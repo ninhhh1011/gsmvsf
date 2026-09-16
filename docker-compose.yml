@@ -28,7 +28,7 @@ services:
     command: >
       osrm-routed --algorithm mld /data/hanoi-baseline.osrm
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000route/v1/driving/0,0"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/route/v1/driving/0,0"]
       interval: 10s
       timeout: 5s
       retries: 5

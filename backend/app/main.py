@@ -14,13 +14,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(health_router, prefix="/api/v1", tags=["health"])
+
+    @app.get("/")
+    async def root() -> dict[str, str]:
+        """Root endpoint."""
+        return {"app": settings.app_name, "version": settings.app_version}
+
     return app
 
 
 app = create_app()
-
-
-@app.get("/")
-async def root() -> dict[str, str]:
-    """Root endpoint."""
-    return {"app": settings.app_name, "version": settings.app_version}
