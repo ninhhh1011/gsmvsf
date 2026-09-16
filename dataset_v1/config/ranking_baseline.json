@@ -1,0 +1,33 @@
+{
+  "version": "v3",
+  "candidate_pipeline": "All stations -> Candidate Search -> eligible == true -> nearest top-N eligible candidates (N<=8) -> Ranking",
+  "group_policy": "Variable group size 1..8; groups with >=2 candidates are LTR-eligible; groups with 1 candidate retained for evaluation/recommendation only.",
+  "features": [
+    "driver_to_station_distance_m",
+    "driver_to_station_eta_min",
+    "station_to_destination_distance_m",
+    "station_to_destination_eta_min",
+    "direct_driver_to_destination_distance_m",
+    "direct_driver_to_destination_eta_min",
+    "detour_distance_m",
+    "detour_time_min",
+    "traffic_adjusted_eta_min",
+    "queue_wait_min",
+    "service_time_min",
+    "available_capacity",
+    "operating_status",
+    "soc_feasible"
+  ],
+  "cost_formula": "traffic_adjusted_eta_min + queue_wait_min + service_time_min + 0.25*detour_time_min + 0.002*detour_distance_m - 0.35*min(available_capacity,6)",
+  "eligibility_rule": "Ranking rows are created only from candidate_labels.eligible == true.",
+  "service_capacity": {
+    "CHARGING": "available_charging_slots",
+    "BATTERY_SWAP": "min(available_swap_slots, available_swap_batteries)"
+  },
+  "service_time": {
+    "CHARGING": 18.0,
+    "BATTERY_SWAP": 6.0
+  },
+  "farther_but_faster_meaningful_margin_min": 10.0,
+  "note": "reference/recommendation labels are evaluation/training artifacts and are not runtime inputs."
+}

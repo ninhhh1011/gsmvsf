@@ -1,0 +1,13 @@
+{
+  "observations_selected": 5029,
+  "positive_candidate_count": 5029,
+  "negative_candidate_count": 22013,
+  "hard_negative_count": 2619,
+  "groups_with_positive": 5029,
+  "groups_with_negative": 5029,
+  "split_observations": {
+    "train": 3499,
+    "test": 766,
+    "validation": 764
+  }
+}

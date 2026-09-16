@@ -1,0 +1,143 @@
+{
+  "overall": "PASS",
+  "passed": 21,
+  "failed": 0,
+  "results": [
+    {
+      "scenario_id": "BRIDGE_AMBIGUITY",
+      "status": "PASS",
+      "details": "bridge=True, negatives=137",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "FARTHER_BUT_FASTER",
+      "status": "PASS",
+      "details": "distance_delta_m=542.9, eta_improvement_min=13.472",
+      "metrics": {
+        "distance_delta_m": 542.9000000000015,
+        "eta_improvement_min": 13.472000000000008,
+        "threshold_min": 10.0
+      }
+    },
+    {
+      "scenario_id": "GPS_MISSING",
+      "status": "PASS",
+      "details": "ratio=0.7117",
+      "metrics": {
+        "gps_to_true_ratio": 0.7116788321167883
+      }
+    },
+    {
+      "scenario_id": "GPS_NOISE",
+      "status": "PASS",
+      "details": "median_error_m=26.66",
+      "metrics": {
+        "median_error_m": 26.663515864729032
+      }
+    },
+    {
+      "scenario_id": "HEAVY_TRAFFIC",
+      "status": "PASS",
+      "details": "{'segment_id': '599087158_1_F', 'timestamp': '2026-09-01T07:00:00+07:00', 'traffic_level': 'HEAVY', 'free_flow_speed_kmh': 30.0, 'current_speed_kmh': 14.07, 'delay_factor': 2.132}",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "INCOMPATIBLE_STATION",
+      "status": "PASS",
+      "details": "incompatible=10, eligible=20",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "INSUFFICIENT_RANGE",
+      "status": "PASS",
+      "details": "count=12",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "LONG_QUEUE",
+      "status": "PASS",
+      "details": "{'service_type': 'BATTERY_SWAP', 'queue_length': 53, 'estimated_wait_min': 45.43, 'service_time_min': 6.0}",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "LOW_SOC",
+      "status": "PASS",
+      "details": "soc=11.082, safe=15",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "NEAREST_FULL",
+      "status": "PASS",
+      "details": "{'reason': 'FULL', 'available_capacity': 0, 'service_type': 'BATTERY_SWAP'}",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "NEAR_TIE_STATIONS",
+      "status": "PASS",
+      "details": "diff_min=1.9742",
+      "metrics": {
+        "top2_cost_diff_min": 1.9742000000000033
+      }
+    },
+    {
+      "scenario_id": "NEED_CHARGING",
+      "status": "PASS",
+      "details": "charging_labels=8",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "NEED_SWAP",
+      "status": "PASS",
+      "details": "labels={'BATTERY_SWAP': 8}, swap_supported=True",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "NORMAL_TRIP",
+      "status": "PASS",
+      "details": "{'NONE': 8}",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "NO_SERVICE_NEEDED",
+      "status": "PASS",
+      "details": "{'NONE': 8}",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "NO_AVAILABLE_STATION",
+      "status": "PASS",
+      "details": "eligible=0",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "PARALLEL_ROADS",
+      "status": "PASS",
+      "details": "hard_negatives=26",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "STATION_OFFLINE",
+      "status": "PASS",
+      "details": "{'reason': 'OFFLINE', 'operating_status': 'OFFLINE'}",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "QUEUE_REALTIME_CHANGE",
+      "status": "PASS",
+      "details": "CHARGING wait 0.0->46.29",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "STATION_STATUS_CHANGE",
+      "status": "PASS",
+      "details": "OPEN->OFFLINE",
+      "metrics": {}
+    },
+    {
+      "scenario_id": "TRAFFIC_REALTIME_CHANGE",
+      "status": "PASS",
+      "details": "FREE_FLOW->HEAVY",
+      "metrics": {}
+    }
+  ]
+}

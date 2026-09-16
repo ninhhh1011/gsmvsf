@@ -1,0 +1,8 @@
+{
+  "baseline_uploaded_sha256": "f69011f81fdc40d63e32a978a8ab15366ba87e8922f75c55821daf139e53ddb7",
+  "baseline_dataset_sha256": "f69011f81fdc40d63e32a978a8ab15366ba87e8922f75c55821daf139e53ddb7",
+  "patched_uploaded_sha256": "0d3a66b2fb03019fd9d7877115c1ed9efbb736a83c5ac6f6e5440d71ddcfff60",
+  "patched_dataset_sha256": "0d3a66b2fb03019fd9d7877115c1ed9efbb736a83c5ac6f6e5440d71ddcfff60",
+  "unchanged": true,
+  "warning": "hanoi-patched.osm.pbf changes OSM way 881947000 (Cầu Thanh Trì) motorcar=designated to motorcar=no. This patch does not decide whether that change is correct. Human confirmation is required before freezing patched PBF as the primary routing map."
+}

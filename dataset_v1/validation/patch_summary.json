@@ -1,0 +1,35 @@
+{
+  "demand_distribution": {
+    "CHARGING": 448,
+    "BATTERY_SWAP": 400,
+    "NONE": 352
+  },
+  "map_matching": {
+    "observations_selected": 5029,
+    "positive_candidate_count": 5029,
+    "negative_candidate_count": 22013,
+    "hard_negative_count": 2619,
+    "groups_with_positive": 5029,
+    "groups_with_negative": 5029,
+    "split_observations": {
+      "train": 3499,
+      "test": 766,
+      "validation": 764
+    }
+  },
+  "ranking": {
+    "rows": 6520,
+    "event_groups": 815,
+    "group_size_min": 8,
+    "group_size_max": 8,
+    "split_groups": {
+      "train": 575,
+      "validation": 120,
+      "test": 120
+    }
+  },
+  "scenarios": {
+    "PASS": 21
+  },
+  "pbf_unchanged": true
+}

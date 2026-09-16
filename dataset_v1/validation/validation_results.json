@@ -1,0 +1,822 @@
+{
+  "passed": 163,
+  "failed": 0,
+  "overall": "PASS",
+  "results": [
+    {
+      "check": "PK unique: nodes",
+      "status": "PASS",
+      "details": "rows=339441"
+    },
+    {
+      "check": "PK unique: segments",
+      "status": "PASS",
+      "details": "rows=701407"
+    },
+    {
+      "check": "PK unique: drivers",
+      "status": "PASS",
+      "details": "rows=60"
+    },
+    {
+      "check": "PK unique: vehicles",
+      "status": "PASS",
+      "details": "rows=60"
+    },
+    {
+      "check": "PK unique: trips",
+      "status": "PASS",
+      "details": "rows=150"
+    },
+    {
+      "check": "PK unique: gps",
+      "status": "PASS",
+      "details": "rows=65847"
+    },
+    {
+      "check": "PK unique: stations",
+      "status": "PASS",
+      "details": "rows=30"
+    },
+    {
+      "check": "PK unique: replay",
+      "status": "PASS",
+      "details": "rows=109193"
+    },
+    {
+      "check": "PK unique: demand",
+      "status": "PASS",
+      "details": "rows=1200"
+    },
+    {
+      "check": "Candidate composite key unique",
+      "status": "PASS",
+      "details": "rows=36000"
+    },
+    {
+      "check": "Ranking composite key unique",
+      "status": "PASS",
+      "details": "rows=3727"
+    },
+    {
+      "check": "Station state composite key unique",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Queue state composite key unique",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK vehicle.driver -> drivers",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK trip.driver -> drivers",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK trip.vehicle -> vehicles",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK segment nodes exist",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK true.segment -> road_segments",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK GPS trip/trajectory",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK station.access_node -> road_nodes",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK traffic.segment -> road_segments",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK station temporal state -> stations",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK demand -> trips",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK candidates -> demand/stations",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK ranking -> demand/stations/trips",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FK recommendations -> demand",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: trips",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: true",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: gps",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: battery",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: traffic",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: demand",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: candidate",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: ranking",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: station_status",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Critical nulls: queue",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Road node coordinate bounds",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "GPS coordinate bounds",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Station coordinate bounds",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Trajectory timestamp ordering",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "SOC timestamp ordering",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Replay event chronology",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Trajectory road connectivity",
+      "status": "PASS",
+      "details": "bad_transitions=0"
+    },
+    {
+      "check": "GPS map-matching truth coverage",
+      "status": "PASS",
+      "details": "labels=65847, gps=65847"
+    },
+    {
+      "check": "SOC range",
+      "status": "PASS",
+      "details": "min=0.000, max=94.665"
+    },
+    {
+      "check": "SOC/distance/energy monotonic consistency",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Training split unique per trip",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Training split covers trips",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Station state nonnegative: available_charging_slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Station state nonnegative: occupied_charging_slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Station state nonnegative: available_swap_slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Station state nonnegative: occupied_swap_slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Station state nonnegative: available_swap_batteries",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging capacity <= charging_slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Swap capacity <= swap_slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging-only station has zero swap state",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Swap-only station has zero charging state",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Offline station service capacities zero",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging service time column semantics",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Swap service time column semantics",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Mixed-station charging capacity bounded",
+      "status": "PASS",
+      "details": "rows=436"
+    },
+    {
+      "check": "Mixed-station swap capacity bounded",
+      "status": "PASS",
+      "details": "rows=436"
+    },
+    {
+      "check": "Queue nonnegative: charging_queue_length",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Queue nonnegative: charging_active_service_count",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Queue nonnegative: charging_estimated_wait_min",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Queue nonnegative: swap_queue_length",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Queue nonnegative: swap_active_service_count",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Queue nonnegative: swap_estimated_wait_min",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging queue active count <= occupied charging slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Swap queue active count <= occupied swap slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging queue uses charging service time",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Swap queue uses swap service time",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging queue wait formula service-specific",
+      "status": "PASS",
+      "details": "max_err=0.0043"
+    },
+    {
+      "check": "Swap queue wait formula service-specific",
+      "status": "PASS",
+      "details": "max_err=0.0033"
+    },
+    {
+      "check": "No label leakage: gps",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "No label leakage: battery",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "No label leakage: trips",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "No label leakage: station_status",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "No label leakage: traffic",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Demand sample count target",
+      "status": "PASS",
+      "details": "rows=1200"
+    },
+    {
+      "check": "Demand class set",
+      "status": "PASS",
+      "details": "{'CHARGING': 448, 'BATTERY_SWAP': 400, 'NONE': 352}"
+    },
+    {
+      "check": "Demand all classes non-trivial",
+      "status": "PASS",
+      "details": "{'CHARGING': 448, 'BATTERY_SWAP': 400, 'NONE': 352}"
+    },
+    {
+      "check": "Demand snapshots per trip",
+      "status": "PASS",
+      "details": "{8: 150}"
+    },
+    {
+      "check": "Demand feature-label event coverage",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Demand need_service consistency",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Demand feature split matches trip split",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "NEED_SWAP vehicle capability",
+      "status": "PASS",
+      "details": "trips=7"
+    },
+    {
+      "check": "NEED_SWAP labels are BATTERY_SWAP",
+      "status": "PASS",
+      "details": "rows=56"
+    },
+    {
+      "check": "BATTERY_SWAP label vehicle capability",
+      "status": "PASS",
+      "details": "rows=400"
+    },
+    {
+      "check": "CHARGING label vehicle capability",
+      "status": "PASS",
+      "details": "rows=448"
+    },
+    {
+      "check": "NO_SERVICE_NEEDED scenario has NONE",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Candidate full station coverage per event",
+      "status": "PASS",
+      "details": "stations=30"
+    },
+    {
+      "check": "Candidate allowed reason vocabulary",
+      "status": "PASS",
+      "details": "{'INCOMPATIBLE': 10880, 'NO_SERVICE_NEEDED': 10560, 'ELIGIBLE': 7762, 'INSUFFICIENT_SOC_TO_REACH': 4183, 'FULL': 1272, 'OFFLINE': 731, 'UNREACHABLE': 612}"
+    },
+    {
+      "check": "Candidate eligible iff ELIGIBLE reason",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Candidate reason semantic recomputation",
+      "status": "PASS",
+      "details": "mismatches=0"
+    },
+    {
+      "check": "Candidate service-state consistency",
+      "status": "PASS",
+      "details": "mismatches=0"
+    },
+    {
+      "check": "Candidate SOC-feasibility consistency",
+      "status": "PASS",
+      "details": "mismatches=0"
+    },
+    {
+      "check": "Candidate service type/time consistency",
+      "status": "PASS",
+      "details": "mismatches=0"
+    },
+    {
+      "check": "Candidate reason present: ELIGIBLE",
+      "status": "PASS",
+      "details": "count=7762"
+    },
+    {
+      "check": "Candidate reason present: INCOMPATIBLE",
+      "status": "PASS",
+      "details": "count=10880"
+    },
+    {
+      "check": "Candidate reason present: OFFLINE",
+      "status": "PASS",
+      "details": "count=731"
+    },
+    {
+      "check": "Candidate reason present: FULL",
+      "status": "PASS",
+      "details": "count=1272"
+    },
+    {
+      "check": "Candidate reason present: UNREACHABLE",
+      "status": "PASS",
+      "details": "count=612"
+    },
+    {
+      "check": "Candidate reason present: INSUFFICIENT_SOC_TO_REACH",
+      "status": "PASS",
+      "details": "count=4183"
+    },
+    {
+      "check": "Candidate reason present: NO_SERVICE_NEEDED",
+      "status": "PASS",
+      "details": "count=10560"
+    },
+    {
+      "check": "Swap candidate capacity <= available swap slots",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Swap candidate capacity <= available swap batteries",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging candidate uses charging capacity",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Charging supported candidate uses charging service time",
+      "status": "PASS",
+      "details": "supported_rows=8960"
+    },
+    {
+      "check": "Battery-swap supported candidate uses swap service time",
+      "status": "PASS",
+      "details": "supported_rows=5600"
+    },
+    {
+      "check": "MM selected observations sufficient",
+      "status": "PASS",
+      "details": "obs=5029"
+    },
+    {
+      "check": "MM exactly one positive per group",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "MM at least one negative per group",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "MM positive candidate equals true segment",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "MM negative candidate differs from truth",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "MM hard-negative definition",
+      "status": "PASS",
+      "details": "hard=2619"
+    },
+    {
+      "check": "MM split follows trip split",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "MM all split partitions present",
+      "status": "PASS",
+      "details": "{'train': 3499, 'test': 766, 'validation': 764}"
+    },
+    {
+      "check": "Ranking required feature columns",
+      "status": "PASS",
+      "details": "[]"
+    },
+    {
+      "check": "Recommendation event coverage = all service events",
+      "status": "PASS",
+      "details": "rec=848, service_events=848"
+    },
+    {
+      "check": "No recommendation labels for NONE events",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Recommendation exists iff eligible candidate exists",
+      "status": "PASS",
+      "details": "eligible_events=630, no_eligible=218"
+    },
+    {
+      "check": "Recommended/reference station is ELIGIBLE",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Exactly-one-eligible event returns that station",
+      "status": "PASS",
+      "details": "events=83"
+    },
+    {
+      "check": "Ranking groups exist iff eligible count > 0",
+      "status": "PASS",
+      "details": "rank_groups=630"
+    },
+    {
+      "check": "Ranking candidates are ELIGIBLE",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking candidate_eligible flag true",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking consumes nearest top-N eligible candidates only",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking variable group size matches eligible count capped at 8",
+      "status": "PASS",
+      "details": "{1: 83, 2: 28, 3: 50, 4: 57, 5: 16, 6: 17, 7: 4, 8: 375}"
+    },
+    {
+      "check": "Ranking group size range 1..8",
+      "status": "PASS",
+      "details": "{1: 83, 2: 28, 3: 50, 4: 57, 5: 16, 6: 17, 7: 4, 8: 375}"
+    },
+    {
+      "check": "LTR flag only for groups >=2",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Single-candidate groups retained",
+      "status": "PASS",
+      "details": "rank_single=83, eligible_single=83"
+    },
+    {
+      "check": "Ranking detour distance consistency",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking detour time consistency",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking traffic-adjusted ETA consistency",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking total ETA consistency",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking baseline cost v3 recomputation",
+      "status": "PASS",
+      "details": "max_abs_err=0.0007"
+    },
+    {
+      "check": "Ranking service time matches Candidate Search",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking queue wait matches Candidate Search",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking capacity matches Candidate Search",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "CHARGING ranking uses charging service time",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "BATTERY_SWAP ranking uses swap service time",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking reference rank ordering",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking exactly one best per group",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking split follows trip split",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Ranking all split partitions present",
+      "status": "PASS",
+      "details": "{'train': 443, 'validation': 98, 'test': 89}"
+    },
+    {
+      "check": "Recommendation labels evaluation-only",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Audit event eligible station retained in ranking/recommendation: DE000147",
+      "status": "PASS",
+      "details": "eligible=['S010'], ranking=['S010'], ref=S010"
+    },
+    {
+      "check": "Audit event eligible station retained in ranking/recommendation: DE000148",
+      "status": "PASS",
+      "details": "eligible=['S010'], ranking=['S010'], ref=S010"
+    },
+    {
+      "check": "Audit event eligible station retained in ranking/recommendation: DE000149",
+      "status": "PASS",
+      "details": "eligible=['S010'], ranking=['S010'], ref=S010"
+    },
+    {
+      "check": "Audit event eligible station retained in ranking/recommendation: DE000150",
+      "status": "PASS",
+      "details": "eligible=['S010'], ranking=['S010'], ref=S010"
+    },
+    {
+      "check": "Audit event eligible station retained in ranking/recommendation: DE000824",
+      "status": "PASS",
+      "details": "eligible=['S010'], ranking=['S010'], ref=S010"
+    },
+    {
+      "check": "Realtime includes service-specific QUEUE_UPDATE events",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Realtime covers every station state",
+      "status": "PASS",
+      "details": "states=3270, replay=3270"
+    },
+    {
+      "check": "Realtime covers every queue state",
+      "status": "PASS",
+      "details": "queues=3270, replay=3270"
+    },
+    {
+      "check": "Realtime service-specific payload schema",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "FARTHER_BUT_FASTER meaningful ETA difference",
+      "status": "PASS",
+      "details": "distance_delta_m=542.9, eta_gain_min=13.472"
+    },
+    {
+      "check": "Scenario set complete",
+      "status": "PASS",
+      "details": "results=21"
+    },
+    {
+      "check": "All independent scenario assertions PASS",
+      "status": "PASS",
+      "details": "{'BRIDGE_AMBIGUITY': 'PASS', 'FARTHER_BUT_FASTER': 'PASS', 'GPS_MISSING': 'PASS', 'GPS_NOISE': 'PASS', 'HEAVY_TRAFFIC': 'PASS', 'INCOMPATIBLE_STATION': 'PASS', 'INSUFFICIENT_RANGE': 'PASS', 'LONG_QUEUE': 'PASS', 'LOW_SOC': 'PASS', 'NEAREST_FULL': 'PASS', 'NEAR_TIE_STATIONS': 'PASS', 'NEED_CHARGING': 'PASS', 'NEED_SWAP': 'PASS', 'NORMAL_TRIP': 'PASS', 'NO_SERVICE_NEEDED': 'PASS', 'NO_AVAILABLE_STATION': 'PASS', 'PARALLEL_ROADS': 'PASS', 'STATION_OFFLINE': 'PASS', 'QUEUE_REALTIME_CHANGE': 'PASS', 'STATION_STATUS_CHANGE': 'PASS', 'TRAFFIC_REALTIME_CHANGE': 'PASS'}"
+    },
+    {
+      "check": "Baseline PBF byte integrity",
+      "status": "PASS",
+      "details": "f69011f81fdc40d63e32a978a8ab15366ba87e8922f75c55821daf139e53ddb7"
+    },
+    {
+      "check": "Patched PBF byte integrity",
+      "status": "PASS",
+      "details": "0d3a66b2fb03019fd9d7877115c1ed9efbb736a83c5ac6f6e5440d71ddcfff60"
+    },
+    {
+      "check": "Cầu Thanh Trì diff explicitly preserved",
+      "status": "PASS",
+      "details": ""
+    },
+    {
+      "check": "Cầu Thanh Trì human-confirmation warning present",
+      "status": "PASS",
+      "details": ""
+    }
+  ]
+}

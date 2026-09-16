@@ -1,0 +1,22 @@
+scenario_id,trip_count,example_trip_id,example_event_id,validator_status,primary_metric,primary_value,operator,threshold,secondary_metric,secondary_value,evidence_entity_a,evidence_entity_b,evidence_timestamp,before_timestamp,after_timestamp,evidence_note
+BRIDGE_AMBIGUITY,7,T0079,DE000625,PASS,bridge_observation_with_negative_count,9.0,>=,1.0,negative_candidate_count,27,1459747350_0_F,,2026-09-01T13:55:23.262384+07:00,,,
+FARTHER_BUT_FASTER,7,T0073,DE000580,PASS,farther_total_eta_improvement_min,13.472,>=,10.0,farther_network_distance_delta_m,542.9,S026,S028,2026-09-01T13:20:00+07:00,,,near_total_eta=66.811; far_total_eta=53.339; meaningful_margin_threshold=10.0min
+GPS_MISSING,7,T0119,DE000945,PASS,gps_to_true_point_ratio,0.7117,<,0.85,missing_point_count,79,,,2026-09-01T17:54:39.307968+07:00,,,
+GPS_NOISE,7,T0076,DE000601,PASS,median_gps_error_m,26.66,>=,10.0,,,,,2026-09-01T13:36:37.973023999+07:00,,,
+HEAVY_TRAFFIC,7,T0011,DE000081,PASS,related_segment_delay_factor,2.132,>,1.5,traffic_level,HEAVY,599087158_1_F,,2026-09-01T07:00:00+07:00,,,
+INCOMPATIBLE_STATION,7,T0008,DE000057,PASS,incompatible_candidate_count,10.0,>=,1.0,eligible_candidate_count,20,,,2026-09-01T06:49:23.037023999+07:00,,,
+INSUFFICIENT_RANGE,7,T0012,DE000092,PASS,remaining_range_margin_km,-1.651,<,0.0,,,,,2026-09-01T07:16:52.514811428+07:00,,,
+LONG_QUEUE,7,T0009,DE000065,PASS,estimated_wait_min,45.43,>=,30.0,,,S006,,2026-09-01T06:50:00+07:00,,,
+LOW_SOC,8,T0129,DE001025,PASS,min_soc_pct,0.497,<=,15.0,minimum_safe_soc_pct,15.0,,,2026-09-01T18:55:43.017438499+07:00,,,
+NEAREST_FULL,7,T0006,DE000043,PASS,nearest_compatible_reachable_capacity,0.0,==,0.0,nearest_reason,FULL,S024,,2026-09-01T06:40:00+07:00,,,
+NEAR_TIE_STATIONS,7,T0021,DE000165,PASS,top2_ranking_cost_difference_min,1.9742,<=,3.0,top2_stations,"S030,S010",S030,S010,2026-09-01T08:10:00+07:00,,,input queue patched at service-specific state; service=BATTERY_SWAP
+NEED_CHARGING,7,T0004,DE000025,PASS,charging_label_count,8.0,>=,1.0,charging_supported,1,,,2026-09-01T06:24:48.469104+07:00,,,
+NEED_SWAP,7,T0110,DE000873,PASS,battery_swap_label_count,8.0,>=,1.0,swap_supported,1,,,2026-09-01T17:02:00.940899999+07:00,,,
+NORMAL_TRIP,8,T0001,DE000001,PASS,service_snapshot_count,0.0,==,0.0,,,,,2026-09-01T06:06:40.768790399+07:00,,,
+NO_AVAILABLE_STATION,7,T0041,DE000321,PASS,eligible_station_count,0.0,==,0.0,,,,,2026-09-01T10:06:29.826462857+07:00,,,
+NO_SERVICE_NEEDED,8,T0002,DE000009,PASS,service_snapshot_count,0.0,==,0.0,,,,,2026-09-01T06:12:59.973648+07:00,,,
+PARALLEL_ROADS,7,T0141,DE001121,PASS,hard_negative_candidate_count,82.0,>=,1.0,min_hard_negative_distance_m,0.02,572354323_5_F,,2026-09-01T20:08:06.529924571+07:00,,,
+QUEUE_REALTIME_CHANGE,7,T0017,DE000129,PASS,queue_wait_change_min,46.29,>=,20.0,before_after_wait_min,0.00->46.29,S022,,,2026-09-01T07:40:00+07:00,2026-09-01T07:50:00+07:00,replay_before_after=True
+STATION_OFFLINE,7,T0028,DE000218,PASS,offline_candidate_count,1.0,>=,1.0,operating_status,OFFLINE,S025,,2026-09-01T08:50:00+07:00,,,
+STATION_STATUS_CHANGE,7,T0019,DE000145,PASS,status_changed,1.0,==,1.0,status_transition,OPEN->OFFLINE,S001,,,2026-09-01T07:50:00+07:00,2026-09-01T08:00:00+07:00,replay_before_after=True
+TRAFFIC_REALTIME_CHANGE,7,T0018,DE000140,PASS,traffic_speed_change_kmh,11.0,>=,5.0,traffic_level_transition,FREE_FLOW->HEAVY,447950948_3_R,,,2026-09-01T07:30:00+07:00,2026-09-01T08:00:00+07:00,replay_before_after=True

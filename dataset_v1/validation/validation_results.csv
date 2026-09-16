@@ -1,0 +1,164 @@
+check,status,details
+PK unique: nodes,PASS,rows=339441
+PK unique: segments,PASS,rows=701407
+PK unique: drivers,PASS,rows=60
+PK unique: vehicles,PASS,rows=60
+PK unique: trips,PASS,rows=150
+PK unique: gps,PASS,rows=65847
+PK unique: stations,PASS,rows=30
+PK unique: replay,PASS,rows=109193
+PK unique: demand,PASS,rows=1200
+Candidate composite key unique,PASS,rows=36000
+Ranking composite key unique,PASS,rows=3727
+Station state composite key unique,PASS,
+Queue state composite key unique,PASS,
+FK vehicle.driver -> drivers,PASS,
+FK trip.driver -> drivers,PASS,
+FK trip.vehicle -> vehicles,PASS,
+FK segment nodes exist,PASS,
+FK true.segment -> road_segments,PASS,
+FK GPS trip/trajectory,PASS,
+FK station.access_node -> road_nodes,PASS,
+FK traffic.segment -> road_segments,PASS,
+FK station temporal state -> stations,PASS,
+FK demand -> trips,PASS,
+FK candidates -> demand/stations,PASS,
+FK ranking -> demand/stations/trips,PASS,
+FK recommendations -> demand,PASS,
+Critical nulls: trips,PASS,
+Critical nulls: true,PASS,
+Critical nulls: gps,PASS,
+Critical nulls: battery,PASS,
+Critical nulls: traffic,PASS,
+Critical nulls: demand,PASS,
+Critical nulls: candidate,PASS,
+Critical nulls: ranking,PASS,
+Critical nulls: station_status,PASS,
+Critical nulls: queue,PASS,
+Road node coordinate bounds,PASS,
+GPS coordinate bounds,PASS,
+Station coordinate bounds,PASS,
+Trajectory timestamp ordering,PASS,
+SOC timestamp ordering,PASS,
+Replay event chronology,PASS,
+Trajectory road connectivity,PASS,bad_transitions=0
+GPS map-matching truth coverage,PASS,"labels=65847, gps=65847"
+SOC range,PASS,"min=0.000, max=94.665"
+SOC/distance/energy monotonic consistency,PASS,
+Training split unique per trip,PASS,
+Training split covers trips,PASS,
+Station state nonnegative: available_charging_slots,PASS,
+Station state nonnegative: occupied_charging_slots,PASS,
+Station state nonnegative: available_swap_slots,PASS,
+Station state nonnegative: occupied_swap_slots,PASS,
+Station state nonnegative: available_swap_batteries,PASS,
+Charging capacity <= charging_slots,PASS,
+Swap capacity <= swap_slots,PASS,
+Charging-only station has zero swap state,PASS,
+Swap-only station has zero charging state,PASS,
+Offline station service capacities zero,PASS,
+Charging service time column semantics,PASS,
+Swap service time column semantics,PASS,
+Mixed-station charging capacity bounded,PASS,rows=436
+Mixed-station swap capacity bounded,PASS,rows=436
+Queue nonnegative: charging_queue_length,PASS,
+Queue nonnegative: charging_active_service_count,PASS,
+Queue nonnegative: charging_estimated_wait_min,PASS,
+Queue nonnegative: swap_queue_length,PASS,
+Queue nonnegative: swap_active_service_count,PASS,
+Queue nonnegative: swap_estimated_wait_min,PASS,
+Charging queue active count <= occupied charging slots,PASS,
+Swap queue active count <= occupied swap slots,PASS,
+Charging queue uses charging service time,PASS,
+Swap queue uses swap service time,PASS,
+Charging queue wait formula service-specific,PASS,max_err=0.0043
+Swap queue wait formula service-specific,PASS,max_err=0.0033
+No label leakage: gps,PASS,
+No label leakage: battery,PASS,
+No label leakage: trips,PASS,
+No label leakage: station_status,PASS,
+No label leakage: traffic,PASS,
+Demand sample count target,PASS,rows=1200
+Demand class set,PASS,"{'CHARGING': 448, 'BATTERY_SWAP': 400, 'NONE': 352}"
+Demand all classes non-trivial,PASS,"{'CHARGING': 448, 'BATTERY_SWAP': 400, 'NONE': 352}"
+Demand snapshots per trip,PASS,{8: 150}
+Demand feature-label event coverage,PASS,
+Demand need_service consistency,PASS,
+Demand feature split matches trip split,PASS,
+NEED_SWAP vehicle capability,PASS,trips=7
+NEED_SWAP labels are BATTERY_SWAP,PASS,rows=56
+BATTERY_SWAP label vehicle capability,PASS,rows=400
+CHARGING label vehicle capability,PASS,rows=448
+NO_SERVICE_NEEDED scenario has NONE,PASS,
+Candidate full station coverage per event,PASS,stations=30
+Candidate allowed reason vocabulary,PASS,"{'INCOMPATIBLE': 10880, 'NO_SERVICE_NEEDED': 10560, 'ELIGIBLE': 7762, 'INSUFFICIENT_SOC_TO_REACH': 4183, 'FULL': 1272, 'OFFLINE': 731, 'UNREACHABLE': 612}"
+Candidate eligible iff ELIGIBLE reason,PASS,
+Candidate reason semantic recomputation,PASS,mismatches=0
+Candidate service-state consistency,PASS,mismatches=0
+Candidate SOC-feasibility consistency,PASS,mismatches=0
+Candidate service type/time consistency,PASS,mismatches=0
+Candidate reason present: ELIGIBLE,PASS,count=7762
+Candidate reason present: INCOMPATIBLE,PASS,count=10880
+Candidate reason present: OFFLINE,PASS,count=731
+Candidate reason present: FULL,PASS,count=1272
+Candidate reason present: UNREACHABLE,PASS,count=612
+Candidate reason present: INSUFFICIENT_SOC_TO_REACH,PASS,count=4183
+Candidate reason present: NO_SERVICE_NEEDED,PASS,count=10560
+Swap candidate capacity <= available swap slots,PASS,
+Swap candidate capacity <= available swap batteries,PASS,
+Charging candidate uses charging capacity,PASS,
+Charging supported candidate uses charging service time,PASS,supported_rows=8960
+Battery-swap supported candidate uses swap service time,PASS,supported_rows=5600
+MM selected observations sufficient,PASS,obs=5029
+MM exactly one positive per group,PASS,
+MM at least one negative per group,PASS,
+MM positive candidate equals true segment,PASS,
+MM negative candidate differs from truth,PASS,
+MM hard-negative definition,PASS,hard=2619
+MM split follows trip split,PASS,
+MM all split partitions present,PASS,"{'train': 3499, 'test': 766, 'validation': 764}"
+Ranking required feature columns,PASS,[]
+Recommendation event coverage = all service events,PASS,"rec=848, service_events=848"
+No recommendation labels for NONE events,PASS,
+Recommendation exists iff eligible candidate exists,PASS,"eligible_events=630, no_eligible=218"
+Recommended/reference station is ELIGIBLE,PASS,
+Exactly-one-eligible event returns that station,PASS,events=83
+Ranking groups exist iff eligible count > 0,PASS,rank_groups=630
+Ranking candidates are ELIGIBLE,PASS,
+Ranking candidate_eligible flag true,PASS,
+Ranking consumes nearest top-N eligible candidates only,PASS,
+Ranking variable group size matches eligible count capped at 8,PASS,"{1: 83, 2: 28, 3: 50, 4: 57, 5: 16, 6: 17, 7: 4, 8: 375}"
+Ranking group size range 1..8,PASS,"{1: 83, 2: 28, 3: 50, 4: 57, 5: 16, 6: 17, 7: 4, 8: 375}"
+LTR flag only for groups >=2,PASS,
+Single-candidate groups retained,PASS,"rank_single=83, eligible_single=83"
+Ranking detour distance consistency,PASS,
+Ranking detour time consistency,PASS,
+Ranking traffic-adjusted ETA consistency,PASS,
+Ranking total ETA consistency,PASS,
+Ranking baseline cost v3 recomputation,PASS,max_abs_err=0.0007
+Ranking service time matches Candidate Search,PASS,
+Ranking queue wait matches Candidate Search,PASS,
+Ranking capacity matches Candidate Search,PASS,
+CHARGING ranking uses charging service time,PASS,
+BATTERY_SWAP ranking uses swap service time,PASS,
+Ranking reference rank ordering,PASS,
+Ranking exactly one best per group,PASS,
+Ranking split follows trip split,PASS,
+Ranking all split partitions present,PASS,"{'train': 443, 'validation': 98, 'test': 89}"
+Recommendation labels evaluation-only,PASS,
+Audit event eligible station retained in ranking/recommendation: DE000147,PASS,"eligible=['S010'], ranking=['S010'], ref=S010"
+Audit event eligible station retained in ranking/recommendation: DE000148,PASS,"eligible=['S010'], ranking=['S010'], ref=S010"
+Audit event eligible station retained in ranking/recommendation: DE000149,PASS,"eligible=['S010'], ranking=['S010'], ref=S010"
+Audit event eligible station retained in ranking/recommendation: DE000150,PASS,"eligible=['S010'], ranking=['S010'], ref=S010"
+Audit event eligible station retained in ranking/recommendation: DE000824,PASS,"eligible=['S010'], ranking=['S010'], ref=S010"
+Realtime includes service-specific QUEUE_UPDATE events,PASS,
+Realtime covers every station state,PASS,"states=3270, replay=3270"
+Realtime covers every queue state,PASS,"queues=3270, replay=3270"
+Realtime service-specific payload schema,PASS,
+FARTHER_BUT_FASTER meaningful ETA difference,PASS,"distance_delta_m=542.9, eta_gain_min=13.472"
+Scenario set complete,PASS,results=21
+All independent scenario assertions PASS,PASS,"{'BRIDGE_AMBIGUITY': 'PASS', 'FARTHER_BUT_FASTER': 'PASS', 'GPS_MISSING': 'PASS', 'GPS_NOISE': 'PASS', 'HEAVY_TRAFFIC': 'PASS', 'INCOMPATIBLE_STATION': 'PASS', 'INSUFFICIENT_RANGE': 'PASS', 'LONG_QUEUE': 'PASS', 'LOW_SOC': 'PASS', 'NEAREST_FULL': 'PASS', 'NEAR_TIE_STATIONS': 'PASS', 'NEED_CHARGING': 'PASS', 'NEED_SWAP': 'PASS', 'NORMAL_TRIP': 'PASS', 'NO_SERVICE_NEEDED': 'PASS', 'NO_AVAILABLE_STATION': 'PASS', 'PARALLEL_ROADS': 'PASS', 'STATION_OFFLINE': 'PASS', 'QUEUE_REALTIME_CHANGE': 'PASS', 'STATION_STATUS_CHANGE': 'PASS', 'TRAFFIC_REALTIME_CHANGE': 'PASS'}"
+Baseline PBF byte integrity,PASS,f69011f81fdc40d63e32a978a8ab15366ba87e8922f75c55821daf139e53ddb7
+Patched PBF byte integrity,PASS,0d3a66b2fb03019fd9d7877115c1ed9efbb736a83c5ac6f6e5440d71ddcfff60
+Cầu Thanh Trì diff explicitly preserved,PASS,
+Cầu Thanh Trì human-confirmation warning present,PASS,
