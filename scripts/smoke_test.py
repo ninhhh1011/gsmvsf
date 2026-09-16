@@ -8,6 +8,11 @@ Uses hanoi-baseline.osm.pbf (primary map).
 Usage:
     python scripts/smoke_test.py
     make smoke
+
+Note: On Windows with Docker Desktop, run via Docker network:
+    docker run --rm --network build6week_default \\
+        -v "$(pwd)/dataset_v1:/dataset_v1:ro" python:3.11-slim sh -c \\
+        "pip install httpx -q && python3 /dataset_v1/../scripts/smoke_test.py"
 """
 import gzip
 import json
@@ -58,13 +63,16 @@ async def test_osrm_route(lat1: float, lon1: float, lat2: float, lon2: float) ->
 
 
 async def test_osrm_match(gps_points: list[dict]) -> dict:
-    """Test OSRM match service with a sequence of GPS points."""
+    """Test OSRM match service with a sequence of GPS points.
+
+    Note: gps_precision param causes 400 errors with this OSRM version.
+    """
     try:
         coords = ";".join(f'{p["longitude"]},{p["latitude"]}' for p in gps_points)
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.get(
                 f"{OSRM_URL}/match/v1/driving/{coords}",
-                params={"overview": "simplified", "steps": "false", "gps_precision": 10}
+                params={"overview": "simplified", "steps": "false"}
             )
             return {"status": response.status_code, "data": response.json()}
     except Exception as e:
@@ -81,7 +89,7 @@ async def run_smoke_tests():
     print(f"\n[1] Checking OSRM at {OSRM_URL}...")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(f"{OSRM_URL}/route/v1/driving/0,0")
+            r = await client.get(f"{OSRM_URL}/route/v1/driving/105.8,21.0;105.85,21.05")
             print(f"    OSRM reachable: HTTP {r.status_code}")
     except Exception as e:
         print(f"    ERROR: OSRM not reachable: {e}")
@@ -127,7 +135,10 @@ async def run_smoke_tests():
             if result["status"] == 200:
                 data = result["data"]
                 if data.get("code") == "Ok":
-                    print(f"    MATCHED: Waypoint index {data['waypoints'][0]['waypoint_index']}")
+                    wp = data["waypoints"][0]
+                    print(f"    MATCHED: lat={wp['location'][1]:.6f}, lon={wp['location'][0]:.6f}")
+                    print(f"    distance to road: {wp['distance']:.3f}m")
+                    print(f"    nodes: {wp['nodes']}")
                 else:
                     print(f"    Response: {json.dumps(data)}")
 
@@ -153,7 +164,7 @@ async def run_smoke_tests():
     # Test map matching
     print("\n[5] Testing OSRM Match (map matching)...")
     if len(sample_obs) >= 3:
-        match_points = sample_obs[:10]
+        match_points = sample_obs[:3]  # Use 3 points for reliable matching
         result = await test_osrm_match(match_points)
         if "error" in result:
             print(f"    ERROR: {result['error']}")
@@ -164,9 +175,15 @@ async def run_smoke_tests():
                 if data.get("code") == "Ok":
                     tracepoints = data.get("tracepoints") or []
                     matched = [tp for tp in tracepoints if tp is not None]
-                    print(f"    MATCHED tracepoints: {len(matched)}/{len(tracepoints)}")
-                    if data.get("matchings"):
-                        print(f"    Total distance: {data['matchings'][0]['distance']:.1f}m")
+                    m = data["matchings"][0]
+                    print(f"    trajectory_id: {match_points[0]['trajectory_id']}")
+                    print(f"    input GPS points: {len(match_points)}")
+                    print(f"    matched tracepoints: {len(matched)}")
+                    print(f"    unmatched/null tracepoints: {len(tracepoints) - len(matched)}")
+                    print(f"    matching code: {data.get('code')}")
+                    print(f"    matching confidence: {m.get('confidence', 'N/A')}")
+                    print(f"    total matched distance: {m.get('distance', 'N/A')}m")
+                    print(f"    total matched duration: {m.get('duration', 'N/A')}s")
                 else:
                     print(f"    Response: {json.dumps(data)}")
 
