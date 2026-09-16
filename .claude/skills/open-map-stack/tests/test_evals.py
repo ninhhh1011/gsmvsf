@@ -1,0 +1,1109 @@
+from __future__ import annotations
+
+import importlib.util
+import io
+import json
+import os
+import shlex
+import sys
+import tempfile
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+
+import yaml
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+RUNNER_PATH = REPO_ROOT / "evals" / "run.py"
+SPEC = importlib.util.spec_from_file_location("openmapstack_eval_runner", RUNNER_PATH)
+assert SPEC and SPEC.loader
+eval_runner = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = eval_runner
+SPEC.loader.exec_module(eval_runner)
+
+from adapters.base import AgentRunResult  # noqa: E402
+
+
+class _RunnerHarness(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory(prefix="openmapstack-eval-runner-test-")
+        self.root = Path(self.tempdir.name)
+        self.cases_dir = self.root / "cases"
+        self.results_dir = self.root / "results"
+        self.cases_dir.mkdir()
+        self.patch_cases = patch.object(eval_runner, "CASES_DIR", self.cases_dir)
+        self.patch_results = patch.object(eval_runner, "RESULTS_DIR", self.results_dir)
+        self.patch_cases.start()
+        self.patch_results.start()
+
+    def tearDown(self) -> None:
+        self.patch_results.stop()
+        self.patch_cases.stop()
+        self.tempdir.cleanup()
+
+    def write_case(
+        self,
+        case_id: str = "test-case",
+        *,
+        modes: list[str] | None = None,
+        score_types: dict[str, str] | None = None,
+        generator: str | None = None,
+        extra_generators: dict[str, str] | None = None,
+        rerun_generator: str | None = None,
+        expect: str = "passed",
+        live_fixtures: list[dict[str, str]] | None = None,
+        source_baseline: list[dict[str, str]] | None = None,
+        extra_assertions: list[dict] | None = None,
+    ) -> Path:
+        modes = modes or ["fixture"]
+        score_types = score_types or {mode: "agent_benchmark" if mode == "live" else "contract_ci" for mode in modes}
+        case_dir = self.cases_dir / case_id
+        project_dir = case_dir / "project"
+        project_dir.mkdir(parents=True)
+        (project_dir / "marker.txt").write_text("ok\n", encoding="utf-8")
+        case = {
+            "id": case_id,
+            "case_type": ("mutation" if "mutation_tests" in score_types.values() else "positive"),
+            "modes": modes,
+            "score_types": score_types,
+            "project_dir": "project",
+            "assertions": [
+                {
+                    "assert": "project.exists",
+                    "args": {"path": "marker.txt"},
+                    "expect": expect,
+                }
+            ]
+            + (extra_assertions or []),
+        }
+        if case["case_type"] == "mutation":
+            # A mutation test always has one deliberately failing target and
+            # an independently executed healthy twin where that target passes.
+            case["assertions"][0]["expect"] = "failed"
+            case["assertions"][0]["expect_code"] = "file_missing"
+            case["mutation"] = {"control_generator": '{python} -c "pass"'}
+        if "fixture" in modes:
+            case["fixture"] = {}
+            if generator is not None:
+                case["fixture"]["generator"] = generator
+            elif case["case_type"] == "mutation":
+                case["fixture"]["generator"] = "{python} -c \"from pathlib import Path; Path('marker.txt').unlink()\""
+            if extra_generators is not None:
+                case["fixture"]["extra_generators"] = extra_generators
+            if rerun_generator is not None:
+                case["fixture"]["rerun_generator"] = rerun_generator
+            if source_baseline is not None:
+                case["fixture"]["source_baseline"] = source_baseline
+        if "live" in modes:
+            case["live"] = {
+                "prompt_file": "prompt.md",
+                "agent_workdir": "project",
+                "fixtures": live_fixtures or [],
+            }
+        (case_dir / "expected.yaml").write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        if "live" in modes:
+            (case_dir / "prompt.md").write_text("Build the project.\n", encoding="utf-8")
+        return case_dir
+
+    def call_main(self, argv: list[str]) -> tuple[int, str, str]:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = eval_runner.main(argv)
+        return exit_code, stdout.getvalue(), stderr.getvalue()
+
+
+class EvalRunnerTests(_RunnerHarness):
+    def test_fixture_mode_is_default_and_passes(self) -> None:
+        self.write_case()
+        exit_code, stdout, _ = self.call_main([])
+        self.assertEqual(exit_code, 0, stdout)
+        payload = json.loads((self.results_dir / "latest.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["run_config"]["mode"], "fixture")
+        self.assertEqual(payload["schema"], "openmapstack-eval-results/v2")
+        self.assertEqual(payload["score_types"]["contract_ci"]["passed"], 1)
+
+    def test_zero_live_cases_is_setup_error(self) -> None:
+        self.write_case(modes=["fixture"])
+        output = self.root / "live.json"
+        exit_code, _, _ = self.call_main(["--mode", "live", "--json", str(output)])
+        self.assertEqual(exit_code, 2)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["selection"]["trials_run"], 0)
+        self.assertEqual(payload["selection"]["case_definitions_skipped"], 1)
+        self.assertEqual(payload["setup_errors"][0]["stage"], "selection")
+
+    def test_nonzero_generator_is_setup_failure_and_assertions_do_not_run(self) -> None:
+        command = f'{shlex.quote(sys.executable)} -c "raise SystemExit(7)"'
+        case_dir = self.write_case(generator=command, expect="failed")
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "setup_failed")
+        self.assertEqual(result["setup_error"]["stage"], "generator")
+        self.assertEqual(result["generator"]["returncode"], 7)
+        self.assertEqual(result["assertions"], [])
+        self.assertIsNone(result["workspace"])
+        self.assertEqual(result["generator"]["cwd"], "$WORKSPACE/project")
+        self.assertNotIn("/tmp/openmapstack-eval-", json.dumps(result))
+
+    def test_assertion_mismatch_uses_exit_one_not_setup_exit(self) -> None:
+        self.write_case(expect="failed")
+        output = self.root / "assertion-failure.json"
+        exit_code, _, _ = self.call_main(["--json", str(output)])
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["outcomes"]["assertions_failed"], 1)
+        self.assertEqual(payload["outcomes"]["setup_failed"], 0)
+        self.assertEqual(payload["results"][0]["status"], "assertions_failed")
+
+    def test_generator_timeout_is_setup_failure(self) -> None:
+        command = f'{shlex.quote(sys.executable)} -c "import time; time.sleep(2)"'
+        case_dir = self.write_case(generator=command)
+        result = eval_runner.run_case(case_dir, "fixture", timeout_s=0.01)
+        self.assertEqual(result["status"], "setup_failed")
+        self.assertTrue(result["generator"]["timed_out"])
+        self.assertIn("timed out", result["setup_error"]["message"])
+
+    def test_extra_and_rerun_generator_failures_are_setup_failures(self) -> None:
+        failure = f'{shlex.quote(sys.executable)} -c "raise SystemExit(8)"'
+        cases = (
+            self.write_case("extra-failure", extra_generators={"project_b": failure}),
+            self.write_case("rerun-failure", rerun_generator=failure),
+        )
+        expected_stages = ("extra_generator:project_b", "rerun_generator")
+        for case_dir, stage in zip(cases, expected_stages, strict=True):
+            with self.subTest(stage=stage):
+                result = eval_runner.run_case(case_dir, "fixture")
+                self.assertEqual(result["status"], "setup_failed")
+                self.assertEqual(result["setup_error"]["stage"], stage)
+
+    def test_missing_agent_cli_is_preflight_setup_failure(self) -> None:
+        case_dir = self.write_case("live-case", modes=["live"])
+
+        class MissingAdapter:
+            executable = "definitely-missing-agent"
+
+            @staticmethod
+            def is_available() -> bool:
+                return False
+
+        with patch.object(eval_runner, "_load_adapter", return_value=MissingAdapter()):
+            result = eval_runner.run_case(
+                case_dir, "live", agent_override="codex", skill_mode="disabled"
+            )
+        self.assertEqual(result["status"], "setup_failed")
+        self.assertEqual(result["setup_error"]["stage"], "agent_preflight")
+        self.assertEqual(result["assertions"], [])
+
+    def test_live_without_explicit_skill_mode_is_setup_failure(self) -> None:
+        # Which arm ran is recorded in the published result, so an inferred
+        # skill_mode mislabels the evidence instead of failing. run_case used
+        # to default to "disabled" while the CLI defaulted to "enabled".
+        case_dir = self.write_case("arm-unstated", modes=["live"])
+
+        class SilentAdapter:
+            executable = "codex"
+
+            @staticmethod
+            def is_available() -> bool:
+                return True
+
+        with patch.object(eval_runner, "_load_adapter", return_value=SilentAdapter()):
+            result = eval_runner.run_case(case_dir, "live", agent_override="codex")
+        self.assertEqual(result["status"], "setup_failed")
+        self.assertEqual(result["setup_error"]["stage"], "agent_preflight")
+        self.assertIn("skill_mode", result["setup_error"]["message"])
+        self.assertEqual(result["assertions"], [])
+
+    def test_fixture_mode_does_not_require_skill_mode(self) -> None:
+        # Fixture mode has no arm to choose, so requiring one there would be
+        # noise rather than a guard.
+        case_dir = self.write_case("fixture-no-arm")
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "passed")
+
+    def test_failed_agent_is_setup_failure_with_complete_evidence(self) -> None:
+        case_dir = self.write_case("live-case", modes=["live"])
+
+        class FailedAdapter:
+            executable = "fake-agent"
+
+            @staticmethod
+            def is_available() -> bool:
+                return True
+
+            @staticmethod
+            def run(prompt, workspace, fixture=None, timeout_s=900, model=None, seed=None):
+                return AgentRunResult(
+                    agent="fake",
+                    model=model,
+                    workspace=workspace,
+                    duration_s=0.25,
+                    success=False,
+                    returncode=9,
+                    command=["fake-agent", prompt],
+                    stdout="partial output",
+                    stderr="agent error",
+                    metadata={"requested_seed": seed, "timeout_s": timeout_s},
+                )
+
+        with patch.object(eval_runner, "_load_adapter", return_value=FailedAdapter()):
+            bundle = self.root / "failed-agent-bundle"
+            result = eval_runner.run_case(
+                case_dir,
+                "live",
+                agent_override="codex",
+                model="test-model",
+                seed=42,
+                artifact_dir=bundle,
+                skill_mode="disabled",
+            )
+        self.assertEqual(result["status"], "setup_failed")
+        self.assertEqual(result["setup_error"]["stage"], "agent_execution")
+        self.assertEqual(result["agent_run"]["returncode"], 9)
+        self.assertEqual(result["agent_run"]["stdout"], "partial output")
+        self.assertEqual(result["agent_run"]["stderr"], "agent error")
+        self.assertEqual(result["agent_run"]["model"], "test-model")
+        self.assertEqual(
+            json.loads((bundle / "grading.json").read_text(encoding="utf-8"))["status"],
+            "setup_failed",
+        )
+        self.assertEqual((bundle / "stdout.txt").read_text(encoding="utf-8"), "partial output")
+
+    def test_assertion_exception_cannot_satisfy_expected_failure(self) -> None:
+        case_dir = self.write_case(expect="failed")
+
+        def raising_assertion(workspace, **args):
+            raise RuntimeError("broken assertion implementation")
+
+        with patch.object(
+            eval_runner,
+            "_resolve_assertion",
+            return_value=("project", raising_assertion),
+        ):
+            result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "setup_failed")
+        self.assertEqual(result["setup_error"]["stage"], "assertion_execution")
+
+    def test_malformed_case_definition_returns_setup_exit_code(self) -> None:
+        case_dir = self.cases_dir / "bad-case"
+        case_dir.mkdir()
+        (case_dir / "expected.yaml").write_text(
+            "id: bad-case\ncase_type: positive\nmode: imaginary\nassertions: []\n",
+            encoding="utf-8",
+        )
+        output = self.root / "bad.json"
+        exit_code, _, stderr = self.call_main(["--json", str(output)])
+        self.assertEqual(exit_code, 2)
+        self.assertIn("Invalid eval configuration", stderr)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["setup_errors"][0]["stage"], "configuration")
+
+    def test_unexpected_workspace_error_is_reported_not_raised(self) -> None:
+        self.write_case()
+        output = self.root / "workspace-error.json"
+        with patch.object(eval_runner, "_prepare_workspace", side_effect=OSError("disk unavailable")):
+            exit_code, _, _ = self.call_main(["--json", str(output)])
+        self.assertEqual(exit_code, 2)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["outcomes"]["setup_failed"], 1)
+        self.assertEqual(payload["results"][0]["setup_error"]["stage"], "runner")
+        self.assertIn("disk unavailable", payload["results"][0]["setup_error"]["message"])
+
+    def test_repetitions_and_seed_are_recorded_per_trial(self) -> None:
+        self.write_case()
+        output = self.root / "repetitions.json"
+        exit_code, stdout, _ = self.call_main(["--repetitions", "2", "--seed", "100", "--json", str(output)])
+        self.assertEqual(exit_code, 0, stdout)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["selection"]["trials_run"], 2)
+        self.assertEqual([result["trial"] for result in payload["results"]], [1, 2])
+        self.assertEqual([result["seed"] for result in payload["results"]], [100, 101])
+
+    def test_score_types_are_reported_separately(self) -> None:
+        self.write_case("contract", score_types={"fixture": "contract_ci"})
+        self.write_case("mutation", score_types={"fixture": "mutation_tests"})
+        output = self.root / "scores.json"
+        exit_code, stdout, _ = self.call_main(["--json", str(output)])
+        self.assertEqual(exit_code, 0, stdout)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["score_types"]["contract_ci"]["passed"], 1)
+        self.assertEqual(payload["score_types"]["mutation_tests"]["passed"], 1)
+        self.assertEqual(payload["score_types"]["agent_benchmark"]["trials_run"], 0)
+        self.assertNotIn("cases_passed", payload)
+        self.assertIn("contract_ci: 1/1", stdout)
+        self.assertIn("mutation_tests: 1/1", stdout)
+        self.assertEqual(payload["mutation_score"]["detected"], 1)
+        self.assertEqual(payload["mutation_score"]["valid"], 1)
+        self.assertEqual(payload["mutation_score"]["isolated"], 1)
+        self.assertEqual(payload["mutation_score"]["score"], 1.0)
+        self.assertIn("mutation score: 1/1 detected", stdout)
+
+    def test_mutation_runs_a_healthy_control_and_marks_target_and_guards(self) -> None:
+        case_dir = self.write_case(
+            "paired-mutation",
+            score_types={"fixture": "mutation_tests"},
+            extra_assertions=[{"assert": "project.exists", "args": {"path": "guard.txt"}}],
+        )
+        (case_dir / "project" / "guard.txt").write_text("guard\n", encoding="utf-8")
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "passed", result)
+        analysis = result["mutation_analysis"]
+        self.assertTrue(analysis["healthy_control_passed"])
+        self.assertTrue(analysis["target_detected"])
+        self.assertTrue(analysis["guards_passed"])
+        self.assertTrue(analysis["isolated"])
+        self.assertTrue(analysis["control"]["healthy"])
+        target = next(item for item in result["assertions"] if item["mutation_role"] == "target")
+        self.assertEqual(target["actual_code"], "file_missing")
+        control_target = next(item for item in analysis["control"]["assertions"] if item["mutation_role"] == "target")
+        self.assertEqual(control_target["expect"], "passed")
+        self.assertEqual(control_target["actual_status"], "passed")
+
+    def test_unhealthy_mutation_control_is_setup_failure_and_ungraded(self) -> None:
+        case_dir = self.write_case("bad-control", score_types={"fixture": "mutation_tests"})
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        case["mutation"]["control_generator"] = case["fixture"]["generator"]
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "setup_failed", result)
+        self.assertEqual(result["setup_error"]["stage"], "mutation_control")
+        summary = eval_runner.build_summary([result], {"mode": "fixture"})
+        self.assertEqual(summary["mutation_score"]["valid"], 0)
+        self.assertEqual(summary["mutation_score"]["invalid"], 1)
+        self.assertIsNone(summary["mutation_score"]["score"])
+
+    def test_mutation_requires_exactly_one_target_and_control_generator(self) -> None:
+        case_dir = self.write_case("bad-mutation-contract", score_types={"fixture": "mutation_tests"})
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        del case["mutation"]
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "required property|mutation"):
+            eval_runner._load_case(case_dir)
+
+        case["mutation"] = {"control_generator": '{python} -c "pass"'}
+        case["assertions"][0].pop("expect")
+        case["assertions"][0].pop("expect_code")
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "exactly one non-passing"):
+            eval_runner._load_case(case_dir)
+
+    def test_multi_mode_live_run_is_isolated_and_receives_declared_fixtures(
+        self,
+    ) -> None:
+        fixtures_dir = self.root / "fixtures"
+        fixtures_dir.mkdir()
+        (fixtures_dir / "input.txt").write_text("fixture input\n", encoding="utf-8")
+        case_dir = self.write_case(
+            "multi-mode",
+            modes=["fixture", "live"],
+            live_fixtures=[
+                {
+                "source": "../../fixtures/input.txt",
+                "destination": "project/data/source/input.txt",
+                }
+            ],
+        )
+
+        class SuccessfulAdapter:
+            executable = "fake-agent"
+
+            @staticmethod
+            def is_available() -> bool:
+                return True
+
+            @staticmethod
+            def run(prompt, workspace, fixture=None, timeout_s=900, model=None, seed=None):
+                # The committed reference marker must not leak into a live benchmark.
+                if (workspace / "marker.txt").exists():
+                    raise AssertionError("live workspace inherited the reference solution")
+                if (workspace / "data/source/input.txt").read_text(encoding="utf-8") != "fixture input\n":
+                    raise AssertionError("declared live fixture was not prepared")
+                (workspace / "marker.txt").write_text("agent output\n", encoding="utf-8")
+                return AgentRunResult(
+                    agent="fake",
+                    model=model,
+                    workspace=workspace,
+                    duration_s=0.1,
+                    success=True,
+                    returncode=0,
+                    command=["fake-agent"],
+                    stdout="done",
+                    stderr="",
+                    metadata={"requested_seed": seed, "timeout_s": timeout_s},
+                )
+
+        fixture_result = eval_runner.run_case(case_dir, "fixture")
+        with patch.object(eval_runner, "_load_adapter", return_value=SuccessfulAdapter()):
+            live_result = eval_runner.run_case(
+                case_dir, "live", agent_override="codex", skill_mode="disabled"
+            )
+
+        self.assertEqual(fixture_result["status"], "passed")
+        self.assertEqual(fixture_result["case_type"], "positive")
+        self.assertEqual(fixture_result["score_type"], "contract_ci")
+        self.assertEqual(live_result["status"], "passed")
+        self.assertEqual(live_result["score_type"], "agent_benchmark")
+        self.assertEqual(
+            live_result["live_fixtures"][0]["destination"],
+            "$WORKSPACE/project/data/source/input.txt",
+        )
+
+    def test_score_type_keys_must_match_modes(self) -> None:
+        case_dir = self.write_case("bad-score-map")
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        case["score_types"] = {}
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "score_types keys must exactly match modes"):
+            eval_runner._load_case(case_dir)
+
+    def test_visual_mode_rules(self) -> None:
+        # A positive case with a visual mode must also declare fixture mode.
+        case_dir = self.write_case(
+            "visual-without-fixture",
+            modes=["visual"],
+            score_types={"visual": "integration_visual"},
+            generator="echo ok > {project_dir}/marker.txt",
+        )
+        with self.assertRaisesRegex(ValueError, "visual mode executes the fixture generator"):
+            eval_runner._load_case(case_dir)
+
+        # integration_visual is only valid for visual mode.
+        case_dir = self.write_case("visual-score-on-fixture", score_types={"fixture": "integration_visual"})
+        with self.assertRaisesRegex(ValueError, "integration_visual is only valid for visual mode"):
+            eval_runner._load_case(case_dir)
+
+        # A visual mode that reuses the fixture config is valid.
+        case_dir = self.write_case(
+            "visual-reuses-fixture",
+            modes=["fixture", "visual"],
+            score_types={"fixture": "contract_ci", "visual": "integration_visual"},
+            generator="echo ok > {project_dir}/marker.txt",
+        )
+        case_def = eval_runner._load_case(case_dir)
+        self.assertEqual(case_def["modes"], ["fixture", "visual"])
+
+    def test_visual_mutation_modes(self) -> None:
+        # A visual-only mutation declares its generator under the visual key.
+        case_dir = self.write_case(
+            "visual-mutation",
+            modes=["fixture"],
+            score_types={"fixture": "mutation_tests"},
+            generator="echo ok > {project_dir}/marker.txt",
+        )
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        case["modes"] = ["visual"]
+        case["score_types"] = {"visual": "mutation_tests"}
+        case["visual"] = case.pop("fixture")
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        case_def = eval_runner._load_case(case_dir)
+        self.assertIn("mutation", case_def)
+
+        # Mutations cannot map a mode to a non-mutation score type.
+        case_dir = self.write_case(
+            "mutation-mixed-scores",
+            modes=["fixture"],
+            score_types={"fixture": "mutation_tests"},
+            generator="echo ok > {project_dir}/marker.txt",
+        )
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        case["modes"] = ["fixture", "visual"]
+        case["score_types"] = {"fixture": "mutation_tests", "visual": "integration_visual"}
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "mutation cases must map every mode"):
+            eval_runner._load_case(case_dir)
+
+    def test_assertion_mode_scoping_validation(self) -> None:
+        case_dir = self.write_case("assertion-scope-invalid", generator="echo ok > {project_dir}/marker.txt")
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        case["assertions"].append({"assert": "project.exists", "args": {"path": "marker.txt"}, "modes": ["live"]})
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "modes must be a subset of the case modes"):
+            eval_runner._load_case(case_dir)
+
+    def test_assertion_entries_filtered_by_mode(self) -> None:
+        case_def = {
+            "assertions": [
+                {"assert": "a.a"},
+                {"assert": "b.b", "modes": ["visual"]},
+                {"assert": "c.c", "modes": ["fixture"]},
+            ],
+            "hard_gate": True,
+        }
+        fixture_entries = eval_runner._assertion_entries(case_def, {}, "fixture")
+        visual_entries = eval_runner._assertion_entries(case_def, {}, "visual")
+        self.assertEqual([entry["assert"] for entry in fixture_entries], ["a.a", "c.c"])
+        self.assertEqual([entry["assert"] for entry in visual_entries], ["a.a", "b.b"])
+
+    def test_mutation_case_cannot_contribute_to_contract_score(self) -> None:
+        case_dir = self.write_case("misclassified-mutation", score_types={"fixture": "mutation_tests"})
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        case["score_types"]["fixture"] = "contract_ci"
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "mutation cases must map every mode"):
+            eval_runner._load_case(case_dir)
+
+    def test_clean_rerun_requires_an_execution_assertion(self) -> None:
+        case_dir = self.write_case("ungraded-clean-rerun")
+        expected_path = case_dir / "expected.yaml"
+        case = yaml.safe_load(expected_path.read_text(encoding="utf-8"))
+        case["fixture"]["clean_rerun"] = {}
+        expected_path.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "clean_rerun requires"):
+            eval_runner._load_case(case_dir)
+
+    def test_source_hashes_magic_value_detects_generator_mutating_its_own_source(
+        self,
+    ) -> None:
+        fixtures_dir = self.root / "fixtures"
+        fixtures_dir.mkdir()
+        origin = fixtures_dir / "input.txt"
+        origin.write_text("immutable content\n", encoding="utf-8")
+
+        mutate_script = self.root / "mutate.py"
+        mutate_script.write_text(
+            "import sys\n"
+            "from pathlib import Path\n"
+            "out = Path(sys.argv[1])\n"
+            "out.mkdir(parents=True, exist_ok=True)\n"
+            "target = out / 'data' / 'source' / 'input.txt'\n"
+            "target.parent.mkdir(parents=True, exist_ok=True)\n"
+            "target.write_text('mutated by generator\\n')\n",
+            encoding="utf-8",
+        )
+        generator = f"{shlex.quote(sys.executable)} {shlex.quote(str(mutate_script))} {{project_dir}}"
+        case_dir = self.write_case(
+            "mutated-source-case",
+            generator=generator,
+            source_baseline=[
+                {
+                "source": "../../fixtures/input.txt",
+                "destination": "data/source/input.txt",
+                }
+            ],
+            extra_assertions=[
+                {
+                "assert": "overrides.source_files_byte_identical",
+                    "args": {
+                        "hashes_before": "$SOURCE_HASHES",
+                        "paths": ["data/source/input.txt"],
+                    },
+                "expect": "failed",
+                }
+            ],
+        )
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "passed", result)
+        mutation_assertion = next(a for a in result["assertions"] if a["assert"] == "overrides.source_files_byte_identical")
+        self.assertEqual(mutation_assertion["actual_status"], "failed")
+        self.assertTrue(mutation_assertion["matched_expectation"])
+
+    def test_source_hashes_baseline_passes_when_generator_leaves_source_untouched(
+        self,
+    ) -> None:
+        fixtures_dir = self.root / "fixtures"
+        fixtures_dir.mkdir()
+        origin = fixtures_dir / "input.txt"
+        origin.write_text("immutable content\n", encoding="utf-8")
+
+        copy_script = self.root / "copy.py"
+        copy_script.write_text(
+            "import shutil, sys\n"
+            "from pathlib import Path\n"
+            "out = Path(sys.argv[1])\n"
+            "(out / 'data' / 'source').mkdir(parents=True, exist_ok=True)\n"
+            f"shutil.copyfile({str(origin)!r}, out / 'data' / 'source' / 'input.txt')\n",
+            encoding="utf-8",
+        )
+        generator = f"{shlex.quote(sys.executable)} {shlex.quote(str(copy_script))} {{project_dir}}"
+        case_dir = self.write_case(
+            "clean-source-case",
+            generator=generator,
+            source_baseline=[
+                {
+                "source": "../../fixtures/input.txt",
+                "destination": "data/source/input.txt",
+                }
+            ],
+            extra_assertions=[
+                {
+                "assert": "overrides.source_files_byte_identical",
+                    "args": {
+                        "hashes_before": "$SOURCE_HASHES",
+                        "paths": ["data/source/input.txt"],
+                    },
+                }
+            ],
+        )
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "passed", result)
+
+    def test_source_immutability_is_injected_when_case_omits_assertion(self) -> None:
+        fixtures_dir = self.root / "fixtures"
+        fixtures_dir.mkdir()
+        origin = fixtures_dir / "input.txt"
+        origin.write_text("immutable content\n", encoding="utf-8")
+        mutate_script = self.root / "mutate-automatic.py"
+        mutate_script.write_text(
+            "import sys\n"
+            "from pathlib import Path\n"
+            "out = Path(sys.argv[1])\n"
+            "target = out / 'data/source/input.txt'\n"
+            "target.parent.mkdir(parents=True, exist_ok=True)\n"
+            "target.write_text('mutated content\\n')\n",
+            encoding="utf-8",
+        )
+        case_dir = self.write_case(
+            "automatic-source-gate",
+            generator=f"{{python}} {shlex.quote(str(mutate_script))} {{project_dir}}",
+            source_baseline=[
+                {
+                "source": "../../fixtures/input.txt",
+                "destination": "data/source/input.txt",
+                }
+            ],
+        )
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "assertions_failed", result)
+        injected = next(item for item in result["assertions"] if item["assert"] == "overrides.source_files_byte_identical")
+        self.assertEqual(injected["actual_code"], "source_mutated")
+        self.assertFalse(injected["matched_expectation"])
+
+    def test_python_placeholder_uses_active_runner_interpreter(self) -> None:
+        case_dir = self.write_case(
+            "active-python",
+            generator="{python} -c \"from pathlib import Path; Path('marker.txt').write_text('ok')\"",
+        )
+        result = eval_runner.run_case(case_dir, "fixture")
+        self.assertEqual(result["status"], "passed", result)
+        self.assertTrue(result["generator"]["command"].startswith(shlex.quote(sys.executable)))
+
+    def test_live_trial_retains_complete_audit_bundle_before_cleanup(self) -> None:
+        case_dir = self.write_case("audited-live", modes=["live"])
+        bundle = self.root / "bundles" / "run-1" / "codex" / "audited-live" / "1"
+
+        class SuccessfulAdapter:
+            executable = "fake-agent"
+
+            @staticmethod
+            def is_available() -> bool:
+                return True
+
+            @staticmethod
+            def run(prompt, workspace, fixture=None, timeout_s=900, model=None, seed=None):
+                (workspace / "marker.txt").write_text("generated\n", encoding="utf-8")
+                events = [{"type": "turn.completed", "usage": {"output_tokens": 5}}]
+                return AgentRunResult(
+                    agent="codex",
+                    model=model,
+                    workspace=workspace,
+                    duration_s=0.2,
+                    success=True,
+                    returncode=0,
+                    command=["fake-agent", "<PROMPT:prompt.md>"],
+                    stdout=json.dumps(events[0]) + "\n",
+                    stderr="diagnostic\n",
+                    version="fake-agent 1.2.3",
+                    events=events,
+                    usage={"output_tokens": 5, "total_tokens": 5},
+                    final_message="done",
+                    permissions={"sandbox": "workspace-write"},
+                    metadata={"structured_completion": True},
+                )
+
+        with patch.object(eval_runner, "_load_adapter", return_value=SuccessfulAdapter()):
+            result = eval_runner.run_case(
+                case_dir,
+                "live",
+                agent_override="codex",
+                model="gpt-test",
+                seed=12,
+                artifact_dir=bundle,
+                benchmark_context={"run_id": "run-1", "skill_commit": "abc123"},
+                skill_mode="disabled",
+            )
+
+        self.assertEqual(result["status"], "passed", result)
+        self.assertEqual(result["artifact_bundle"], str(bundle))
+        self.assertEqual(
+            {path.name for path in bundle.iterdir()},
+            {
+                "prompt.md",
+                "events.ndjson",
+                "stdout.txt",
+                "stderr.txt",
+                "agent.json",
+                "generated-project",
+                "grading.json",
+            },
+        )
+        self.assertEqual((bundle / "prompt.md").read_text(encoding="utf-8"), "Build the project.\n")
+        self.assertTrue((bundle / "generated-project" / "marker.txt").is_file())
+        agent = json.loads((bundle / "agent.json").read_text(encoding="utf-8"))
+        self.assertEqual(agent["schema"], "openmapstack-agent-run/v1")
+        self.assertEqual(agent["model"], "gpt-test")
+        self.assertEqual(agent["version"], "fake-agent 1.2.3")
+        self.assertNotIn("stdout", agent)
+        grading = json.loads((bundle / "grading.json").read_text(encoding="utf-8"))
+        self.assertEqual(grading["assertions"][0]["actual_status"], "passed")
+
+    def test_repeated_live_main_retains_fresh_bundle_per_trial(self) -> None:
+        self.write_case("repeat-live", modes=["live"])
+
+        class SuccessfulAdapter:
+            executable = "fake-agent"
+
+            @staticmethod
+            def is_available() -> bool:
+                return True
+
+            @staticmethod
+            def run(prompt, workspace, fixture=None, timeout_s=900, model=None, seed=None):
+                if (workspace / "marker.txt").exists():
+                    raise AssertionError("trial workspace was not fresh")
+                skill = workspace.parent / "benchmark-context" / "openmapstack" / "SKILL.md"
+                if not skill.is_file() or "controlled OpenMapStack skill snapshot" not in prompt:
+                    raise AssertionError("controlled skill context was not injected")
+                (workspace / "marker.txt").write_text(str(seed), encoding="utf-8")
+                return AgentRunResult(
+                    agent="codex",
+                    model=model,
+                    workspace=workspace,
+                    duration_s=0.1,
+                    success=True,
+                    returncode=0,
+                    command=["fake-agent", "<PROMPT:prompt.md>"],
+                    version="fake 1",
+                    events=[{"type": "turn.completed"}],
+                    usage={"total_tokens": 10},
+                    cost_usd=0.01,
+                    permissions={"sandbox": "workspace-write"},
+                    metadata={"structured_completion": True},
+                )
+
+        summary_path = self.root / "benchmark.json"
+        with patch.object(eval_runner, "_load_adapter", return_value=SuccessfulAdapter()):
+            exit_code, stdout, stderr = self.call_main(
+                [
+                    "--mode",
+                    "live",
+                    "--agent",
+                    "codex",
+                    "--model",
+                    "gpt-test",
+                    "--case",
+                    "repeat-live",
+                    "--repetitions",
+                    "3",
+                    "--seed",
+                    "50",
+                    "--run-id",
+                    "repeat-run",
+                    "--results-dir",
+                    str(self.results_dir),
+                    "--json",
+                    str(summary_path),
+                ]
+            )
+
+        self.assertEqual(exit_code, 0, (stdout, stderr))
+        for trial, seed in ((1, "50"), (2, "51"), (3, "52")):
+            generated = self.results_dir / "repeat-run" / "codex" / "repeat-live" / str(trial) / "generated-project" / "marker.txt"
+            self.assertEqual(generated.read_text(encoding="utf-8"), seed)
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        self.assertEqual(summary["agent_benchmark"]["trials"], 3)
+        self.assertEqual(summary["agent_benchmark"]["task_success_rate"], 1.0)
+        self.assertEqual(summary["agent_benchmark"]["median_tokens"], 10.0)
+        self.assertEqual(summary["agent_benchmark"]["median_cost_usd"], 0.01)
+        skill_context = summary["results"][0]["benchmark_context"]["skill"]
+        self.assertEqual(skill_context["mode"], "enabled")
+        self.assertRegex(skill_context["content_sha256"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_live_cli_requires_explicit_model_identity(self) -> None:
+        self.write_case("live-model", modes=["live"])
+        output = self.root / "missing-model.json"
+        exit_code, _, stderr = self.call_main(["--mode", "live", "--case", "live-model", "--json", str(output)])
+        self.assertEqual(exit_code, 2)
+        self.assertIn("require --model", stderr)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["setup_errors"][0]["stage"], "model_identity")
+
+    def test_live_model_can_come_from_openai_compatible_environment(self) -> None:
+        self.write_case("env-model-live", modes=["live"])
+
+        recorded: dict[str, Any] = {}
+
+        class EnvAdapter:
+            name = "openai_compatible"
+            executable = ""
+
+            def is_available(self) -> bool:
+                return True
+
+            def run(self, prompt, workspace, fixture=None, timeout_s=900, model=None, seed=None):
+                recorded["model"] = model
+                (workspace / "marker.txt").write_text("ok\n", encoding="utf-8")
+                return AgentRunResult(
+                    agent="openai_compatible",
+                    model=model,
+                    workspace=workspace,
+                    duration_s=0.1,
+                    success=True,
+                    returncode=0,
+                    command=["POST", "https://api.example/v1/chat/completions", "<PROMPT:prompt.md>"],
+                    usage={"total_tokens": 5},
+                    final_message="done",
+                    permissions={},
+                    metadata={"structured_completion": True},
+                )
+
+        env = {key: value for key, value in os.environ.items() if not key.startswith("OPENAI_COMPATIBLE_")}
+        env["OPENAI_COMPATIBLE_MODEL"] = "env/model-1"
+        output = self.root / "env-model.json"
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.object(eval_runner, "_load_adapter", return_value=EnvAdapter()),
+        ):
+            exit_code, stdout, stderr = self.call_main(
+                [
+                    "--mode",
+                    "live",
+                    "--agent",
+                    "openai_compatible",
+                    "--case",
+                    "env-model-live",
+                    "--no-retain-artifacts",
+                    "--json",
+                    str(output),
+                ]
+            )
+
+        self.assertEqual(exit_code, 0, (stdout, stderr))
+        self.assertEqual(recorded["model"], "env/model-1")
+        payload = json.loads((self.results_dir / "latest.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["run_config"]["model"], "env/model-1")
+        self.assertEqual(payload["run_config"]["model_source"], "env:OPENAI_COMPATIBLE_MODEL")
+
+    def test_live_env_model_does_not_leak_into_non_openai_adapters(self) -> None:
+        self.write_case("claude-env-model", modes=["live"])
+        env = {key: value for key, value in os.environ.items() if not key.startswith("OPENAI_COMPATIBLE_")}
+        env["OPENAI_COMPATIBLE_MODEL"] = "env/model-1"
+        output = self.root / "claude-env-model.json"
+        with patch.dict(os.environ, env, clear=True):
+            exit_code, _, stderr = self.call_main(
+                ["--mode", "live", "--agent", "claude_code", "--case", "claude-env-model", "--json", str(output)]
+            )
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("require --model", stderr)
+
+    def test_case_flag_can_select_multiple_cases(self) -> None:
+        self.write_case("first")
+        self.write_case("second")
+        output = self.root / "selected.json"
+        exit_code, stdout, _ = self.call_main(["--case", "first", "--case", "second", "--json", str(output)])
+        self.assertEqual(exit_code, 0, stdout)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual([result["id"] for result in payload["results"]], ["first", "second"])
+
+
+class PairedArmTests(_RunnerHarness):
+    """Paired plain/oms arms, arm provenance, and task export (issue #13, C2/C3)."""
+
+    def _adapter(self, seen: list[tuple[str, int | None]]):
+        class Adapter:
+            executable = "fake-agent"
+
+            @staticmethod
+            def is_available() -> bool:
+                return True
+
+            @staticmethod
+            def run(prompt, workspace, fixture=None, timeout_s=900, model=None, seed=None):
+                skill_present = (workspace.parent / "benchmark-context" / "openmapstack" / "SKILL.md").is_file()
+                seen.append(("oms" if skill_present else "plain", seed))
+                (workspace / "marker.txt").write_text("ok\n", encoding="utf-8")
+                return AgentRunResult(
+                    agent="codex", model="observed-model", workspace=workspace, duration_s=0.1, success=True, returncode=0,
+                    command=["fake-agent"], version="fake 2", events=[{"type": "x"}] * (3 if skill_present else 5),
+                    usage={"total_tokens": 10 if skill_present else 20}, cost_usd=0.02 if skill_present else 0.01,
+                    permissions={}, metadata={"structured_completion": True, "temperature": 0.0},
+                )
+
+        return Adapter()
+
+    def test_paired_arms_share_cases_trials_and_seeds_and_are_reported_apart(self) -> None:
+        self.write_case("paired-live", modes=["live"])
+        # Present in the selection, skipped in live mode: it must not enter
+        # the arm's task-set identity.
+        self.write_case("fixture-only-neighbour")
+        seen: list[tuple[str, int | None]] = []
+        summary_path = self.root / "paired.json"
+        with patch.object(eval_runner, "_load_adapter", return_value=self._adapter(seen)):
+            exit_code, stdout, stderr = self.call_main([
+                "--mode", "live", "--agent", "codex", "--model", "gpt-test", "--case", "paired-live",
+                "--arms", "paired", "--repetitions", "2", "--seed", "7", "--price-catalog-date", "2026-09-01",
+                "--run-id", "paired-run", "--results-dir", str(self.results_dir), "--json", str(summary_path),
+            ])
+        self.assertEqual(exit_code, 0, (stdout, stderr))
+        self.assertEqual(sorted(seen), [("oms", 7), ("oms", 8), ("plain", 7), ("plain", 8)])
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        paired = summary["paired_arms"]
+        self.assertTrue(paired["task_parity"])
+        self.assertEqual({row["arm"] for row in paired["pareto"]}, {"plain", "oms"})
+        self.assertEqual(paired["arms"]["oms"]["quality"]["median_cost_usd"], 0.02)
+        self.assertEqual(paired["arms"]["plain"]["quality"]["median_tokens"], 20.0)
+        self.assertEqual(paired["arms"]["plain"]["diagnostics"]["median_event_count"], 5)
+        self.assertNotIn("success_per_dollar", json.dumps(paired))
+        self.assertEqual(summary["run_config"]["arms"], ["plain", "oms"])
+        self.assertEqual(summary["run_config"]["skill_mode"], "paired")
+        provenance = {record["arm"]: record for record in summary["run_config"]["arm_provenance"]}
+        self.assertEqual(provenance["oms"]["skill"]["mode"], "enabled")
+        self.assertRegex(provenance["oms"]["skill"]["content_sha256"], r"^sha256:[0-9a-f]{64}$")
+        self.assertIsNone(provenance["plain"]["skill"]["content_sha256"])
+        self.assertEqual(provenance["oms"]["price_catalog_date"], "2026-09-01")
+        self.assertEqual(provenance["oms"]["tool_surface"], {"adapter": "codex", "agent_version": "fake 2"})
+        self.assertEqual(provenance["oms"]["sampling"], {"seed": 7, "temperature": 0.0, "reasoning": None})
+        self.assertEqual(provenance["oms"]["task_set"], provenance["plain"]["task_set"])
+        self.assertEqual(provenance["oms"]["task_set"]["cases"], ["paired-live"])
+        self.assertEqual(provenance["oms"]["checker"]["check_api_version"], "openmapstack-check-api/v1")
+        for arm in ("plain", "oms"):
+            bundle = self.results_dir / "paired-run" / "codex" / arm / "paired-live" / "1"
+            self.assertTrue((bundle / "grading.json").is_file(), bundle)
+        self.assertIn("paired arms (task parity)", stdout)
+
+    def test_arm_flags_must_agree_and_default_to_oms(self) -> None:
+        self.write_case("arm-flags", modes=["live"])
+        seen: list[tuple[str, int | None]] = []
+        summary_path = self.root / "arm-flags.json"
+        with patch.object(eval_runner, "_load_adapter", return_value=self._adapter(seen)):
+            exit_code, _, _ = self.call_main(["--mode", "live", "--model", "requested-alias", "--case", "arm-flags", "--no-retain-artifacts", "--json", str(summary_path)])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(seen, [("oms", None)])
+        # --agent was omitted and the adapter reported what actually ran:
+        # provenance records the resolved adapter and observed model.
+        [record] = json.loads(summary_path.read_text(encoding="utf-8"))["run_config"]["arm_provenance"]
+        self.assertEqual(record["tool_surface"]["adapter"], "codex")
+        self.assertEqual(record["model"], {"provider": "openai", "id": "observed-model", "revision": None})
+        with self.assertRaises(SystemExit):
+            self.call_main(["--mode", "live", "--agent", "codex", "--model", "m", "--skill-mode", "disabled", "--arms", "oms"])
+        with self.assertRaises(SystemExit):
+            self.call_main(["--mode", "live", "--agent", "codex", "--model", "m", "--price-catalog-date", "yesterday"])
+
+    def test_export_tasks_writes_vendor_neutral_bundles(self) -> None:
+        fixture = self.root / "fixture.geojson"
+        fixture.write_text('{"type": "FeatureCollection", "features": []}', encoding="utf-8")
+        self.write_case("070-underspecified-prompt", modes=["live"], live_fixtures=[
+            {"source": os.path.relpath(fixture, self.cases_dir / "070-underspecified-prompt"), "destination": "project/data/source/fixture.geojson"},
+        ])
+        # fixture sources must stay inside the eval tree for a live run, but export only reads them
+        self.write_case("fixture-only")
+        destination = self.root / "tasks"
+        exit_code, stdout, stderr = self.call_main(["--export-tasks", str(destination)])
+        self.assertEqual(exit_code, 0, (stdout, stderr))
+        index = json.loads((destination / "index.json").read_text(encoding="utf-8"))
+        self.assertEqual([task["id"] for task in index["tasks"]], ["070-underspecified-prompt"])
+        task = json.loads((destination / "070-underspecified-prompt" / "task.json").read_text(encoding="utf-8"))
+        self.assertEqual(task["schema"], "openmapstack-benchmark-task/v1")
+        self.assertEqual(task["ownership"], "openmapbench")
+        self.assertEqual(task["prompt"], "Build the project.\n")
+        self.assertEqual(task["fixtures"][0]["destination"], "project/data/source/fixture.geojson")
+        self.assertTrue((destination / "070-underspecified-prompt" / "fixtures" / "fixture.geojson").is_file())
+        self.assertFalse((destination / "070-underspecified-prompt" / "project").exists())
+        self.assertEqual(
+            eval_runner.validation_errors(task, eval_runner._load_eval_schema("benchmark-task-v1.schema.json")), []
+        )
+        exit_code, _, stderr = self.call_main(["--export-tasks", str(self.root / "none"), "--case", "fixture-only"])
+        self.assertEqual(exit_code, 2)
+        self.assertIn("No live-capable", stderr)
+
+
+class CapabilityRollupTests(unittest.TestCase):
+    """A pass rate produced where part of the suite could not run is not the
+    same evidence as one produced where all of it ran. The rollup makes that
+    difference visible in the published numbers."""
+
+    @staticmethod
+    def _case(assertions: list[dict[str, Any]], status: str = "passed") -> dict[str, Any]:
+        return {"status": status, "assertions": assertions}
+
+    def test_full_fidelity_run_is_marked_as_such(self) -> None:
+        rollup = eval_runner.rollup_capability([
+            self._case([
+                {"actual_status": "passed", "matched_expectation": True, "hard_gate": True},
+                {"actual_status": "failed", "matched_expectation": True, "hard_gate": True},
+            ])
+        ])
+        self.assertEqual(rollup["assertions_evaluated"], 2)
+        self.assertEqual(rollup["assertions_not_testable"], 0)
+        self.assertEqual(rollup["unmet_soft_gates"], 0)
+        self.assertTrue(rollup["fully_exercised"])
+
+    def test_not_testable_and_unmet_soft_gates_are_counted(self) -> None:
+        rollup = eval_runner.rollup_capability([
+            self._case([
+                {"actual_status": "passed", "matched_expectation": True, "hard_gate": True},
+                # PyQGIS absent: the assertion never really ran.
+                {"actual_status": "not_testable", "matched_expectation": False, "hard_gate": False},
+                # A soft gate that failed without failing its case.
+                {"actual_status": "failed", "matched_expectation": False, "hard_gate": False},
+            ])
+        ])
+        self.assertEqual(rollup["assertions_evaluated"], 3)
+        self.assertEqual(rollup["assertions_not_testable"], 1)
+        self.assertEqual(rollup["unmet_soft_gates"], 2)
+        self.assertFalse(rollup["fully_exercised"])
+
+    def test_skipped_and_setup_failed_cases_are_excluded(self) -> None:
+        rollup = eval_runner.rollup_capability([
+            self._case([{"actual_status": "not_testable", "matched_expectation": False, "hard_gate": False}],
+                       status="skipped"),
+            self._case([{"actual_status": "not_testable", "matched_expectation": False, "hard_gate": False}],
+                       status="setup_failed"),
+        ])
+        self.assertEqual(rollup["assertions_evaluated"], 0)
+        self.assertFalse(rollup["fully_exercised"])
+
+
+class CoverageConfigTests(unittest.TestCase):
+    """`coverage run` aborts with "Couldn't trace with concurrency=X, the
+    module isn't installed" when a declared concurrency library is missing.
+    The declaration and the documented install must therefore stay in step,
+    or the coverage gate becomes unrunnable for anyone following the README.
+    """
+
+    def test_declared_concurrency_libraries_are_installable_and_declared(self) -> None:
+        try:
+            import tomllib
+        except ModuleNotFoundError:  # Python 3.10
+            self.skipTest("tomllib requires Python 3.11+")
+        config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        declared = config["tool"]["coverage"]["run"].get("concurrency", [])
+        requirements = (REPO_ROOT / "evals" / "requirements.txt").read_text(encoding="utf-8").lower()
+        for library in declared:
+            if library == "thread":  # stdlib; coverage never needs a package for it
+                continue
+            with self.subTest(library=library):
+                self.assertIsNotNone(
+                    importlib.util.find_spec(library),
+                    f"coverage declares concurrency={library!r} but it is not importable",
+                )
+                self.assertIn(
+                    library,
+                    requirements,
+                    f"coverage declares concurrency={library!r}; evals/requirements.txt must install it",
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,207 @@
+{
+  "run_id": "run-20260909-133304",
+  "schema": "openmapstack-project/v1",
+  "status": "warning",
+  "checks": [
+    {
+      "id": "geometry_valid",
+      "status": "passed",
+      "features_checked": 517,
+      "invalid_count": 0
+    },
+    {
+      "id": "no_duplicate_cadastral_id",
+      "status": "passed",
+      "duplicates": 0
+    },
+    {
+      "id": "crs_known",
+      "status": "passed",
+      "expected": "EPSG:3301",
+      "actual": "EPSG:3301"
+    },
+    {
+      "id": "no_null_cadastral_id",
+      "status": "passed",
+      "nulls": 0
+    },
+    {
+      "id": "row_count_gt_zero",
+      "status": "passed",
+      "rows": 517,
+      "prime_tier1_rows": 66
+    },
+    {
+      "id": "parcel_area_range",
+      "status": "passed",
+      "out_of_range_count": 0
+    },
+    {
+      "id": "highway_distance_check",
+      "status": "passed",
+      "out_of_range_count": 0
+    },
+    {
+      "id": "source_semantics_verified",
+      "status": "passed",
+      "invalid_education_rows": 0,
+      "school_predicate": "Omand=1 AND Liik<>5 AND Lopetamise_kp IS NULL",
+      "kindergarten_predicate": "Liik=10 AND Lopetamise_kp IS NULL"
+    },
+    {
+      "id": "education_ownership_check",
+      "status": "passed",
+      "invalid_rows": 0
+    },
+    {
+      "id": "source_result_complete",
+      "status": "passed",
+      "roads": {
+        "matched": 1444,
+        "returned": 1444
+      },
+      "education": {
+        "matched": 62,
+        "returned": 62
+      }
+    },
+    {
+      "id": "overrides_applied",
+      "status": "passed",
+      "declared": [
+        "OVERRIDE-001",
+        "OVERRIDE-002"
+      ],
+      "results": [
+        {
+          "id": "OVERRIDE-001",
+          "status": "applied",
+          "detail": "kindergarten:C321B05A-5565-4AEB-B77B-FEE90B4C13FC.active: True -> False",
+          "target": "kindergarten:C321B05A-5565-4AEB-B77B-FEE90B4C13FC",
+          "field": "active",
+          "from": true,
+          "to": false,
+          "origin": "scenario"
+        },
+        {
+          "id": "OVERRIDE-002",
+          "status": "applied",
+          "detail": "1 scenario road geometry loaded from data/overrides/planned-road.geojson"
+        }
+      ],
+      "effective_education_pois": {
+        "school": 27,
+        "kindergarten": 34,
+        "scenario_inactive": 1
+      }
+    },
+    {
+      "id": "manifest_graph_resolves",
+      "status": "passed",
+      "steps_checked": 10,
+      "symbols_resolved": 14,
+      "errors": []
+    },
+    {
+      "id": "view_controls_match_pipeline",
+      "status": "passed",
+      "controls": [
+        "education_threshold",
+        "land_use",
+        "max_road_distance",
+        "min_area",
+        "scenario_outage",
+        "scenario_road"
+      ],
+      "mismatches": []
+    },
+    {
+      "id": "qgis_project_static_valid",
+      "status": "passed",
+      "project": "project.qgz",
+      "errors": []
+    },
+    {
+      "id": "qgis_runtime_load",
+      "status": "not_testable",
+      "reason": "PyQGIS is not installed in this execution environment"
+    },
+    {
+      "id": "manifest_report_parity",
+      "status": "passed",
+      "expected": [
+        "crs_known",
+        "education_ownership_check",
+        "geometry_valid",
+        "highway_distance_check",
+        "manifest_graph_resolves",
+        "manifest_report_parity",
+        "no_duplicate_cadastral_id",
+        "no_null_cadastral_id",
+        "overrides_applied",
+        "parcel_area_range",
+        "qgis_project_static_valid",
+        "row_count_gt_zero",
+        "source_result_complete",
+        "source_semantics_verified",
+        "view_controls_match_pipeline"
+      ],
+      "reported": [
+        "crs_known",
+        "education_access_method",
+        "education_ownership_check",
+        "education_source_license",
+        "geometry_valid",
+        "highway_distance_check",
+        "manifest_graph_resolves",
+        "manifest_report_parity",
+        "no_duplicate_cadastral_id",
+        "no_null_cadastral_id",
+        "overrides_applied",
+        "parcel_area_range",
+        "qgis_project_static_valid",
+        "qgis_runtime_load",
+        "row_count_gt_zero",
+        "source_result_complete",
+        "source_semantics_verified",
+        "view_controls_match_pipeline"
+      ]
+    },
+    {
+      "id": "education_source_license",
+      "status": "warning",
+      "reason": "The authoritative Tartu ArcGIS items do not publish explicit license text"
+    },
+    {
+      "id": "education_access_method",
+      "status": "warning",
+      "reason": "2 km straight-line proxy; no pedestrian-network isochrone was computed"
+    }
+  ],
+  "candidate_count": 517,
+  "prime_tier1_count": 66,
+  "sources": {
+    "cadastral_parcels": "https://s3.pilw.io/rp-kemit-kataster/ANDMED/Tartu_maakond_KATASTER_GPKG.zip",
+    "roads": "https://gsavalik.envir.ee/geoserver/etak/wfs",
+    "education_pois": "https://gis.tartulv.ee/arcgis/rest/services/Haridus"
+  },
+  "overrides": [
+    {
+      "id": "OVERRIDE-001",
+      "status": "applied",
+      "detail": "kindergarten:C321B05A-5565-4AEB-B77B-FEE90B4C13FC.active: True -> False",
+      "target": "kindergarten:C321B05A-5565-4AEB-B77B-FEE90B4C13FC",
+      "field": "active",
+      "from": true,
+      "to": false,
+      "origin": "scenario"
+    },
+    {
+      "id": "OVERRIDE-002",
+      "status": "applied",
+      "detail": "1 scenario road geometry loaded from data/overrides/planned-road.geojson"
+    }
+  ],
+  "inputs_hash": "sha256:b33a5402987c8b5e737c613d2063154a2cfb5466e1c24bbf7c8162b8286e995c",
+  "outputs_hash": "sha256:a6bb45317750bfc9c52e6eba03c3198b64e129b37a0cf175fa0a0a097ab53203"
+}

@@ -1,0 +1,36 @@
+.claude/settings.local.json
+pipelines/*/data/
+pipelines/*/out/
+pipelines/*/.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.DS_Store
+.claude/settings.json
+.wrangler/
+
+.e2e-venv/
+# regenerable outputs from the example's run_e2e.py
+examples/tartu-development/data/source/
+examples/tartu-development/data/derived/
+*.e2e-dashboard.png
+# intermediate QGIS XML (the .qgz zip already embeds it)
+examples/tartu-development/project.qgs
+
+# eval run artifacts (evals/README.md documents how to regenerate)
+evals/results/*
+!evals/results/.gitkeep
+eval-results.json
+eval-benchmark-results.json
+# The offline container writes into evals/results/ (already ignored above).
+# Kept so an older checkout's root-level copy stays ignored rather than
+# resurfacing as an untracked file.
+offline-eval-results.json
+.coverage
+assertion-coverage.json
+assertion-coverage.xml
+.*venv/
+venv/

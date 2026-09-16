@@ -1,0 +1,315 @@
+# openmapstack
+
+**Turn Geospatial questions into reproducible, validated GIS analysis project (with very nice interactive map on web and QGIS).**
+
+Install:
+```bash
+npx skills add jaakla/openmapstack -g
+```
+
+OpenMapStack gives your favorite AI agent: Claude Code, Codex, Cursor, OpenCode, PI and 50+ other agents a production workflow from **authoritative data discovery** through reusable analysis pipeline.py to interactive web and GIS deliverables. The workflow becomes inspectable and repeatable as well-defined projects in a `yaml` file with pinned sources, explicit assumptions and CRS choices, deterministic processing in a python script, isolated overrides, machine-readable validation, and surfaced provenance.
+
+It is open-first (both data and code-wise) and cloud-native by default, built on shoulders of the awesome Open GIS stack: STAC for discovery; GeoParquet, COG, and PMTiles for storage and delivery; DuckDB and PostGIS for compute; and QGIS, MapLibre, and Martin for presentation. It also encourages to use GDAL/OGR, GeoPandas, xarray/rioxarray, PDAL, routing engines, spatial SQL, and pragmatic hosted services when scale or reliability requires them.
+
+## What's in this repo
+
+Core skills:
+
+- [SKILL.md](SKILL.md) — the skill entry point: triggers, global defaults, format and compute decision matrices, anti-patterns, and a quick triage guide.
+- [references/data-sources.md](references/data-sources.md) - lists OSM, Overture, Sentinel/Landsat, regional portals, STAC catalogs and others.
+- [references/services-and-scale.md](references/services-and-scale.md) - depending on case use local installs or hosted/SaaS services for global-scale basemaps, elevation, routing, geocoding, place search, and postcodes.
+- [references/user-data-sources.md](references/user-data-sources.md) - the user's own warehouse data: credentials by reference, read-only discovery, approval-gated snapshots, and the pin classes that make a warehouse table reproducible.
+- [references/formats-and-crs.md](references/formats-and-crs.md) - how to choose formats, conversions, projections, EPSG codes.
+- [references/processing.md](references/processing.md) - when and how to use GDAL/OGR, GeoPandas, xarray, DuckDB, PostGIS, PDAL and other open geo processing tools.
+- [references/analytics.md](references/analytics.md) — do vector/raster analytics, terrain, hydrology, network, point clouds, geocoding etc.
+- [references/web-delivery.md](references/web-delivery.md) — renderer selection for maps, PMTiles, MVT, Martin, TiTiler, MapLibre, deck.gl, kepler.gl, and lonboard formats and engines.
+- [references/qgis.md](references/qgis.md) — QGIS desktop, plugins, PyQGIS, Processing, QGIS MCP.
+- [references/validation-and-ops.md](references/validation-and-ops.md) — validation, manifests, attribution, and deployment checks, including the machine-readable reproducible-project contract.
+- [references/project-spec.md](references/project-spec.md) — the specific`openmapstack-project/v1` schema: compiling any material analysis into a reproducible GIS project (`project.yaml`, pipeline, source provenance, overrides, validation, semantic presentation, QGIS output).
+- [references/project-workflow.md](references/project-workflow.md) — the mandatory material-analysis workflow and delivery rules, loaded when a task needs a reproducible project.
+- [templates/](templates/) — ready scaffolds (`project.yaml`, `pipeline.py`, `presentation.yaml`, `validation.yaml`) for new projects.
+
+Additional materials:
+
+- [examples/tartu-development/](examples/tartu-development/) — a fully-worked reproducible project matching the acceptance scenario: source provenance + timestamps, explicit assumptions, two verified project overrides (a scenario attribute change with prior-value verification, and hypothetical scenario geometry), deterministic pipeline, machine-readable validation, and semantic presentation.
+- [evals/](evals/) — the eval suite grading whether an agent reaches the right analytical answer, respects the GIS-method guardrails, and reruns reproducibly, with the `openmapstack-project/v1` contract as the substrate that makes those independently checkable: `python evals/run.py --mode fixture` runs deterministic, no-LLM checks against real generated artifacts (analytical correctness against known geospatial truth, metric CRS, source immutability, schema, overrides, validation integrity, presentation contract, and clean reruns), plus adversarial cases and a pluggable live-agent benchmark (Claude Code, Codex, and any OpenAI-compatible API such as OpenRouter — URL and model via `OPENAI_COMPATIBLE_*` env, API key as a secret).
+- [`openmapstack/`](openmapstack/) — the installable `openmapstack validate/run/inspect` CLI for auditing and executing `openmapstack-project/v1` projects, plus [`openmapstack/checks/`](openmapstack/checks/): the reusable, semantic check library. All but five of its checks are oracle-free, so the same functions that grade the eval suite also grade a user's own project on data this repository has never seen.
+- [docs/openmapbench-interop.md](docs/openmapbench-interop.md) — the narrow, versioned contract a benchmark harness such as OpenMapBench consumes: `openmapstack checks` / `check` / `api-info` (`openmapstack-check-api/v1`), the packaged result schemas, skill snapshots, arm provenance, and exported task bundles.
+- [`.claude-plugin/`](.claude-plugin/) — Claude Code plugin and marketplace manifests, so the repository can also be installed with `/plugin install`. Validated in CI by [`.github/workflows/plugin.yml`](.github/workflows/plugin.yml).
+
+Some my local Estonia-specific guidance (Maa- ja Ruumiamet, ETAK, EPSG:3301 / L-EST97) is included for convenience. But most of the major global sources are included for world-wide coverage.
+
+## Install
+
+### Recommended: skills.sh CLI
+
+The recommended way is the [skills CLI](https://github.com/vercel-labs/skills), which works for Claude Code, Cursor, OpenCode, Codex, and 50+ other agents.
+
+Install globally (available in every project):
+
+```bash
+npx skills add jaakla/openmapstack -g
+```
+
+Update later with `npx skills update open-map-stack`. Remove with `npx skills remove open-map-stack`.
+
+### Claude Code plugin (optional)
+
+Claude Code users can install the same repository also as a plugin. This adds
+versioned installs, `/plugin update`, and project-scoped installs that a team
+picks up from a repository's `.claude/settings.json`:
+
+```bash
+/plugin marketplace add jaakla/openmapstack
+/plugin install open-map-stack@open-map-stack
+```
+
+The repository is its own marketplace, so no separate marketplace repo is
+needed. The plugin wraps the same root `SKILL.md` — nothing is duplicated, and
+the skills-CLI install path above keeps working unchanged.
+
+### Install the project CLI
+
+The skills installer loads the agent instructions; the Python package provides
+the project commands. From a clone of this repository:
+
+```bash
+python3 -m pip install .
+openmapstack --version
+```
+
+For development, the commands can also run directly without installation:
+
+```bash
+python3 -m openmapstack --help
+```
+
+### Manual install (fallback)
+
+If you'd rather not use the CLI, clone directly into your agent's skills directory. For Claude Code:
+
+```bash
+# User-level (every project)
+git clone https://github.com/jaakla/openmapstack.git ~/.claude/skills/open-map-stack
+
+# Project-level (one repo)
+git clone https://github.com/jaakla/openmapstack.git .claude/skills/open-map-stack
+```
+
+### Verify
+
+Start Claude Code and run `/skills open-map-stack` should appear in the list. The expected layout is:
+
+```
+<skills-dir>/open-map-stack/
+├── SKILL.md
+├── references/
+│   ├── analytics.md
+│   ├── data-sources.md
+│   ├── formats-and-crs.md
+│   ├── processing.md
+│   ├── project-spec.md
+│   ├── qgis.md
+│   ├── services-and-scale.md
+│   ├── spatial-sql.md
+│   ├── validation-and-ops.md
+│   └── web-delivery.md
+├── templates/
+│   ├── project.yaml
+│   ├── pipeline.py
+│   ├── presentation.yaml
+│   └── validation.yaml
+├── examples/
+│   └── tartu-development/
+└── .claude-plugin/          # Claude Code plugin + marketplace manifests
+    ├── plugin.json
+    └── marketplace.json
+```
+
+## Use
+
+The skill auto-activates when you ask Claude about geospatial work — terms like GIS, OpenStreetMap, Overture, Sentinel, Landsat, LiDAR, GeoTIFF, shapefile, GeoPackage, raster/vector tiles, isochrones, spatial joins, EPSG codes, and projections will all trigger it. You don't need to invoke it manually, but sometimes hinting "use open-map-stack skills" may be useful to encourage agents to do it.
+
+Example prompts that engage the skill:
+
+- "Pull all buildings in Tartu from Overture and publish them as a PMTiles layer."
+- "Compute average NDVI for these polygons from Sentinel-2 over the last 12 months."
+- "Reproject this GeoTIFF from EPSG:3301 to EPSG:3857 as a COG."
+- "Set up an OSRM routing server from a Estonia OSM extract."
+- "Build an isochrone API around these points."
+
+## Project CLI
+
+> The key innovation of the skill is not just do the work every time again and then forget it, but to create special well-defined project with data and process descriptions and rerunnable scripts, so the whole process becomes investigatable and repeatable.
+
+To help with that we have special CLI to work with the projects.
+
+The CLI operates on an `openmapstack-project/v1` manifest. A project directory may
+be supplied in place of its `project.yaml` file.
+
+```bash
+# Audit the complete artifact, including outputs, report, and run record.
+openmapstack validate path/to/project.yaml
+
+# Check the produced artifacts without requiring a golden answer.
+openmapstack verify path/to/project.yaml
+
+# Run the one canonical pipeline, then validate what it produced.
+openmapstack run path/to/project.yaml
+
+# Review sources, versions, overrides, ordered steps, outputs, and latest run.
+openmapstack inspect path/to/project.yaml
+
+# Copy SKILL.md, references/, and templates/ into a hashed, inspectable snapshot.
+openmapstack skill-snapshot --out /tmp/oms-skill --json
+openmapstack skill-snapshot --inspect /tmp/oms-skill
+
+# Read-only discovery of a warehouse source, then an approval-gated snapshot.
+openmapstack source discover path/to/project.yaml --source parcels
+openmapstack source snapshot path/to/project.yaml --source parcels \
+  --query "SELECT id, geom FROM cadastre.parcels" --destination data/source/parcels.parquet --approve
+```
+
+Useful automation options:
+
+```bash
+openmapstack validate project.yaml --json --output validation/cli-report.json
+openmapstack validate project.yaml --strict       # warnings also return non-zero
+openmapstack validate project.yaml --preflight    # skip not-yet-generated artifacts
+openmapstack run project.yaml --dry-run        # print the command, execute nothing
+openmapstack run project.yaml --json
+openmapstack inspect project.yaml --json
+```
+
+### Sampled runs — nail it before you scale it
+
+A wide-area analysis can run for hours before a late step fails. A sampled run
+executes the same pipeline over a deliberately smaller slice, so failure
+arrives in minutes:
+
+```bash
+openmapstack run project.yaml --sample                     # the manifest's declared sample
+openmapstack run project.yaml --sample-area 26.6,58.3,26.8,58.4
+openmapstack run project.yaml --sample-rows 5000
+openmapstack run project.yaml --sample-fraction 1.0
+```
+
+Each flag binds a `runtime.implementation.parameters` entry that declares the
+matching `role`; sampling a project that declares none is refused, naming what
+the manifest must add. The canonical run still passes nothing.
+
+**A sampled run proves the pipeline executes; it does not establish the
+result.** Clipping to a test AOI breaks neighbourhood operations at the cut and
+row sampling destroys the spatial coherence a join needs, so sampled counts are
+not answers. That is enforced, not merely advised: a sampled run record is
+marked `mode: sampled`, must record what it *realized* rather than only what
+was requested, and can never become `runs.latest` — `openmapstack validate`
+reports this as `runs.sample_isolation`, and `run --sample` fails outright if a
+pipeline promotes its own sampled run — by moving `runs.latest`, by rewriting
+the record it already points at, or by leaving no sampled record behind at all.
+See `references/project-spec.md`.
+
+### `openmapstack verify` — check the analysis, not just the paperwork
+
+`validate` audits the manifest and its bookkeeping. `verify` runs the check
+library in `openmapstack/checks/` against what the pipeline actually produced:
+geometry read back through DuckDB Spatial, dataset CRS read from the artifact
+rather than the manifest's claim, validation evidence recomputed from the
+geodata it summarises, and QGIS project structure and runtime loading where
+PyQGIS is available.
+
+```bash
+openmapstack verify path/to/project.yaml
+openmapstack verify path/to/project.yaml --rerun     # + rebuild from source and compare
+openmapstack verify path/to/project.yaml --metamorphic   # + run declared no-oracle relations
+openmapstack verify path/to/project.yaml --json --output validation/verify-report.json
+openmapstack verify path/to/project.yaml --strict    # warnings and not-testable also return 1
+```
+
+These checks require no repository-owned golden answer, so they work on data
+neither this repository nor the model has seen. They establish bounded
+structural, provenance, artifact, and reproducibility predicates; they do not
+prove every project-specific analytical answer.
+
+`--rerun` is the strongest signal available without a known answer. It rebuilds
+the project in an empty workspace from only the manifest, the declared
+immutable inputs, and the declared dependencies, runs the one canonical
+entrypoint, re-hashes the sources, and compares the outputs semantically. A
+pipeline that cannot reproduce itself, or that mutates its own declared
+immutable inputs, is not trustworthy whatever its numbers say.
+
+The check plan is derived from the manifest rather than configured, so a
+project cannot opt out of a check by omitting it: a declared output is a
+checked output. A check whose dependency is missing reports `not_testable` and
+is counted separately — never a silent pass. A mixture of executed and
+`not_testable` checks has aggregate status `warning`, and every report includes
+`applicable`, `executed`, and `execution_rate` coverage. Install
+`openmapstack[geo]` for the DuckDB-backed geodata checks; PyQGIS comes from a
+system QGIS install.
+
+See [the applicability reference](docs/verify-applicability.md) for the exact
+plan conditions, dependencies, current regression evidence, and deliberate
+exclusions. In particular, browser/dashboard checks are not yet part of the
+automatic `verify` plan.
+
+Project-specific known answers can be declared under
+`validation.expectations[]`. The five allowlisted checks cover row count,
+feature presence/absence, one feature-field value, and field range. New
+expectations start as `attestation.status: unverified`; they produce a warning
+and are not executed. The JSON report supplies the exact
+`expected_expectation_sha256` an independent reviewer must bind, together with
+the current `runs.latest.inputs_hash`. Changing the expected check, arguments,
+inputs, or a retained local evidence file invalidates the attestation and
+returns it to warning status. See
+[the project contract](references/project-spec.md#26-validation).
+
+Where no golden answer exists at all, `validation.metamorphic[]` declares
+relations that must hold under a controlled perturbation: shuffle a source and
+the result must not change, duplicate every feature and a keyed set must not
+change, widen an inclusion buffer and no candidate may disappear. Each relation
+states the precondition that makes it valid, is executed by
+`verify --metamorphic` in an isolated copy against the project's own pipeline,
+and reports `not_testable` with the reason when the precondition does not hold
+on the actual data. See [the project contract](references/project-spec.md#26-validation).
+
+`openmapstack source` is the connector pilot for the user's own data
+(DuckDB local files and PostGIS). Credentials are referenced, never stored;
+discovery is read-only with a statement timeout; a snapshot is a dry run
+until `--approve`, is limited by rows and bytes, lands only under
+`data/source/`, and hands back the `pin` block that makes the source
+reproducible. A warehouse table with only a timestamp is not pinned; an
+expired backend snapshot is reported as `not_reproducible`. See
+[user data sources](references/user-data-sources.md).
+
+`validate` checks manifest structure, source retrieval/version/licensing data,
+CRS declarations, processing graph resolution, override provenance and files,
+output existence, validation-report parity/status propagation, override
+application results, and run-record identity/hashes. GIS-specific checks such as
+geometry validity remain the pipeline's responsibility; the CLI verifies that
+each declared check appears exactly once with an explicit result.
+
+Normal validation warnings return exit code 0 so known limitations remain
+representable. Failures return 1; malformed invocation or an unstartable runtime
+returns 2. `--strict` makes warnings return 1.
+
+## What this skill will and won't do
+
+**Will:**
+- Recommend modern, cloud-native formats (GeoParquet, COG, PMTiles) and flag legacy patterns (Shapefile output, MBTiles for new deployments).
+- Push spatial joins to DuckDB / PostGIS instead of Python loops.
+- Discover data via STAC before downloading.
+- Preserve license metadata (OSM ODbL, Overture per-source, Sentinel attribution).
+- Pin dataset versions for reproducibility (Overture releases, STAC item IDs, OSM extract dates).
+- Compile material multi-stage analysis into a reproducible GIS project (`project.yaml` + pipeline + overrides + validation), deriving the final map/dashboard from it.
+
+**Won't:**
+- Trigger on simple location lookups ("what city is this?") or casual map references with no analytical work.
+- Default to proprietary services when an open/self-hosted option fits the scale, quality, privacy, and budget.
+
+## License
+
+Licensed under the [MIT License](LICENSE).
+
+## Contributing
+
+Issues and PRs welcome at [github.com/jaakla/openmapstack](https://github.com/jaakla/openmapstack). When adding a new tool or workflow, place it in the matching reference file and add a one-row entry to the relevant decision matrix in [SKILL.md](SKILL.md).

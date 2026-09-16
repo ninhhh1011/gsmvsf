@@ -1,0 +1,42 @@
+id: 003-manual-planned-road
+case_type: positive
+modes: [fixture, live]
+score_types:
+  fixture: contract_ci
+  live: agent_benchmark
+project_dir: project
+hard_gate: true
+fixture:
+  generator: "{python} {evals_dir}/fixtures/reference_pipeline/gen.py {project_dir} --scenario-road"
+  source_baseline:
+    - { source: ../../fixtures/mini-tartu/parcels.geojson, destination: data/source/parcels.geojson }
+    - { source: ../../fixtures/mini-tartu/roads.geojson, destination: data/source/roads.geojson }
+    - { source: ../../fixtures/mini-tartu/pois.geojson, destination: data/source/pois.geojson }
+    - { source: ../../fixtures/mini-tartu/planned-road.geojson, destination: data/overrides/planned-road.geojson }
+live:
+  prompt_file: prompt.md
+  agent_workdir: project
+  fixtures:
+    - { source: ../../fixtures/mini-tartu/parcels.geojson, destination: project/data/source/parcels.geojson }
+    - { source: ../../fixtures/mini-tartu/roads.geojson, destination: project/data/source/roads.geojson }
+    - { source: ../../fixtures/mini-tartu/pois.geojson, destination: project/data/source/pois.geojson }
+    - { source: ../../fixtures/mini-tartu/planned-road.geojson, destination: project/data/overrides/planned-road.geojson }
+
+assertions:
+  - assert: overrides.declared_count
+    args: { count: 2 }
+  - assert: overrides.every_override_has_provenance
+  - assert: overrides.evidence_not_placeholder
+  - assert: overrides.application_status
+    args: { id: OVERRIDE-002, status: applied }
+  - assert: project.exists
+    args: { path: data/overrides/planned-road.geojson }
+  - assert: project.graph_resolves
+  # scenario road brings P3 into range; without it P3 is excluded (case 001)
+  - assert: geodata.feature_present
+    args: { path: data/derived/candidate-parcels.parquet, id_field: cadastral_id, id: P3 }
+  - assert: presentation.distinguishable_layer_semantics
+  - assert: presentation.required_layer_groups_exist
+    args: { groups: [analysis, user_overrides] }
+  - assert: presentation.controls_match_pipeline
+  - assert: presentation.edit_targets_reference_real_sources

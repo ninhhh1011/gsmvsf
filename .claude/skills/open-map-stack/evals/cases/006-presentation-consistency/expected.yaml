@@ -1,0 +1,65 @@
+id: 006-presentation-consistency
+case_type: positive
+modes: [fixture, visual, live]
+score_types:
+  fixture: contract_ci
+  visual: integration_visual
+  live: agent_benchmark
+project_dir: project_a
+hard_gate: true
+fixture:
+  generator: "{python} {evals_dir}/fixtures/reference_pipeline/gen.py {project_dir}"
+  source_baseline:
+    - { source: ../../fixtures/mini-tartu/parcels.geojson, destination: data/source/parcels.geojson }
+    - { source: ../../fixtures/mini-tartu/roads.geojson, destination: data/source/roads.geojson }
+    - { source: ../../fixtures/mini-tartu/pois.geojson, destination: data/source/pois.geojson }
+  extra_generators:
+    project_b: "{python} {evals_dir}/fixtures/reference_pipeline/gen.py {project_dir} --scenario-road"
+live:
+  prompt_file: prompt.md
+  agent_workdir: .
+  fixtures:
+    - { source: ../../fixtures/mini-tartu/parcels.geojson, destination: project_a/data/source/parcels.geojson }
+    - { source: ../../fixtures/mini-tartu/roads.geojson, destination: project_a/data/source/roads.geojson }
+    - { source: ../../fixtures/mini-tartu/pois.geojson, destination: project_a/data/source/pois.geojson }
+    - { source: ../../fixtures/mini-tartu/parcels.geojson, destination: project_b/data/source/parcels.geojson }
+    - { source: ../../fixtures/mini-tartu/roads.geojson, destination: project_b/data/source/roads.geojson }
+    - { source: ../../fixtures/mini-tartu/pois.geojson, destination: project_b/data/source/pois.geojson }
+    - { source: ../../fixtures/mini-tartu/planned-road.geojson, destination: project_b/data/overrides/planned-road.geojson }
+
+assertions:
+  - assert: presentation.layers_use_semantic_roles
+  - assert: presentation.required_layer_groups_exist
+    args: { groups: [analysis, user_overrides] }
+  - assert: presentation.controls_match_pipeline
+  - assert: presentation.edit_targets_reference_real_sources
+  - assert: presentation.consistent_with
+    args: { other_project_dir: ../project_b }
+
+  # Visual integration: both generated dashboards must open cleanly in a
+  # real browser and honour every presentation claim (map, legend,
+  # provenance, layer toggles, scenario distinguishability, canonical
+  # reset). Project B carries the planned-road scenario, so its leg also
+  # proves the scenario layer renders and stays distinguishable.
+  - assert: qgis.styles_declared
+  # A layer with no declared CRS is assumed to be in the project CRS and
+  # never reprojected — which put the Web Mercator basemap 1500 km from
+  # the Estonian data while every other check passed.
+  - assert: qgis.every_layer_declares_crs
+  - assert: qgis.groups_match_manifest
+  - assert: qgis.runtime_load
+    hard_gate: false
+    args: { render_png: "../visual/qgis-render.png" }
+  - assert: qgis.layers_match_manifest
+    modes: [visual]
+  - assert: visual.render_substantive
+    modes: [visual]
+    args: { path: "../visual/qgis-render.png" }
+  - assert: qgis.every_declared_layer_renders
+    modes: [visual]
+  - assert: visual.dashboard_loads_in_browser
+    modes: [visual]
+    args: { screenshots_dir: "../visual/screenshots" }
+  - assert: visual.dashboard_loads_in_browser
+    modes: [visual]
+    args: { project_dir: ../project_b, screenshots_dir: "../visual/screenshots" }

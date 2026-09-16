@@ -28,6 +28,10 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Claude Code skills
+node_modules/
+skills-lock.json
+
 # Project
 runtime/osrm/*.osrm
 runtime/osrm/*.osm.bz2

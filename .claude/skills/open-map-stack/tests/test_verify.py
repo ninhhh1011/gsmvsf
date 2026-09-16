@@ -1,0 +1,291 @@
+"""Tests for `openmapstack verify`.
+
+Every capability here gets a deliberate-defect test as well as a positive
+one, on the same discipline the mutation cases enforce for the eval suite: a
+check that has never been observed to fail is not evidence.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import shutil
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+
+import yaml
+
+from openmapstack.checks import not_testable, passed, warning
+from openmapstack.checks.qgis import groups_match_manifest
+from openmapstack.cli import main
+from openmapstack.verify import CheckRun, VerifyResult, verify_project
+from tests.evals.helpers import make_workspace, minimal_project, write_project
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+EXAMPLE = REPO_ROOT / "examples" / "tartu-development"
+
+
+def _worked_example_has_generated_outputs() -> bool:
+    """Whether the local worked example has every output its manifest declares.
+
+    The example's source and derived data are intentionally gitignored because
+    they are regenerable run artifacts. Fresh CI checkouts therefore contain
+    the project definition but not the files these integration-style tests
+    inspect. Keep the tests useful for a locally generated example without
+    making ordinary unit CI depend on uncommitted artifacts.
+    """
+    manifest_path = EXAMPLE / "project.yaml"
+    if not manifest_path.is_file():
+        return False
+    try:
+        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return False
+    outputs = manifest.get("outputs") if isinstance(manifest, dict) else None
+    if not isinstance(outputs, dict) or not outputs:
+        return False
+    declared = [
+        spec.get("path")
+        for spec in outputs.values()
+        if isinstance(spec, dict) and isinstance(spec.get("path"), str) and spec["path"].strip()
+    ]
+    return bool(declared) and all((EXAMPLE / path).is_file() for path in declared)
+
+
+def _status_of(result, name: str) -> str | None:
+    for run in result.checks:
+        if run.name == name:
+            return run.result.status
+    return None
+
+
+class VerifyPlanTests(unittest.TestCase):
+    def test_manifest_checks_run_without_any_optional_dependency(self) -> None:
+        workspace = make_workspace()
+        write_project(workspace, minimal_project())
+        result = verify_project(workspace / "project.yaml")
+        self.assertIsNotNone(_status_of(result, "project.conforms_to_schema"))
+        self.assertIsNotNone(_status_of(result, "provenance.every_source_pinned"))
+        self.assertIsNotNone(_status_of(result, "rerun.no_chat_dependency"))
+
+    def test_declared_outputs_drive_the_geodata_plan(self) -> None:
+        # The plan is derived from the manifest, so a project cannot opt out
+        # of a check by omitting it: a declared output is a checked output.
+        workspace = make_workspace()
+        project = minimal_project()
+        project["outputs"] = {
+            "result": {"path": "data/derived/result.parquet", "format": "GeoParquet (EPSG:3301)"}
+        }
+        write_project(workspace, project)
+        result = verify_project(workspace / "project.yaml")
+        planned = [r for r in result.checks if r.args.get("path") == "data/derived/result.parquet"]
+        self.assertTrue(planned, "declared output produced no geodata checks")
+        self.assertIn("geodata.dataset_crs_is", {r.name for r in planned})
+
+    def test_output_without_declared_epsg_is_not_testable_not_passed(self) -> None:
+        workspace = make_workspace()
+        project = minimal_project()
+        project["outputs"] = {"result": {"path": "data/derived/result.parquet", "format": "GeoParquet"}}
+        write_project(workspace, project)
+        result = verify_project(workspace / "project.yaml")
+        crs = [r for r in result.checks if r.name == "geodata.dataset_crs_is"]
+        self.assertEqual(len(crs), 1)
+        self.assertEqual(crs[0].result.status, "not_testable")
+        self.assertEqual(crs[0].result.data.get("code"), "crs_undeclared")
+
+    def test_unreadable_output_format_is_not_testable_not_skipped(self) -> None:
+        workspace = make_workspace()
+        project = minimal_project()
+        project["outputs"] = {"report": {"path": "data/derived/summary.pdf", "format": "PDF"}}
+        write_project(workspace, project)
+        result = verify_project(workspace / "project.yaml")
+        geo = [r for r in result.checks if r.args.get("path") == "data/derived/summary.pdf"]
+        self.assertEqual(len(geo), 1)
+        self.assertEqual(geo[0].result.status, "not_testable")
+        self.assertEqual(geo[0].result.data.get("code"), "unsupported_format")
+
+    def test_a_raising_check_is_not_testable_not_a_crash(self) -> None:
+        # One broken check must not take down a report the user is relying on
+        # for everything else -- but it must never read as a pass either.
+        workspace = make_workspace()
+        write_project(workspace, minimal_project())
+        with patch(
+            "openmapstack.checks.project.graph_resolves",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = verify_project(workspace / "project.yaml")
+        run = next(r for r in result.checks if r.name == "project.graph_resolves")
+        self.assertEqual(run.result.status, "not_testable")
+        self.assertEqual(run.result.data.get("code"), "check_error")
+        self.assertNotEqual(result.status, "passed")
+
+
+class VerifyStatusTests(unittest.TestCase):
+    def test_passed_and_not_testable_aggregate_to_warning(self) -> None:
+        result = VerifyResult(
+            Path("project.yaml"),
+            checks=[
+                CheckRun("project.parses", passed("parsed")),
+                CheckRun("geodata.geometry_all_valid", not_testable("DuckDB unavailable")),
+            ],
+        )
+        self.assertEqual(result.status, "warning")
+        self.assertTrue(result.ok())
+        self.assertFalse(result.ok(strict=True))
+
+    def test_not_testable_alone_never_reports_passed(self) -> None:
+        workspace = make_workspace()
+        write_project(workspace, minimal_project())
+        result = verify_project(workspace / "project.yaml")
+        for run in result.checks:
+            run.result.status = "not_testable"
+        self.assertEqual(result.status, "not_testable")
+        self.assertTrue(result.ok())
+        self.assertFalse(result.ok(strict=True))
+
+    def test_empty_plan_is_not_testable(self) -> None:
+        result = VerifyResult(Path("project.yaml"))
+        self.assertEqual(result.status, "not_testable")
+        self.assertEqual(
+            result.coverage,
+            {"applicable": 0, "executed": 0, "not_testable": 0, "execution_rate": None},
+        )
+        self.assertTrue(result.ok())
+        self.assertFalse(result.ok(strict=True))
+
+    def test_coverage_counts_only_checks_that_established_a_result(self) -> None:
+        result = VerifyResult(
+            Path("project.yaml"),
+            checks=[
+                CheckRun("one", passed()),
+                CheckRun("two", warning()),
+                CheckRun("three", not_testable()),
+                CheckRun("four", not_testable()),
+            ],
+        )
+        self.assertEqual(
+            result.coverage,
+            {"applicable": 4, "executed": 2, "not_testable": 2, "execution_rate": 0.5},
+        )
+
+    def test_any_failure_makes_the_run_fail(self) -> None:
+        workspace = make_workspace()
+        write_project(workspace, minimal_project())
+        result = verify_project(workspace / "project.yaml")
+        result.checks[0].result.status = "failed"
+        self.assertEqual(result.status, "failed")
+        self.assertFalse(result.ok())
+
+
+class VerifyCliTests(unittest.TestCase):
+    def test_missing_project_is_exit_two_not_a_traceback(self) -> None:
+        with redirect_stderr(io.StringIO()):
+            self.assertEqual(main(["verify", str(make_workspace() / "absent.yaml")]), 2)
+
+    def test_json_output_is_machine_readable_and_written(self) -> None:
+        workspace = make_workspace()
+        write_project(workspace, minimal_project())
+        out = workspace / "report" / "verify.json"
+        with redirect_stdout(io.StringIO()):
+            main(["verify", str(workspace / "project.yaml"), "--json", "--output", str(out)])
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema"], "openmapstack-verify-result/v1")
+        self.assertIn("counts", payload)
+        self.assertEqual(payload["coverage"]["applicable"], len(payload["checks"]))
+        self.assertEqual(
+            payload["coverage"]["executed"] + payload["coverage"]["not_testable"],
+            payload["coverage"]["applicable"],
+        )
+        self.assertTrue(payload["checks"])
+
+    def test_text_output_exposes_partial_execution(self) -> None:
+        workspace = make_workspace()
+        write_project(workspace, minimal_project())
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            main(["verify", str(workspace / "project.yaml")])
+        self.assertIn("applicable checks executed", stdout.getvalue())
+
+    def test_partial_execution_is_zero_by_default_and_one_in_strict_mode(self) -> None:
+        result = VerifyResult(
+            Path("project.yaml"),
+            checks=[
+                CheckRun("project.parses", passed()),
+                CheckRun("geodata.geometry_all_valid", not_testable()),
+            ],
+        )
+        with patch("openmapstack.cli.verify_project", return_value=result):
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["verify", "project.yaml"]), 0)
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["verify", "project.yaml", "--strict"]), 1)
+
+
+@unittest.skipUnless(EXAMPLE.is_dir(), "worked example is not present")
+class CommittedWorkedExampleContractTests(unittest.TestCase):
+    """Checkout-safe checks for the generated artifacts committed to git."""
+
+    def test_latest_run_attests_the_committed_pipeline(self) -> None:
+        manifest = yaml.safe_load((EXAMPLE / "project.yaml").read_text(encoding="utf-8"))
+        run_id = manifest["runs"]["latest"]["id"]
+        record = json.loads((EXAMPLE / "runs" / f"{run_id}.json").read_text(encoding="utf-8"))
+        pipeline = next(item for item in record["inputs"] if item["path"] == "pipeline.py")
+        actual = "sha256:" + hashlib.sha256((EXAMPLE / "pipeline.py").read_bytes()).hexdigest()
+        self.assertEqual(pipeline["sha256"], actual)
+
+    def test_qgis_layer_tree_matches_the_manifest(self) -> None:
+        result = groups_match_manifest(EXAMPLE)
+        self.assertEqual(result.status, "passed", result.detail)
+
+
+@unittest.skipUnless(
+    _worked_example_has_generated_outputs(),
+    "worked example generated outputs are absent; run the example pipeline first",
+)
+class VerifyWorkedExampleTests(unittest.TestCase):
+    """Integration checks for a locally generated worked example."""
+
+    def test_geodata_checks_run_against_the_real_outputs(self) -> None:
+        result = verify_project(EXAMPLE)
+        geometry = [r for r in result.checks if r.name == "geodata.geometry_all_valid"]
+        self.assertTrue(geometry)
+        # The example writes its geometry column as `geometry`, not `geom`.
+        # These checks used to hardcode `geom` and reported not_testable on
+        # exactly the naming real GeoParquet uses.
+        self.assertTrue(
+            any(r.result.status == "passed" for r in geometry),
+            [r.result.detail for r in geometry],
+        )
+
+    def test_a_corrupted_output_is_detected(self) -> None:
+        workspace = make_workspace() / "project"
+        shutil.copytree(EXAMPLE, workspace)
+        manifest = yaml.safe_load((workspace / "project.yaml").read_text(encoding="utf-8"))
+        target = next(
+            spec["path"]
+            for spec in manifest["outputs"].values()
+            if str(spec.get("path", "")).endswith(".parquet")
+        )
+        (workspace / target).write_bytes(b"not a parquet file")
+        result = verify_project(workspace)
+        run = next(
+            r for r in result.checks
+            if r.name == "geodata.geometry_all_valid" and r.args.get("path") == target
+        )
+        self.assertNotEqual(run.result.status, "passed")
+
+    def test_a_declared_output_that_does_not_exist_is_detected(self) -> None:
+        workspace = make_workspace() / "project"
+        shutil.copytree(EXAMPLE, workspace)
+        manifest = yaml.safe_load((workspace / "project.yaml").read_text(encoding="utf-8"))
+        target = next(iter(manifest["outputs"].values()))["path"]
+        (workspace / target).unlink()
+        result = verify_project(workspace)
+        self.assertEqual(_status_of(result, "project.declared_files_exist"), "failed")
+
+
+if __name__ == "__main__":
+    unittest.main()

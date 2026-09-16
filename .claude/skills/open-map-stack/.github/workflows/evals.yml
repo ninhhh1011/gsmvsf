@@ -1,0 +1,85 @@
+name: OpenMapStack fixture evals
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  fixture-evals:
+    runs-on: ubuntu-latest
+    # Deterministic fixture evals only: no LLM account required. Spatial is
+    # prepared explicitly, then the acceptance suite is repeated inside the
+    # same image with its runtime network namespace disabled.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install eval dependencies and project CLI
+        run: |
+          pip install -r evals/requirements.txt
+          pip install "playwright>=1.40"
+          pip install .
+
+      - name: Install headless Chromium for browser-assertion tests
+        # The visual assertions' browser tests run in fixture CI too (with
+        # network); the offline Docker gate below proves the fixture suite
+        # itself needs no browser and no network.
+        run: python -m playwright install --with-deps chromium
+
+      - name: Prepare controlled DuckDB Spatial directory
+        run: |
+          echo "OPENMAPSTACK_SPATIAL_EXTENSION_DIR=${RUNNER_TEMP}/openmapstack-duckdb-extensions" >> "$GITHUB_ENV"
+          OPENMAPSTACK_SPATIAL_EXTENSION_DIR="${RUNNER_TEMP}/openmapstack-duckdb-extensions" python evals/prepare_spatial.py
+
+      - name: Run unit tests with assertion coverage gate
+        run: |
+          python -m coverage run -m unittest discover -v
+          python -m coverage report
+          python -m coverage json
+          python -m coverage xml
+
+      - name: Smoke-test CLI and committed worked-example evidence
+        # --preflight, not by preference: the example's data/source and
+        # data/derived are gitignored (a county cadastral snapshot alone is
+        # 55 MB), so a fresh checkout has no outputs for the full artifact
+        # checks to read. What preflight does still see is the committed
+        # inputs, and `runs.present_files` fails here if pipeline.py has been
+        # edited without re-running -- the drift that shipped in #14. The
+        # complete artifact validation runs in example.yml, which regenerates
+        # the data first.
+        run: |
+          python -m unittest -v tests.test_verify.CommittedWorkedExampleContractTests
+          openmapstack validate examples/tartu-development/project.yaml --preflight
+          openmapstack inspect examples/tartu-development/project.yaml --json > /tmp/openmapstack-inspection.json
+
+      - name: Run fixture evals
+        run: python evals/run.py --mode fixture --json eval-results.json
+
+      - name: Build prepared offline eval image
+        run: docker build -f evals/Dockerfile.offline -t openmapstack-evals-offline .
+
+      - name: Prove fixture suite with runtime network disabled
+        run: |
+          # Mount only the results directory. Mounting ${PWD} gave a
+          # root-running container read-write access to the whole working
+          # tree, and it wrote a root-owned offline-eval-results.json into
+          # the repository root on every local run.
+          mkdir -p evals/results
+          docker run --rm --network none \
+            --volume "${PWD}/evals/results:/results" \
+            openmapstack-evals-offline
+
+      - name: Upload eval and coverage results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: |
+            eval-results.json
+            evals/results/offline-eval-results.json
+            assertion-coverage.json
+            assertion-coverage.xml
