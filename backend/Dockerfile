@@ -15,10 +15,9 @@ RUN pip install --no-cache-dir "uvicorn[standard]>=0.32.0" \
     "httpx>=0.27.0" \
     "structlog>=24.0.0"
 
-COPY backend/app ./app
-COPY backend/tests ./tests
+COPY backend/ ./backend/
 
 ENV PYTHONPATH=/app
 ENV LOG_LEVEL=INFO
 
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]

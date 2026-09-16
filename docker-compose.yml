@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -28,9 +26,9 @@ services:
     command: >
       osrm-routed --algorithm mld /data/hanoi-baseline.osrm
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/route/v1/driving/0,0"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/route/v1/driving/105.8,21.0;105.85,21.05 || true"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
       start_period: 30s
 
@@ -56,11 +54,6 @@ services:
         condition: service_healthy
       osrm:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 volumes:
   pgdata:

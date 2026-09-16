@@ -31,6 +31,7 @@ Thumbs.db
 # Project
 runtime/osrm/*.osrm
 runtime/osrm/*.osm.bz2
+runtime/osrm/*.osm.pbf
 runtime/osrm/*.osrm.*
 runtime/osrm/.osrm-lock
 samples/week1/*.csv
