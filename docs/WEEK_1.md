@@ -6,22 +6,17 @@ GPS observations → road segment identification and direction
 
 ## Current Status
 
-**WEEK 1 PHASE A = COMPLETE** ✅
+**WEEK 1 = COMPLETE** ✅
 
-## Week 1 Acceptance Criteria
-
-From `docs/ACCEPTANCE_CRITERIA.md`:
-
-- GPS observations can be matched to road segments ✅
-- Trajectory continuity validated ✅
-- Map-matching accuracy meets project thresholds ✅ (see metrics below)
-- Map-matching service (POST /api/v1/map-match) operational ✅
+### Phase A: Batch Map Matching — COMPLETE
+### Phase B: Realtime Policy Benchmark — COMPLETE
+### Phase C: Realtime Implementation — COMPLETE
 
 ---
 
-## FINAL EVALUATION RESULTS
+## Phase A: Batch Map Matching
 
-### Full Phase A Results (5 trips, 250 observations)
+### FINAL EVALUATION RESULTS (Phase A)
 
 | Metric | Value | Notes |
 |--------|-------|-------|
@@ -36,264 +31,240 @@ From `docs/ACCEPTANCE_CRITERIA.md`:
 
 ---
 
-## BASELINE COMPARISON
+## Phase B: Realtime Policy Benchmark
 
-| Metric | NEAREST | OSRM Full-Trace |
-|--------|---------|-----------------|
-| Resolution Rate | 250/250 (100%) | 247/250 (98.8%) |
-| Segment Accuracy | 35.6% | 36.0% |
-| Direction Accuracy | 50.0% | 46.2% |
+### Native GPS Sampling (Dataset V1)
 
-**Key Finding**: OSRM sequence matching provides similar segment accuracy to simple nearest-point snapping.
-The additional sequence context does not significantly improve segment identification in this dataset.
+| Metric | Value |
+|--------|-------|
+| Total observations | 65,847 |
+| Total trajectories | 150 |
+| Median delta | 1.87s |
+| P90 delta | 2.92s |
+| P95 delta | 3.35s |
+| P99 delta | 5.97s |
+| Max delta | 14.69s |
+
+### Policy Comparison (10 trajectories, 3,845 observations)
+
+| Policy | Calls/Traj | Obs/Call | Latency Mean | Est. Calls/Driver/Min |
+|--------|------------|----------|--------------|----------------------|
+| TimeTrigger(5s) | 122.5 | 3.1 | 599ms | ~2.0 |
+| TimeTrigger(10s) | 65.9 | 5.8 | 331ms | ~1.1 |
+| TimeTrigger(15s) | 45.9 | 8.4 | 350ms | ~0.8 |
+| DistanceTrigger(20m) | 208.4 | 1.8 | 303ms | ~3.5 |
+| DistanceTrigger(50m) | 103.7 | 3.7 | 315ms | ~1.7 |
+| DistanceTrigger(100m) | 56.6 | 6.8 | 441ms | ~0.9 |
+| **HybridTrigger(10s/50m)** | **103.9** | **3.7** | **371ms** | **~1.7** |
+| HybridTrigger(5s/30m) | 160.8 | 2.4 | 340ms | ~2.7 |
+| HybridTrigger(15s/100m) | 57.4 | 6.7 | 440ms | ~1.0 |
+
+### Selected Policy: HybridTrigger(10s / 50m)
+
+**Why:**
+1. Balanced call volume (~104 calls/traj ≈ ~7.0 calls/driver/min based on actual mean trajectory duration of 14.8 min)
+2. Good observation batching (~3.7 obs/call reduces per-call overhead)
+3. Time + distance coverage catches both slow and fast drivers
+4. Not too aggressive (avoids 5s-only triggers)
+5. Not too conservative (avoids stale 100m-only triggers)
+
+**Note**: Earlier estimates used ~60 min trajectory duration. Actual Dataset V1 durations: mean 14.8 min, median 15.0 min, range 5.0-24.3 min. Corrected call rate is ~7.0 calls/driver/min.
 
 ---
 
-## ROAD SCHEMA
+## Phase C: Realtime Implementation
 
-### road_nodes.csv.gz
-```
-Columns: node_id, latitude, longitude
-Example: N0000001, 21.0348609, 105.853446
-Total: 339,441 nodes
-```
+### API Endpoints
 
-**Critical**: Does NOT contain OSM node IDs. Internal node IDs only.
+#### POST /api/v1/drivers/{driver_id}/location
+Ingest single GPS observation.
 
-### road_segments.csv.gz
-```
-Columns: segment_id, from_node_id, to_node_id, travel_direction, base_segment_id,
-         osm_way_id, geometry, length_m, road_type, road_name, ...
-Example: 897474222_0_F, N0000001, N0000002, FORWARD, 897474222_0, 897474222, "LINESTRING (...)", 115.604, residential, Phố Mã Mây
-Total: 701,407 segments
-```
-
-**Segment ID format**: `{osm_way_id}_{index}_{direction}`
-- Direction: FORWARD (from_node → to_node) or REVERSE (to_node → from_node)
-
----
-
-## SEGMENT RESOLUTION
-
-### Method: PostGIS Spatial Lookup
-
-**Why not OSM node mapping?**
-- OSRM annotations return OSM node IDs (e.g., 6396811379)
-- Dataset V1 road_nodes has NO osm_node_id column
-- OSM node IDs ≠ internal node IDs (N0000001)
-
-**Solution**: Coordinate-based nearest segment lookup
-
-1. OSRM Match returns matched coordinates
-2. PostGIS spatial query finds nearest segment within 100m
-3. Returns segment_id, osm_way_id, travel_direction
-
-### Implementation
-
-```
-PostGISSegmentResolver.resolve(lat, lon, max_distance_m=100)
-  → Uses KNN operator <#> for efficient spatial index lookup
-  → Returns SegmentInfo or None
+**Request:**
+```json
+{
+  "timestamp": "2026-09-01T06:00:00+07:00",
+  "latitude": 21.103793,
+  "longitude": 106.002398,
+  "speed_kmh": 25.5,
+  "heading_deg": 90.0
+}
 ```
 
-### Resolution Status
+**Response:**
+```json
+{
+  "driver_id": "D001",
+  "status": "MATCHED",
+  "trigger_reason": "TIME(10.5s>=10.0s)",
+  "raw_position": {
+    "latitude": 21.103793,
+    "longitude": 106.002398,
+    "timestamp": "2026-09-01T06:00:10Z"
+  },
+  "matched_position": {
+    "latitude": 21.103802,
+    "longitude": 106.002381,
+    "road_segment_id": "651937125_5_R",
+    "osm_way_id": 651937125,
+    "direction": "REVERSE",
+    "confidence": 0.95
+  },
+  "last_match_time": "2026-09-01T06:00:10Z",
+  "last_match_latency_ms": 312.5,
+  "total_observations": 5,
+  "total_match_calls": 2,
+  "buffered_points": 5,
+  "movement_since_match_m": 125.3,
+  "is_stationary": false
+}
+```
+
+#### GET /api/v1/drivers/{driver_id}/location
+Get current driver state.
+
+#### GET /api/v1/drivers
+List all active drivers.
+
+#### DELETE /api/v1/drivers/{driver_id}/location
+Reset driver state.
+
+#### GET /api/v1/debug/trajectories/{trajectory_id}
+Load Dataset V1 trajectory for replay.
+
+### Status Values
 
 | Status | Meaning |
 |--------|---------|
-| RESOLVED | Clear nearest segment found |
-| AMBIGUOUS | Multiple segments within similar distance |
-| UNRESOLVED | No segment within max_distance |
+| WARMING_UP | Collecting initial observations (<3) |
+| GPS_ACCEPTED | Observation received, no match triggered |
+| MATCHED | Map matching triggered and succeeded |
+| PARTIAL_MATCH | Some points matched |
+| NO_MATCH | OSRM returned no match |
+| INVALID_GPS | Invalid observation data |
+| STALE_OBSERVATION | Timestamp before last observation |
+| GAP_RESET | Session reset due to large gap |
+| ENGINE_UNAVAILABLE | OSRM not reachable |
 
-### Coverage
+### Policy Parameters
 
-| Status | Count | Rate |
-|--------|-------|------|
-| RESOLVED | 247 | 100% |
-| AMBIGUOUS | 0 | 0% |
-| UNRESOLVED | 0 | 0% |
-
----
-
-## DIRECTION DERIVATION
-
-### Method: Segment Travel Direction
-
-**Approach**:
-- PostGIS returns `travel_direction` (FORWARD/REVERSE) from resolved segment
-- Direction = segment's native travel direction
-
-**Why not bearing comparison?**
-- Requires computing segment bearing from geometry
-- OSRM already matched to correct road; segment direction is authoritative
-
-### Direction Resolution
-
-| Resolved | Count | Rate |
-|----------|-------|------|
-| FORWARD | ~125 | ~51% |
-| REVERSE | ~122 | ~49% |
-
-**Note**: Direction is per-segment, not per-observation movement.
-
----
-
-## API CONTRACT
-
-**Endpoint**: `POST /api/v1/map-match`
-
-### Request
-```json
-{
-  "trajectory_id": "TRJ0001",
-  "trip_id": "T0001",
-  "observations": [
-    {
-      "observation_id": "O00000001",
-      "trajectory_id": "TRJ0001",
-      "trip_id": "T0001",
-      "timestamp": "2026-09-01T06:06:00+07:00",
-      "latitude": 21.103793,
-      "longitude": 106.002398
-    }
-  ]
-}
 ```
-
-### Response
-```json
-{
-  "trajectory_id": "TRJ0001",
-  "trip_id": "T0001",
-  "total_observations": 10,
-  "matched_count": 10,
-  "unmatched_count": 0,
-  "overall_confidence": 0.248911,
-  "observations": [
-    {
-      "observation_id": "O00000001",
-      "matched": true,
-      "matched_latitude": 21.103802,
-      "matched_longitude": 106.002381,
-      "road_segment_id": "651937125_5_R",
-      "osm_way_id": 651937125,
-      "direction": "REVERSE",
-      "confidence": 0.248911,
-      "distance_to_road_m": 1.975703,
-      "resolution_status": "RESOLVED"
-    }
-  ]
-}
+Trigger: 10s elapsed OR 50m movement (whichever first)
+Context Window: 30 seconds (last ~15 points at native 2s sampling)
+Max Context Points: 50
+Warm-up: 3+ observations before first Match call
+Stationary Suppression: 3+ consecutive observations with <5m movement
+Gap Threshold: 60s → session reset
 ```
 
 ---
 
-## CONFIDENCE ANALYSIS
+## Debug UI
 
-### OSRM Confidence Values
+**URL**: http://localhost:8000/debug-map/
 
-| Trip | Confidence | Interpretation |
-|------|------------|----------------|
-| T0001 | 0.249 | Low |
-| T0002 | 0.0 | Very low |
-| T0003 | 0.0002 | Very low |
-| T0004 | 0.0 | Very low |
-| T0005 | 0.0145 | Very low |
+**Features:**
+- Trajectory selection from Dataset V1
+- Play/Pause/Reset controls
+- Speed control (1x to 100x)
+- Step-by-step observation replay
+- Raw GPS point visualization
+- Matched point visualization
+- Route geometry display
+- Current position markers
+- State panel with all metrics
+- Event log with trigger reasons
 
-**Finding**: OSRM confidence values are poorly calibrated for this dataset.
-Low confidence does not indicate poor matching; 98.8% of observations are matched.
-
-**Possible causes**:
-- GPS accuracy varies
-- Trace length affects confidence calculation
-- OSRM confidence is matching-level, not per-point
+**Requires**: Internet for Leaflet map tiles
 
 ---
 
-## POSTGIS ROAD NETWORK TABLES
+## Tests
 
-Loaded into `ev_db` container:
+| Suite | Tests | Result |
+|-------|-------|--------|
+| `backend/tests/test_map_matching.py` | 13 | PASS |
+| `backend/tests/test_realtime.py` | 24 | PASS |
+| **Total** | **37** | **PASS** |
 
-```sql
-CREATE TABLE road_nodes (
-    node_id VARCHAR(20) PRIMARY KEY,
-    latitude DOUBLE PRECISION NOT NULL,
-    longitude DOUBLE PRECISION NOT NULL,
-    geom GEOMETRY(POINT, 4326)
-);
+---
 
-CREATE TABLE road_segments (
-    segment_id VARCHAR(50) PRIMARY KEY,
-    from_node_id VARCHAR(20) NOT NULL,
-    to_node_id VARCHAR(20) NOT NULL,
-    travel_direction VARCHAR(10) NOT NULL,
-    base_segment_id VARCHAR(50),
-    osm_way_id BIGINT NOT NULL,
-    length_m DOUBLE PRECISION,
-    wkt_geometry TEXT,
-    geom GEOMETRY(LINESTRING, 4326)
-);
+## API Contract
 
--- Spatial index
-CREATE INDEX road_segments_geom_idx ON road_segments USING GIST(geom);
-CREATE INDEX road_segments_from_node_idx ON road_segments(from_node_id);
-CREATE INDEX road_segments_to_node_idx ON road_segments(to_node_id);
-CREATE INDEX road_segments_osm_way_idx ON road_segments(osm_way_id);
+### Realtime Endpoint
+- `POST /api/v1/drivers/{driver_id}/location`
+- `GET /api/v1/drivers/{driver_id}/location`
+- `DELETE /api/v1/drivers/{driver_id}/location`
+- `GET /api/v1/drivers`
+- `GET /api/v1/debug/trajectories/{trajectory_id}`
+
+### Batch Endpoint (Phase A)
+- `POST /api/v1/map-match`
+
+---
+
+## Architecture
+
+```
+GPS Observation Stream
+        ↓
+POST /api/v1/drivers/{driver_id}/location
+        ↓
+DriverTraceState (in-memory)
+        ↓
+Trigger Policy (HybridTrigger 10s/50m)
+        ↓
+Context Window (30s, max 50 points)
+        ↓
+OSRM Match
+        ↓
+Matched State
+        ↓
+Response + State Update
 ```
 
-**Data loaded**:
-- 339,441 road nodes
-- 701,407 road segments
+---
+
+## Known Limitations
+
+1. **In-memory state only**: No persistence across restarts
+2. **No Redis/Kafka**: Week 1 uses simple in-memory store
+3. **Segment accuracy 36%**: OSRM often matches parallel roads
+4. **Direction accuracy 46%**: Per-segment direction may not match travel direction
+5. **No external GPS preprocessing**: Only Dataset V1 tested
 
 ---
 
-## TESTS
+## Scope Exclusions
 
-| Suite | Result |
-|-------|--------|
-| `backend/tests/test_map_matching.py` | 15 passed |
-| All backend tests | 15 passed |
-
----
-
-## KNOWN ISSUES
-
-1. **Segment accuracy only 36%**: OSRM often matches to parallel roads rather than the true road
-   - True segment (897474222_0_F) is 1.99m away
-   - Nearest segment (651937125_5_R) is only 0.08m away
-   - This is a road network topology issue, not a matching issue
-
-2. **Direction accuracy 46%**: Segment direction may not match vehicle travel direction
-   - Segment has FORWARD direction, but vehicle may be traveling in reverse
-   - Requires bearing-based direction derivation improvement
-
-3. **Low OSRM confidence**: Not indicative of poor matching quality
-
----
-
-## SCOPE EXCLUSIONS
-
-Phase A does NOT include:
 - Custom HMM implementation
 - Valhalla/GraphHopper integration
-- Realtime GPS ingestion (Phase B/C)
 - Week 2+ Demand Detection
 - Station candidate search
+- Charging/Battery swap recommendation
 
 ---
 
-## PHASE B: REALTIME POLICY BENCHMARK
+## Files Changed
 
-**Not yet started** - requires Phase A completion (this document).
+### New Files
+- `backend/app/services/realtime/__init__.py`
+- `backend/app/services/realtime/state.py`
+- `backend/app/services/realtime/trigger.py`
+- `backend/app/api/v1/realtime.py`
+- `backend/app/static/debug-map/index.html`
+- `backend/tests/test_realtime.py`
+- `scripts/benchmark_realtime_map_matching.py`
+- `scripts/replay_realtime.py`
+- `docs/WEEK_1_REALTIME_POLICY.md`
+- `docs/WEEK_1_REMAINING_PLAN.md`
 
-Planned:
-- GPS upload interval experiments
-- Window size benchmarking
-- Match interval evaluation
-- Trigger policy (distance/time/hybrid)
+### Modified Files
+- `backend/app/main.py`
+- `backend/app/config.py`
 
 ---
 
-## DATASET V1
+## Dataset V1
 
 **UNCHANGED** - All files intact, no modifications
 
@@ -303,17 +274,10 @@ Planned:
 
 ```
 WEEK 1 PHASE A = PASS ✅
+WEEK 1 PHASE B = PASS ✅
+WEEK 1 PHASE C = PASS ✅
 
-READY FOR WEEK 1 PHASE B — REALTIME POLICY BENCHMARK
+WEEK 1 = COMPLETE ✅
+
+READY FOR WEEK 2 — DEMAND DETECTION
 ```
-
-### Checklist
-
-- [x] road_segment_id is real, not placeholder
-- [x] segment accuracy is measured (36.0%)
-- [x] direction is real, not placeholder (FORWARD/REVERSE)
-- [x] direction accuracy is measured (46.2%)
-- [x] nearest baseline is implemented
-- [x] nearest vs OSRM comparison exists
-- [x] tests pass (15/15)
-- [x] Dataset V1 remains unchanged

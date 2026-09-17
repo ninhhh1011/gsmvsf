@@ -26,7 +26,7 @@ Dataset V1 is the canonical development dataset. All acceptance criteria referen
 - GPS observations can be matched to road segments
 - Trajectory continuity validated
 - Map-matching accuracy meets project thresholds
-- Map-matching service (GET /api/v1/map-match) operational
+- Map-matching service (POST /api/v1/map-match) operational
 
 ### Week 2 — Demand Detection
 
