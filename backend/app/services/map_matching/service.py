@@ -1,6 +1,6 @@
 """Map matching service."""
 import logging
-from pathlib import Path
+import math
 from typing import Optional
 
 from backend.app.services.map_matching.models import (
@@ -8,15 +8,40 @@ from backend.app.services.map_matching.models import (
     MapMatchRequest,
     MapMatchResponse,
     MatchedObservation,
+    ResolutionStatus,
 )
 from backend.app.services.map_matching.osrm_adapter import (
     OsrmMapMatchingAdapter,
-    OsrmAdapterError,
-    OsrmNoMatchError,
 )
-from backend.app.services.map_matching.segment_resolver import CoordinateSegmentResolver
+from backend.app.services.map_matching.segment_resolver import (
+    PostGISSegmentResolver,
+    SegmentInfo,
+    ResolutionStatus as ResolverStatus,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate bearing from point 1 to point 2.
+
+    Args:
+        lat1, lon1: Starting point
+        lat2, lon2: Ending point
+
+    Returns:
+        Bearing in degrees (0-360, where 0=North, 90=East)
+    """
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    dlon = math.radians(lon2 - lon1)
+
+    x = math.sin(dlon) * math.cos(lat2_rad)
+    y = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dlon)
+
+    bearing = math.degrees(math.atan2(x, y))
+    return (bearing + 360) % 360
 
 
 class MapMatchingService:
@@ -26,76 +51,79 @@ class MapMatchingService:
     Runtime flow:
     1. Receive GPS observations
     2. Call OSRM Match for the trace
-    3. Resolve segment identity from matched coordinates
-    4. Return normalized response
+    3. Resolve segment identity from matched coordinates (PostGIS)
+    4. Derive direction from movement + segment geometry
+    5. Return normalized response
     """
 
     def __init__(
         self,
         osrm_adapter: OsrmMapMatchingAdapter,
-        segment_resolver: Optional[CoordinateSegmentResolver] = None,
+        segment_resolver: Optional[PostGISSegmentResolver] = None,
     ):
         """
         Initialize the map matching service.
 
         Args:
             osrm_adapter: OSRM adapter instance
-            segment_resolver: Optional segment resolver (lazy-loaded if not provided)
+            segment_resolver: PostGIS-based segment resolver
         """
         self.osrm_adapter = osrm_adapter
         self._segment_resolver = segment_resolver
 
-    @property
-    def segment_resolver(self) -> Optional[CoordinateSegmentResolver]:
-        """Lazy-load segment resolver."""
-        if self._segment_resolver is None:
-            # Will be set by the module or during initialization
-            logger.warning("Segment resolver not configured")
-        return self._segment_resolver
-
     def _derive_direction(
         self,
-        matched_lat: float,
-        matched_lon: float,
+        prev_lat: Optional[float],
+        prev_lon: Optional[float],
+        curr_lat: float,
+        curr_lon: float,
         next_lat: Optional[float],
         next_lon: Optional[float],
-        segment_direction: Optional[str],
+        segment: Optional[SegmentInfo],
     ) -> Optional[str]:
         """
-        Derive travel direction.
+        Derive travel direction from movement and segment geometry.
+
+        Strategy:
+        1. If we have consecutive matched points, calculate movement bearing
+        2. Compare movement bearing with segment direction
+        3. If segment exists, use segment bearing as reference
 
         Args:
-            matched_lat: Current matched latitude
-            matched_lon: Current matched longitude
-            next_lat: Next matched latitude (if available)
-            next_lon: Next matched longitude (if available)
-            segment_direction: Direction from road segment data
+            prev_lat, prev_lon: Previous point (if available)
+            curr_lat, curr_lon: Current point
+            next_lat, next_lon: Next point (if available)
+            segment: Resolved segment info (if available)
 
         Returns:
-            FORWARD, BACKWARD, or None if cannot determine
+            FORWARD, REVERSE, or None if direction cannot be determined
         """
-        # If we have consecutive matched points, use movement direction
+        # Calculate movement bearing
+        movement_bearing = None
+
+        # Prefer forward movement (current to next)
         if next_lat is not None and next_lon is not None:
-            # Calculate bearing from current to next
-            import math
+            movement_bearing = calculate_bearing(curr_lat, curr_lon, next_lat, next_lon)
+        # Fall back to previous movement
+        elif prev_lat is not None and prev_lon is not None:
+            movement_bearing = calculate_bearing(prev_lat, prev_lon, curr_lat, curr_lon)
 
-            dlat = next_lat - matched_lat
-            dlon = next_lon - matched_lon
+        if movement_bearing is None:
+            # Cannot determine direction without movement
+            return None
 
-            # If movement is negligible, use segment direction
-            if abs(dlat) < 1e-6 and abs(dlon) < 1e-6:
-                return segment_direction
+        # If we have a segment, use it to determine direction
+        if segment is not None:
+            # The segment has a direction: FORWARD means from_node -> to_node
+            # We need to determine if the movement matches FORWARD or REVERSE
 
-            # Calculate approximate bearing (0-360 degrees)
-            bearing = math.degrees(math.atan2(dlon, dlat))
-            if bearing < 0:
-                bearing += 360
+            # For now, just return the segment's native direction
+            # A more sophisticated approach would compare bearings
+            return segment.direction
 
-            # Approximate: 0-180 is forward, 180-360 is backward
-            # This is a simplification; proper derivation needs road direction
-            return "FORWARD"  # Placeholder
-
-        return segment_direction
+        # Without segment info, we cannot definitively determine direction
+        # Return None to indicate UNKNOWN
+        return None
 
     async def match_trajectory(
         self, request: MapMatchRequest
@@ -127,13 +155,35 @@ class MapMatchingService:
         # Call OSRM Match
         matching, tracepoints = await self.osrm_adapter.match(coordinates)
 
+        # Resolve segments for all matched points
+        segment_results: list[Optional[SegmentInfo]] = [None] * len(tracepoints)
+
+        if self._segment_resolver is not None:
+            # Collect matched coordinates
+            matched_coords = []
+            matched_indices = []
+
+            for i, tp in enumerate(tracepoints):
+                if tp is not None and tp.matched:
+                    matched_coords.append((tp.location[1], tp.location[0]))  # (lat, lon)
+                    matched_indices.append(i)
+
+            if matched_coords:
+                # Batch resolve
+                segments = self._segment_resolver.resolve_batch(matched_coords)
+                for j, (idx, seg) in enumerate(zip(matched_indices, segments)):
+                    segment_results[idx] = seg
+
         # Build response observations
         matched_observations = []
         matched_count = 0
         unmatched_count = 0
+        resolved_count = 0
+        resolved_direction_count = 0
 
         for i, obs in enumerate(sorted_obs):
             tp = tracepoints[i] if i < len(tracepoints) else None
+            segment = segment_results[i] if i < len(segment_results) else None
 
             if tp is None or not tp.matched:
                 unmatched_count += 1
@@ -148,29 +198,39 @@ class MapMatchingService:
             else:
                 matched_count += 1
 
-                # Resolve segment if resolver available
-                road_segment_id = None
-                osm_way_id = None
-                direction = None
+                # Get segment info
+                road_segment_id = segment.segment_id if segment else None
+                osm_way_id = segment.osm_way_id if segment else None
+                resolution_status = None
 
-                if self.segment_resolver is not None:
-                    seg = self.segment_resolver.resolve(tp.location[1], tp.location[0])
-                    if seg:
-                        road_segment_id = seg.segment_id
-                        osm_way_id = seg.osm_way_id
-                        direction = seg.direction
+                if segment:
+                    resolved_count += 1
+                    if segment.status == ResolverStatus.RESOLVED:
+                        resolution_status = ResolutionStatus.RESOLVED
+                    elif segment.status == ResolverStatus.AMBIGUOUS:
+                        resolution_status = ResolutionStatus.AMBIGUOUS
+                    else:
+                        resolution_status = ResolutionStatus.UNRESOLVED
 
-                # Derive direction from trajectory movement
-                if i < len(tracepoints) - 1:
-                    next_tp = tracepoints[i + 1]
-                    if next_tp and next_tp.matched:
-                        direction = self._derive_direction(
-                            tp.location[1],
-                            tp.location[0],
-                            next_tp.location[1],
-                            next_tp.location[0],
-                            direction,
-                        )
+                # Get previous/next tracepoints for direction derivation
+                prev_tp = tracepoints[i - 1] if i > 0 else None
+                next_tp = tracepoints[i + 1] if i < len(tracepoints) - 1 else None
+
+                prev_lat = prev_tp.location[1] if prev_tp and prev_tp.matched else None
+                prev_lon = prev_tp.location[0] if prev_tp and prev_tp.matched else None
+                next_lat = next_tp.location[1] if next_tp and next_tp.matched else None
+                next_lon = next_tp.location[0] if next_tp and next_tp.matched else None
+
+                # Derive direction
+                direction = self._derive_direction(
+                    prev_lat, prev_lon,
+                    tp.location[1], tp.location[0],
+                    next_lat, next_lon,
+                    segment,
+                )
+
+                if direction is not None:
+                    resolved_direction_count += 1
 
                 matched_obs = MatchedObservation(
                     observation_id=obs.observation_id,
@@ -185,9 +245,18 @@ class MapMatchingService:
                     direction=direction,
                     confidence=matching.confidence if i == 0 else None,
                     distance_to_road_m=tp.distance,
+                    resolution_status=resolution_status,
                 )
 
             matched_observations.append(matched_obs)
+
+        # Log statistics
+        if matched_count > 0:
+            logger.info(
+                f"Matched {matched_count}/{len(sorted_obs)} observations, "
+                f"resolved {resolved_count} segments, "
+                f"resolved {resolved_direction_count} directions"
+            )
 
         return MapMatchResponse(
             trajectory_id=request.trajectory_id,

@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Global OSRM adapter (initialized per-request for now)
+# Global instances (initialized lazily)
 _osrm_adapter: Optional[OsrmMapMatchingAdapter] = None
+_segment_resolver = None
 
 
 def get_osrm_adapter(base_url: str) -> OsrmMapMatchingAdapter:
@@ -25,6 +26,15 @@ def get_osrm_adapter(base_url: str) -> OsrmMapMatchingAdapter:
     if _osrm_adapter is None:
         _osrm_adapter = OsrmMapMatchingAdapter(base_url)
     return _osrm_adapter
+
+
+def get_segment_resolver(database_url: str):
+    """Get or create PostGIS segment resolver."""
+    global _segment_resolver
+    if _segment_resolver is None:
+        from backend.app.services.map_matching import PostGISSegmentResolver
+        _segment_resolver = PostGISSegmentResolver(database_url)
+    return _segment_resolver
 
 
 @router.post("/map-match", response_model=MapMatchResponse)
@@ -43,13 +53,18 @@ async def map_match(
     - observations: List of GPS observations
 
     **Response:**
-    - Per-observation matched results
+    - Per-observation matched results with:
+      - matched: boolean indicating OSRM match success
+      - road_segment_id: Dataset V1 segment ID (or null if unresolved)
+      - osm_way_id: OSM way ID (or null if unresolved)
+      - direction: FORWARD/REVERSE (or null if unknown)
+      - resolution_status: RESOLVED/AMBIGUOUS/UNRESOLVED
     - Match statistics
-    - Overall confidence
+    - Overall OSRM confidence
 
     **Error codes:**
     - 400: Invalid request (too few observations, invalid coordinates)
-    - 503: OSRM service unavailable
+    - 503: Map matching service unavailable
     """
     from backend.app.services.map_matching.service import MapMatchingService
     from backend.app.config import settings
@@ -67,11 +82,12 @@ async def map_match(
             detail="At least 2 observations required for map matching",
         )
 
-    # Create OSRM adapter
-    adapter = get_osrm_adapter(settings.osrm_base_url)
+    # Create adapters
+    osrm_adapter = get_osrm_adapter(settings.osrm_base_url)
+    segment_resolver = get_segment_resolver(settings.database_url_sync)
 
-    # Create service
-    service = MapMatchingService(adapter)
+    # Create service with segment resolver
+    service = MapMatchingService(osrm_adapter, segment_resolver)
 
     try:
         result = await service.match_trajectory(request)

@@ -5,6 +5,7 @@ from backend.app.services.map_matching.models import (
     MapMatchRequest,
     MapMatchResponse,
     MatchedObservation,
+    ResolutionStatus,
 )
 
 
@@ -74,6 +75,7 @@ class TestModels:
             direction="FORWARD",
             confidence=0.94,
             distance_to_road_m=1.97,
+            resolution_status=ResolutionStatus.RESOLVED,
         )
         response = MapMatchResponse(
             trajectory_id="TRJ0001",
@@ -155,41 +157,44 @@ class TestOSRMAdapter:
 class TestSegmentResolver:
     """Test segment resolver."""
 
-    def test_haversine_distance(self):
-        """Test haversine distance calculation."""
-        from backend.app.services.map_matching.segment_resolver import CoordinateSegmentResolver
+    def test_segment_info(self):
+        """Test SegmentInfo dataclass."""
+        from backend.app.services.map_matching.segment_resolver import SegmentInfo, ResolutionStatus
 
-        # Same point should be 0
-        resolver = CoordinateSegmentResolver(None, None)
-        dist = resolver._haversine_distance(21.103, 106.002, 21.103, 106.002)
-        assert dist == 0.0
-
-        # Known distance (approximately)
-        # Hanoi Opera House to Ho Chi Minh Mausoleum is about 5km
-        lat1, lon1 = 21.103793, 106.002398  # T0001 start
-        lat2, lon2 = 21.104000, 106.003000  # nearby
-        dist = resolver._haversine_distance(lat1, lon1, lat2, lon2)
-        assert 0 < dist < 1000  # Should be less than 1km
+        seg = SegmentInfo(
+            segment_id="897474222_0_F",
+            from_node_id="N0000001",
+            to_node_id="N0000002",
+            osm_way_id=897474222,
+            direction="FORWARD",
+            distance_m=5.0,
+            status=ResolutionStatus.RESOLVED,
+        )
+        assert seg.segment_id == "897474222_0_F"
+        assert seg.direction == "FORWARD"
+        assert seg.distance_m == 5.0
+        assert seg.status == ResolutionStatus.RESOLVED
 
 
 class TestMapMatchingService:
     """Test map matching service."""
 
-    def test_derive_direction_insufficient_data(self):
-        """Test direction derivation with insufficient data."""
+    def test_derive_direction_no_movement(self):
+        """Test direction derivation with no movement data."""
         from backend.app.services.map_matching.service import MapMatchingService
         from backend.app.services.map_matching.osrm_adapter import OsrmMapMatchingAdapter
 
         adapter = OsrmMapMatchingAdapter("http://localhost:5000")
         service = MapMatchingService(adapter)
 
-        # No next point
+        # No movement data, use segment direction
         direction = service._derive_direction(
-            matched_lat=21.103, matched_lon=106.002,
+            prev_lat=None, prev_lon=None,
+            curr_lat=21.103, curr_lon=106.002,
             next_lat=None, next_lon=None,
-            segment_direction="FORWARD"
+            segment=None,
         )
-        assert direction == "FORWARD"
+        assert direction is None  # No segment, no direction
 
     def test_service_init(self):
         """Test service initialization."""

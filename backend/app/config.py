@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     osrm_base_url: str = "http://localhost:5000"
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ev_recommendation"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation"
+    database_url_sync: str = "postgresql://postgres:postgres@db:5432/ev_recommendation"
 
     # Logging
     log_level: str = "INFO"

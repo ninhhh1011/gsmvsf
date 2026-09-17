@@ -1,6 +1,14 @@
 """Map matching service models."""
+from enum import Enum
 from pydantic import BaseModel, Field
 from typing import Optional
+
+
+class ResolutionStatus(str, Enum):
+    """Status of segment resolution."""
+    RESOLVED = "RESOLVED"
+    AMBIGUOUS = "AMBIGUOUS"
+    UNRESOLVED = "UNRESOLVED"
 
 
 class GPSObservation(BaseModel):
@@ -34,9 +42,10 @@ class MatchedObservation(BaseModel):
     matched_longitude: Optional[float] = None
     road_segment_id: Optional[str] = None
     osm_way_id: Optional[int] = None
-    direction: Optional[str] = None
-    confidence: Optional[float] = None
+    direction: Optional[str] = None  # FORWARD, REVERSE, or null if UNKNOWN
+    confidence: Optional[float] = None  # OSRM matching confidence
     distance_to_road_m: Optional[float] = None
+    resolution_status: Optional[ResolutionStatus] = None
     null_reason: Optional[str] = None
 
 

@@ -4,6 +4,7 @@ from backend.app.services.map_matching.models import (
     MapMatchRequest,
     MapMatchResponse,
     MatchedObservation,
+    ResolutionStatus,
 )
 from backend.app.services.map_matching.osrm_adapter import (
     OsrmMapMatchingAdapter,
@@ -14,13 +15,18 @@ from backend.app.services.map_matching.osrm_adapter import (
     OsrmBadRequestError,
 )
 from backend.app.services.map_matching.service import MapMatchingService
-from backend.app.services.map_matching.segment_resolver import CoordinateSegmentResolver
+from backend.app.services.map_matching.segment_resolver import (
+    PostGISSegmentResolver,
+    SegmentInfo,
+    ResolutionStatus as ResolverStatus,
+)
 
 __all__ = [
     "GPSObservation",
     "MapMatchRequest",
     "MapMatchResponse",
     "MatchedObservation",
+    "ResolutionStatus",
     "OsrmMapMatchingAdapter",
     "OsrmAdapterError",
     "OsrmNoMatchError",
@@ -28,5 +34,7 @@ __all__ = [
     "OsrmTimeoutError",
     "OsrmBadRequestError",
     "MapMatchingService",
-    "CoordinateSegmentResolver",
+    "PostGISSegmentResolver",
+    "SegmentInfo",
+    "ResolverStatus",
 ]
