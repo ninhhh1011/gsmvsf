@@ -75,7 +75,7 @@ class TestModels:
             direction="FORWARD",
             confidence=0.94,
             distance_to_road_m=1.97,
-            resolution_status=ResolutionStatus.RESOLVED,
+            resolution_status=ResolutionStatus.ROUTE_NODE_PAIR,
         )
         response = MapMatchResponse(
             trajectory_id="TRJ0001",
@@ -104,6 +104,14 @@ class TestModels:
         assert unmatched_obs.null_reason == "tracepoint_null"
         assert unmatched_obs.matched_latitude is None
 
+    def test_resolution_status_enum(self):
+        """Test resolution status enum values."""
+        assert ResolutionStatus.ROUTE_NODE_PAIR.value == "ROUTE_NODE_PAIR"
+        assert ResolutionStatus.ROUTE_SPATIAL.value == "ROUTE_SPATIAL"
+        assert ResolutionStatus.GLOBAL_SPATIAL.value == "GLOBAL_SPATIAL"
+        assert ResolutionStatus.AMBIGUOUS.value == "AMBIGUOUS"
+        assert ResolutionStatus.UNRESOLVED.value == "UNRESOLVED"
+
 
 class TestOSRMAdapter:
     """Test OSRM adapter."""
@@ -127,12 +135,14 @@ class TestOSRMAdapter:
             "distance": 1.975703,
             "name": "Test Street",
             "alternatives_count": 0,
+            "matchings_index": 0,
         }
         tp = Tracepoint.from_osrm(data, index=0)
         assert tp.matched is True
         assert tp.location == (106.002381, 21.103802)
         assert tp.distance == 1.975703
         assert tp.name == "Test Street"
+        assert tp.matchings_index == 0
 
     def test_matching_from_osrm(self):
         """Test creating matching from OSRM data."""
@@ -143,15 +153,38 @@ class TestOSRMAdapter:
             "distance": 140.1,
             "duration": 27.3,
             "geometry": "test_geometry",
+            "legs": [],
         }
         tracepoints = [
             Tracepoint(0, (106.002381, 21.103802), 1.97, "", True),
         ]
-        matching = Matching.from_osrm(data, tracepoints)
+        matching = Matching.from_osrm(data, tracepoints, include_annotations=True)
         assert matching.confidence == 0.94
         assert matching.distance == 140.1
         assert matching.duration == 27.3
         assert matching.geometry == "test_geometry"
+        assert len(matching.legs) == 0
+
+    def test_matching_get_route_nodes(self):
+        """Test getting route nodes from matching."""
+        from backend.app.services.map_matching.osrm_adapter import Matching, RouteLeg, Tracepoint
+
+        leg1 = RouteLeg(distance=10.0, duration=5.0, annotation_nodes=[1, 2, 3])
+        leg2 = RouteLeg(distance=15.0, duration=7.0, annotation_nodes=[4, 5])
+
+        tracepoints = [Tracepoint(0, (0, 0), 0, "", True)]
+
+        matching = Matching(
+            confidence=0.9,
+            distance=25.0,
+            duration=12.0,
+            geometry="test",
+            tracepoints=tracepoints,
+            legs=[leg1, leg2],
+        )
+
+        nodes = matching.get_route_nodes()
+        assert nodes == [1, 2, 3, 4, 5]
 
 
 class TestSegmentResolver:
@@ -168,33 +201,26 @@ class TestSegmentResolver:
             osm_way_id=897474222,
             direction="FORWARD",
             distance_m=5.0,
-            status=ResolutionStatus.RESOLVED,
+            status=ResolutionStatus.ROUTE_NODE_PAIR,
         )
         assert seg.segment_id == "897474222_0_F"
         assert seg.direction == "FORWARD"
         assert seg.distance_m == 5.0
-        assert seg.status == ResolutionStatus.RESOLVED
+        assert seg.status == ResolutionStatus.ROUTE_NODE_PAIR
+
+    def test_resolution_status_values(self):
+        """Test ResolutionStatus enum values."""
+        from backend.app.services.map_matching.segment_resolver import ResolutionStatus
+
+        assert ResolutionStatus.ROUTE_NODE_PAIR.value == "ROUTE_NODE_PAIR"
+        assert ResolutionStatus.ROUTE_SPATIAL.value == "ROUTE_SPATIAL"
+        assert ResolutionStatus.GLOBAL_SPATIAL.value == "GLOBAL_SPATIAL"
+        assert ResolutionStatus.AMBIGUOUS.value == "AMBIGUOUS"
+        assert ResolutionStatus.UNRESOLVED.value == "UNRESOLVED"
 
 
 class TestMapMatchingService:
     """Test map matching service."""
-
-    def test_derive_direction_no_movement(self):
-        """Test direction derivation with no movement data."""
-        from backend.app.services.map_matching.service import MapMatchingService
-        from backend.app.services.map_matching.osrm_adapter import OsrmMapMatchingAdapter
-
-        adapter = OsrmMapMatchingAdapter("http://localhost:5000")
-        service = MapMatchingService(adapter)
-
-        # No movement data, use segment direction
-        direction = service._derive_direction(
-            prev_lat=None, prev_lon=None,
-            curr_lat=21.103, curr_lon=106.002,
-            next_lat=None, next_lon=None,
-            segment=None,
-        )
-        assert direction is None  # No segment, no direction
 
     def test_service_init(self):
         """Test service initialization."""

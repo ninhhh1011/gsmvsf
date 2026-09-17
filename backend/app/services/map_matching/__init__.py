@@ -13,9 +13,13 @@ from backend.app.services.map_matching.osrm_adapter import (
     OsrmUnavailableError,
     OsrmTimeoutError,
     OsrmBadRequestError,
+    Tracepoint,
+    RouteLeg,
+    Matching,
 )
 from backend.app.services.map_matching.service import MapMatchingService
 from backend.app.services.map_matching.segment_resolver import (
+    RouteConstrainedSegmentResolver,
     PostGISSegmentResolver,
     SegmentInfo,
     ResolutionStatus as ResolverStatus,
@@ -33,7 +37,11 @@ __all__ = [
     "OsrmUnavailableError",
     "OsrmTimeoutError",
     "OsrmBadRequestError",
+    "Tracepoint",
+    "RouteLeg",
+    "Matching",
     "MapMatchingService",
+    "RouteConstrainedSegmentResolver",
     "PostGISSegmentResolver",
     "SegmentInfo",
     "ResolverStatus",

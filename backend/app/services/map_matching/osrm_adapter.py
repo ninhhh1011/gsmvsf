@@ -42,6 +42,8 @@ class Tracepoint:
         name: str,
         matched: bool,
         alternatives_count: int = 0,
+        matchings_index: Optional[int] = None,
+        waypoint_index_in_match: Optional[int] = None,
         null_reason: Optional[str] = None,
     ):
         self.waypoint_index = waypoint_index
@@ -50,6 +52,8 @@ class Tracepoint:
         self.name = name
         self.matched = matched
         self.alternatives_count = alternatives_count
+        self.matchings_index = matchings_index
+        self.waypoint_index_in_match = waypoint_index_in_match
         self.null_reason = null_reason
 
     @classmethod
@@ -71,7 +75,23 @@ class Tracepoint:
             name=data.get("name", ""),
             matched=True,
             alternatives_count=data.get("alternatives_count", 0),
+            matchings_index=data.get("matchings_index"),
+            waypoint_index_in_match=data.get("waypoint_index"),
         )
+
+
+class RouteLeg:
+    """Represents a leg of the matched route."""
+
+    def __init__(
+        self,
+        distance: float,
+        duration: float,
+        annotation_nodes: Optional[list[int]] = None,
+    ):
+        self.distance = distance
+        self.duration = duration
+        self.annotation_nodes = annotation_nodes or []
 
 
 class Matching:
@@ -84,23 +104,56 @@ class Matching:
         duration: float,
         geometry: str,
         tracepoints: list[Tracepoint],
+        legs: Optional[list[RouteLeg]] = None,
     ):
         self.confidence = confidence
         self.distance = distance  # total matched distance
         self.duration = duration  # total matched duration
         self.geometry = geometry  # polyline encoding
         self.tracepoints = tracepoints
+        self.legs = legs or []
 
     @classmethod
-    def from_osrm(cls, data: dict, tracepoints: list[Tracepoint]) -> "Matching":
+    def from_osrm(
+        cls,
+        data: dict,
+        tracepoints: list[Tracepoint],
+        include_annotations: bool = False,
+    ) -> "Matching":
         """Create from OSRM matching data."""
+        legs = []
+
+        if include_annotations:
+            legs_data = data.get("legs", [])
+            for leg_data in legs_data:
+                annotation = leg_data.get("annotation", {})
+                leg = RouteLeg(
+                    distance=leg_data.get("distance", 0.0),
+                    duration=leg_data.get("duration", 0.0),
+                    annotation_nodes=annotation.get("nodes", []),
+                )
+                legs.append(leg)
+
         return cls(
             confidence=data.get("confidence", 0.0),
             distance=data.get("distance", 0.0),
             duration=data.get("duration", 0.0),
             geometry=data.get("geometry", ""),
             tracepoints=tracepoints,
+            legs=legs,
         )
+
+    def get_route_nodes(self) -> list[int]:
+        """
+        Get the complete ordered list of OSM node IDs from route annotations.
+
+        Returns:
+            Ordered list of OSM node IDs
+        """
+        all_nodes = []
+        for leg in self.legs:
+            all_nodes.extend(leg.annotation_nodes)
+        return all_nodes
 
 
 class OsrmMapMatchingAdapter:
@@ -114,6 +167,7 @@ class OsrmMapMatchingAdapter:
         self,
         coordinates: list[tuple[float, float]],
         overview: str = "simplified",
+        annotations: bool = False,
     ) -> tuple[Matching, list[Tracepoint]]:
         """
         Match GPS coordinates to road network.
@@ -121,6 +175,7 @@ class OsrmMapMatchingAdapter:
         Args:
             coordinates: List of (longitude, latitude) tuples
             overview: 'simplified', 'full', or 'false'
+            annotations: Include node annotations for segment resolution
 
         Returns:
             Tuple of (Matching object, list of Tracepoints)
@@ -140,8 +195,11 @@ class OsrmMapMatchingAdapter:
         url = f"{self.base_url}/match/v1/driving/{coords_str}"
         params = {
             "overview": overview,
-            "steps": "false",
+            "steps": "true" if annotations else "false",
         }
+
+        if annotations:
+            params["annotations"] = "nodes"
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -180,6 +238,10 @@ class OsrmMapMatchingAdapter:
         if not matchings_data:
             raise OsrmNoMatchError("No matching returned")
 
-        matching = Matching.from_osrm(matchings_data[0], tracepoints)
+        matching = Matching.from_osrm(
+            matchings_data[0],
+            tracepoints,
+            include_annotations=annotations,
+        )
 
         return matching, tracepoints

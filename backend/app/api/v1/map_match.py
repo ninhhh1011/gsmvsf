@@ -1,5 +1,6 @@
 """Map matching API endpoints."""
 import logging
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
@@ -28,12 +29,12 @@ def get_osrm_adapter(base_url: str) -> OsrmMapMatchingAdapter:
     return _osrm_adapter
 
 
-def get_segment_resolver(database_url: str):
-    """Get or create PostGIS segment resolver."""
+def get_segment_resolver(database_url: str, mapping_dir: Path):
+    """Get or create route-constrained segment resolver."""
     global _segment_resolver
     if _segment_resolver is None:
-        from backend.app.services.map_matching import PostGISSegmentResolver
-        _segment_resolver = PostGISSegmentResolver(database_url)
+        from backend.app.services.map_matching import RouteConstrainedSegmentResolver
+        _segment_resolver = RouteConstrainedSegmentResolver(database_url, mapping_dir)
     return _segment_resolver
 
 
@@ -45,7 +46,7 @@ async def map_match(
     Match GPS observations to road network.
 
     This endpoint accepts a trajectory with GPS observations and returns
-    matched road positions and segment identities.
+    matched road positions and segment identities using route-constrained resolution.
 
     **Request body:**
     - trajectory_id: Trajectory identifier
@@ -58,7 +59,7 @@ async def map_match(
       - road_segment_id: Dataset V1 segment ID (or null if unresolved)
       - osm_way_id: OSM way ID (or null if unresolved)
       - direction: FORWARD/REVERSE (or null if unknown)
-      - resolution_status: RESOLVED/AMBIGUOUS/UNRESOLVED
+      - resolution_status: ROUTE_NODE_PAIR / ROUTE_SPATIAL / GLOBAL_SPATIAL / AMBIGUOUS / UNRESOLVED
     - Match statistics
     - Overall OSRM confidence
 
@@ -84,7 +85,8 @@ async def map_match(
 
     # Create adapters
     osrm_adapter = get_osrm_adapter(settings.osrm_base_url)
-    segment_resolver = get_segment_resolver(settings.database_url_sync)
+    mapping_dir = Path(settings.mapping_dir)
+    segment_resolver = get_segment_resolver(settings.database_url_sync, mapping_dir)
 
     # Create service with segment resolver
     service = MapMatchingService(osrm_adapter, segment_resolver)

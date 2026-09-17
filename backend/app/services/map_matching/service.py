@@ -1,6 +1,7 @@
-"""Map matching service."""
+"""Map matching service with route-constrained segment resolution."""
 import logging
 import math
+from pathlib import Path
 from typing import Optional
 
 from backend.app.services.map_matching.models import (
@@ -12,9 +13,11 @@ from backend.app.services.map_matching.models import (
 )
 from backend.app.services.map_matching.osrm_adapter import (
     OsrmMapMatchingAdapter,
+    Tracepoint,
+    Matching,
 )
 from backend.app.services.map_matching.segment_resolver import (
-    PostGISSegmentResolver,
+    RouteConstrainedSegmentResolver,
     SegmentInfo,
     ResolutionStatus as ResolverStatus,
 )
@@ -23,16 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def calculate_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """
-    Calculate bearing from point 1 to point 2.
-
-    Args:
-        lat1, lon1: Starting point
-        lat2, lon2: Ending point
-
-    Returns:
-        Bearing in degrees (0-360, where 0=North, 90=East)
-    """
+    """Calculate bearing from point 1 to point 2."""
     lat1_rad = math.radians(lat1)
     lat2_rad = math.radians(lat2)
     dlon = math.radians(lon2 - lon1)
@@ -48,82 +42,55 @@ class MapMatchingService:
     """
     Service for matching GPS observations to road segments.
 
-    Runtime flow:
-    1. Receive GPS observations
-    2. Call OSRM Match for the trace
-    3. Resolve segment identity from matched coordinates (PostGIS)
-    4. Derive direction from movement + segment geometry
-    5. Return normalized response
+    Uses route-constrained segment resolution to leverage OSRM's matched path
+    for accurate segment identification.
     """
 
     def __init__(
         self,
         osrm_adapter: OsrmMapMatchingAdapter,
-        segment_resolver: Optional[PostGISSegmentResolver] = None,
+        segment_resolver: Optional[RouteConstrainedSegmentResolver] = None,
     ):
         """
         Initialize the map matching service.
 
         Args:
             osrm_adapter: OSRM adapter instance
-            segment_resolver: PostGIS-based segment resolver
+            segment_resolver: Route-constrained segment resolver
         """
         self.osrm_adapter = osrm_adapter
         self._segment_resolver = segment_resolver
 
-    def _derive_direction(
+    def _derive_direction_from_route(
         self,
-        prev_lat: Optional[float],
-        prev_lon: Optional[float],
-        curr_lat: float,
-        curr_lon: float,
-        next_lat: Optional[float],
-        next_lon: Optional[float],
-        segment: Optional[SegmentInfo],
-    ) -> Optional[str]:
+        osm_from_node: int,
+        osm_to_node: int,
+        segment: SegmentInfo,
+    ) -> str:
         """
-        Derive travel direction from movement and segment geometry.
+        Derive direction from OSRM route traversal.
 
-        Strategy:
-        1. If we have consecutive matched points, calculate movement bearing
-        2. Compare movement bearing with segment direction
-        3. If segment exists, use segment bearing as reference
-
-        Args:
-            prev_lat, prev_lon: Previous point (if available)
-            curr_lat, curr_lon: Current point
-            next_lat, next_lon: Next point (if available)
-            segment: Resolved segment info (if available)
-
-        Returns:
-            FORWARD, REVERSE, or None if direction cannot be determined
+        Compares OSRM's node traversal with the Dataset segment orientation
+        to determine if the vehicle is moving FORWARD or REVERSE along the segment.
         """
-        # Calculate movement bearing
-        movement_bearing = None
+        # Get segment's OSM node mapping
+        seg_osm = getattr(segment, '_osm_from', None), getattr(segment, '_osm_to', None)
 
-        # Prefer forward movement (current to next)
-        if next_lat is not None and next_lon is not None:
-            movement_bearing = calculate_bearing(curr_lat, curr_lon, next_lat, next_lon)
-        # Fall back to previous movement
-        elif prev_lat is not None and prev_lon is not None:
-            movement_bearing = calculate_bearing(prev_lat, prev_lon, curr_lat, curr_lon)
-
-        if movement_bearing is None:
-            # Cannot determine direction without movement
-            return None
-
-        # If we have a segment, use it to determine direction
-        if segment is not None:
-            # The segment has a direction: FORWARD means from_node -> to_node
-            # We need to determine if the movement matches FORWARD or REVERSE
-
-            # For now, just return the segment's native direction
-            # A more sophisticated approach would compare bearings
+        if seg_osm[0] is None or seg_osm[1] is None:
+            # No OSM mapping, fall back to segment direction
             return segment.direction
 
-        # Without segment info, we cannot definitively determine direction
-        # Return None to indicate UNKNOWN
-        return None
+        # Check if OSRM's traversal matches segment orientation
+        if osm_from_node == seg_osm[0] and osm_to_node == seg_osm[1]:
+            # OSRM traversal matches FORWARD direction
+            return "FORWARD"
+        elif osm_from_node == seg_osm[1] and osm_to_node == seg_osm[0]:
+            # OSRM traversal matches REVERSE direction
+            return "REVERSE"
+        else:
+            # Traversal doesn't match segment endpoints exactly
+            # Use segment's native direction
+            return segment.direction
 
     async def match_trajectory(
         self, request: MapMatchRequest
@@ -131,15 +98,13 @@ class MapMatchingService:
         """
         Match a trajectory to the road network.
 
+        Uses route-constrained segment resolution when possible.
+
         Args:
             request: Map matching request with observations
 
         Returns:
             Map matching response with matched observations
-
-        Raises:
-            OsrmAdapterError: If OSRM call fails
-            ValueError: If request is invalid
         """
         if not request.observations:
             raise ValueError("No observations provided")
@@ -152,34 +117,51 @@ class MapMatchingService:
         # Extract coordinates for OSRM (lon, lat)
         coordinates = [(o.longitude, o.latitude) for o in sorted_obs]
 
-        # Call OSRM Match
-        matching, tracepoints = await self.osrm_adapter.match(coordinates)
+        # Call OSRM Match with node annotations
+        matching, tracepoints = await self.osrm_adapter.match(
+            coordinates,
+            annotations=True,  # Enable node annotations for route resolution
+        )
 
-        # Resolve segments for all matched points
+        # Get route nodes from matching
+        route_nodes = matching.get_route_nodes()
+
+        # Resolve segments using route context
         segment_results: list[Optional[SegmentInfo]] = [None] * len(tracepoints)
 
-        if self._segment_resolver is not None:
-            # Collect matched coordinates
+        if self._segment_resolver is not None and route_nodes:
+            # Get matched coordinates for observations
             matched_coords = []
-            matched_indices = []
-
-            for i, tp in enumerate(tracepoints):
-                if tp is not None and tp.matched:
+            for tp in tracepoints:
+                if tp.matched:
                     matched_coords.append((tp.location[1], tp.location[0]))  # (lat, lon)
-                    matched_indices.append(i)
+                else:
+                    matched_coords.append((0.0, 0.0))
 
-            if matched_coords:
-                # Batch resolve
-                segments = self._segment_resolver.resolve_batch(matched_coords)
-                for j, (idx, seg) in enumerate(zip(matched_indices, segments)):
-                    segment_results[idx] = seg
+            # Resolve using route-constrained method
+            observation_indices = [i for i, tp in enumerate(tracepoints) if tp.matched]
+            results = self._segment_resolver.resolve_with_route(
+                route_nodes,
+                matched_coords,
+                observation_indices,
+            )
+
+            for idx, seg in results.items():
+                segment_results[idx] = seg
+
+        # Fill in unmatched with spatial fallback
+        for i, tp in enumerate(tracepoints):
+            if not tp.matched and segment_results[i] is None:
+                segment_results[i] = self._segment_resolver._resolve_spatial(
+                    sorted_obs[i].latitude,
+                    sorted_obs[i].longitude,
+                ) if self._segment_resolver else None
 
         # Build response observations
         matched_observations = []
         matched_count = 0
         unmatched_count = 0
-        resolved_count = 0
-        resolved_direction_count = 0
+        resolution_stats = {}
 
         for i, obs in enumerate(sorted_obs):
             tp = tracepoints[i] if i < len(tracepoints) else None
@@ -198,39 +180,22 @@ class MapMatchingService:
             else:
                 matched_count += 1
 
-                # Get segment info
-                road_segment_id = segment.segment_id if segment else None
-                osm_way_id = segment.osm_way_id if segment else None
+                # Get resolution status
                 resolution_status = None
-
                 if segment:
-                    resolved_count += 1
-                    if segment.status == ResolverStatus.RESOLVED:
-                        resolution_status = ResolutionStatus.RESOLVED
+                    status_str = segment.status.value if hasattr(segment.status, 'value') else str(segment.status)
+                    resolution_stats[status_str] = resolution_stats.get(status_str, 0) + 1
+
+                    if segment.status == ResolverStatus.ROUTE_NODE_PAIR:
+                        resolution_status = ResolutionStatus.ROUTE_NODE_PAIR
+                    elif segment.status == ResolverStatus.ROUTE_SPATIAL:
+                        resolution_status = ResolutionStatus.ROUTE_SPATIAL
+                    elif segment.status == ResolverStatus.GLOBAL_SPATIAL:
+                        resolution_status = ResolutionStatus.GLOBAL_SPATIAL
                     elif segment.status == ResolverStatus.AMBIGUOUS:
                         resolution_status = ResolutionStatus.AMBIGUOUS
-                    else:
+                    elif segment.status == ResolverStatus.UNRESOLVED:
                         resolution_status = ResolutionStatus.UNRESOLVED
-
-                # Get previous/next tracepoints for direction derivation
-                prev_tp = tracepoints[i - 1] if i > 0 else None
-                next_tp = tracepoints[i + 1] if i < len(tracepoints) - 1 else None
-
-                prev_lat = prev_tp.location[1] if prev_tp and prev_tp.matched else None
-                prev_lon = prev_tp.location[0] if prev_tp and prev_tp.matched else None
-                next_lat = next_tp.location[1] if next_tp and next_tp.matched else None
-                next_lon = next_tp.location[0] if next_tp and next_tp.matched else None
-
-                # Derive direction
-                direction = self._derive_direction(
-                    prev_lat, prev_lon,
-                    tp.location[1], tp.location[0],
-                    next_lat, next_lon,
-                    segment,
-                )
-
-                if direction is not None:
-                    resolved_direction_count += 1
 
                 matched_obs = MatchedObservation(
                     observation_id=obs.observation_id,
@@ -240,9 +205,9 @@ class MapMatchingService:
                     matched=True,
                     matched_latitude=tp.location[1],
                     matched_longitude=tp.location[0],
-                    road_segment_id=road_segment_id,
-                    osm_way_id=osm_way_id,
-                    direction=direction,
+                    road_segment_id=segment.segment_id if segment else None,
+                    osm_way_id=segment.osm_way_id if segment else None,
+                    direction=segment.direction if segment else None,
                     confidence=matching.confidence if i == 0 else None,
                     distance_to_road_m=tp.distance,
                     resolution_status=resolution_status,
@@ -254,8 +219,7 @@ class MapMatchingService:
         if matched_count > 0:
             logger.info(
                 f"Matched {matched_count}/{len(sorted_obs)} observations, "
-                f"resolved {resolved_count} segments, "
-                f"resolved {resolved_direction_count} directions"
+                f"resolution: {resolution_stats}"
             )
 
         return MapMatchResponse(

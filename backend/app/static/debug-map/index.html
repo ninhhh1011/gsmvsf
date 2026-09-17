@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Week 1 Map Matching Debug - Simple Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a2e; color: #fff; }
+        #map { height: 500px; width: 100%; background: #0f0f23; margin: 20px 0; }
+        .controls { margin: 20px 0; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .info { background: #333; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .status { font-size: 14px; }
+        input { padding: 8px; width: 200px; }
+        #log { background: #222; padding: 10px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .log-entry { margin: 2px 0; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .info-text { color: #60a5fa; }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+    <h1>Week 1 Map Matching Debug UI</h1>
+
+    <div class="controls">
+        <select id="trajectory">
+            <option value="TRJ0001">TRJ0001 (273 obs)</option>
+            <option value="TRJ0002">TRJ0002</option>
+            <option value="TRJ0003">TRJ0003</option>
+            <option value="TRJ0004">TRJ0004</option>
+            <option value="TRJ0005">TRJ0005</option>
+        </select>
+        <button onclick="loadTrajectory()">Load</button>
+        <button onclick="playReplay()">Play</button>
+        <button onclick="pauseReplay()">Pause</button>
+        <button onclick="resetReplay()">Reset</button>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="info">
+        <strong>Status:</strong> <span id="status" class="status">-</span><br>
+        <strong>Progress:</strong> <span id="progress">0 / 0</span><br>
+        <strong>Last Trigger:</strong> <span id="trigger">-</span><br>
+        <strong>Total Matches:</strong> <span id="match-count">0</span><br>
+        <strong>Current Position:</strong> <span id="position">-</span>
+    </div>
+
+    <h3>Event Log</h3>
+    <div id="log"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api/v1';
+        let map = null;
+        let rawMarkers = [];
+        let matchedMarkers = [];
+        let currentRawMarker = null;
+        let currentMatchedMarker = null;
+        let observations = [];
+        let currentIndex = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let driverId = 'debug_ui_' + Date.now();
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([21.0285, 105.8542], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            log('Map initialized', 'info');
+        }
+
+        function log(message, type = '') {
+            const div = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+            div.insertBefore(entry, div.firstChild);
+        }
+
+        async function loadTrajectory() {
+            const trajectoryId = document.getElementById('trajectory').value;
+            resetReplay();
+
+            log('Loading trajectory: ' + trajectoryId);
+
+            try {
+                const response = await fetch(API_BASE + '/debug/trajectories/' + trajectoryId);
+                if (!response.ok) throw new Error('Failed to load');
+
+                observations = await response.json();
+                log('Loaded ' + observations.length + ' observations', 'success');
+
+                document.getElementById('progress').textContent = '0 / ' + observations.length;
+
+                // Add all points to map
+                observations.forEach((obs, i) => {
+                    L.circleMarker([obs.latitude, obs.longitude], {
+                        radius: 3,
+                        color: '#60a5fa',
+                        fillColor: '#60a5fa',
+                        fillOpacity: 0.5
+                    }).addTo(map).bindPopup('Obs ' + i);
+                    rawMarkers.push(obs);
+                });
+
+                // Fit bounds
+                const bounds = L.latLngBounds(observations.map(o => [o.latitude, o.longitude]));
+                map.fitBounds(bounds, { padding: [20, 20] });
+
+            } catch (e) {
+                log('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function processStep() {
+            if (currentIndex >= observations.length) {
+                pauseReplay();
+                log('Replay complete', 'success');
+                return;
+            }
+
+            const obs = observations[currentIndex];
+
+            // Update progress
+            document.getElementById('progress').textContent = (currentIndex + 1) + ' / ' + observations.length;
+            document.getElementById('position').textContent = obs.latitude.toFixed(5) + ', ' + obs.longitude.toFixed(5);
+
+            // Send to API
+            try {
+                const response = await fetch(API_BASE + '/drivers/' + driverId + '/location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        timestamp: obs.timestamp,
+                        latitude: obs.latitude,
+                        longitude: obs.longitude
+                    })
+                });
+
+                const data = await response.json();
+
+                document.getElementById('status').textContent = data.status;
+                document.getElementById('trigger').textContent = data.trigger_reason || '-';
+                document.getElementById('match-count').textContent = data.total_match_calls || 0;
+
+                // Update current position marker
+                if (currentRawMarker) map.removeLayer(currentRawMarker);
+                currentRawMarker = L.circleMarker([obs.latitude, obs.longitude], {
+                    radius: 8,
+                    color: '#fbbf24',
+                    fillColor: '#fbbf24',
+                    fillOpacity: 1
+                }).addTo(map);
+
+                if (data.status === 'MATCHED') {
+                    log('MATCH: ' + data.trigger_reason, 'success');
+
+                    // Show matched position if available
+                    if (data.matched_position && data.matched_position.latitude) {
+                        if (currentMatchedMarker) map.removeLayer(currentMatchedMarker);
+                        currentMatchedMarker = L.circleMarker(
+                            [data.matched_position.latitude, data.matched_position.longitude],
+                            { radius: 8, color: '#4ade80', fillColor: '#4ade80', fillOpacity: 1 }
+                        ).addTo(map);
+                    }
+                } else if (data.status === 'GPS_ACCEPTED') {
+                    log('GPS: ' + data.trigger_reason, 'info');
+                } else if (data.status === 'WARMING_UP') {
+                    log('Warming up...', 'info');
+                }
+
+            } catch (e) {
+                log('Error: ' + e.message, 'error');
+            }
+
+            currentIndex++;
+        }
+
+        function playReplay() {
+            if (isPlaying) return;
+            isPlaying = true;
+            log('Playing...');
+
+            playInterval = setInterval(processStep, 100); // 100ms per step
+        }
+
+        function pauseReplay() {
+            isPlaying = false;
+            if (playInterval) clearInterval(playInterval);
+            log('Paused');
+        }
+
+        function resetReplay() {
+            pauseReplay();
+            currentIndex = 0;
+
+            // Clear markers
+            rawMarkers = [];
+            matchedMarkers = [];
+            if (currentRawMarker) map.removeLayer(currentRawMarker);
+            if (currentMatchedMarker) map.removeLayer(currentMatchedMarker);
+
+            document.getElementById('status').textContent = '-';
+            document.getElementById('trigger').textContent = '-';
+            document.getElementById('match-count').textContent = '0';
+            document.getElementById('progress').textContent = '0 / 0';
+            document.getElementById('position').textContent = '-';
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            initMap();
+            log('Debug UI ready');
+            log('Select a trajectory and click Load');
+        };
+    </script>
+</body>
+</html>

@@ -38,6 +38,10 @@ runtime/osrm/*.osm.bz2
 runtime/osrm/*.osm.pbf
 runtime/osrm/*.osrm.*
 runtime/osrm/.osrm-lock
+runtime/map_mapping/*.json
+runtime/map_mapping/*.csv
+runtime/map_mapping/*.parquet
+runtime/benchmark_results.json
 samples/week1/*.csv
 samples/week1/*.json
 
@@ -46,3 +50,6 @@ data/external/gps/processed/*.parquet
 data/external/gps/rejected/*.csv
 data/external/gps/reports/*.json
 data/external/gps/raw/*.csv
+
+# External station data
+data/external/vinfast_stations/

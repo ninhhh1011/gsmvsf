@@ -6,7 +6,9 @@ from typing import Optional
 
 class ResolutionStatus(str, Enum):
     """Status of segment resolution."""
-    RESOLVED = "RESOLVED"
+    ROUTE_NODE_PAIR = "ROUTE_NODE_PAIR"
+    ROUTE_SPATIAL = "ROUTE_SPATIAL"
+    GLOBAL_SPATIAL = "GLOBAL_SPATIAL"
     AMBIGUOUS = "AMBIGUOUS"
     UNRESOLVED = "UNRESOLVED"
 
