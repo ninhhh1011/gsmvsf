@@ -111,12 +111,26 @@ Dataset V1 is located at `./dataset_v1/` and is the canonical development datase
 
 **CRITICAL: Labels must NEVER be consumed as runtime prediction input.**
 
-## FARTHER_BUT_FASTER Evidence
+## External GPS Data
 
-Validated event DE000580 / trip T0073:
-- S028 is 542.9 m farther than S026 by network distance
-- S028's total ETA is 13.472 min lower (53.339 vs 66.811 min)
-- Meaningful margin: ≥500 m farther and ≥10 min faster
+An additional GPS mobility source is maintained outside `dataset_v1/`.
+
+| File | Description |
+|------|-------------|
+| `data/external/gps/raw/fake_gps.csv` | Raw GPS CSV (51 MB, ~400K rows) |
+| `data/external/gps/processed/gps_normalized.parquet` | 399,759 normalized observations |
+| `data/external/gps/processed/gps_hanoi.parquet` | 332,700 Hanoi-subset observations |
+| `data/external/gps/processed/gps_sessions.parquet` | 1,202 GPS session summaries |
+| `data/external/gps/rejected/rejected_rows.csv` | 225 rejected malformed rows |
+| `docs/EXTERNAL_GPS_DATA.md` | Full documentation |
+
+**External GPS is NOT part of Dataset V1.** It has no ground truth labels, no SOC data, and no station state. See `docs/EXTERNAL_GPS_DATA.md` for schema, profiling, and usage guidance.
+
+Pipeline:
+```bash
+python scripts/prepare_external_gps.py   # preprocess
+python scripts/validate_external_gps.py  # validate
+```
 
 ## Service Semantics (V1.2)
 

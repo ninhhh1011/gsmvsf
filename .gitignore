@@ -40,3 +40,9 @@ runtime/osrm/*.osrm.*
 runtime/osrm/.osrm-lock
 samples/week1/*.csv
 samples/week1/*.json
+
+# External GPS processed data (large)
+data/external/gps/processed/*.parquet
+data/external/gps/rejected/*.csv
+data/external/gps/reports/*.json
+data/external/gps/raw/*.csv

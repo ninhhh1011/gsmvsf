@@ -1,16 +1,18 @@
-.PHONY: help setup validate-data prepare-map up down logs test smoke clean
+.PHONY: help setup validate-data prepare-map up down logs test smoke clean prepare-external-gps validate-external-gps
 
 help:
 	@echo "EV Recommendation API - Available commands:"
-	@echo "  make setup          - Install Python dependencies"
-	@echo "  make validate-data  - Run Dataset V1 validation"
-	@echo "  make prepare-map    - Preprocess OSRM map from baseline PBF"
-	@echo "  make up             - Start all services (Docker Compose)"
-	@echo "  make down           - Stop all services"
-	@echo "  make logs           - View service logs"
-	@echo "  make test           - Run pytest tests"
-	@echo "  make smoke           - Run OSRM smoke tests with Dataset V1 GPS"
-	@echo "  make clean           - Remove generated files"
+	@echo "  make setup                  - Install Python dependencies"
+	@echo "  make validate-data          - Run Dataset V1 validation"
+	@echo "  make prepare-map           - Preprocess OSRM map from baseline PBF"
+	@echo "  make up                    - Start all services (Docker Compose)"
+	@echo "  make down                  - Stop all services"
+	@echo "  make logs                  - View service logs"
+	@echo "  make test                  - Run pytest tests"
+	@echo "  make smoke                 - Run OSRM smoke tests with Dataset V1 GPS"
+	@echo "  make prepare-external-gps  - Preprocess external GPS dataset"
+	@echo "  make validate-external-gps - Validate external GPS processed data"
+	@echo "  make clean                 - Remove generated files"
 
 setup:
 	@echo "Installing Python dependencies..."
@@ -59,3 +61,13 @@ clean:
 	rm -rf runtime/osrm/*.osrm runtime/osrm/*.osrm.* runtime/osrm/*.pbf
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+
+prepare-external-gps:
+	@echo "Preprocessing external GPS dataset..."
+	python scripts/prepare_external_gps.py
+	@echo "External GPS preprocessing complete."
+
+validate-external-gps:
+	@echo "Validating external GPS processed data..."
+	python scripts/validate_external_gps.py
+	@echo "External GPS validation complete."
