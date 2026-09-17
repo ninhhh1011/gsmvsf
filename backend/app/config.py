@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Paths
     dataset_path: Path = Path("dataset_v1")
-    primary_pbf_path: Path = Path("dataset_v1/map/raw/hanoi-baseline.osm.pbf")
+    primary_pbf_path: Path = Path("dataset_v1/map/raw/hanoi-patched.osm.pbf")
     osrm_data_path: Path = Path("runtime/osrm")
 
     # OSRM
