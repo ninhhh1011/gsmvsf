@@ -1,6 +1,6 @@
 # DATA_DICTIONARY — Dataset V1.2
 
-**MAP WARNING — HUMAN CONFIRMATION REQUIRED:** `hanoi-patched.osm.pbf` changes OSM way `881947000` (Cầu Thanh Trì) from `motorcar=designated` to `motorcar=no`. Dataset V1.2 does not decide whether that edit is correct. Keep both PBFs unchanged and obtain human confirmation before freezing the patched PBF as the primary routing map.
+**MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary OSRM map. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
 
 ## V1.2 semantic contracts
 

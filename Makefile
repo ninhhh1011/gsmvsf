@@ -24,11 +24,11 @@ validate-data:
 prepare-map:
 	@echo "Preprocessing OSRM map via Docker..."
 	mkdir -p runtime/osrm
-	cp dataset_v1/map/raw/hanoi-baseline.osm.pbf runtime/osrm/
-	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-extract -p /usr/local/share/osrm/profiles/car.lua /data/hanoi-baseline.osm.pbf
-	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-partition /data/hanoi-baseline.osrm
-	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-customize /data/hanoi-baseline.osrm
-	rm -f runtime/osrm/hanoi-baseline.osm.pbf
+	cp dataset_v1/map/raw/hanoi-patched.osm.pbf runtime/osrm/
+	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-extract -p /usr/local/share/osrm/profiles/car.lua /data/hanoi-patched.osm.pbf
+	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-partition /data/hanoi-patched.osrm
+	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-customize /data/hanoi-patched.osrm
+	rm -f runtime/osrm/hanoi-patched.osm.pbf
 	@echo "OSRM preprocessing complete."
 
 up:

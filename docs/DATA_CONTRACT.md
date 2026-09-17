@@ -1,6 +1,6 @@
 # DATA_CONTRACT
 
-**MAP WARNING — HUMAN CONFIRMATION REQUIRED:** `hanoi-patched.osm.pbf` changes OSM way `881947000` (Cầu Thanh Trì) from `motorcar=designated` to `motorcar=no`. Human confirmation required before freezing patched PBF as primary routing map.
+**MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary OSRM map. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
 
 ## Dataset V1 Location
 

@@ -43,9 +43,12 @@ Also read the active-week documentation when it exists (e.g., `docs/WEEK_1.md`).
 
 ---
 
-## Dataset V1 Map Warning
+## Dataset V1 Map Status
 
-`hanoi-patched.osm.pbf` changes OSM way `881947000` (Cầu Thanh Trì) from `motorcar=designated` to `motorcar=no`. Human confirmation required before use as primary routing map. Both PBFs remain untouched.
+**APPROVED**: `hanoi-patched.osm.pbf` is the primary OSRM map.
+- Contains motorcar=no for Cầu Thanh Trì way 881947000
+- `hanoi-baseline.osm.pbf` retained as reference
+- Both PBFs remain untouched.
 
 ---
 

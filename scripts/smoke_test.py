@@ -3,7 +3,7 @@
 OSRM Smoke Test Script
 
 Tests OSRM with Dataset V1 GPS observations.
-Uses hanoi-baseline.osm.pbf (primary map).
+Uses hanoi-patched.osm.pbf (primary map).
 
 Usage:
     python scripts/smoke_test.py

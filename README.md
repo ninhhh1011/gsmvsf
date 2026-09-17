@@ -69,10 +69,10 @@ make validate-data
 
 ---
 
-## MAP WARNING — HUMAN CONFIRMATION REQUIRED
+## MAP STATUS — PRIMARY MAP FINALIZED
 
-- **`hanoi-baseline.osm.pbf`** — Primary routing map (baseline OSM)
-- **`hanoi-patched.osm.pbf`** — Contains a pending change to OSM way `881947000` (Cầu Thanh Trì) from `motorcar=designated` to `motorcar=no`. **Human confirmation required before this PBF can be used as primary.**
+- **`hanoi-patched.osm.pbf`** — Primary routing map (contains motorcar=no for Cầu Thanh Trì way 881947000)
+- **`hanoi-baseline.osm.pbf`** — Reference map (historical baseline)
 
 Both files remain untouched.
 
@@ -97,7 +97,7 @@ Both files remain untouched.
 2. Review `.env` — defaults point to local paths:
    ```
    DATASET_PATH=./dataset_v1
-   PRIMARY_PBF_PATH=./dataset_v1/map/raw/hanoi-baseline.osm.pbf
+   PRIMARY_PBF_PATH=./dataset_v1/map/raw/hanoi-patched.osm.pbf
    OSRM_DATA_PATH=./runtime/osrm
    OSRM_BASE_URL=http://localhost:5000
    DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/ev_recommendation
@@ -250,8 +250,8 @@ SMOKE TEST COMPLETE
     ├── trajectories/
     ├── labels/
     ├── map/raw/
-    │   ├── hanoi-baseline.osm.pbf  # PRIMARY
-    │   └── hanoi-patched.osm.pbf   # PENDING REVIEW
+    │   ├── hanoi-baseline.osm.pbf  # REFERENCE
+    │   └── hanoi-patched.osm.pbf   # PRIMARY
     ├── validation/
     └── ...
 ```
@@ -278,7 +278,7 @@ Week 1 does NOT start until Milestone 0 is verified as complete.
 
 2. **Dataset V1 is read-only** — Do not modify, regenerate, or move files inside `dataset_v1/`.
 
-3. **Map routing** — `hanoi-baseline.osm.pbf` is primary. `hanoi-patched.osm.pbf` requires human confirmation.
+3. **Map routing** — `hanoi-patched.osm.pbf` is primary. `hanoi-baseline.osm.pbf` is reference.
 
 4. **Week boundaries** — Implement only the current week's scope. Do not build future weeks' features early.
 

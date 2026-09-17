@@ -60,24 +60,24 @@
 
 ---
 
-## ADR-006: hanoi-baseline.osm.pbf is Primary Initial Routing Map
+## ADR-006: hanoi-patched.osm.pbf is Primary Routing Map (Supersedes v1)
 
-**Decision**: Use `hanoi-baseline.osm.pbf` as the primary OSRM routing map.
+**Decision**: Use `hanoi-patched.osm.pbf` as the primary OSRM routing map.
 
-**Reason**: The baseline PBF has passed PBF integrity validation and is the safest starting point. The Cầu Thanh Trì (bridge) patch in `hanoi-patched.osm.pbf` requires human review before being designated as primary.
+**Reason**: The patched PBF has been approved for production use. It contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì bridge), which is the intended project behavior.
 
-**Trade-off**: The baseline PBF may not include recent road updates or the specific Cầu Thanh Trì change. Routing results may differ from the patched version.
+**Trade-off**: The baseline PBF remains available as a reference for historical comparison.
 
-**Revisit condition**: When human review confirms the Cầu Thanh Trì patch is correct.
+**Revisit condition**: When a new approved PBF patch is provided.
 
 ---
 
-## ADR-007: hanoi-patched.osm.pbf Remains Non-Primary Pending Human Review
+## ADR-007: hanoi-baseline.osm.pbf is Reference Map (Supersedes v1)
 
-**Decision**: `hanoi-patched.osm.pbf` is kept alongside the baseline but is not used as the primary routing map.
+**Decision**: `hanoi-baseline.osm.pbf` is kept as a reference map only.
 
-**Reason**: The patch changes OSM way 881947000 (Cầu Thanh Trì) from `motorcar=designated` to `motorcar=no`. This is a significant semantic change that affects routing across the bridge. Dataset V1 documentation explicitly states human confirmation is required.
+**Reason**: The baseline PBF served as the initial OSRM map. With the approval of hanoi-patched.osm.pbf, the baseline is retained for historical reference and comparison purposes.
 
-**Trade-off**: Applications must be designed to switch between maps when the patch is confirmed. Both PBFs must remain byte-for-byte intact.
+**Trade-off**: The baseline should not be used for production routing. Both PBFs remain byte-for-byte intact.
 
-**Revisit condition**: When human review of the Cầu Thanh Trì change is completed and a decision is reached.
+**Revisit condition**: When comparing routing behavior between baseline and patched maps is needed.

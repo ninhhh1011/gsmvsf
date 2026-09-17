@@ -24,7 +24,7 @@
 - >=2 eligible: eligible candidates are ranked; `is_ltr_group=true`.
 
 ## Map routing caveat
-**MAP WARNING — HUMAN CONFIRMATION REQUIRED:** `hanoi-patched.osm.pbf` changes OSM way `881947000` (Cầu Thanh Trì) from `motorcar=designated` to `motorcar=no`. Dataset V1.2 does not decide whether that edit is correct. Both PBFs remain unchanged; human confirmation is required before routing-map freeze.
+**MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary OSRM map. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
 
 ## Scope boundary
 No FastAPI, database, OSRM server, Docker application stack, Kafka, Redis, frontend, microservices or production infrastructure is created.

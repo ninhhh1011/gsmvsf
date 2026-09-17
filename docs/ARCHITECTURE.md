@@ -16,7 +16,7 @@ PostgreSQL/PostGIS             OSRM
      │                       ┌──────┴──────┐
      │                       ▼             ▼
      │              hanoi-baseline.osm.pbf  hanoi-patched.osm.pbf
-     │                   (PRIMARY)        (PENDING REVIEW)
+     │                   (REFERENCE)      (PRIMARY)
      │                       │
      │                       ▼
      │              osrm-extract → osrm-partition → osrm-customize

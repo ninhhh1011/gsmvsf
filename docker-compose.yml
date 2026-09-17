@@ -24,7 +24,7 @@ services:
     volumes:
       - ./runtime/osrm:/data
     command: >
-      osrm-routed --algorithm mld /data/hanoi-baseline.osrm
+      osrm-routed --algorithm mld /data/hanoi-patched.osrm
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5000/route/v1/driving/105.8,21.0;105.85,21.05 || true"]
       interval: 10s
@@ -41,7 +41,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation
       - OSRM_BASE_URL=http://osrm:5000
       - DATASET_PATH=/app/dataset_v1
-      - PRIMARY_PBF_PATH=/app/dataset_v1/map/raw/hanoi-baseline.osm.pbf
+      - PRIMARY_PBF_PATH=/app/dataset_v1/map/raw/hanoi-patched.osm.pbf
       - OSRM_DATA_PATH=/app/runtime/osrm
       - LOG_LEVEL=INFO
     ports:

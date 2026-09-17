@@ -64,5 +64,5 @@ Dataset V1 is the canonical development dataset. All acceptance criteria referen
 
 1. **Labels are evaluation-only**: recommendation_labels, demand_labels, candidate_labels, ranking_reference must never be consumed as runtime prediction input
 2. **Dataset V1 is read-only**: do not modify, regenerate, or move files inside dataset_v1/
-3. **Map routing**: hanoi-baseline.osm.pbf is primary OSRM map; hanoi-patched.osm.pbf requires human confirmation before use
+3. **Map routing**: hanoi-patched.osm.pbf is primary OSRM map; hanoi-baseline.osm.pbf is reference
 4. **Candidate-to-ranking contract**: All Stations → Candidate Search → eligible==true → top-N eligible → Ranking

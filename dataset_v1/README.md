@@ -4,10 +4,10 @@ This workspace is an in-place semantic patch of Dataset V1. No road-network rebu
 
 ## Map source status
 - Raw PBFs remain byte-for-byte unchanged: `map/raw/hanoi-baseline.osm.pbf` and `map/raw/hanoi-patched.osm.pbf`.
-- Current processed road representation still derives from the patched working source, but this is **provisional**.
+- Current processed road representation derives from the patched working source.
 - PBF integrity against the originally uploaded inputs: **PASS**.
 
-**MAP WARNING — HUMAN CONFIRMATION REQUIRED:** `hanoi-patched.osm.pbf` changes OSM way `881947000` (Cầu Thanh Trì) from `motorcar=designated` to `motorcar=no`. Dataset V1.2 does not decide whether the edit is correct. Human confirmation is required before freezing the patched PBF as the primary routing map.
+**MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary OSRM map. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
 
 ## Patch V1.2 summary
 - Ranking now consumes Candidate Search output: `All stations → candidate eligibility → eligible=true → optional nearest top-N eligible (max 8) → ranking`.
