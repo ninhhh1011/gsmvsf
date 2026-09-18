@@ -31,38 +31,98 @@ PostgreSQL/PostGIS             OSRM
 ## Planned Architecture (Weeks 1-6)
 
 ```
-                    ┌─────────────────────────┐
-                    │     FastAPI Backend     │
-                    │   (Modular Monolith)    │
-                    └──────────┬──────────────┘
-                               │
-          ┌────────────────────┼────────────────────┐
-          │                    │                    │
-          ▼                    ▼                    ▼
-    MapMatchingService   DemandDetection    CandidateSearch
-    (Week 1)             (Week 2)          (Week 3)
-          │                    │                    │
-          └────────────────────┤                    │
-                               │                    │
-                               ▼                    ▼
-                         RoutingService      StationRanking
-                         (Week 3)            (Week 4)
-                               │                    │
-                               └────────┬───────────┘
-                                        │
-                                        ▼
-                               RecommendationAPI
-                                  (Week 5)
-                                        │
-                               ┌────────┴────────┐
-                               ▼                 ▼
-                      PostgreSQL/PostGIS        OSRM
-                      (persistence)      (routing engine)
-                               │
-                               ▼
-                         RealtimeReplay
-                          (Week 5)
+                    ┌─────────────────────────────────────────┐
+                    │              FastAPI Backend            │
+                    │            (Modular Monolith)           │
+                    └─────────────────────┬───────────────────┘
+                                          │
+          ┌────────────────────────────────┼────────────────────────────────┐
+          │                                │                                │
+          ▼                                ▼                                ▼
+    MapMatchingService               DemandDetection                  CandidateSearch
+    [PLANNED: RoutingEngine]        (Week 2)                         (Week 3)
+    (Week 1) ← FROZEN               │                                │
+          │                           │                                │
+          └───────────────────────────┼────────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌─────────────────────────────────────┐
+                    │       RoutingDomainLayer             │
+                    │  RouteRequest → RouteResult          │
+                    │  (Week 3 — PLANNED)                  │
+                    └─────────────────┬───────────────────┘
+                                      │
+                    ┌─────────────────┼───────────────────┐
+                    │                 │                   │
+                    ▼                 ▼                   ▼
+              OsrmAdapter      ValhallaAdapter      GraphHopperAdapter
+              [CURRENT]        [FUTURE]            [FUTURE]
+                    │                 │                   │
+                    └────────┬────────┴───────────┬───────┘
+                             ▼                    ▼
+                    ┌────────────────┐  ┌──────────────────┐
+                    │   OSRM HTTP     │  │  External Engine  │
+                    │   (MLD/MLD)    │  │   HTTP APIs      │
+                    └────────────────┘  └──────────────────┘
+                                      │
+                                      ▼
+                         ┌─────────────────────────┐
+                         │   StationRanking       │
+                         │   (Week 4 — PLANNED)   │
+                         └───────────┬─────────────┘
+                                     │
+                                     ▼
+                         ┌─────────────────────────┐
+                         │   RecommendationAPI     │
+                         │   (Week 5 — PLANNED)   │
+                         └─────────────────────────┘
 ```
+
+### Data Flow (Planned)
+
+```
+GPS / Driver State
+        │
+        ▼
+Vehicle Capability / Service Intent
+        │
+        ▼
+Candidate Search (station + service_type pairs)
+        │
+        ▼
+RouteRequest (per candidate)
+        │
+        ▼
+RoutingService (domain)
+        │
+        ▼
+RoutingEngine Adapter (OsrmAdapter, etc.)
+        │
+        ▼
+Engine HTTP API
+        │
+        ▼
+RouteResult
+        │
+        ▼
+Route Metrics + Dynamic Service Metrics
+        │
+        ▼
+RankingPolicy (configurable)
+        │
+        ▼
+Recommendation
+```
+
+### Legend
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| MapMatchingService | **CURRENT** | Week 1 frozen, OSRM-coupled |
+| RoutingDomainLayer | **PLANNED** | Week 3 — RouteRequest → RouteResult |
+| OsrmAdapter | **PLANNED** | Week 3 — implements RoutingEngine |
+| StationRanking | **PLANNED** | Week 4 |
+| RecommendationAPI | **PLANNED** | Week 5 |
 
 ## Stack
 

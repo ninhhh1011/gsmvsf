@@ -30,16 +30,18 @@ Also read the active-week documentation when it exists (e.g., `docs/WEEK_1.md`).
 
 7. **Do not add technology without demonstrated need** — Kafka, Redis, microservices, vector DBs, LLM agents require explicit approval and documented ADR.
 
-8. **Update DECISIONS.md** when architecture decisions change — every new technology, pattern, or approach must have an ADR entry.
+8. **Update DECISIONS.md when architecture decisions change** — every new technology, pattern, or approach must have an ADR entry.
 
 9. **Week boundaries are strict** — implement only the current week's scope. Do not implement future weeks' features.
+
+10. **Routing engine abstraction** — routing business logic must not depend directly on a specific routing engine. Route constraints, optimization objectives, vehicle capabilities, and dynamic context must be represented at the project/domain level. Routing engines (OSRM, Valhalla, GraphHopper) are adapters behind these contracts. Prefer configurable and measurable flexibility over hardcoded ease of implementation.
 
 ---
 
 ## Current Milestone
 
 **Milestone 0**: Project Foundation — COMPLETE
-**Week 1**: Map Matching — NOT STARTED
+**Week 1**: Map Matching — COMPLETE
 
 ---
 

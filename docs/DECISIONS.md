@@ -81,3 +81,23 @@
 **Trade-off**: The baseline should not be used for production routing. Both PBFs remain byte-for-byte intact.
 
 **Revisit condition**: When comparing routing behavior between baseline and patched maps is needed.
+
+---
+
+## ADR-008: Engine-Independent Dynamic Routing Domain
+
+**Decision**: Represent route requests, constraints, objectives, vehicle capabilities, and dynamic context at the project/domain level. Routing engines are adapters behind these contracts.
+
+**Reason**: The six-week project requires increasingly dynamic routing decisions (vehicle-specific access, energy-aware routing, traffic-adjusted ETA, avoid constraints, multi-objective optimization). Hardcoding OSRM's current capabilities into business logic will make future extensions brittle and engine-switching expensive. OSRM remains the initial engine implementation.
+
+**Trade-off**: Slightly more abstraction now, but avoids engine lock-in as dynamic requirements grow. The domain model must be maintained as requirements evolve — it is not a one-time design.
+
+**Domain model scope:**
+- `RouteRequest` with origin/destination/via, vehicle profile, constraints, optimization objective, dynamic context
+- `RouteResult` with geometry, distance, duration, legs, detour metrics, engine metadata
+- `RoutingEngine` interface (route, route_via, matrix, map_match)
+- Separation of routing (path computation) from recommendation (station scoring)
+
+**Week 3 decision gate:** Reassess when concrete use cases (vehicle-specific routing, energy-aware paths, dynamic cost propagation) demonstrate an OSRM limitation. Evidence-based benchmarking takes priority over feature checklists.
+
+**Revisit condition**: When Week 3/4 benchmarks show OSRM cannot express a required constraint, or when custom costing is required and OSRM profile rebuild is too slow for production.
