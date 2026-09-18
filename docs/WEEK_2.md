@@ -96,8 +96,10 @@ The `AutoDemandDetector` implements the physical energy feasibility model matchi
    $$\text{required\_safe\_range\_km} = \text{remaining\_trip\_distance\_km} + \text{safety\_reserve\_km}$$
 5. **Energy Margin:**
    $$\text{energy\_margin\_km} = \text{estimated\_remaining\_range\_km} - \text{required\_safe\_range\_km}$$
-6. **Safety SOC Floor Guard:**
-   $$\text{below\_safe\_soc} = \text{current\_soc\_pct} \le \text{minimum\_safe\_soc\_pct} + 5.0\%$$
+6. **Configurable Low-SOC Dispatch Guard:**
+   $$\text{safe\_threshold\_pct} = \text{minimum\_safe\_soc\_pct} + \text{low\_soc\_warning\_margin\_pct}$$
+   *(Configured in `SafetyReservePolicy`: $\text{low\_soc\_warning\_margin\_pct} = 5.0\%$, representing a safety buffer above the $15.0\%$ floor to prevent deep discharge).*
+   $$\text{below\_safe\_soc} = \text{current\_soc\_pct} \le \text{safe\_threshold\_pct}$$
 
 ### Three Canonical Energy States
 The detector explicitly categorizes the energy feasibility of the trip into three states:
@@ -116,9 +118,10 @@ The detector explicitly categorizes the energy feasibility of the trip into thre
 
 ### Same SOC, Different Trip Verification
 Demand detection is **not** an SOC-threshold lookup. SOC is only one component of the energy state:
-- **Vehicle:** `VF_3` ($18.64\text{ kWh}$ usable, $0.12\text{ kWh/km}$ $\rightarrow 155.33\text{ km}$ nominal range), $\text{SOC} = 45\%$ ($\text{remaining\_range} \approx 69.9\text{ km}$).
-- **Trip A (Short: $20\text{ km}$, Reserve: $20\text{ km}$):** Required range $= 40\text{ km} \le 69.9\text{ km} \rightarrow$ **SAFE** (`need_service = False`).
-- **Trip B (Long: $55\text{ km}$, Reserve: $20\text{ km}$):** Required range $= 75\text{ km} > 69.9\text{ km} \rightarrow$ **NEED_SERVICE** (`need_service = True`, `INSUFFICIENT_POST_DESTINATION_RESERVE`).
+- **Vehicle:** `VF_3` (Nominal Capacity $= 18.64\text{ kWh}$, Usable Capacity $= 17.15\text{ kWh}$ via $92\%$ simulation factor, Consumption $= 150\text{ Wh/km} = 0.150\text{ kWh/km} \rightarrow 114.33\text{ km}$ nominal full range).
+- **Battery State:** $\text{SOC} = 45\%$ ($\text{remaining\_energy} = 7.718\text{ kWh} \rightarrow \text{estimated\_range} = 51.45\text{ km}$, with $10\text{ km}$ reserve).
+- **Trip A (Short: $20\text{ km}$, Reserve: $10\text{ km}$):** Required range $= 30\text{ km} \le 51.45\text{ km} \rightarrow$ **SAFE** (`need_service = False`, `margin = +21.45 km`).
+- **Trip B (Long: $45\text{ km}$, Reserve: $10\text{ km}$):** Required range $= 55\text{ km} > 51.45\text{ km} \rightarrow$ **NEED_SERVICE** (`need_service = True`, `INSUFFICIENT_POST_DESTINATION_RESERVE`, `margin = -3.55 km`).
 
 ### Resolution Rules for AUTO_DETECTED
 - If $\text{need\_service} = \text{False}$:
@@ -131,7 +134,7 @@ Demand detection is **not** an SOC-threshold lookup. SOC is only one component o
 
 ## 5. DRIVER_REQUEST Intent Resolution
 
-The `DriverRequestProcessor` validates explicit driver requests (`CHARGING`, `BATTERY_SWAP`, `ANY`) against vehicle capabilities:
+The `DriverRequestProcessor` validates explicit driver requests (`CHARGING`, `BATTERY_SWAP`, `ANY`) against vehicle capabilities. `ANY` signifies "the driver has no preference among services supported by this vehicle" and is valid for all fleet vehicles, leaving `resolved_service_type = None` for Week 3 candidate search:
 
 ### Decision Matrix
 
@@ -139,17 +142,17 @@ The `DriverRequestProcessor` validates explicit driver requests (`CHARGING`, `BA
 |---|---|---|---|---|---|
 | **EV_CAR** (All 10 models) | `CHARGING` | True | `[CHARGING]` | `CHARGING` | `VALID_REQUEST` |
 | **EV_CAR** (All 10 models) | `BATTERY_SWAP` | False | `[CHARGING]` | `None` | `UNSUPPORTED_SERVICE` |
-| **EV_CAR** (All 10 models) | `ANY` | False | `[CHARGING]` | `None` | `UNSUPPORTED_SERVICE` |
+| **EV_CAR** (All 10 models) | `ANY` | True | `[CHARGING]` | `None` (UNRESOLVED) | `VALID_REQUEST` |
 | **EV_MOTORBIKE** (Charge-only) | `CHARGING` | True | `[CHARGING]` | `CHARGING` | `VALID_REQUEST` |
 | **EV_MOTORBIKE** (Charge-only) | `BATTERY_SWAP` | False | `[CHARGING]` | `None` | `UNSUPPORTED_SERVICE` |
-| **EV_MOTORBIKE** (Charge-only) | `ANY` | False | `[CHARGING]` | `None` | `UNSUPPORTED_SERVICE` |
+| **EV_MOTORBIKE** (Charge-only) | `ANY` | True | `[CHARGING]` | `None` (UNRESOLVED) | `VALID_REQUEST` |
 | **EV_MOTORBIKE** (Swap-capable) | `CHARGING` | True | `[CHARGING, BATTERY_SWAP]` | `CHARGING` | `VALID_REQUEST` |
 | **EV_MOTORBIKE** (Swap-capable) | `BATTERY_SWAP` | True | `[CHARGING, BATTERY_SWAP]` | `BATTERY_SWAP` | `VALID_REQUEST` |
 | **EV_MOTORBIKE** (Swap-capable) | `ANY` | True | `[CHARGING, BATTERY_SWAP]` | `None` (UNRESOLVED) | `VALID_REQUEST` |
 
 - Explicit driver requests always have `need_service = True`.
 - Unsupported requests are NOT silently converted.
-- Requests with `ANY` on swap-capable vehicles are NOT silently resolved to `CHARGING`.
+- Requests with `ANY` leave `resolved_service_type = None` without forcing a premature service choice.
 
 ---
 

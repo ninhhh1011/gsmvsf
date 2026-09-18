@@ -4,7 +4,7 @@ Unit tests for AUTO_DETECTED Demand Baseline Engine.
 
 import pytest
 
-from backend.app.services.demand.auto_detector import AutoDemandDetector
+from backend.app.services.demand.auto_detector import AutoDemandDetector, SafetyReservePolicy
 from backend.app.services.demand.capability import get_capability_resolver
 from backend.app.services.demand.models import (
     DemandContext,
@@ -207,3 +207,36 @@ def test_charge_only_motorcycle_resolves_to_charging(detector, resolver):
 
     resolved = detector.resolve_service_type(decision.need_service, charge_cap)
     assert resolved == ServiceType.CHARGING
+
+
+def test_configurable_low_soc_policy(resolver):
+    """
+    Verify low-SOC warning margin is explicit and configurable via SafetyReservePolicy.
+    - With low_soc_warning_margin_pct=0.0: SOC=18% (>15% safe) is SAFE for short trip.
+    - With low_soc_warning_margin_pct=5.0: SOC=18% (<= 15 + 5 = 20%) triggers LOW_SOC.
+    - Proves no magic number is buried in logic.
+    """
+    cap = resolver.resolve_by_model("VF_5")
+
+    # Policy A: Zero warning buffer (strictly at minimum_safe_soc_pct=15%)
+    policy_strict = SafetyReservePolicy(low_soc_warning_margin_pct=0.0)
+    detector_strict = AutoDemandDetector(policy=policy_strict)
+
+    ctx_18 = DemandContext(
+        vehicle_id="V0002",
+        current_soc_pct=18.0,
+        estimated_remaining_range_km=45.0,
+        remaining_trip_distance_km=5.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    decision_strict = detector_strict.evaluate_need(ctx_18, cap)
+    assert decision_strict.need_service is False
+    assert decision_strict.reason_code == ReasonCode.SUFFICIENT_SOC_RANGE
+
+    # Policy B: Canonical default (5% dispatch warning buffer)
+    policy_canonical = SafetyReservePolicy(low_soc_warning_margin_pct=5.0)
+    detector_canonical = AutoDemandDetector(policy=policy_canonical)
+
+    decision_canonical = detector_canonical.evaluate_need(ctx_18, cap)
+    assert decision_canonical.need_service is True
+    assert decision_canonical.reason_code == ReasonCode.LOW_SOC

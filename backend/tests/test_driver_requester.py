@@ -44,11 +44,12 @@ def test_car_driver_requests(processor, resolver):
     assert res_s.resolved_service_type is None
     assert res_s.reason_code == ReasonCode.UNSUPPORTED_SERVICE
 
-    # 3. Car + ANY
+    # 3. Car + ANY (driver has no preference; valid, allowed=[CHARGING], resolved=None)
     res_a = processor.process_request(car_cap, RequestedServiceType.ANY)
-    assert res_a.request_valid is False
+    assert res_a.request_valid is True
+    assert res_a.allowed_service_types == [ServiceType.CHARGING]
     assert res_a.resolved_service_type is None
-    assert res_a.reason_code == ReasonCode.UNSUPPORTED_SERVICE
+    assert res_a.reason_code == ReasonCode.VALID_REQUEST
 
 
 def test_charge_only_motorcycle_driver_requests(processor, resolver):
@@ -56,7 +57,7 @@ def test_charge_only_motorcycle_driver_requests(processor, resolver):
     Charge-only motorcycle rules:
     - EVO200 + CHARGING -> valid, resolved CHARGING
     - EVO200 + BATTERY_SWAP -> invalid UNSUPPORTED_SERVICE
-    - EVO200 + ANY -> invalid UNSUPPORTED_SERVICE
+    - EVO200 + ANY -> valid, allowed [CHARGING], resolved None (no preference)
     """
     bike_cap = resolver.resolve_by_model("EVO200")
 
@@ -72,11 +73,12 @@ def test_charge_only_motorcycle_driver_requests(processor, resolver):
     assert res_s.resolved_service_type is None
     assert res_s.reason_code == ReasonCode.UNSUPPORTED_SERVICE
 
-    # 3. Charge-only bike + ANY
+    # 3. Charge-only bike + ANY (driver has no preference; valid, allowed=[CHARGING], resolved=None)
     res_a = processor.process_request(bike_cap, RequestedServiceType.ANY)
-    assert res_a.request_valid is False
+    assert res_a.request_valid is True
+    assert res_a.allowed_service_types == [ServiceType.CHARGING]
     assert res_a.resolved_service_type is None
-    assert res_a.reason_code == ReasonCode.UNSUPPORTED_SERVICE
+    assert res_a.reason_code == ReasonCode.VALID_REQUEST
 
 
 def test_swap_capable_motorcycle_driver_requests(processor, resolver):

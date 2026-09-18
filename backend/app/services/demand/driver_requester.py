@@ -109,23 +109,25 @@ class DriverRequestProcessor:
             )
 
         elif requested_service == RequestedServiceType.ANY:
-            # ANY indicates driver has no preference among available services.
-            # Only valid for vehicles supporting multiple services (swap-capable motorbikes).
-            if len(allowed) > 1 and ServiceType.BATTERY_SWAP in allowed and ServiceType.CHARGING in allowed:
+            # ANY indicates the driver has no preference among services supported by this vehicle.
+            # Consistent contract:
+            # - request_valid = True (as long as the vehicle supports at least one service)
+            # - allowed_service_types = capability.allowed_service_types
+            # - resolved_service_type = None (UNRESOLVED: Week 3 candidate search evaluates all allowed services)
+            if len(allowed) > 0:
                 return DriverRequestDecision(
                     request_valid=True,
                     reason_code=ReasonCode.VALID_REQUEST,
                     allowed_service_types=allowed,
-                    resolved_service_type=None,  # UNRESOLVED: ranking will pick best
-                    details="Driver requested ANY; vehicle supports both charging and swap",
+                    resolved_service_type=None,
+                    details=f"Driver requested ANY; vehicle supports {', '.join(s.value for s in allowed)}",
                 )
-            # For single-service vehicles, ANY is not supported as an unconstrained request
             return DriverRequestDecision(
                 request_valid=False,
                 reason_code=ReasonCode.UNSUPPORTED_SERVICE,
                 allowed_service_types=allowed,
                 resolved_service_type=None,
-                details=f"Driver requested ANY; vehicle model {capability.vehicle_model} supports only single service",
+                details=f"Driver requested ANY; vehicle model {capability.vehicle_model} supports no energy services",
             )
 
         # Fallback for unexpected service type

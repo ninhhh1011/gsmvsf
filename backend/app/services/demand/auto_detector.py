@@ -34,24 +34,37 @@ from backend.app.services.demand.models import (
 logger = logging.getLogger(__name__)
 
 # Default safety margin parameters consistent with Dataset V1.3.1
-DEFAULT_SAFETY_RESERVE_RATIO = 0.15  # 15% of remaining trip distance
-DEFAULT_MIN_SAFETY_RESERVE_KM = 1.0  # Minimum 1.0 km buffer
-DEFAULT_SAFE_SOC_BUFFER_PCT = 5.0    # 5.0% buffer above minimum_safe_soc_pct
-DEFAULT_MINIMUM_SAFE_SOC_PCT = 15.0  # Default 15% safe SOC threshold
+DEFAULT_SAFETY_RESERVE_RATIO = 0.15          # 15% of remaining trip distance
+DEFAULT_MIN_SAFETY_RESERVE_KM = 1.0          # Minimum 1.0 km buffer
+DEFAULT_LOW_SOC_WARNING_MARGIN_PCT = 5.0     # 5.0% dispatch warning buffer above minimum_safe_soc_pct
+DEFAULT_MINIMUM_SAFE_SOC_PCT = 15.0          # Default 15% safe SOC threshold floor
 
 
 @dataclass(frozen=True)
 class SafetyReservePolicy:
     """
     Configurable domain policy for safety and service-access reserve.
-    Ensures reserve buffer is not a buried magic number.
-    Can be configured as ratio-based, fixed km, or extended dynamically.
+    Ensures reserve buffers and low-SOC guards are explicit, documented domain policies,
+    not unexplained magic constants.
+
+    Fields:
+    - safety_reserve_ratio: Ratio of remaining trip distance kept as safety buffer (default 0.15 = 15%).
+    - min_safety_reserve_km: Absolute minimum safety reserve in km (default 1.0 km).
+    - fixed_safety_reserve_km: If set, overrides ratio calculation with a fixed buffer (e.g. 20.0 km).
+    - low_soc_warning_margin_pct: Percentage points above minimum_safe_soc_pct at which the low-battery
+      guard triggers (default 5.0%, representing a dispatch warning buffer to prevent deep discharge).
+    - default_minimum_safe_soc_pct: Baseline minimum safe battery SOC percentage (default 15.0%).
     """
     safety_reserve_ratio: float = DEFAULT_SAFETY_RESERVE_RATIO
     min_safety_reserve_km: float = DEFAULT_MIN_SAFETY_RESERVE_KM
     fixed_safety_reserve_km: Optional[float] = None
-    safe_soc_buffer_pct: float = DEFAULT_SAFE_SOC_BUFFER_PCT
+    low_soc_warning_margin_pct: float = DEFAULT_LOW_SOC_WARNING_MARGIN_PCT
     default_minimum_safe_soc_pct: float = DEFAULT_MINIMUM_SAFE_SOC_PCT
+
+    @property
+    def safe_soc_buffer_pct(self) -> float:
+        """Backward-compatible alias for low_soc_warning_margin_pct."""
+        return self.low_soc_warning_margin_pct
 
     def compute_safety_reserve_km(
         self,
@@ -83,7 +96,7 @@ class AutoDemandDetector:
         policy: Optional[SafetyReservePolicy] = None,
         safety_reserve_ratio: float = DEFAULT_SAFETY_RESERVE_RATIO,
         min_safety_reserve_km: float = DEFAULT_MIN_SAFETY_RESERVE_KM,
-        safe_soc_buffer_pct: float = DEFAULT_SAFE_SOC_BUFFER_PCT,
+        low_soc_warning_margin_pct: float = DEFAULT_LOW_SOC_WARNING_MARGIN_PCT,
     ):
         self._resolver = capability_resolver or get_capability_resolver()
         if policy is not None:
@@ -92,7 +105,7 @@ class AutoDemandDetector:
             self._policy = SafetyReservePolicy(
                 safety_reserve_ratio=safety_reserve_ratio,
                 min_safety_reserve_km=min_safety_reserve_km,
-                safe_soc_buffer_pct=safe_soc_buffer_pct,
+                low_soc_warning_margin_pct=low_soc_warning_margin_pct,
             )
 
     @property
@@ -189,7 +202,7 @@ class AutoDemandDetector:
             if context.minimum_safe_soc_pct is not None
             else self._policy.default_minimum_safe_soc_pct
         )
-        safe_threshold = min_safe_soc + self._policy.safe_soc_buffer_pct
+        safe_threshold = min_safe_soc + self._policy.low_soc_warning_margin_pct
         below_safe = soc_pct <= safe_threshold
 
         # Determine remaining trip distance
@@ -258,6 +271,7 @@ class AutoDemandDetector:
             safety_reserve_km=round(safety_reserve_km, 3) if safety_reserve_km is not None else None,
             remaining_trip_distance_km=round(remaining_trip_km, 3) if remaining_trip_km is not None else None,
             remaining_energy_kwh=round(remaining_energy_kwh, 3) if remaining_energy_kwh is not None else None,
+            estimated_remaining_range_km=round(remaining_range_km, 3) if remaining_range_km is not None else None,
             energy_margin_km=round(energy_margin_km, 3) if energy_margin_km is not None else None,
             details=(
                 f"below_safe={below_safe}, insufficient_range={insufficient_range}, "

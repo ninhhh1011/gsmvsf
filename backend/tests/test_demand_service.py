@@ -153,3 +153,39 @@ def test_driver_request_swap_bike_swap(service):
     assert req.resolved_service_type == ServiceType.BATTERY_SWAP
     assert req.request_valid is True
     assert req.reason_code == ReasonCode.VALID_REQUEST
+
+
+def test_driver_request_car_any(service):
+    """Car requesting ANY -> valid, allowed=[CHARGING], resolved=None (no driver preference)."""
+    ctx = DemandContext(
+        vehicle_id="V0001",
+        driver_id="D0001",
+        timestamp=datetime.utcnow(),
+        current_soc_pct=50.0,
+    )
+    req = service.process_driver_request(ctx, RequestedServiceType.ANY)
+    assert req.request_source == RequestSource.DRIVER_REQUEST
+    assert req.need_service is True
+    assert req.requested_service_type == RequestedServiceType.ANY
+    assert req.allowed_service_types == [ServiceType.CHARGING]
+    assert req.resolved_service_type is None
+    assert req.request_valid is True
+    assert req.reason_code == ReasonCode.VALID_REQUEST
+
+
+def test_driver_request_charge_only_bike_any(service):
+    """Charge-only bike requesting ANY -> valid, allowed=[CHARGING], resolved=None (no driver preference)."""
+    ctx = DemandContext(
+        vehicle_id="V0024",
+        driver_id="D0024",
+        timestamp=datetime.utcnow(),
+        current_soc_pct=45.0,
+    )
+    req = service.process_driver_request(ctx, RequestedServiceType.ANY)
+    assert req.request_source == RequestSource.DRIVER_REQUEST
+    assert req.need_service is True
+    assert req.requested_service_type == RequestedServiceType.ANY
+    assert req.allowed_service_types == [ServiceType.CHARGING]
+    assert req.resolved_service_type is None
+    assert req.request_valid is True
+    assert req.reason_code == ReasonCode.VALID_REQUEST

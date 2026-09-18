@@ -201,3 +201,95 @@ def test_anomaly_and_invalid_state_handling(detector, resolver):
     res_invalid_cons = detector.evaluate_need(ctx_invalid_cons, cap)
     assert res_invalid_cons.need_service is False
     assert res_invalid_cons.reason_code == ReasonCode.INVALID_STATE
+
+
+def test_end_to_end_catalog_driven_energy_feasibility(resolver):
+    """
+    Test 5 canonical energy feasibility cases using actual catalog usable capacity:
+    Vehicle: VF_3 (nominal=18.64 kWh, usable=17.15 kWh, consumption=150 Wh/km)
+    Derived range at 100% SOC = 17.15 / 0.150 = 114.33 km.
+
+    Cases:
+    1. SAFE (SOC=80% -> range=91.47 km, trip=30 km, reserve=4.5 km -> margin=+56.97 km)
+    2. DESTINATION_REACHABLE_BUT_RESERVE_INSUFFICIENT (SOC=45% -> range=51.45 km, trip=45 km, reserve=10 km -> margin=-3.55 km)
+    3. DESTINATION_NOT_REACHABLE (SOC=30% -> range=34.3 km, trip=50 km -> range < trip)
+    4. SAME_SOC_SHORT_TRIP (SOC=45% -> range=51.45 km, trip=20 km, reserve=10 km -> margin=+21.45 km -> SAFE)
+    5. SAME_SOC_LONG_TRIP (SOC=45% -> range=51.45 km, trip=45 km, reserve=10 km -> margin=-3.55 km -> NEED_SERVICE)
+    """
+    policy_fixed_10 = SafetyReservePolicy(fixed_safety_reserve_km=10.0)
+    det_fixed_10 = AutoDemandDetector(policy=policy_fixed_10)
+    det_default = AutoDemandDetector()
+    cap = resolver.resolve_by_model("VF_3")
+
+    assert cap.battery_capacity_kwh == 18.64
+    assert cap.usable_capacity_kwh == 17.15
+
+    # Case 1: SAFE
+    ctx_1 = DemandContext(
+        vehicle_id="V0001",
+        current_soc_pct=80.0,
+        consumption_wh_per_km=150.0,
+        remaining_trip_distance_km=30.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    res_1 = det_default.evaluate_need(ctx_1, cap)
+    assert res_1.need_service is False
+    assert res_1.reason_code == ReasonCode.SUFFICIENT_SOC_RANGE
+    assert res_1.remaining_energy_kwh == pytest.approx(13.72, 0.01)
+    assert res_1.estimated_remaining_range_km == pytest.approx(91.467, 0.01)
+    assert res_1.energy_margin_km == pytest.approx(56.967, 0.1)
+
+    # Case 2: DESTINATION_REACHABLE_BUT_RESERVE_INSUFFICIENT
+    ctx_2 = DemandContext(
+        vehicle_id="V0001",
+        current_soc_pct=45.0,
+        consumption_wh_per_km=150.0,
+        remaining_trip_distance_km=45.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    res_2 = det_fixed_10.evaluate_need(ctx_2, cap)
+    assert res_2.need_service is True
+    assert res_2.reason_code == ReasonCode.INSUFFICIENT_POST_DESTINATION_RESERVE
+    assert res_2.remaining_energy_kwh == pytest.approx(7.7175, 0.01)
+    assert res_2.estimated_remaining_range_km == pytest.approx(51.45, 0.01)
+    assert res_2.energy_margin_km == pytest.approx(-3.55, 0.05)
+
+    # Case 3: DESTINATION_NOT_REACHABLE
+    ctx_3 = DemandContext(
+        vehicle_id="V0001",
+        current_soc_pct=30.0,
+        consumption_wh_per_km=150.0,
+        remaining_trip_distance_km=50.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    res_3 = det_default.evaluate_need(ctx_3, cap)
+    assert res_3.need_service is True
+    assert res_3.reason_code == ReasonCode.DESTINATION_NOT_REACHABLE
+    assert res_3.estimated_remaining_range_km == pytest.approx(34.3, 0.01)
+    assert res_3.energy_margin_km < -15.0
+
+    # Case 4: SAME_SOC_SHORT_TRIP
+    ctx_4 = DemandContext(
+        vehicle_id="V0001",
+        current_soc_pct=45.0,
+        consumption_wh_per_km=150.0,
+        remaining_trip_distance_km=20.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    res_4 = det_fixed_10.evaluate_need(ctx_4, cap)
+    assert res_4.need_service is False
+    assert res_4.reason_code == ReasonCode.SUFFICIENT_SOC_RANGE
+    assert res_4.energy_margin_km == pytest.approx(21.45, 0.05)
+
+    # Case 5: SAME_SOC_LONG_TRIP
+    ctx_5 = DemandContext(
+        vehicle_id="V0001",
+        current_soc_pct=45.0,
+        consumption_wh_per_km=150.0,
+        remaining_trip_distance_km=45.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    res_5 = det_fixed_10.evaluate_need(ctx_5, cap)
+    assert res_5.need_service is True
+    assert res_5.reason_code == ReasonCode.INSUFFICIENT_POST_DESTINATION_RESERVE
+    assert res_5.energy_margin_km == pytest.approx(-3.55, 0.05)

@@ -144,6 +144,7 @@ class NeedServiceDecision(BaseModel):
     safety_reserve_km: Optional[float] = None
     remaining_trip_distance_km: Optional[float] = None
     remaining_energy_kwh: Optional[float] = None
+    estimated_remaining_range_km: Optional[float] = None
     energy_margin_km: Optional[float] = None
     details: Optional[str] = None
 
