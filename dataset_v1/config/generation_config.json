@@ -9,7 +9,7 @@
   "station_update_min": 10,
   "simulation_start": "2026-09-01T06:00:00+07:00",
   "simulation_hours": 18,
-  "semantic_patch_version": "v1.2",
+  "semantic_patch_version": "v1.3",
   "demand_snapshots_per_trip": 8,
   "candidate_max_wait_min": 90.0,
   "soc_reach_buffer_km": 0.5,
@@ -20,5 +20,11 @@
   "charging_service_time_min": 18.0,
   "swap_service_time_min": 6.0,
   "farther_but_faster_min_distance_delta_m": 500.0,
-  "farther_but_faster_meaningful_eta_margin_min": 10.0
+  "farther_but_faster_meaningful_eta_margin_min": 10.0,
+  "demand_events_per_snapshot": 4,
+  "usable_capacity_ratio": 0.92,
+  "consumption_car_wh_km": 150,
+  "consumption_bike_wh_km": 45,
+  "swap_module_capacity_kwh": 1.5,
+  "max_swap_modules": 2
 }

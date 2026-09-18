@@ -13,11 +13,13 @@
   "traffic_snapshots": 883597,
   "realtime_events": 109193,
   "map_matching_candidates": 27042,
-  "map_matching_selected_observations": 5029,
-  "demand_labels": 1200,
-  "candidate_labels": 36000,
-  "ranking_reference": 3727,
-  "ranking_event_groups": 630,
+  "demand_labels": 3824,
+  "candidate_labels": 31440,
+  "ranking_reference": 3439,
+  "ranking_event_groups": 553,
   "recommendation_labels": 848,
-  "scenario_rows": 21
+  "scenario_rows": 21,
+  "need_service_training_samples": 1200,
+  "need_service_positive": 848,
+  "need_service_negative": 352
 }

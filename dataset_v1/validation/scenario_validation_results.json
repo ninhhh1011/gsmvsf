@@ -1,8 +1,14 @@
 {
   "overall": "PASS",
-  "passed": 21,
+  "passed": 22,
   "failed": 0,
   "results": [
+    {
+      "scenario_id": "NEED_ENERGY_BOTH_ALLOWED",
+      "status": "PASS",
+      "details": "trip=T0110, vehicle=V0018, swap=True",
+      "metrics": {}
+    },
     {
       "scenario_id": "BRIDGE_AMBIGUITY",
       "status": "PASS",
@@ -12,11 +18,10 @@
     {
       "scenario_id": "FARTHER_BUT_FASTER",
       "status": "PASS",
-      "details": "distance_delta_m=542.9, eta_improvement_min=13.472",
+      "details": "dist_delta_m=542.9, eta_gain_min=13.472",
       "metrics": {
         "distance_delta_m": 542.9000000000015,
-        "eta_improvement_min": 13.472000000000008,
-        "threshold_min": 10.0
+        "eta_improvement_min": 13.472000000000008
       }
     },
     {
@@ -44,63 +49,63 @@
     {
       "scenario_id": "INCOMPATIBLE_STATION",
       "status": "PASS",
-      "details": "incompatible=10, eligible=20",
+      "details": "incompatible=42, eligible=2",
       "metrics": {}
     },
     {
       "scenario_id": "INSUFFICIENT_RANGE",
       "status": "PASS",
-      "details": "count=12",
+      "details": "count=8",
       "metrics": {}
     },
     {
       "scenario_id": "LONG_QUEUE",
       "status": "PASS",
-      "details": "{'service_type': 'BATTERY_SWAP', 'queue_length': 53, 'estimated_wait_min': 45.43, 'service_time_min': 6.0}",
+      "details": "service=BATTERY_SWAP, wait=45.43",
       "metrics": {}
     },
     {
       "scenario_id": "LOW_SOC",
       "status": "PASS",
-      "details": "soc=11.082, safe=15",
+      "details": "soc=1.37, safe=15",
       "metrics": {}
     },
     {
       "scenario_id": "NEAREST_FULL",
       "status": "PASS",
-      "details": "{'reason': 'FULL', 'available_capacity': 0, 'service_type': 'BATTERY_SWAP'}",
+      "details": "{'reason': 'FULL', 'available_capacity': 0, 'service_type': 'CHARGING'}",
       "metrics": {}
     },
     {
       "scenario_id": "NEAR_TIE_STATIONS",
       "status": "PASS",
-      "details": "diff_min=1.9742",
+      "details": "top2_cost_diff=1.1270",
       "metrics": {
-        "top2_cost_diff_min": 1.9742000000000033
+        "top2_cost_diff_min": 1.1270000000000024
       }
     },
     {
       "scenario_id": "NEED_CHARGING",
       "status": "PASS",
-      "details": "charging_labels=8",
+      "details": "charging_auto=16",
       "metrics": {}
     },
     {
-      "scenario_id": "NEED_SWAP",
+      "scenario_id": "NEED_ENERGY_BOTH_ALLOWED",
       "status": "PASS",
-      "details": "labels={'BATTERY_SWAP': 8}, swap_supported=True",
+      "details": "trip=T0110, vehicle=V0018, swap=True, charge=True",
       "metrics": {}
     },
     {
       "scenario_id": "NORMAL_TRIP",
       "status": "PASS",
-      "details": "{'NONE': 8}",
+      "details": "need_service_count=0",
       "metrics": {}
     },
     {
       "scenario_id": "NO_SERVICE_NEEDED",
       "status": "PASS",
-      "details": "{'NONE': 8}",
+      "details": "need_service_count=0",
       "metrics": {}
     },
     {

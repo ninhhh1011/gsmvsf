@@ -1,6 +1,6 @@
-# DATA_DICTIONARY — Dataset V1.2
+# DATA_DICTIONARY â€” Dataset V1.2
 
-**MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary OSRM map. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
+**MAP STATUS â€” APPROVED:** `hanoi-patched.osm.pbf` is the primary OSRM map. Contains motorcar=no for OSM way 881947000 (Cáº§u Thanh TrÃ¬). `hanoi-baseline.osm.pbf` is reference.
 
 ## V1.2 semantic contracts
 
@@ -186,7 +186,7 @@
 
 - **Purpose:** Temporal operating state plus service-specific charging/swap capacity and service time
 - **Primary key:** station_id + timestamp
-- **Foreign keys:** station_id → stations.station_id
+- **Foreign keys:** station_id â†’ stations.station_id
 - **Modules:** Candidate search, ranking, realtime replay
 
 | Column | Type | Unit | Nullable | Relationship / notes |
@@ -208,7 +208,7 @@ For BATTERY_SWAP, usable capacity is `min(available_swap_slots, available_swap_b
 
 - **Purpose:** Independent charging and battery-swap queue/service/wait state
 - **Primary key:** station_id + timestamp
-- **Foreign keys:** station_id → stations.station_id
+- **Foreign keys:** station_id â†’ stations.station_id
 - **Modules:** Candidate search, ranking, realtime replay
 
 | Column | Type | Unit | Nullable | Relationship / notes |
@@ -218,11 +218,11 @@ For BATTERY_SWAP, usable capacity is `min(available_swap_slots, available_swap_b
 | charging_queue_length | int64 | vehicles | No | Charging queue only |
 | charging_active_service_count | int64 | services | No | Active charging services |
 | charging_service_time_min | float64 | min | No | Service-specific time; 18 when offered |
-| charging_estimated_wait_min | float64 | min | No | queue_length × service_time / active_service_count when active > 0 |
+| charging_estimated_wait_min | float64 | min | No | queue_length Ã— service_time / active_service_count when active > 0 |
 | swap_queue_length | int64 | vehicles | No | Swap queue only |
 | swap_active_service_count | int64 | services | No | Active swap services |
 | swap_service_time_min | float64 | min | No | Service-specific time; 6 when offered |
-| swap_estimated_wait_min | float64 | min | No | queue_length × service_time / active_service_count when active > 0 |
+| swap_estimated_wait_min | float64 | min | No | queue_length Ã— service_time / active_service_count when active > 0 |
 
 ## `traffic/traffic_snapshots.csv.gz`
 
@@ -321,7 +321,7 @@ For BATTERY_SWAP, usable capacity is `min(available_swap_slots, available_swap_b
 | trip_id | object |  | No | References trips.trip_id |
 | timestamp | object | ISO 8601 | No |  |
 | need_service | bool |  | No |  |
-| service_type | object |  | No | Target values: NONE / CHARGING / BATTERY_SWAP |
+| service_type | object |  | Yes | Target energy service values: CHARGING / BATTERY_SWAP (or ANY for unconstrained DRIVER_REQUEST; NULL for need_service=False or unresolved AUTO; note: NONE is not an energy service type) |
 | reason_code | object |  | No |  |
 
 ## `training/demand_features.csv`
@@ -352,9 +352,9 @@ For BATTERY_SWAP, usable capacity is `min(available_swap_slots, available_swap_b
 
 ## `labels/candidate_labels.csv`
 
-- **Purpose:** Full Candidate Search evaluation output for every service decision event × station
+- **Purpose:** Full Candidate Search evaluation output for every service decision event Ã— station
 - **Primary key:** event_id + station_id
-- **Foreign keys:** event_id → demand_labels.event_id; station_id → stations.station_id
+- **Foreign keys:** event_id â†’ demand_labels.event_id; station_id â†’ stations.station_id
 - **Modules:** Candidate Search evaluation; source contract for ranking
 
 | Column | Type | Unit | Nullable | Relationship / notes |
@@ -478,5 +478,99 @@ For BATTERY_SWAP, usable capacity is `min(available_swap_slots, available_swap_b
 - `validation/map_matching_candidate_stats.json`: positive/negative/hard-negative and split coverage.
 - `validation/demand_distribution.json`: demand class distribution.
 - `validation/ranking_stats.json`: ranking rows/groups/splits.
-- `validation/pbf_integrity.json`: SHA-256 equality check against the originally uploaded raw PBFs plus the Cầu Thanh Trì warning.
+- `validation/pbf_integrity.json`: SHA-256 equality check against the originally uploaded raw PBFs plus the Cáº§u Thanh TrÃ¬ warning.
 - `map/processed/pbf_diff.csv`: explicit baseline vs patched OSM tag diff; raw PBFs remain unchanged.
+
+
+## `vehicles/vehicle_model_catalog.csv`
+
+- **Purpose:** Canonical VinFast vehicle model capability reference
+- **Primary key:** vehicle_model
+- **Modules:** Demand, compatibility, candidate search
+
+| Column | Type | Unit | Nullable | Relationship / notes |
+|---|---|---|---|---|
+| vehicle_model | object |  | No | VinFast model name (project-internal, not official branding) |
+| vehicle_category | object |  | No | EV_CAR or EV_MOTORBIKE |
+| battery_architecture | object |  | No | FIXED_TRACTION_PACK / FIXED_OR_INTEGRATED_LFP / REMOVABLE_SWAP_MODULE |
+| battery_capacity_kwh | float64 | kWh | No | Nominal battery capacity; null for REMOVABLE_SWAP_MODULE models |
+| battery_module_capacity_kwh | float64 | kWh | Yes | For swap-capable models; null otherwise |
+| max_battery_modules | int64 |  | Yes | For swap-capable models; null otherwise |
+| charging_supported | bool |  | No |  |
+| swap_supported | bool |  | No |  |
+| public_swap_compatible | bool |  | No | True only for EVO, EVO_LITE, FELIZ_II, VIPER |
+| charging_interface_class | object |  | No | CCS2_TYPE2 for cars; VINFAST_MOTORCYCLE_CHARGING for motorcycles |
+| swap_battery_family | object |  | Yes | VINFAST_SWAP_LFP_1_5_KWH for swap-capable models; null otherwise |
+| capability_source_class | object |  | No | VINFAST_OFFICIAL_BATTERY_SPEC for official data; PROJECT_SIMULATION_ASSUMPTION for synthetic fields |
+
+**Note:** charging_interface_class and swap_battery_family are project-internal normalized names.
+They do NOT reflect official VinFast product terminology.
+
+## `vehicles/vehicles.csv` — V1.3 additions
+
+| Column | Type | Unit | Nullable | Notes |
+|---|---|---|---|---|
+| vehicle_model | object |  | No | References vehicle_model_catalog.vehicle_model |
+| battery_architecture | object |  | No | From catalog |
+| battery_module_capacity_kwh | float64 | kWh | Yes | For swap-capable motorcycles |
+| max_battery_modules | int64 |  | Yes | For swap-capable motorcycles |
+| installed_battery_modules | int64 |  | Yes | For swap-capable motorcycles; 1 or 2 |
+| public_swap_compatible | bool |  | No | True only for EVO/EVO_LITE/FELIZ_II/VIPER |
+| charging_interface_class | object |  | No | CCS2_TYPE2 or VINFAST_MOTORCYCLE_CHARGING |
+| swap_battery_family | object |  | Yes | VINFAST_SWAP_LFP_1_5_KWH for swap-capable models |
+
+## `labels/demand_labels.csv` — V1.3 additions
+
+| Column | Type | Unit | Nullable | Notes |
+|---|---|---|---|---|
+| request_source | object |  | No | AUTO_DETECTED or DRIVER_REQUEST |
+| requested_service_type | object |  | No | CHARGING / BATTERY_SWAP / ANY |
+| allowed_service_types | object |  | No | Semicolon-separated list of supported services |
+| request_valid | bool |  | Yes | True/False for DRIVER_REQUEST; null for AUTO_DETECTED |
+| current_soc_pct | float64 | % | No |  |
+| estimated_remaining_range_km | float64 | km | No |  |
+| remaining_trip_distance_km | float64 | km | No |  |
+| safety_reserve_km | float64 | km | No |  |
+| vehicle_model | object |  | No | From vehicles |
+| vehicle_category | object |  | No | EV_CAR or EV_MOTORBIKE |
+| public_swap_compatible | bool |  | No |  |
+| installed_battery_modules | int64 |  | Yes | For swap-capable motorcycles |
+
+**service_type semantics (V1.3):**
+- AUTO_DETECTED rows: service_type is the auto-detected needed service
+- DRIVER_REQUEST rows: service_type is the explicitly requested service
+
+## `labels/energy_service_requests.csv`
+
+- **Purpose:** Week 3 Candidate Search data contract
+- **Primary key:** event_id
+- **Modules:** Week 3 Candidate Search, Week 4 Ranking
+
+Same columns as `demand_labels.csv` with additional vehicle identifiers.
+
+## `training/demand_need_service_features.csv`
+
+- **Purpose:** Task A training features — binary need_service prediction
+- **Primary key:** event_id
+- **Modules:** Demand training
+
+Features: soc_pct, estimated_remaining_range_km, remaining_trip_distance_km,
+safety_reserve_km, consumption_wh_per_km, minimum_safe_soc_pct,
+battery_capacity_kwh, usable_capacity_kwh, charging_supported, swap_supported,
+vehicle_category, vehicle_model, trip_progress_pct.
+
+## `training/demand_need_service_labels.csv`
+
+- **Purpose:** Task A training labels — binary need_service
+- **Primary key:** event_id
+
+Columns: event_id, trip_id, split, need_service.
+
+## `labels/candidate_labels.csv` — V1.3 additions
+
+**Reason vocabulary (V1.3):** ELIGIBLE / INCOMPATIBLE / UNSUPPORTED_SERVICE / OFFLINE /
+FULL / UNREACHABLE / INSUFFICIENT_SOC_TO_REACH / NO_SERVICE_NEEDED / NO_SWAP_BATTERY / EXCESSIVE_QUEUE
+
+**service_type per row:** Each row represents ONE service type at ONE station.
+A swap-capable vehicle may have multiple rows for the same (event_id, station_id) pair,
+one per service type it supports.
