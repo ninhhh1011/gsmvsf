@@ -80,28 +80,50 @@ Vehicle capability resolution is 100% deterministic and model-based (`VehicleCap
 
 ---
 
-## 4. AUTO_DETECTED Demand Baseline
+## 4. AUTO_DETECTED Demand Baseline & Energy Feasibility Model
 
-The `AutoDemandDetector` implements the physical energy feasibility equation matching Dataset V1.3.1 canonical semantics:
+The `AutoDemandDetector` implements the physical energy feasibility model matching Dataset V1.3.1 canonical semantics and accounting for trip and post-destination service-access reserves:
 
-### Formulation
-1. **Safety Threshold Check:**
-   $$\text{below\_safe} = \text{soc\_pct} \le \text{minimum\_safe\_soc\_pct} + 5.0\%$$
-2. **Safety Reserve Calculation:**
-   $$\text{safety\_reserve\_km} = \max(1.0\text{ km}, \text{remaining\_trip\_distance\_km} \times 0.15)$$
-3. **Range Feasibility Check:**
-   $$\text{insufficient\_range} = \text{estimated\_remaining\_range\_km} < (\text{remaining\_trip\_distance\_km} + \text{safety\_reserve\_km})$$
-4. **Decision:**
-   $$\text{need\_service} = \text{below\_safe} \lor \text{insufficient\_range}$$
+### Core Formulations
+1. **Usable Battery Energy:**
+   $$\text{remaining\_energy\_kwh} = \text{usable\_battery\_capacity\_kwh} \times \left(\frac{\text{current\_soc\_pct}}{100.0}\right)$$
+2. **Estimated Range:**
+   $$\text{estimated\_remaining\_range\_km} = \frac{\text{remaining\_energy\_kwh}}{\text{estimated\_consumption\_kwh\_per\_km}}$$
+3. **Configurable Safety Reserve Policy (`SafetyReservePolicy`):**
+   $$\text{safety\_reserve\_km} = \max(\text{min\_buffer\_km}, \text{remaining\_trip\_distance\_km} \times \text{reserve\_ratio})$$
+   *(Default: $\text{min\_buffer\_km} = 1.0\text{ km}$, $\text{reserve\_ratio} = 0.15$. Can also accept a fixed/dynamic policy e.g. $20.0\text{ km}$ service-access buffer).*
+4. **Required Safe Range:**
+   $$\text{required\_safe\_range\_km} = \text{remaining\_trip\_distance\_km} + \text{safety\_reserve\_km}$$
+5. **Energy Margin:**
+   $$\text{energy\_margin\_km} = \text{estimated\_remaining\_range\_km} - \text{required\_safe\_range\_km}$$
+6. **Safety SOC Floor Guard:**
+   $$\text{below\_safe\_soc} = \text{current\_soc\_pct} \le \text{minimum\_safe\_soc\_pct} + 5.0\%$$
 
-### Resolution Rules & Reason Codes
+### Three Canonical Energy States
+The detector explicitly categorizes the energy feasibility of the trip into three states:
+
+- **STATE A — SAFE:**
+  - Condition: $\text{estimated\_remaining\_range\_km} \ge \text{required\_safe\_range\_km}$ ($\text{energy\_margin\_km} \ge 0$) and not `below_safe_soc`.
+  - Result: $\text{need\_service} = \text{False}$, `resolved_service_type = None`, `reason_code = ReasonCode.SUFFICIENT_SOC_RANGE`.
+- **STATE B — DESTINATION REACHABLE, BUT RESERVE INSUFFICIENT:**
+  - Condition: $\text{remaining\_trip\_distance\_km} \le \text{estimated\_remaining\_range\_km} < \text{required\_safe\_range\_km}$ ($- \text{safety\_reserve\_km} \le \text{energy\_margin\_km} < 0$).
+  - Meaning: Vehicle has sufficient energy to reach destination, but cannot maintain the post-destination safety/service-access reserve.
+  - Result: $\text{need\_service} = \text{True}$, `reason_code = ReasonCode.INSUFFICIENT_POST_DESTINATION_RESERVE` (or `LOW_SOC_AND_INSUFFICIENT_RANGE` if also below safe SOC).
+- **STATE C — DESTINATION NOT SAFELY REACHABLE:**
+  - Condition: $\text{estimated\_remaining\_range\_km} < \text{remaining\_trip\_distance\_km}$ ($\text{energy\_margin\_km} < - \text{safety\_reserve\_km}$).
+  - Meaning: Vehicle physically cannot reach destination without intermediate replenishment.
+  - Result: $\text{need\_service} = \text{True}$, `reason_code = ReasonCode.DESTINATION_NOT_REACHABLE` (or `LOW_SOC_AND_INSUFFICIENT_RANGE` if below safe SOC, or `INSUFFICIENT_RANGE`).
+
+### Same SOC, Different Trip Verification
+Demand detection is **not** an SOC-threshold lookup. SOC is only one component of the energy state:
+- **Vehicle:** `VF_3` ($18.64\text{ kWh}$ usable, $0.12\text{ kWh/km}$ $\rightarrow 155.33\text{ km}$ nominal range), $\text{SOC} = 45\%$ ($\text{remaining\_range} \approx 69.9\text{ km}$).
+- **Trip A (Short: $20\text{ km}$, Reserve: $20\text{ km}$):** Required range $= 40\text{ km} \le 69.9\text{ km} \rightarrow$ **SAFE** (`need_service = False`).
+- **Trip B (Long: $55\text{ km}$, Reserve: $20\text{ km}$):** Required range $= 75\text{ km} > 69.9\text{ km} \rightarrow$ **NEED_SERVICE** (`need_service = True`, `INSUFFICIENT_POST_DESTINATION_RESERVE`).
+
+### Resolution Rules for AUTO_DETECTED
 - If $\text{need\_service} = \text{False}$:
   - `resolved_service_type = None`
-  - `reason_code = ReasonCode.SUFFICIENT_SOC_RANGE`
 - If $\text{need\_service} = \text{True}$:
-  - If `below_safe` and `insufficient_range`: `reason_code = ReasonCode.LOW_SOC_AND_INSUFFICIENT_RANGE`
-  - Else if `below_safe`: `reason_code = ReasonCode.LOW_SOC`
-  - Else: `reason_code = ReasonCode.INSUFFICIENT_RANGE`
   - **Single-service vehicle (Cars, Charge-only bikes):** `resolved_service_type = ServiceType.CHARGING`
   - **Swap-capable vehicle (EVO, EVO_LITE, FELIZ_II, VIPER):** `resolved_service_type = None` (**UNRESOLVED**). The system does NOT auto-prefer battery swap over charging. Candidate search and ranking in Weeks 3–4 evaluate both services.
 
@@ -150,9 +172,11 @@ class EnergyServiceRequest(BaseModel):
     request_valid: bool
     reason_code: ReasonCode
     current_soc_pct: Optional[float]
+    remaining_energy_kwh: Optional[float]
     estimated_remaining_range_km: Optional[float]
     remaining_trip_distance_km: Optional[float]
     safety_reserve_km: Optional[float]
+    energy_margin_km: Optional[float]
     vehicle_model: Optional[str]
     vehicle_type: Optional[str]
     battery_capacity_kwh: Optional[float]
@@ -210,7 +234,7 @@ Integrated into FastAPI backend under `/api/v1`:
 
 ## 9. Dataset V1.3.1 Scenario Replay Verification
 
-Replayed 13 canonical scenarios directly against `dataset_v1/labels/demand_labels.csv`:
+Replayed 18 canonical scenarios (13 dataset replay + 5 post-destination risk & same-SOC scenarios) directly against `dataset_v1/labels/demand_labels.csv`:
 
 | Scenario Name | Canonical Event ID | Vehicle / Model | Request Source | Ground Truth Need | Allowed Services | Ground Truth Resolved | Replay Status |
 |---|---|---|---|---|---|---|---|
@@ -227,6 +251,11 @@ Replayed 13 canonical scenarios directly against `dataset_v1/labels/demand_label
 | `SWAP_BIKE_REQUEST_CHARGE` | `DE000050` | `V0003` (EVO) | DRIVER_REQUEST | True | `[CHARGING, BATTERY_SWAP]` | `CHARGING` | **PASS** |
 | `SWAP_BIKE_REQUEST_SWAP` | `DE000051` | `V0003` (EVO) | DRIVER_REQUEST | True | `[CHARGING, BATTERY_SWAP]` | `BATTERY_SWAP` | **PASS** |
 | `SWAP_BIKE_REQUEST_ANY` | `DE000052` | `V0003` (EVO) | DRIVER_REQUEST | True | `[CHARGING, BATTERY_SWAP]` | `None` (UNRESOLVED) | **PASS** |
+| `POST_DESTINATION_RESERVE_OK` | Synthetic Case | `V0001` (VF_3) | AUTO_DETECTED | False | `[CHARGING]` | `None` | **PASS** |
+| `POST_DESTINATION_RESERVE_INSUFFICIENT` | Synthetic Case | `V0001` (VF_3) | AUTO_DETECTED | True | `[CHARGING]` | `CHARGING` | **PASS** |
+| `DESTINATION_NOT_REACHABLE` | Synthetic Case | `V0001` (VF_3) | AUTO_DETECTED | True | `[CHARGING]` | `CHARGING` | **PASS** |
+| `SAME_SOC_SHORT_TRIP` | Controlled Pair | `V0001` (VF_3) | AUTO_DETECTED | False | `[CHARGING]` | `None` | **PASS** |
+| `SAME_SOC_LONG_TRIP` | Controlled Pair | `V0001` (VF_3) | AUTO_DETECTED | True | `[CHARGING]` | `CHARGING` | **PASS** |
 
 ---
 
@@ -235,11 +264,14 @@ Replayed 13 canonical scenarios directly against `dataset_v1/labels/demand_label
 | Requirement | Implementation | Evidence | Test | Status | Limitation / Note |
 |---|---|---|---|---|---|
 | Model-level vehicle capability | `capability.py` | 19 VinFast models, 40 cars, 13 charge bikes, 7 swap bikes | `test_vehicle_capability.py` | **PASS** | Strict model catalog; no category shortcuts |
-| AUTO demand feasibility | `auto_detector.py` | Safe SOC + reserve range feasibility equation | `test_auto_detector.py` | **PASS** | Deterministic baseline; handles missing/invalid state |
+| AUTO demand feasibility | `auto_detector.py` | Energy model ($E = C \times \text{SOC}$, range $= E / c$) | `test_auto_detector.py` | **PASS** | Deterministic baseline; handles missing/invalid state |
+| Post-destination reserve risk | `auto_detector.py` | $\text{range} < \text{trip} + \text{reserve} \implies \text{need\_service}=\text{true}$ | `test_energy_feasibility.py` | **PASS** | Evaluated via `SafetyReservePolicy` |
+| Distinct energy states (A/B/C) | `auto_detector.py` | Safe vs Reserve Insufficient vs Destination Unreachable | `test_energy_feasibility.py` | **PASS** | Explicit reason codes emitted |
+| Same SOC / Different Trip | `auto_detector.py` | SOC 45% safe at 20 km, service needed at 55 km | `test_energy_feasibility.py` | **PASS** | Proves non-threshold trip-dependent logic |
 | Swap bike AUTO leaves unresolved | `auto_detector.py`, `service.py` | `resolved_service_type=None` for swap-capable AUTO | `test_auto_detector.py`, `test_scenarios_week2.py` | **PASS** | Prevents pre-ranking service bias |
 | Explicit DRIVER_REQUEST validation | `driver_requester.py` | Matrix validation for CHARGING, BATTERY_SWAP, ANY | `test_driver_requester.py` | **PASS** | Unsupported requests rejected with UNSUPPORTED_SERVICE |
 | DRIVER_REQUEST ANY unconstrained | `driver_requester.py` | `resolved_service_type=None` for ANY on swap bike | `test_driver_requester.py`, `test_scenarios_week2.py` | **PASS** | Never collapsed to CHARGING |
-| Common EnergyServiceRequest contract | `models.py`, `service.py` | Single schema for AUTO and DRIVER requests | `test_demand_models.py`, `test_demand_service.py` | **PASS** | Extra station/ranking fields strictly forbidden |
+| Common EnergyServiceRequest contract | `models.py`, `service.py` | Single schema with energy margin, reserve, range | `test_demand_models.py`, `test_demand_service.py` | **PASS** | Extra station/ranking fields strictly forbidden |
 | Offline ML evaluation & comparison | `scripts/evaluate_demand_ml.py` | Canonical split, zero leakage, 100% metrics | Benchmark script run | **PASS** | Documented why Rule Baseline is selected |
 | Week 1 realtime state integration | `demand.py` | Consumes `DriverStateStore` position/segment | `test_demand_api.py` | **PASS** | In-memory store; Week 1 untouched |
 | Dataset V1.3.1 validation | `validate_dataset.py` | 152 checks PASS, 22 scenario checks PASS | `validate_dataset.py` | **PASS** | Dataset remains byte-for-byte read-only |

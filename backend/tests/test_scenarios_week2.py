@@ -209,3 +209,81 @@ def test_scenario_13_swap_bike_request_any(demand_labels_df, demand_service):
     assert res.requested_service_type == RequestedServiceType.ANY
     assert res.resolved_service_type is None, "Must NOT auto-force CHARGING on ANY request"
     assert set(res.allowed_service_types) == {ServiceType.CHARGING, ServiceType.BATTERY_SWAP}
+
+
+def test_scenario_14_post_destination_reserve_ok(demand_service):
+    """Scenario: POST_DESTINATION_RESERVE_OK"""
+    ctx = DemandContext(
+        vehicle_id="V0002",
+        current_soc_pct=50.0,
+        estimated_remaining_range_km=110.0,
+        remaining_trip_distance_km=60.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    req = demand_service.evaluate_auto_demand(ctx)
+    assert req.need_service is False
+    assert req.reason_code.value == "SUFFICIENT_SOC_RANGE"
+    assert req.energy_margin_km is not None
+    assert req.energy_margin_km >= 0
+
+
+def test_scenario_15_post_destination_reserve_insufficient(demand_service):
+    """Scenario: POST_DESTINATION_RESERVE_INSUFFICIENT (70km range < 55km trip + 20km reserve)."""
+    ctx = DemandContext(
+        vehicle_id="V0002",
+        current_soc_pct=45.0,
+        estimated_remaining_range_km=70.0,
+        remaining_trip_distance_km=55.0,
+        safety_reserve_km=20.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    req = demand_service.evaluate_auto_demand(ctx)
+    assert req.need_service is True
+    assert req.reason_code.value == "INSUFFICIENT_POST_DESTINATION_RESERVE"
+    assert req.energy_margin_km == pytest.approx(-5.0, 0.1)
+
+
+def test_scenario_16_destination_not_reachable(demand_service):
+    """Scenario: DESTINATION_NOT_REACHABLE (45km range < 60km trip)."""
+    ctx = DemandContext(
+        vehicle_id="V0002",
+        current_soc_pct=35.0,
+        estimated_remaining_range_km=45.0,
+        remaining_trip_distance_km=60.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    req = demand_service.evaluate_auto_demand(ctx)
+    assert req.need_service is True
+    assert req.reason_code.value == "DESTINATION_NOT_REACHABLE"
+    assert req.energy_margin_km < 0
+
+
+def test_scenario_17_same_soc_short_trip(demand_service):
+    """Scenario: SAME_SOC_SHORT_TRIP (SOC=45%, trip=20km, reserve=20km -> SAFE)."""
+    ctx = DemandContext(
+        vehicle_id="V0002",
+        current_soc_pct=45.0,
+        estimated_remaining_range_km=70.0,
+        remaining_trip_distance_km=20.0,
+        safety_reserve_km=20.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    req = demand_service.evaluate_auto_demand(ctx)
+    assert req.need_service is False
+    assert req.reason_code.value == "SUFFICIENT_SOC_RANGE"
+
+
+def test_scenario_18_same_soc_long_trip(demand_service):
+    """Scenario: SAME_SOC_LONG_TRIP (SOC=45%, trip=55km, reserve=20km -> NEED_SERVICE)."""
+    ctx = DemandContext(
+        vehicle_id="V0002",
+        current_soc_pct=45.0,
+        estimated_remaining_range_km=70.0,
+        remaining_trip_distance_km=55.0,
+        safety_reserve_km=20.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    req = demand_service.evaluate_auto_demand(ctx)
+    assert req.need_service is True
+    assert req.reason_code.value == "INSUFFICIENT_POST_DESTINATION_RESERVE"
+

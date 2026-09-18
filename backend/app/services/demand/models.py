@@ -44,6 +44,8 @@ class ReasonCode(str, Enum):
     LOW_SOC = "LOW_SOC"
     INSUFFICIENT_RANGE = "INSUFFICIENT_RANGE"
     LOW_SOC_AND_INSUFFICIENT_RANGE = "LOW_SOC_AND_INSUFFICIENT_RANGE"
+    INSUFFICIENT_POST_DESTINATION_RESERVE = "INSUFFICIENT_POST_DESTINATION_RESERVE"
+    DESTINATION_NOT_REACHABLE = "DESTINATION_NOT_REACHABLE"
 
     # DRIVER_REQUEST reasons
     VALID_REQUEST = "VALID_REQUEST"
@@ -122,6 +124,8 @@ class DemandContext(BaseModel):
     distance_travelled_km: Optional[float] = None
     planned_trip_distance_km: Optional[float] = None
     safety_reserve_km: Optional[float] = None
+    remaining_energy_kwh: Optional[float] = None
+    energy_margin_km: Optional[float] = None
     consumption_wh_per_km: Optional[float] = None
     minimum_safe_soc_pct: Optional[float] = None
 
@@ -139,6 +143,8 @@ class NeedServiceDecision(BaseModel):
     reason_code: ReasonCode
     safety_reserve_km: Optional[float] = None
     remaining_trip_distance_km: Optional[float] = None
+    remaining_energy_kwh: Optional[float] = None
+    energy_margin_km: Optional[float] = None
     details: Optional[str] = None
 
 
@@ -174,9 +180,11 @@ class EnergyServiceRequest(BaseModel):
 
     # Energy and trip metrics
     current_soc_pct: Optional[float] = None
+    remaining_energy_kwh: Optional[float] = None
     estimated_remaining_range_km: Optional[float] = None
     remaining_trip_distance_km: Optional[float] = None
     safety_reserve_km: Optional[float] = None
+    energy_margin_km: Optional[float] = None
 
     # Vehicle metadata
     vehicle_model: Optional[str] = None

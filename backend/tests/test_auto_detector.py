@@ -60,10 +60,10 @@ def test_low_soc_short_trip(detector, resolver):
 
 
 def test_medium_soc_long_trip_insufficient_range(detector, resolver):
-    """Medium SOC (>20%) but remaining trip exceeds range -> Service needed, INSUFFICIENT_RANGE."""
+    """Medium SOC (>20%) but remaining trip exceeds range -> DESTINATION_NOT_REACHABLE."""
     cap = resolver.resolve_by_model("VF_5")
     # Remaining trip = 70 km, reserve = max(1.0, 70 * 0.15) = 10.5 km.
-    # Total required = 80.5 km. Estimated range = 50.0 km.
+    # Total required = 80.5 km. Estimated range = 50.0 km (< 70 km).
     ctx = DemandContext(
         vehicle_id="V0002",
         current_soc_pct=30.0,  # > 20%
@@ -73,10 +73,30 @@ def test_medium_soc_long_trip_insufficient_range(detector, resolver):
     )
     decision = detector.evaluate_need(ctx, cap)
     assert decision.need_service is True
-    assert decision.reason_code == ReasonCode.INSUFFICIENT_RANGE
+    assert decision.reason_code in (ReasonCode.DESTINATION_NOT_REACHABLE, ReasonCode.INSUFFICIENT_RANGE)
+    assert decision.energy_margin_km is not None
+    assert decision.energy_margin_km < 0
 
     resolved = detector.resolve_service_type(decision.need_service, cap)
     assert resolved == ServiceType.CHARGING
+
+
+def test_medium_soc_destination_reachable_reserve_insufficient(detector, resolver):
+    """Destination reachable (range >= trip) but reserve insufficient -> INSUFFICIENT_POST_DESTINATION_RESERVE."""
+    cap = resolver.resolve_by_model("VF_5")
+    # Trip = 50 km, reserve = 50 * 0.15 = 7.5 km. Required = 57.5 km.
+    # Range = 52.0 km (>= 50 km trip, but < 57.5 km).
+    ctx = DemandContext(
+        vehicle_id="V0002",
+        current_soc_pct=30.0,
+        estimated_remaining_range_km=52.0,
+        remaining_trip_distance_km=50.0,
+        minimum_safe_soc_pct=15.0,
+    )
+    decision = detector.evaluate_need(ctx, cap)
+    assert decision.need_service is True
+    assert decision.reason_code == ReasonCode.INSUFFICIENT_POST_DESTINATION_RESERVE
+    assert decision.energy_margin_km == pytest.approx(-5.5, 0.1)
 
 
 def test_low_soc_and_insufficient_range(detector, resolver):
