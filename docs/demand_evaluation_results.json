@@ -1,0 +1,96 @@
+{
+  "rule_baseline": {
+    "train": {
+      "total_samples": 840,
+      "positive_samples": 608,
+      "negative_samples": 232,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "confusion_matrix": {
+        "TP": 608,
+        "FP": 0,
+        "FN": 0,
+        "TN": 232
+      }
+    },
+    "validation": {
+      "total_samples": 176,
+      "positive_samples": 120,
+      "negative_samples": 56,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "confusion_matrix": {
+        "TP": 120,
+        "FP": 0,
+        "FN": 0,
+        "TN": 56
+      }
+    },
+    "test": {
+      "total_samples": 184,
+      "positive_samples": 120,
+      "negative_samples": 64,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "confusion_matrix": {
+        "TP": 120,
+        "FP": 0,
+        "FN": 0,
+        "TN": 64
+      }
+    }
+  },
+  "logistic_regression": {
+    "train": {
+      "total_samples": 840,
+      "positive_samples": 608,
+      "negative_samples": 232,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "confusion_matrix": {
+        "TP": 608,
+        "FP": 0,
+        "FN": 0,
+        "TN": 232
+      }
+    },
+    "validation": {
+      "total_samples": 176,
+      "positive_samples": 120,
+      "negative_samples": 56,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "confusion_matrix": {
+        "TP": 120,
+        "FP": 0,
+        "FN": 0,
+        "TN": 56
+      }
+    },
+    "test": {
+      "total_samples": 184,
+      "positive_samples": 120,
+      "negative_samples": 64,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "confusion_matrix": {
+        "TP": 120,
+        "FP": 0,
+        "FN": 0,
+        "TN": 64
+      }
+    }
+  }
+}
