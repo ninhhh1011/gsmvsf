@@ -101,3 +101,24 @@
 **Week 3 decision gate:** Reassess when concrete use cases (vehicle-specific routing, energy-aware paths, dynamic cost propagation) demonstrate an OSRM limitation. Evidence-based benchmarking takes priority over feature checklists.
 
 **Revisit condition**: When Week 3/4 benchmarks show OSRM cannot express a required constraint, or when custom costing is required and OSRM profile rebuild is too slow for production.
+
+---
+
+## ADR-009: Candidate Search Ordering, Composite Identity, and Evaluation Precedence
+
+**Decision**:
+1. Represent candidate identity as the composite tuple `(station_id, service_type)`.
+2. Enforce strict pipeline ordering: All Stations → Service Alternatives Expansion → Full Eligibility Evaluation → Eligible Candidates → Optional Deterministic Top-N Reduction.
+3. Enforce deterministic candidate rejection reason precedence: `UNREACHABLE` → `INCOMPATIBLE` → `OFFLINE` → `NO_SWAP_BATTERY` → `FULL` → `EXCESSIVE_QUEUE` → `INSUFFICIENT_SOC_TO_REACH` → `ELIGIBLE`.
+4. Decouple Candidate Search from Week 4 Ranking: Candidate Search computes physical multi-leg routing metrics (distance, duration, detour, base ETA) and operational availability; it does NOT assign ranking scores, weights, or recommendations.
+
+**Reason**:
+Early iterations of the platform (pre-Dataset V1.3) suffered from two major architectural defects:
+- Collapsing candidates to physical `station_id` caused multi-service stations (offering both charging and swap) to arbitrarily drop one service alternative for swap-capable vehicles.
+- Performing nearest-N prefiltering by Euclidean distance prior to checking compatibility or operational status excluded viable stations along the route and recommended unreachable/incompatible ones.
+The deterministic precedence guarantees 100% semantic alignment with canonical Dataset V1.3.1 ground truth.
+
+**Trade-off**: Evaluating all 30 physical stations and up to 60 service alternatives generates 61 route calls per request. Benchmark profiling shows median latency is ~86 ms, well within real-time budgets, and avoids premature optimization.
+
+**Revisit condition**: If the station network expands from 30 stations to >1,000 stations in production, introduce spatial grid/quadtree bounding-box prefiltering with safety reachability buffers.
+
