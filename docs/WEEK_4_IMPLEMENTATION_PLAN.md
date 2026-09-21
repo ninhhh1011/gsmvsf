@@ -345,5 +345,5 @@ No Kafka, Redis Streams, live feed, continuous monitoring, push or ML runtime.
 | 3 | W4-04 | PASS: 7 real cache tests + 7 DB tests; historical/empty-cache fix verified |
 | 4 | W4-05, W4-06 | PASS: 25 ranking tests; 105 with model/Week 3 regression; independent review |
 | 5 | W4-07 | PASS: 4 API tests including real DB/Redis lifespan shutdown; 30 with ranking/lifecycle; live API rebuilt and healthy |
-| 6 | W4-08, W4-09 | Pending implementation |
+| 6 | W4-08, W4-09 | PASS: 1,200 real predictions, 848 recommendation/553 ranking groups; dynamic S029-to-S007 demo, real HTTP failure probes and concurrency 1/5/10 baseline; 7 script tests; independent evaluation review |
 | 7 | W4-10 | Pending implementation |

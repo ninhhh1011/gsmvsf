@@ -1,0 +1,511 @@
+{
+  "status": "PASS",
+  "timestamp_utc": "2026-09-21T04:40:38.566922+00:00",
+  "scope": "INITIAL LOCAL WEEK 4 BACKEND PERFORMANCE BASELINE",
+  "api_url": "http://127.0.0.1:8000",
+  "runtime_inputs": [
+    "vehicles/vehicles.csv",
+    "trips/trips.csv",
+    "map/processed/road_nodes.csv.gz",
+    "battery/soc_history.csv.gz",
+    "stations/stations.csv",
+    "traffic/traffic_snapshots.csv.gz",
+    "PostgreSQL persisted source snapshots"
+  ],
+  "labels_consumed": false,
+  "mode": "full",
+  "limitations": [
+    "Local laptop measurements; no production throughput or SLA claim.",
+    "Performance uses one real car trip; four vehicle/service categories covered by smoke.",
+    "HTTP cache misses clear only snapshot keys used by this experiment.",
+    "Failure probes exercise in-process HTTP with real unavailable connections; deployed services remain running."
+  ],
+  "smoke": [
+    {
+      "case": "car",
+      "trip_id": "T0001",
+      "evaluated": 30,
+      "eligible_count": 19,
+      "ranking_http_ms": 38.331,
+      "recommend_http_ms": 420.34,
+      "recommend_status": 200,
+      "selected_station": "S029",
+      "selected_service": "CHARGING"
+    },
+    {
+      "case": "fixed_bike",
+      "trip_id": "T0024",
+      "evaluated": 30,
+      "eligible_count": 0,
+      "ranking_http_ms": 9.042,
+      "recommend_http_ms": 521.992,
+      "recommend_status": 200,
+      "selected_station": null,
+      "selected_service": null
+    },
+    {
+      "case": "swap",
+      "trip_id": "T0003",
+      "evaluated": 30,
+      "eligible_count": 1,
+      "ranking_http_ms": 11.262,
+      "recommend_http_ms": 444.141,
+      "recommend_status": 200,
+      "selected_station": "S021",
+      "selected_service": "BATTERY_SWAP"
+    },
+    {
+      "case": "both",
+      "trip_id": "T0015",
+      "evaluated": 60,
+      "eligible_count": 13,
+      "ranking_http_ms": 26.654,
+      "recommend_http_ms": 535.568,
+      "recommend_status": 200,
+      "selected_station": "S009",
+      "selected_service": "BATTERY_SWAP"
+    }
+  ],
+  "ingestion_probes": {
+    "traffic_status": 201,
+    "traffic_snapshot_id": "b3638222-333b-5fb8-bcb5-74966fc0db6d",
+    "traffic_entity_id": "602290106_14_F",
+    "traffic_delay_factor": 2,
+    "traffic_ingestion_ms": 10.719,
+    "traffic_payload_verified": true,
+    "prior_traffic_snapshot_id": "f3ceab92-58fe-579d-9a01-7cf83f8f9215",
+    "traffic_history_preserved": true,
+    "wrong_token_status": 403,
+    "missing_token_status": 401,
+    "unknown_station_status": 422,
+    "naive_timestamp_status": 422,
+    "traffic_scope": "Synthetic speed update on a canonical source segment; no route/segment mapping asserted"
+  },
+  "dynamic": {
+    "source": "week4-verification:8b82481c-9eac-4a5c-a1c6-16d305faff26",
+    "start": "2026-09-03T00:10:00+00:00",
+    "before_station": "S029",
+    "after_station": "S007",
+    "eligible_count": 20,
+    "queue_wait_before_min": 0,
+    "queue_wait_after_min": 90,
+    "same_search_id": "819ee3e4-68c2-444f-9389-7ef4dbf848bd",
+    "newer_snapshot_id": "a83ec847-c2e0-575e-a689-51c44b2c9a63",
+    "older_snapshot_id": "4e3d2eed-3b04-5732-b757-bfc12608bee8",
+    "historical_snapshot_id": "5f4306d2-ad0c-5811-9eb5-bff4fe6f7ff4",
+    "historical_station": "S029",
+    "latest_cache_not_regressed": true,
+    "retry_status": 200,
+    "conflicting_retry_status": 409,
+    "conflict_payload": {
+      "error_code": "SNAPSHOT_CONFLICT",
+      "message": "Conflicting snapshot retry"
+    },
+    "candidate_state_conflict": {
+      "error_code": "CANDIDATE_STATE_CHANGED",
+      "message": "Candidate eligibility state changed after candidate search.",
+      "candidate_search_id": "819ee3e4-68c2-444f-9389-7ef4dbf848bd",
+      "changed_candidates": [
+        {
+          "station_id": "S029",
+          "service_type": "CHARGING",
+          "previous_state": "ELIGIBLE",
+          "current_state": "OFFLINE"
+        }
+      ],
+      "action": "RERUN_CANDIDATE_SEARCH"
+    },
+    "true_single_eligible_count": 1,
+    "zero_eligible_count": 0
+  },
+  "performance": {
+    "ingestion_http_new_rows": {
+      "samples": 10,
+      "median_ms": 8.789,
+      "p90_ms": 10.27,
+      "p95_ms": 10.588,
+      "max_ms": 10.905,
+      "latency_ms": [
+        8.692,
+        8.886,
+        8.306,
+        8.497,
+        8.994,
+        10.199,
+        9.567,
+        7.995,
+        10.905,
+        8.045
+      ],
+      "eligible_counts": [],
+      "percentile_method": "linear interpolation"
+    },
+    "ranking_pure_in_process": {
+      "samples": 10,
+      "median_ms": 0.105,
+      "p90_ms": 0.112,
+      "p95_ms": 0.125,
+      "max_ms": 0.138,
+      "latency_ms": [
+        0.138,
+        0.109,
+        0.109,
+        0.104,
+        0.104,
+        0.105,
+        0.104,
+        0.105,
+        0.104,
+        0.104
+      ],
+      "eligible_counts": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "percentile_method": "linear interpolation"
+    },
+    "snapshot_lookup_cache_hit": {
+      "samples": 10,
+      "median_ms": 8.67,
+      "p90_ms": 10.187,
+      "p95_ms": 10.302,
+      "max_ms": 10.417,
+      "latency_ms": [
+        8.122,
+        8.631,
+        8.709,
+        10.162,
+        7.907,
+        9.569,
+        9.811,
+        10.417,
+        8.605,
+        8.124
+      ],
+      "eligible_counts": [],
+      "percentile_method": "linear interpolation",
+      "metrics": {
+        "cache_hit": 600,
+        "cache_miss": 0,
+        "db_fallback": 0,
+        "lookups": 10,
+        "stale": 0,
+        "missing": 0
+      }
+    },
+    "snapshot_lookup_cache_miss": {
+      "samples": 10,
+      "median_ms": 78.684,
+      "p90_ms": 87.624,
+      "p95_ms": 96.504,
+      "max_ms": 105.383,
+      "latency_ms": [
+        78.309,
+        81.132,
+        77.61,
+        77.487,
+        78.407,
+        73.626,
+        78.962,
+        85.651,
+        105.383,
+        84.017
+      ],
+      "eligible_counts": [],
+      "percentile_method": "linear interpolation",
+      "metrics": {
+        "cache_hit": 0,
+        "cache_miss": 600,
+        "db_fallback": 600,
+        "lookups": 10,
+        "stale": 0,
+        "missing": 0
+      }
+    },
+    "ranking_http_cache_hit": {
+      "samples": 10,
+      "median_ms": 14.347,
+      "p90_ms": 17.596,
+      "p95_ms": 18.578,
+      "max_ms": 19.559,
+      "latency_ms": [
+        15.564,
+        16.658,
+        12.447,
+        15.296,
+        19.559,
+        13.397,
+        13.141,
+        11.979,
+        11.668,
+        17.378
+      ],
+      "eligible_counts": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "percentile_method": "linear interpolation"
+    },
+    "ranking_http_cache_miss": {
+      "samples": 10,
+      "median_ms": 30.308,
+      "p90_ms": 39.164,
+      "p95_ms": 55.103,
+      "max_ms": 71.042,
+      "latency_ms": [
+        34.244,
+        28.509,
+        71.042,
+        35.622,
+        27.974,
+        26.438,
+        30.053,
+        29.599,
+        30.562,
+        34.291
+      ],
+      "eligible_counts": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "percentile_method": "linear interpolation"
+    },
+    "recommend_http_cache_hit": {
+      "samples": 10,
+      "median_ms": 337.738,
+      "p90_ms": 447.276,
+      "p95_ms": 462.771,
+      "max_ms": 478.266,
+      "latency_ms": [
+        376.086,
+        478.266,
+        316.516,
+        330.799,
+        344.271,
+        319.749,
+        331.205,
+        315.804,
+        443.833,
+        401.807
+      ],
+      "eligible_counts": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "percentile_method": "linear interpolation"
+    },
+    "recommend_http_cache_miss": {
+      "samples": 10,
+      "median_ms": 396.739,
+      "p90_ms": 528.034,
+      "p95_ms": 535.486,
+      "max_ms": 542.938,
+      "latency_ms": [
+        394.451,
+        394.294,
+        526.378,
+        542.938,
+        514.84,
+        449.837,
+        399.028,
+        351.208,
+        382.35,
+        356.717
+      ],
+      "eligible_counts": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "percentile_method": "linear interpolation"
+    },
+    "recommend_http_concurrency": {
+      "1": {
+        "samples": 10,
+        "median_ms": 332.141,
+        "p90_ms": 379.297,
+        "p95_ms": 387.427,
+        "max_ms": 395.558,
+        "latency_ms": [
+          332.185,
+          377.49,
+          337.365,
+          395.558,
+          315.106,
+          338.666,
+          332.097,
+          328.189,
+          320.337,
+          320.769
+        ],
+        "eligible_counts": [
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20
+        ],
+        "percentile_method": "linear interpolation",
+        "requested_concurrency": 1,
+        "effective_concurrency": 1
+      },
+      "5": {
+        "samples": 10,
+        "median_ms": 1135.717,
+        "p90_ms": 1285.422,
+        "p95_ms": 1305.435,
+        "max_ms": 1325.448,
+        "latency_ms": [
+          796.128,
+          1030.106,
+          1133.951,
+          925.319,
+          1002.288,
+          1325.448,
+          1218.618,
+          1280.974,
+          1137.483,
+          1179.655
+        ],
+        "eligible_counts": [
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20
+        ],
+        "percentile_method": "linear interpolation",
+        "requested_concurrency": 5,
+        "effective_concurrency": 5
+      },
+      "10": {
+        "samples": 10,
+        "median_ms": 2252.427,
+        "p90_ms": 2479.249,
+        "p95_ms": 2488.713,
+        "max_ms": 2498.177,
+        "latency_ms": [
+          2145.509,
+          2230.345,
+          2308.837,
+          2117.912,
+          2026.043,
+          2094.402,
+          2498.177,
+          2477.146,
+          2429.051,
+          2274.51
+        ],
+        "eligible_counts": [
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20
+        ],
+        "percentile_method": "linear interpolation",
+        "requested_concurrency": 10,
+        "effective_concurrency": 10
+      }
+    }
+  },
+  "failure_probes": {
+    "method": "Real unavailable connections using a bound, non-listening local port (connection refusal or timeout depends on the operating system); real workflows through in-process ASGI HTTP routes; deployed services remain running",
+    "in_process_http": {
+      "redis_unavailable": {
+        "search_status": 200,
+        "ranking_status": 200,
+        "candidate_search_id": "8b368aee-975e-4bd9-a9aa-dbf56fc027dc",
+        "eligible_count": 20,
+        "selected_station_id": "S029",
+        "selected_service_type": "CHARGING"
+      },
+      "database_unavailable": {
+        "status": 503,
+        "response": {
+          "error_code": "SNAPSHOT_DATABASE_UNAVAILABLE",
+          "message": "Snapshot database unavailable"
+        }
+      },
+      "graphhopper_unavailable": {
+        "status": 504,
+        "response": {
+          "detail": "GraphHopper request timed out: "
+        }
+      }
+    },
+    "redis_falls_back_to_database": true,
+    "redis_metrics": {
+      "cache_error": 6,
+      "cache_hit": 0,
+      "cache_miss": 101,
+      "db_fallback": 101,
+      "lookups": 3,
+      "stale": 0,
+      "missing": 0
+    },
+    "database_with_warm_cache_status": 503,
+    "database_error": {
+      "error_code": "SNAPSHOT_DATABASE_UNAVAILABLE",
+      "message": "Snapshot database unavailable"
+    },
+    "graphhopper_route_status": "TIMEOUT",
+    "graphhopper_exception": "RoutingTimeoutError",
+    "graphhopper_service_error_http_status": 504
+  },
+  "restored_open_at": "2026-09-03T00:19:00+00:00"
+}
