@@ -743,9 +743,9 @@ requires real infrastructure. All expected paths below are relative to root.
 | W5-00 | PASS | User contracts, retained 302/152/22 audit baseline, plan reviewed |
 | W5-01 | PASS | 5 reproductions failed before fix; 54 focused/prior tests passed; shared accessor/None diff reviewed |
 | W5-02 | PASS | 321 full protected tests; independent 19-test review PASS; actual APIs healthy on isolated schemas; location-bridge-tests.xml |
-| W5-02A | IN PROGRESS | 34/34 real zero-path responses reproduced; adapter regression and fresh replay required |
-| W5-03 | IN PROGRESS | Replay a precision defect fixed; replay b retained with 34 correctly reported adapter errors; fresh c required |
-| W5-04 | PENDING | Not yet executed |
+| W5-02A | PASS | 73 protected tests; 34/34 real reproductions; final replay 34 NO_MATCH and zero engine errors |
+| W5-03 | PASS | replay-c: 30 trajectories, 1952 events, 308 requests, zero errors; causal provenance/cache audit; 26 focused/prior tests |
+| W5-04 | PASS | Predictions persisted and hashed before labels; 184 joined reference events; docs/reports/week5-evaluation.json |
 | W5-05 | PENDING | Not yet executed |
 | W5-06 | PENDING | Not yet executed |
 | W5-07 | PENDING | Not yet executed |

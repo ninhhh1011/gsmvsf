@@ -1,0 +1,1382 @@
+{
+  "prediction_count": 240,
+  "reference_events": 184,
+  "runtime_group_sizes": {
+    "zero": 130,
+    "single": 24,
+    "multiple": 86
+  },
+  "reference_group_sizes": {
+    "zero": 89,
+    "single": 21,
+    "multiple": 74
+  },
+  "baselines": {
+    "nearest_eligible": {
+      "recommendation_presence": {
+        "matches": 167,
+        "total": 184,
+        "rate": 0.907608695652174
+      },
+      "overall_station_agreement": {
+        "matches": 154,
+        "total": 184,
+        "rate": 0.8369565217391305
+      },
+      "overall_composite_agreement": {
+        "matches": 154,
+        "total": 184,
+        "rate": 0.8369565217391305
+      },
+      "station_top1": {
+        "matches": 81,
+        "total": 95,
+        "rate": 0.8526315789473684
+      },
+      "composite_top1": {
+        "matches": 81,
+        "total": 95,
+        "rate": 0.8526315789473684
+      },
+      "service_type_top1": {
+        "matches": 94,
+        "total": 95,
+        "rate": 0.9894736842105263
+      },
+      "reference_best_in_runtime_pool": {
+        "matches": 93,
+        "total": 95,
+        "rate": 0.9789473684210527
+      },
+      "common_pool_station_top1": {
+        "matches": 82,
+        "total": 94,
+        "rate": 0.8723404255319149
+      },
+      "common_pool_composite_top1": {
+        "matches": 82,
+        "total": 94,
+        "rate": 0.8723404255319149
+      },
+      "pairwise_common_pool": {
+        "matches": 1141,
+        "total": 1224,
+        "rate": 0.9321895424836601
+      },
+      "pairwise_comparable_events": 70,
+      "by_reference_group": {
+        "zero": {
+          "recommendation_presence": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "overall_station_agreement": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "overall_composite_agreement": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "station_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "composite_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "service_type_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "common_pool_station_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "common_pool_composite_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_common_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_comparable_events": 0
+        },
+        "single": {
+          "recommendation_presence": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "overall_station_agreement": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "overall_composite_agreement": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "station_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "composite_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "service_type_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "common_pool_station_top1": {
+            "matches": 20,
+            "total": 20,
+            "rate": 1.0
+          },
+          "common_pool_composite_top1": {
+            "matches": 20,
+            "total": 20,
+            "rate": 1.0
+          },
+          "pairwise_common_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_comparable_events": 0
+        },
+        "multiple": {
+          "recommendation_presence": {
+            "matches": 74,
+            "total": 74,
+            "rate": 1.0
+          },
+          "overall_station_agreement": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "overall_composite_agreement": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "station_top1": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "composite_top1": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "service_type_top1": {
+            "matches": 74,
+            "total": 74,
+            "rate": 1.0
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 73,
+            "total": 74,
+            "rate": 0.9864864864864865
+          },
+          "common_pool_station_top1": {
+            "matches": 62,
+            "total": 74,
+            "rate": 0.8378378378378378
+          },
+          "common_pool_composite_top1": {
+            "matches": 62,
+            "total": 74,
+            "rate": 0.8378378378378378
+          },
+          "pairwise_common_pool": {
+            "matches": 1141,
+            "total": 1224,
+            "rate": 0.9321895424836601
+          },
+          "pairwise_comparable_events": 70
+        }
+      }
+    },
+    "minimum_station_eta": {
+      "recommendation_presence": {
+        "matches": 167,
+        "total": 184,
+        "rate": 0.907608695652174
+      },
+      "overall_station_agreement": {
+        "matches": 154,
+        "total": 184,
+        "rate": 0.8369565217391305
+      },
+      "overall_composite_agreement": {
+        "matches": 154,
+        "total": 184,
+        "rate": 0.8369565217391305
+      },
+      "station_top1": {
+        "matches": 81,
+        "total": 95,
+        "rate": 0.8526315789473684
+      },
+      "composite_top1": {
+        "matches": 81,
+        "total": 95,
+        "rate": 0.8526315789473684
+      },
+      "service_type_top1": {
+        "matches": 94,
+        "total": 95,
+        "rate": 0.9894736842105263
+      },
+      "reference_best_in_runtime_pool": {
+        "matches": 93,
+        "total": 95,
+        "rate": 0.9789473684210527
+      },
+      "common_pool_station_top1": {
+        "matches": 82,
+        "total": 94,
+        "rate": 0.8723404255319149
+      },
+      "common_pool_composite_top1": {
+        "matches": 82,
+        "total": 94,
+        "rate": 0.8723404255319149
+      },
+      "pairwise_common_pool": {
+        "matches": 1092,
+        "total": 1224,
+        "rate": 0.8921568627450981
+      },
+      "pairwise_comparable_events": 70,
+      "by_reference_group": {
+        "zero": {
+          "recommendation_presence": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "overall_station_agreement": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "overall_composite_agreement": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "station_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "composite_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "service_type_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "common_pool_station_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "common_pool_composite_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_common_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_comparable_events": 0
+        },
+        "single": {
+          "recommendation_presence": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "overall_station_agreement": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "overall_composite_agreement": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "station_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "composite_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "service_type_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "common_pool_station_top1": {
+            "matches": 20,
+            "total": 20,
+            "rate": 1.0
+          },
+          "common_pool_composite_top1": {
+            "matches": 20,
+            "total": 20,
+            "rate": 1.0
+          },
+          "pairwise_common_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_comparable_events": 0
+        },
+        "multiple": {
+          "recommendation_presence": {
+            "matches": 74,
+            "total": 74,
+            "rate": 1.0
+          },
+          "overall_station_agreement": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "overall_composite_agreement": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "station_top1": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "composite_top1": {
+            "matches": 61,
+            "total": 74,
+            "rate": 0.8243243243243243
+          },
+          "service_type_top1": {
+            "matches": 74,
+            "total": 74,
+            "rate": 1.0
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 73,
+            "total": 74,
+            "rate": 0.9864864864864865
+          },
+          "common_pool_station_top1": {
+            "matches": 62,
+            "total": 74,
+            "rate": 0.8378378378378378
+          },
+          "common_pool_composite_top1": {
+            "matches": 62,
+            "total": 74,
+            "rate": 0.8378378378378378
+          },
+          "pairwise_common_pool": {
+            "matches": 1092,
+            "total": 1224,
+            "rate": 0.8921568627450981
+          },
+          "pairwise_comparable_events": 70
+        }
+      }
+    },
+    "total_service_completion": {
+      "recommendation_presence": {
+        "matches": 167,
+        "total": 184,
+        "rate": 0.907608695652174
+      },
+      "overall_station_agreement": {
+        "matches": 158,
+        "total": 184,
+        "rate": 0.8586956521739131
+      },
+      "overall_composite_agreement": {
+        "matches": 158,
+        "total": 184,
+        "rate": 0.8586956521739131
+      },
+      "station_top1": {
+        "matches": 85,
+        "total": 95,
+        "rate": 0.8947368421052632
+      },
+      "composite_top1": {
+        "matches": 85,
+        "total": 95,
+        "rate": 0.8947368421052632
+      },
+      "service_type_top1": {
+        "matches": 94,
+        "total": 95,
+        "rate": 0.9894736842105263
+      },
+      "reference_best_in_runtime_pool": {
+        "matches": 93,
+        "total": 95,
+        "rate": 0.9789473684210527
+      },
+      "common_pool_station_top1": {
+        "matches": 86,
+        "total": 94,
+        "rate": 0.9148936170212766
+      },
+      "common_pool_composite_top1": {
+        "matches": 86,
+        "total": 94,
+        "rate": 0.9148936170212766
+      },
+      "pairwise_common_pool": {
+        "matches": 1102,
+        "total": 1224,
+        "rate": 0.9003267973856209
+      },
+      "pairwise_comparable_events": 70,
+      "by_reference_group": {
+        "zero": {
+          "recommendation_presence": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "overall_station_agreement": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "overall_composite_agreement": {
+            "matches": 73,
+            "total": 89,
+            "rate": 0.8202247191011236
+          },
+          "station_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "composite_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "service_type_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "common_pool_station_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "common_pool_composite_top1": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_common_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_comparable_events": 0
+        },
+        "single": {
+          "recommendation_presence": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "overall_station_agreement": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "overall_composite_agreement": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "station_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "composite_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "service_type_top1": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 20,
+            "total": 21,
+            "rate": 0.9523809523809523
+          },
+          "common_pool_station_top1": {
+            "matches": 20,
+            "total": 20,
+            "rate": 1.0
+          },
+          "common_pool_composite_top1": {
+            "matches": 20,
+            "total": 20,
+            "rate": 1.0
+          },
+          "pairwise_common_pool": {
+            "matches": 0,
+            "total": 0,
+            "rate": null
+          },
+          "pairwise_comparable_events": 0
+        },
+        "multiple": {
+          "recommendation_presence": {
+            "matches": 74,
+            "total": 74,
+            "rate": 1.0
+          },
+          "overall_station_agreement": {
+            "matches": 65,
+            "total": 74,
+            "rate": 0.8783783783783784
+          },
+          "overall_composite_agreement": {
+            "matches": 65,
+            "total": 74,
+            "rate": 0.8783783783783784
+          },
+          "station_top1": {
+            "matches": 65,
+            "total": 74,
+            "rate": 0.8783783783783784
+          },
+          "composite_top1": {
+            "matches": 65,
+            "total": 74,
+            "rate": 0.8783783783783784
+          },
+          "service_type_top1": {
+            "matches": 74,
+            "total": 74,
+            "rate": 1.0
+          },
+          "reference_best_in_runtime_pool": {
+            "matches": 73,
+            "total": 74,
+            "rate": 0.9864864864864865
+          },
+          "common_pool_station_top1": {
+            "matches": 66,
+            "total": 74,
+            "rate": 0.8918918918918919
+          },
+          "common_pool_composite_top1": {
+            "matches": 66,
+            "total": 74,
+            "rate": 0.8918918918918919
+          },
+          "pairwise_common_pool": {
+            "matches": 1102,
+            "total": 1224,
+            "rate": 0.9003267973856209
+          },
+          "pairwise_comparable_events": 70
+        }
+      }
+    }
+  },
+  "mismatch_examples": [
+    {
+      "event_id": "DE000049",
+      "runtime_best": [
+        "S021",
+        "BATTERY_SWAP"
+      ],
+      "reference_best": [
+        "S012",
+        "BATTERY_SWAP"
+      ],
+      "causes": [
+        "REFERENCE_BEST_NOT_RUNTIME_ELIGIBLE"
+      ],
+      "runtime_eligible_count": 1,
+      "reference_pool_count": 2,
+      "reference_eligible_count": 2,
+      "runtime_best_metrics": {
+        "station_id": "S021",
+        "service_type": "BATTERY_SWAP",
+        "eta_to_station_s": 670.0,
+        "eta_to_service_start_s": 670.0,
+        "eta_to_service_complete_s": 1030.0,
+        "final_cost_s": 1030.0,
+        "distance_to_station_m": 7769.3,
+        "traffic_method": "BASE_DURATION_MISSING",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 360.0,
+        "available_capacity": 2
+      },
+      "reference_best_runtime_eligibility": {
+        "reason": "INSUFFICIENT_SOC_TO_REACH",
+        "eligible": false,
+        "station_id": "S012",
+        "operational": {
+          "queue_length": 0,
+          "state_timestamp": "2026-08-31T23:10:00+00:00",
+          "operating_status": "OPEN",
+          "service_time_min": 6.0,
+          "available_capacity": 4,
+          "estimated_wait_min": 0.0,
+          "available_service_slots": 4,
+          "available_swap_batteries": 8
+        },
+        "service_type": "BATTERY_SWAP",
+        "soc_feasible": false,
+        "route_metrics": {
+          "eta_to_station_s": 791.0,
+          "detour_distance_m": 15256.7,
+          "detour_duration_s": 1316.3,
+          "direct_distance_m": 1169.3,
+          "direct_duration_s": 164.3,
+          "traffic_delay_factor": null,
+          "via_total_distance_m": 16426.0,
+          "via_total_duration_s": 1480.6,
+          "distance_to_station_m": 8486.8,
+          "duration_to_station_s": 791.0,
+          "distance_station_to_dest_m": 7939.2,
+          "duration_station_to_dest_s": 689.6,
+          "traffic_adjusted_duration_to_station_s": null
+        },
+        "access_node_id": "N0004732",
+        "station_latitude": 21.022215,
+        "station_longitude": 105.8368905,
+        "network_distance_m": 8486.8
+      },
+      "reference_best_runtime_metrics": null,
+      "reference_best_frozen_metrics": {
+        "event_id": "DE000049",
+        "trip_id": "T0003",
+        "station_id": "S012",
+        "service_type": "BATTERY_SWAP",
+        "split": "validation",
+        "eligible_candidate_count": 2,
+        "ranking_group_size": 2,
+        "is_ltr_group": true,
+        "candidate_eligible": true,
+        "driver_to_station_distance_m": 6691.2,
+        "driver_to_station_eta_min": 8.143,
+        "station_to_destination_distance_m": 7132.1,
+        "station_to_destination_eta_min": 8.278,
+        "direct_driver_to_destination_distance_m": 4569.0,
+        "direct_driver_to_destination_eta_min": 12.469,
+        "detour_distance_m": 9254.3,
+        "detour_time_min": 3.952,
+        "traffic_delay_factor_driver_leg": 1.314,
+        "traffic_delay_factor_station_leg": 1.141,
+        "traffic_adjusted_eta_min": 20.145,
+        "queue_wait_min": 0.0,
+        "service_time_min": 6.0,
+        "total_eta_min": 26.145,
+        "available_capacity": 4,
+        "operating_status": "OPEN",
+        "soc_feasible": true,
+        "ranking_cost_label": 44.2421,
+        "reference_rank": 1,
+        "is_reference_best": true
+      },
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    },
+    {
+      "event_id": "DE000053",
+      "runtime_best": null,
+      "reference_best": [
+        "S012",
+        "BATTERY_SWAP"
+      ],
+      "causes": [
+        "RECOMMENDATION_PRESENCE_DIFFERS",
+        "REFERENCE_BEST_NOT_RUNTIME_ELIGIBLE"
+      ],
+      "runtime_eligible_count": 0,
+      "reference_pool_count": 1,
+      "reference_eligible_count": 1,
+      "runtime_best_metrics": null,
+      "reference_best_runtime_eligibility": {
+        "reason": "INSUFFICIENT_SOC_TO_REACH",
+        "eligible": false,
+        "station_id": "S012",
+        "operational": {
+          "queue_length": 0,
+          "state_timestamp": "2026-08-31T23:20:00+00:00",
+          "operating_status": "OPEN",
+          "service_time_min": 6.0,
+          "available_capacity": 3,
+          "estimated_wait_min": 0.0,
+          "available_service_slots": 3,
+          "available_swap_batteries": 8
+        },
+        "service_type": "BATTERY_SWAP",
+        "soc_feasible": false,
+        "route_metrics": {
+          "eta_to_station_s": 804.1,
+          "detour_distance_m": 15256.7,
+          "detour_duration_s": 1316.3,
+          "direct_distance_m": 1186.5,
+          "direct_duration_s": 177.4,
+          "traffic_delay_factor": null,
+          "via_total_distance_m": 16443.1,
+          "via_total_duration_s": 1493.7,
+          "distance_to_station_m": 8503.9,
+          "duration_to_station_s": 804.1,
+          "distance_station_to_dest_m": 7939.2,
+          "duration_station_to_dest_s": 689.6,
+          "traffic_adjusted_duration_to_station_s": null
+        },
+        "access_node_id": "N0004732",
+        "station_latitude": 21.022215,
+        "station_longitude": 105.8368905,
+        "network_distance_m": 8503.9
+      },
+      "reference_best_runtime_metrics": null,
+      "reference_best_frozen_metrics": {
+        "event_id": "DE000053",
+        "trip_id": "T0003",
+        "station_id": "S012",
+        "service_type": "BATTERY_SWAP",
+        "split": "validation",
+        "eligible_candidate_count": 1,
+        "ranking_group_size": 1,
+        "is_ltr_group": false,
+        "candidate_eligible": true,
+        "driver_to_station_distance_m": 6826.6,
+        "driver_to_station_eta_min": 8.418,
+        "station_to_destination_distance_m": 7132.1,
+        "station_to_destination_eta_min": 8.278,
+        "direct_driver_to_destination_distance_m": 3935.0,
+        "direct_driver_to_destination_eta_min": 10.673,
+        "detour_distance_m": 10023.7,
+        "detour_time_min": 6.023,
+        "traffic_delay_factor_driver_leg": 1.299,
+        "traffic_delay_factor_station_leg": 1.141,
+        "traffic_adjusted_eta_min": 20.38,
+        "queue_wait_min": 0.0,
+        "service_time_min": 6.0,
+        "total_eta_min": 26.38,
+        "available_capacity": 3,
+        "operating_status": "OPEN",
+        "soc_feasible": true,
+        "ranking_cost_label": 46.8831,
+        "reference_rank": 1,
+        "is_reference_best": true
+      },
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    },
+    {
+      "event_id": "DE000169",
+      "runtime_best": [
+        "S016",
+        "CHARGING"
+      ],
+      "reference_best": null,
+      "causes": [
+        "RECOMMENDATION_PRESENCE_DIFFERS",
+        "RUNTIME_BEST_OUTSIDE_REFERENCE_POOL"
+      ],
+      "runtime_eligible_count": 20,
+      "reference_pool_count": 0,
+      "reference_eligible_count": 0,
+      "runtime_best_metrics": {
+        "station_id": "S016",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 140.8,
+        "eta_to_service_start_s": 140.8,
+        "eta_to_service_complete_s": 1220.8,
+        "final_cost_s": 1220.8,
+        "distance_to_station_m": 1945.0,
+        "traffic_method": "BASE_DURATION_MISSING",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 3
+      },
+      "reference_best_runtime_eligibility": null,
+      "reference_best_runtime_metrics": null,
+      "reference_best_frozen_metrics": null,
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    },
+    {
+      "event_id": "DE000172",
+      "runtime_best": [
+        "S016",
+        "CHARGING"
+      ],
+      "reference_best": null,
+      "causes": [
+        "RECOMMENDATION_PRESENCE_DIFFERS",
+        "RUNTIME_BEST_OUTSIDE_REFERENCE_POOL"
+      ],
+      "runtime_eligible_count": 20,
+      "reference_pool_count": 0,
+      "reference_eligible_count": 0,
+      "runtime_best_metrics": {
+        "station_id": "S016",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 140.8,
+        "eta_to_service_start_s": 140.8,
+        "eta_to_service_complete_s": 1220.8,
+        "final_cost_s": 1220.8,
+        "distance_to_station_m": 1945.0,
+        "traffic_method": "BASE_DURATION_MISSING",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 3
+      },
+      "reference_best_runtime_eligibility": null,
+      "reference_best_runtime_metrics": null,
+      "reference_best_frozen_metrics": null,
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    },
+    {
+      "event_id": "DE000175",
+      "runtime_best": [
+        "S016",
+        "CHARGING"
+      ],
+      "reference_best": null,
+      "causes": [
+        "RECOMMENDATION_PRESENCE_DIFFERS",
+        "RUNTIME_BEST_OUTSIDE_REFERENCE_POOL"
+      ],
+      "runtime_eligible_count": 20,
+      "reference_pool_count": 0,
+      "reference_eligible_count": 0,
+      "runtime_best_metrics": {
+        "station_id": "S016",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 140.8,
+        "eta_to_service_start_s": 140.8,
+        "eta_to_service_complete_s": 1220.8,
+        "final_cost_s": 1220.8,
+        "distance_to_station_m": 1945.0,
+        "traffic_method": "BASE_DURATION_MISSING",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 3
+      },
+      "reference_best_runtime_eligibility": null,
+      "reference_best_runtime_metrics": null,
+      "reference_best_frozen_metrics": null,
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    },
+    {
+      "event_id": "DE000273",
+      "runtime_best": [
+        "S008",
+        "CHARGING"
+      ],
+      "reference_best": [
+        "S022",
+        "CHARGING"
+      ],
+      "causes": [
+        "ORDER_DIFFERS_WITHIN_COMMON_POOL"
+      ],
+      "runtime_eligible_count": 19,
+      "reference_pool_count": 8,
+      "reference_eligible_count": 19,
+      "runtime_best_metrics": {
+        "station_id": "S008",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 1345.0788,
+        "eta_to_service_start_s": 1345.0788,
+        "eta_to_service_complete_s": 2425.0788000000002,
+        "final_cost_s": 2425.0788000000002,
+        "distance_to_station_m": 9065.7,
+        "traffic_method": "ORIGIN_SEGMENT_PROXY",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 1
+      },
+      "reference_best_runtime_eligibility": {
+        "reason": "ELIGIBLE",
+        "eligible": true,
+        "station_id": "S022",
+        "operational": {
+          "queue_length": 0,
+          "state_timestamp": "2026-09-01T00:00:00+00:00",
+          "operating_status": "OPEN",
+          "service_time_min": 18.0,
+          "available_capacity": 3,
+          "estimated_wait_min": 0.0,
+          "available_service_slots": 3,
+          "available_swap_batteries": 0
+        },
+        "service_type": "CHARGING",
+        "soc_feasible": true,
+        "route_metrics": {
+          "eta_to_station_s": 646.3,
+          "detour_distance_m": 15339.1,
+          "detour_duration_s": 1119.0,
+          "direct_distance_m": 1622.0,
+          "direct_duration_s": 194.6,
+          "traffic_delay_factor": null,
+          "via_total_distance_m": 16961.1,
+          "via_total_duration_s": 1313.6,
+          "distance_to_station_m": 8596.3,
+          "duration_to_station_s": 646.3,
+          "distance_station_to_dest_m": 8364.8,
+          "duration_station_to_dest_s": 667.3,
+          "traffic_adjusted_duration_to_station_s": null
+        },
+        "access_node_id": "N0002981",
+        "station_latitude": 20.9748053,
+        "station_longitude": 105.8454813,
+        "network_distance_m": 8596.3
+      },
+      "reference_best_runtime_metrics": {
+        "station_id": "S022",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 1377.9116,
+        "eta_to_service_start_s": 1377.9116,
+        "eta_to_service_complete_s": 2457.9116,
+        "final_cost_s": 2457.9116,
+        "distance_to_station_m": 8596.3,
+        "traffic_method": "ORIGIN_SEGMENT_PROXY",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 3
+      },
+      "reference_best_frozen_metrics": {
+        "event_id": "DE000273",
+        "trip_id": "T0011",
+        "station_id": "S022",
+        "service_type": "CHARGING",
+        "split": "test",
+        "eligible_candidate_count": 19,
+        "ranking_group_size": 8,
+        "is_ltr_group": true,
+        "candidate_eligible": true,
+        "driver_to_station_distance_m": 8090.6,
+        "driver_to_station_eta_min": 11.824,
+        "station_to_destination_distance_m": 8005.5,
+        "station_to_destination_eta_min": 12.074,
+        "direct_driver_to_destination_distance_m": 8364.0,
+        "direct_driver_to_destination_eta_min": 19.619,
+        "detour_distance_m": 7732.1,
+        "detour_time_min": 4.279,
+        "traffic_delay_factor_driver_leg": 2.132,
+        "traffic_delay_factor_station_leg": 1.997,
+        "traffic_adjusted_eta_min": 49.319,
+        "queue_wait_min": 0.0,
+        "service_time_min": 18.0,
+        "total_eta_min": 67.319,
+        "available_capacity": 3,
+        "operating_status": "OPEN",
+        "soc_feasible": true,
+        "ranking_cost_label": 82.8032,
+        "reference_rank": 1,
+        "is_reference_best": true
+      },
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    },
+    {
+      "event_id": "DE000288",
+      "runtime_best": [
+        "S008",
+        "CHARGING"
+      ],
+      "reference_best": [
+        "S022",
+        "CHARGING"
+      ],
+      "causes": [
+        "ORDER_DIFFERS_WITHIN_COMMON_POOL"
+      ],
+      "runtime_eligible_count": 18,
+      "reference_pool_count": 8,
+      "reference_eligible_count": 18,
+      "runtime_best_metrics": {
+        "station_id": "S008",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 1183.1404,
+        "eta_to_service_start_s": 1183.1404,
+        "eta_to_service_complete_s": 2263.1404,
+        "final_cost_s": 2263.1404,
+        "distance_to_station_m": 7943.5,
+        "traffic_method": "ORIGIN_SEGMENT_PROXY",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 2
+      },
+      "reference_best_runtime_eligibility": {
+        "reason": "ELIGIBLE",
+        "eligible": true,
+        "station_id": "S022",
+        "operational": {
+          "queue_length": 0,
+          "state_timestamp": "2026-09-01T00:20:00+00:00",
+          "operating_status": "OPEN",
+          "service_time_min": 18.0,
+          "available_capacity": 5,
+          "estimated_wait_min": 0.0,
+          "available_service_slots": 5,
+          "available_swap_batteries": 0
+        },
+        "service_type": "CHARGING",
+        "soc_feasible": true,
+        "route_metrics": {
+          "eta_to_station_s": 550.9,
+          "detour_distance_m": 14999.8,
+          "detour_duration_s": 1117.5,
+          "direct_distance_m": 839.1,
+          "direct_duration_s": 100.7,
+          "traffic_delay_factor": null,
+          "via_total_distance_m": 15838.9,
+          "via_total_duration_s": 1218.2,
+          "distance_to_station_m": 7474.1,
+          "duration_to_station_s": 550.9,
+          "distance_station_to_dest_m": 8364.8,
+          "duration_station_to_dest_s": 667.3,
+          "traffic_adjusted_duration_to_station_s": null
+        },
+        "access_node_id": "N0002981",
+        "station_latitude": 20.9748053,
+        "station_longitude": 105.8454813,
+        "network_distance_m": 7474.1
+      },
+      "reference_best_runtime_metrics": {
+        "station_id": "S022",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 1216.9381,
+        "eta_to_service_start_s": 1216.9381,
+        "eta_to_service_complete_s": 2296.9381000000003,
+        "final_cost_s": 2296.9381000000003,
+        "distance_to_station_m": 7474.1,
+        "traffic_method": "ORIGIN_SEGMENT_PROXY",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 5
+      },
+      "reference_best_frozen_metrics": {
+        "event_id": "DE000288",
+        "trip_id": "T0011",
+        "station_id": "S022",
+        "service_type": "CHARGING",
+        "split": "test",
+        "eligible_candidate_count": 18,
+        "ranking_group_size": 8,
+        "is_ltr_group": true,
+        "candidate_eligible": true,
+        "driver_to_station_distance_m": 6968.6,
+        "driver_to_station_eta_min": 9.989,
+        "station_to_destination_distance_m": 8005.5,
+        "station_to_destination_eta_min": 12.074,
+        "direct_driver_to_destination_distance_m": 2885.0,
+        "direct_driver_to_destination_eta_min": 6.763,
+        "detour_distance_m": 12089.1,
+        "detour_time_min": 15.3,
+        "traffic_delay_factor_driver_leg": 1.831,
+        "traffic_delay_factor_station_leg": 1.997,
+        "traffic_adjusted_eta_min": 42.402,
+        "queue_wait_min": 0.0,
+        "service_time_min": 18.0,
+        "total_eta_min": 60.402,
+        "available_capacity": 5,
+        "operating_status": "OPEN",
+        "soc_feasible": true,
+        "ranking_cost_label": 86.6548,
+        "reference_rank": 1,
+        "is_reference_best": true
+      },
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    },
+    {
+      "event_id": "DE000291",
+      "runtime_best": [
+        "S008",
+        "CHARGING"
+      ],
+      "reference_best": [
+        "S022",
+        "CHARGING"
+      ],
+      "causes": [
+        "ORDER_DIFFERS_WITHIN_COMMON_POOL"
+      ],
+      "runtime_eligible_count": 18,
+      "reference_pool_count": 8,
+      "reference_eligible_count": 18,
+      "runtime_best_metrics": {
+        "station_id": "S008",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 1135.433,
+        "eta_to_service_start_s": 1135.433,
+        "eta_to_service_complete_s": 2215.433,
+        "final_cost_s": 2215.433,
+        "distance_to_station_m": 7838.7,
+        "traffic_method": "ORIGIN_SEGMENT_PROXY",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 2
+      },
+      "reference_best_runtime_eligibility": {
+        "reason": "ELIGIBLE",
+        "eligible": true,
+        "station_id": "S022",
+        "operational": {
+          "queue_length": 0,
+          "state_timestamp": "2026-09-01T00:20:00+00:00",
+          "operating_status": "OPEN",
+          "service_time_min": 18.0,
+          "available_capacity": 5,
+          "estimated_wait_min": 0.0,
+          "available_service_slots": 5,
+          "available_swap_batteries": 0
+        },
+        "service_type": "CHARGING",
+        "soc_feasible": true,
+        "route_metrics": {
+          "eta_to_station_s": 538.4,
+          "detour_distance_m": 14745.3,
+          "detour_duration_s": 1087.0,
+          "direct_distance_m": 988.8,
+          "direct_duration_s": 118.7,
+          "traffic_delay_factor": null,
+          "via_total_distance_m": 15734.1,
+          "via_total_duration_s": 1205.7,
+          "distance_to_station_m": 7369.3,
+          "duration_to_station_s": 538.4,
+          "distance_station_to_dest_m": 8364.8,
+          "duration_station_to_dest_s": 667.3,
+          "traffic_adjusted_duration_to_station_s": null
+        },
+        "access_node_id": "N0002981",
+        "station_latitude": 20.9748053,
+        "station_longitude": 105.8454813,
+        "network_distance_m": 7369.3
+      },
+      "reference_best_runtime_metrics": {
+        "station_id": "S022",
+        "service_type": "CHARGING",
+        "eta_to_station_s": 1168.8663999999999,
+        "eta_to_service_start_s": 1168.8663999999999,
+        "eta_to_service_complete_s": 2248.8664,
+        "final_cost_s": 2248.8664,
+        "distance_to_station_m": 7369.3,
+        "traffic_method": "ORIGIN_SEGMENT_PROXY",
+        "effective_queue_wait_s": 0.0,
+        "service_duration_s": 1080.0,
+        "available_capacity": 5
+      },
+      "reference_best_frozen_metrics": {
+        "event_id": "DE000291",
+        "trip_id": "T0011",
+        "station_id": "S022",
+        "service_type": "CHARGING",
+        "split": "test",
+        "eligible_candidate_count": 18,
+        "ranking_group_size": 8,
+        "is_ltr_group": true,
+        "candidate_eligible": true,
+        "driver_to_station_distance_m": 6887.9,
+        "driver_to_station_eta_min": 9.828,
+        "station_to_destination_distance_m": 8005.5,
+        "station_to_destination_eta_min": 12.074,
+        "direct_driver_to_destination_distance_m": 1772.0,
+        "direct_driver_to_destination_eta_min": 4.192,
+        "detour_distance_m": 13121.4,
+        "detour_time_min": 17.709,
+        "traffic_delay_factor_driver_leg": 2.374,
+        "traffic_delay_factor_station_leg": 1.997,
+        "traffic_adjusted_eta_min": 47.442,
+        "queue_wait_min": 0.0,
+        "service_time_min": 18.0,
+        "total_eta_min": 65.442,
+        "available_capacity": 5,
+        "operating_status": "OPEN",
+        "soc_feasible": true,
+        "ranking_cost_label": 94.3623,
+        "reference_rank": 1,
+        "is_reference_best": true
+      },
+      "policy_difference": "Runtime minimizes station arrival + queue + service; reference includes onward travel, detour penalties and capacity credit. Route/profile/origin and traffic inputs also differ; this comparison does not isolate their causal contributions."
+    }
+  ],
+  "mismatch_causes": {
+    "REFERENCE_BEST_NOT_RUNTIME_ELIGIBLE": 2,
+    "RECOMMENDATION_PRESENCE_DIFFERS": 17,
+    "RUNTIME_BEST_OUTSIDE_REFERENCE_POOL": 16,
+    "ORDER_DIFFERS_WITHIN_COMMON_POOL": 8
+  },
+  "eligible_count_distribution": {
+    "all_predictions": {
+      "count": 240,
+      "min": 0,
+      "median": 0.0,
+      "max": 20,
+      "histogram": {
+        "0": 130,
+        "1": 24,
+        "2": 6,
+        "3": 5,
+        "4": 17,
+        "5": 1,
+        "6": 3,
+        "7": 1,
+        "18": 7,
+        "19": 27,
+        "20": 19
+      }
+    },
+    "joined_reference_events": {
+      "count": 184,
+      "min": 0,
+      "median": 1.0,
+      "max": 20,
+      "histogram": {
+        "0": 74,
+        "1": 24,
+        "2": 6,
+        "3": 5,
+        "4": 17,
+        "5": 1,
+        "6": 3,
+        "7": 1,
+        "18": 7,
+        "19": 27,
+        "20": 19
+      }
+    }
+  },
+  "label": "INITIAL LOCAL WEEK 5 EVALUATION",
+  "replay_status": "PASS",
+  "replay_counters": {
+    "events_processed": 1952,
+    "trajectories_replayed": 30,
+    "recommendation_requests": 308,
+    "matched_position_uses": 284,
+    "raw_gps_fallbacks": 24,
+    "no_service_short_circuits": 56,
+    "candidate_searches": 308,
+    "ranking_calls": 308,
+    "zero_candidate_results": 148,
+    "candidate_state_conflicts": 0,
+    "one_retry_recoveries": 0,
+    "second_conflict_failures": 0,
+    "recommendation_changes": 14,
+    "unchanged_recommendations": 196,
+    "stale_observations": 30,
+    "no_match_observations": 34,
+    "heading_wrap_normalizations": 1,
+    "graphhopper_failures": 0,
+    "total_errors": 0,
+    "station_snapshots_ingested": 930,
+    "queue_snapshots_ingested": 930,
+    "traffic_snapshots_ingested": 262691
+  },
+  "prediction_modes": {
+    "AUTO": 240,
+    "CHARGING": 30,
+    "ANY": 30,
+    "BATTERY_SWAP": 8
+  },
+  "label_population": "AUTO source event IDs only; explicit intent probes are correctness evidence, excluded from AUTO reference agreement.",
+  "no_service_behavior": {
+    "requests": 56,
+    "empty_recommendations": 56
+  },
+  "observed_services": {
+    "NONE": 148,
+    "CHARGING": 106,
+    "BATTERY_SWAP": 54
+  },
+  "invalid_request_behavior": "Controlled invalid intent is measured by verify_week5, outside source-only replay reference agreement.",
+  "refresh_behavior": {
+    "recommendation_changes": 14,
+    "unchanged_recommendations": 196,
+    "candidate_state_conflicts": 0,
+    "one_retry_recoveries": 0,
+    "second_conflict_failures": 0
+  },
+  "label_leakage_audit": {
+    "status": "PASS",
+    "predictions_written_before_labels": true,
+    "predictions_sha256": "14d8584b1a15ee139926930fb1ecd81fd57c29bba6d4ea82d92c123022a8fe21",
+    "runtime_inputs": "GPS, SOC, trips, vehicles, map nodes, station/queue/traffic source tables; source realtime GPS schedule. No demand/candidate/recommendation/ranking labels."
+  },
+  "limitations": [
+    "Finite representative replay, not full-dataset evaluation.",
+    "Matched Week 1 origins can differ from frozen reference geometry.",
+    "Reference ranking and Week 4 runtime ranking objectives differ; agreement is descriptive, not an invented accuracy acceptance threshold."
+  ],
+  "status": "PASS",
+  "status_meaning": "Evaluation pipeline and leakage audit passed; descriptive agreement has no invented accuracy threshold."
+}
