@@ -59,6 +59,7 @@ runtime/graphhopper/gh-cache*/
 runtime/graphhopper/*.jar
 runtime/migration/
 runtime/week4/
+runtime/week5/
 
 # Local agent memory, preserved outside the product source
 .claude/memory/

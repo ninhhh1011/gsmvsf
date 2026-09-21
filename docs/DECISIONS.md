@@ -304,3 +304,27 @@ production SLA. `api-outage.json` confirms explicit failures without a fallback.
 The final passing test distribution is Week 1: 37, Week 2: 69, Week 3: 71 and
 migration: 62. The integrity manifest records 63 unchanged files. Larger
 performance work remains subject to the project's week boundaries.
+
+
+## ADR-014: Week 5 request-driven refresh and causal evaluation
+
+**Date:** 2026-09-21. **Status:** Approved by the user.
+
+Continuous recommendation means repeated client/replay requests through the existing
+Week 2?4 RecommendationWorkflow. A shared small location bridge uses explicit
+coordinates (including zero), then current valid matched Week 1 state, then accepted
+raw GPS with RAW_GPS_FALLBACK provenance; no location is an explicit error when needed.
+No driver-store rewrite, new lifecycle table, background worker, push or streaming.
+
+Finite historical replay uses isolated operational history/cache and advances only
+state available at event time. Future state and evaluation labels must not enter
+inference. Predictions are persisted before labels are opened for comparison.
+Existing immutable candidate evidence and snapshot provenance remain sufficient.
+
+Week 3 retains eligibility and Week 4 ranking. Its one whole-search conflict retry
+is unchanged. There is no official numeric latency SLA: measure at least three
+warmups and twenty requests per concurrency 1/5/10 where practical, reporting
+median/P90/P95/max, successes/errors and workload/cache/environment as an INITIAL
+LOCAL WEEK 5 PERFORMANCE BASELINE. Slow correct responses do not fail an invented SLA.
+Production optimization, lifecycle/retention, scale, monitoring and deployment
+hardening remain Week 6/future scope.
