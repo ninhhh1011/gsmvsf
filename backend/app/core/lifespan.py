@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         policy = RankingPolicy(missing_queue_wait_s=settings.missing_queue_wait_s,
             station_fresh_s=settings.station_fresh_s, queue_fresh_s=settings.queue_fresh_s,
             traffic_fresh_s=settings.traffic_fresh_s)
-        cache = SnapshotCache(redis, settings.snapshot_cache_ttl_s)
+        cache = SnapshotCache(redis, settings.snapshot_cache_ttl_s, prefix=settings.snapshot_cache_prefix)
         resolver = SnapshotResolver(repository, cache, policy)
         app.state.snapshot_resolver = resolver
         app.state.snapshot_ingestion = IngestionService(repository, cache=cache)

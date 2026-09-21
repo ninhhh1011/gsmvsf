@@ -541,7 +541,7 @@ responses provide reproducible history for the experiment without pretending to
 be product lifecycle state. Adding a production result repository remains a
 separate decision, not a hidden dependency of the minimal plan.
 
-## 17. Authoritative contract resolution ? W5-00 PASS
+## 17. Authoritative contract resolution - W5-00 PASS
 
 The user resolved all contract questions on 2026-09-21 and authorized autonomous
 implementation, focused commits, and the Week 5 tag only after all gates pass.
@@ -576,9 +576,9 @@ and prior-week tests -> git diff review -> fixes/retest -> exit gate. Source lab
 and Dataset bytes remain protected. No task may pass on mocks alone when its gate
 requires real infrastructure. All expected paths below are relative to root.
 
-### Phase 0 ? Contract resolution and baseline
+### Phase 0 - Contract resolution and baseline
 
-#### W5-00 ? Contract resolution and baseline
+#### W5-00 - Contract resolution and baseline
 
 - **TASK ID:** W5-00
 - **OBJECTIVE:** Record the approved scope and preserve the verified baseline.
@@ -594,9 +594,9 @@ requires real infrastructure. All expected paths below are relative to root.
 - **RISKS:** Historical audit text may look current; label it baseline.
 - **FAILURE / FALLBACK BEHAVIOR:** Do not start dependent work if written scope contradicts user instructions.
 
-### Phase 1 ? Fix existing state integration defects
+### Phase 1 - Fix existing state integration defects
 
-#### W5-01 ? Fix existing state integration defects
+#### W5-01 - Fix existing state integration defects
 
 - **TASK ID:** W5-01
 - **OBJECTIVE:** Repair missing accessors and explicit-zero handling.
@@ -612,9 +612,9 @@ requires real infrastructure. All expected paths below are relative to root.
 - **RISKS:** Matched and raw positions have different observation times.
 - **FAILURE / FALLBACK BEHAVIOR:** Explicit location-unavailable or invalid-coordinate error; no accidental 500.
 
-### Phase 2 ? Bridge current location into /recommend
+### Phase 2 - Bridge current location into /recommend
 
-#### W5-02 ? Bridge current location into /recommend
+#### W5-02 - Bridge current location into /recommend
 
 - **TASK ID:** W5-02
 - **OBJECTIVE:** Reuse current state with visible location provenance.
@@ -624,15 +624,15 @@ requires real infrastructure. All expected paths below are relative to root.
 - **DEPENDENCIES:** W5-01.
 - **FILES EXPECTED TO CHANGE:** backend/app/api/v1/ranking.py; backend/app/services/ranking/models.py; backend/app/services/ranking/orchestration.py; backend/app/config.py; backend/app/core/lifespan.py; backend/tests/test_week5_location.py
 - **IMPLEMENTATION APPROACH:** Resolve location before demand; preserve no-service short circuit and invalid-energy rejection; return response provenance and finite timing/count metadata. Keep the existing two-attempt workflow. Add configurable snapshot cache prefix solely for isolated replay. Reject future state at as-of boundary without an age system.
-- **TEST PLAN:** Test explicit zero/ordinary coordinates, matched priority, raw fallback, unavailable, future state, no-demand, invalid intent; run Week 1?4 protected tests.
+- **TEST PLAN:** Test explicit zero/ordinary coordinates, matched priority, raw fallback, unavailable, future state, no-demand, invalid intent; run Weeks 1-4 protected tests.
 - **SELF-REVIEW CHECKLIST:** No extra retry/orchestrator; no hidden matched claim; same ranking costs.
 - **EXIT GATE:** Bridge tests and full protected API/regression checks pass; diff reviewed.
 - **RISKS:** Current state is not a history store; request timestamps can precede it.
 - **FAILURE / FALLBACK BEHAVIOR:** Future/missing current state cannot be invented; request fails explicitly when a location is needed.
 
-### Phase 3 ? Finite causal replay
+### Phase 3 - Finite causal replay
 
-#### W5-03 ? Finite causal replay
+#### W5-03 - Finite causal replay
 
 - **TASK ID:** W5-03
 - **OBJECTIVE:** Replay >=30 representative trajectories through real HTTP APIs where practical.
@@ -648,9 +648,9 @@ requires real infrastructure. All expected paths below are relative to root.
 - **RISKS:** Full-resolution GPS may be expensive; source-event sampling must be disclosed.
 - **FAILURE / FALLBACK BEHAVIOR:** Fail incomplete run on dependency/causality error; preserve partial evidence without PASS.
 
-### Phase 4 ? Recommendation evaluation
+### Phase 4 - Recommendation evaluation
 
-#### W5-04 ? Recommendation evaluation
+#### W5-04 - Recommendation evaluation
 
 - **TASK ID:** W5-04
 - **OBJECTIVE:** Evaluate completed predictions without label leakage.
@@ -666,9 +666,9 @@ requires real infrastructure. All expected paths below are relative to root.
 - **RISKS:** Matching and objective differences produce valid mismatches.
 - **FAILURE / FALLBACK BEHAVIOR:** Report discrepancies; do not tune ranking or alter labels.
 
-### Phase 5 ? Refresh invalidation and reliability
+### Phase 5 - Refresh invalidation and reliability
 
-#### W5-05 ? Refresh invalidation and reliability
+#### W5-05 - Refresh invalidation and reliability
 
 - **TASK ID:** W5-05
 - **OBJECTIVE:** Prove causal refresh and explicit failures using existing boundaries.
@@ -684,9 +684,9 @@ requires real infrastructure. All expected paths below are relative to root.
 - **RISKS:** Controlled change probes are not canonical trajectory outcomes; label separately.
 - **FAILURE / FALLBACK BEHAVIOR:** Retain explicit error result and fail gate for unexpected success.
 
-### Phase 6 ? Local performance baseline
+### Phase 6 - Local performance baseline
 
-#### W5-06 ? Local performance baseline
+#### W5-06 - Local performance baseline
 
 - **TASK ID:** W5-06
 - **OBJECTIVE:** Measure real API path without optimization or invented SLA.
@@ -702,9 +702,9 @@ requires real infrastructure. All expected paths below are relative to root.
 - **RISKS:** Laptop measurements cannot establish production capacity.
 - **FAILURE / FALLBACK BEHAVIOR:** Dependency/correctness failure fails run; slow valid responses alone do not fail an invented SLA.
 
-### Phase 7 ? Regression documentation and freeze
+### Phase 7 - Regression documentation and freeze
 
-#### W5-07 ? Regression documentation and freeze
+#### W5-07 - Regression documentation and freeze
 
 - **TASK ID:** W5-07
 - **OBJECTIVE:** Close only after every user gate passes.
@@ -713,7 +713,7 @@ requires real infrastructure. All expected paths below are relative to root.
 - **OUTPUTS:** docs/WEEK_5.md; acceptance report; focused commits; clean tree; week5-realtime-api-evaluation-complete tag.
 - **DEPENDENCIES:** W5-00 through W5-06 PASS.
 - **FILES EXPECTED TO CHANGE:** docs/WEEK_5.md; docs/reports/week5-acceptance.json; docs/WEEK_5_IMPLEMENTATION_PLAN.md; docs/ARCHITECTURE.md; docs/ACCEPTANCE_CRITERIA.md; AGENTS.md; README.md
-- **IMPLEMENTATION APPROACH:** Run all Week 5/full backend tests, protected validator/hashes, real infrastructure and Week 1?4 smokes. Audit diff from 0983164, deployed source identity, label leakage and artifact hygiene. Stage explicit files only; preserve prior tags; tag only after clean committed gate.
+- **IMPLEMENTATION APPROACH:** Run all Week 5/full backend tests, protected validator/hashes, real infrastructure and Weeks 1-4 smokes. Audit diff from 0983164, deployed source identity, label leakage and artifact hygiene. Stage explicit files only; preserve prior tags; tag only after clean committed gate.
 - **TEST PLAN:** Actual pass/fail/error/skip counts; full SHA-256 Dataset comparison; real API/DB/Redis/GH checks; git diff --check and independent review.
 - **SELF-REVIEW CHECKLIST:** No missing gate, stale evidence, blanket staging, Dataset write, Week 6 implementation or production claim.
 - **EXIT GATE:** All checklist items PASS, documentation complete, commits clean; only then freeze tag.
@@ -725,8 +725,8 @@ requires real infrastructure. All expected paths below are relative to root.
 | Task | Status | Evidence |
 |---|---|---|
 | W5-00 | PASS | User contracts, retained 302/152/22 audit baseline, plan reviewed |
-| W5-01 | PENDING | Not yet executed |
-| W5-02 | PENDING | Not yet executed |
+| W5-01 | PASS | 5 reproductions failed before fix; 54 focused/prior tests passed; shared accessor/None diff reviewed |
+| W5-02 | PASS | 321 full protected tests; independent 19-test review PASS; actual APIs healthy on isolated schemas; location-bridge-tests.xml |
 | W5-03 | PENDING | Not yet executed |
 | W5-04 | PENDING | Not yet executed |
 | W5-05 | PENDING | Not yet executed |

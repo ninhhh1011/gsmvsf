@@ -1,6 +1,7 @@
 """Ranking contracts preserve Week 2/3 models and expose costs in seconds."""
 from datetime import datetime, timezone
 from uuid import uuid4
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -76,6 +77,13 @@ class RecommendationResult(FrozenModel):
     degraded: bool
     degraded_reasons: list[str]
     reason: str
+    location_source: Literal['EXPLICIT', 'MATCHED', 'RAW_GPS_FALLBACK', 'LOCATION_UNAVAILABLE'] | None = None
+    location_timestamp: datetime | None = None
+    timings_ms: dict[str, Nonnegative] = Field(default_factory=dict)
+    workflow_attempts: int = Field(default=1, ge=1, le=2)
+    candidate_search_calls: Count = 0
+    ranking_calls: Count = 0
+    candidate_state_conflicts: Count = 0
 
     _time = field_validator('request_time')(aware_utc)
 

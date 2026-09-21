@@ -26,7 +26,7 @@ from backend.app.services.demand.models import (
     VehicleCapability,
 )
 from backend.app.services.demand.service import get_demand_service
-from backend.app.services.realtime.state import get_state_store
+from backend.app.services.realtime.location import resolve_current_location
 
 router = APIRouter()
 
@@ -187,30 +187,16 @@ async def evaluate_driver_demand_with_realtime_state(
     Evaluate demand for an active driver, automatically incorporating Week 1
     realtime map-matching state (matched coordinates, road segment ID) if active.
     """
-    store = get_state_store()
-    driver_state = store.get(driver_id)
-
-    # Extract location from Week 1 realtime state if not provided in payload
-    lat = payload.raw_latitude
-    lon = payload.raw_longitude
-    seg_id = payload.road_segment_id
-
-    if driver_state:
-        if driver_state.last_matched_state:
-            lat = lat or driver_state.last_matched_state.matched_latitude
-            lon = lon or driver_state.last_matched_state.matched_longitude
-            seg_id = seg_id or driver_state.last_matched_state.road_segment_id
-        elif driver_state.observations:
-            latest_obs = driver_state.observations[-1]
-            lat = lat or latest_obs.latitude
-            lon = lon or latest_obs.longitude
+    request_time = payload.timestamp if payload.timestamp is not None else datetime.utcnow()
+    location = resolve_current_location(driver_id, payload.raw_latitude,
+                                        payload.raw_longitude, payload.road_segment_id, request_time)
 
     # Construct context
     ctx = DemandContext(
         vehicle_id=payload.vehicle_id,
         driver_id=driver_id,
         trip_id=payload.trip_id,
-        timestamp=payload.timestamp or datetime.utcnow(),
+        timestamp=request_time,
         current_soc_pct=payload.current_soc_pct,
         estimated_remaining_range_km=payload.estimated_remaining_range_km,
         remaining_trip_distance_km=payload.remaining_trip_distance_km,
@@ -219,9 +205,9 @@ async def evaluate_driver_demand_with_realtime_state(
         safety_reserve_km=payload.safety_reserve_km,
         consumption_wh_per_km=payload.consumption_wh_per_km,
         minimum_safe_soc_pct=payload.minimum_safe_soc_pct,
-        raw_latitude=lat,
-        raw_longitude=lon,
-        road_segment_id=seg_id,
+        raw_latitude=location.latitude,
+        raw_longitude=location.longitude,
+        road_segment_id=location.road_segment_id,
     )
 
     demand_service = get_demand_service()

@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     # Week 4 project policy; freshness follows Dataset cadence, TTL is cache retention.
     redis_url: str = "redis://127.0.0.1:6379/0"
+    snapshot_cache_prefix: str = Field(default="week4:snapshot:", min_length=1)
     snapshot_cache_ttl_s: int = Field(default=60, ge=1)
     snapshot_cache_timeout_s: float = Field(default=0.2, gt=0, allow_inf_nan=False)
     snapshot_db_timeout_s: float = Field(default=5.0, gt=0, allow_inf_nan=False)

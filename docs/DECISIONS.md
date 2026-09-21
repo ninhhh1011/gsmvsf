@@ -311,7 +311,7 @@ performance work remains subject to the project's week boundaries.
 **Date:** 2026-09-21. **Status:** Approved by the user.
 
 Continuous recommendation means repeated client/replay requests through the existing
-Week 2?4 RecommendationWorkflow. A shared small location bridge uses explicit
+Week 2 API and Week 3-4 RecommendationWorkflow. A shared small location bridge uses explicit
 coordinates (including zero), then current valid matched Week 1 state, then accepted
 raw GPS with RAW_GPS_FALLBACK provenance; no location is an explicit error when needed.
 No driver-store rewrite, new lifecycle table, background worker, push or streaming.

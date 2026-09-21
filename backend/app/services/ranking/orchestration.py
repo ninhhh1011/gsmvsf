@@ -71,12 +71,27 @@ class RecommendationWorkflow:
         await self.repository.save_search(evidence)
         return evidence
 
-    async def recommend(self, request, top_n=None):
+    async def recommend(self, request, top_n=None, metrics=None):
         started = perf_counter()
+        if metrics is None:
+            metrics = {}
+        metrics.update(workflow_attempts=0, candidate_search_calls=0, ranking_calls=0,
+                       candidate_state_conflicts=0, timings_ms={'candidate_search': 0.0, 'ranking': 0.0})
         for attempt in range(2):
-            evidence = await self.search(request)
+            metrics['workflow_attempts'] = attempt + 1
+            metrics['candidate_search_calls'] += 1
+            stage_started = perf_counter()
             try:
-                result = await self.ranking.recommend(evidence, top_n=top_n)
+                evidence = await self.search(request)
+            finally:
+                metrics['timings_ms']['candidate_search'] += (perf_counter() - stage_started) * 1000
+            try:
+                metrics['ranking_calls'] += 1
+                stage_started = perf_counter()
+                try:
+                    result = await self.ranking.recommend(evidence, top_n=top_n)
+                finally:
+                    metrics['timings_ms']['ranking'] += (perf_counter() - stage_started) * 1000
                 logger.info('recommendation_workflow', latency_ms=round((perf_counter()-started)*1000, 3),
                             attempts=attempt+1, candidate_count=evidence.result.total_candidates_evaluated,
                             eligible_count=result.eligible_count, policy=result.policy.name,
@@ -84,6 +99,7 @@ class RecommendationWorkflow:
                             service_type=result.recommended_service_type)
                 return result
             except CandidateStateChanged:
+                metrics['candidate_state_conflicts'] += 1
                 if attempt == 1:
                     raise
                 logger.info('candidate_search_retry', reason='CANDIDATE_STATE_CHANGED', attempt=1)

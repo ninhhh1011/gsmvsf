@@ -19,7 +19,7 @@ from backend.app.services.candidate.models import (
 from backend.app.services.candidate.service import CandidateSearchService
 from backend.app.services.demand.models import DemandContext, EnergyServiceRequest
 from backend.app.services.demand.service import get_demand_service
-from backend.app.services.realtime.state import get_state_store
+from backend.app.services.realtime.location import resolve_current_location
 from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from backend.app.services.routing.engine import (
     RoutingEngineError, RoutingInvalidRequestError, RoutingTimeoutError,
@@ -135,37 +135,24 @@ async def evaluate_and_search(
     2. Evaluate Week 2 demand detection to produce canonical EnergyServiceRequest.
     3. Execute Week 3 candidate search and multi-leg routing.
     """
-    lat = request.raw_latitude
-    lon = request.raw_longitude
-    seg_id = request.road_segment_id
-
-    # If coordinates missing, check Week 1 driver state store
-    if (lat is None or lon is None) and request.driver_id:
-        store = get_state_store()
-        driver_state = store.get(request.driver_id)
-        if driver_state:
-            latest_obs = driver_state.get_latest_observation()
-            if latest_obs:
-                lat = latest_obs.latitude
-                lon = latest_obs.longitude
-            latest_match = driver_state.get_latest_match()
-            if latest_match and latest_match.resolved_segment_id:
-                seg_id = latest_match.resolved_segment_id
+    request_time = request.timestamp if request.timestamp is not None else datetime.utcnow()
+    location = resolve_current_location(request.driver_id, request.raw_latitude,
+                                        request.raw_longitude, request.road_segment_id, request_time)
 
     demand_ctx = DemandContext(
         vehicle_id=request.vehicle_id,
         driver_id=request.driver_id,
         trip_id=request.trip_id,
-        timestamp=request.timestamp or datetime.utcnow(),
+        timestamp=request_time,
         current_soc_pct=request.current_soc_pct,
         estimated_remaining_range_km=request.estimated_remaining_range_km,
         remaining_trip_distance_km=request.remaining_trip_distance_km,
         distance_travelled_km=request.distance_travelled_km,
         planned_trip_distance_km=request.planned_trip_distance_km,
         safety_reserve_km=request.safety_reserve_km,
-        raw_latitude=lat,
-        raw_longitude=lon,
-        road_segment_id=seg_id,
+        raw_latitude=location.latitude,
+        raw_longitude=location.longitude,
+        road_segment_id=location.road_segment_id,
     )
 
     demand_svc = get_demand_service()

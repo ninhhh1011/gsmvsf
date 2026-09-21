@@ -1,6 +1,7 @@
 """Synchronous Week 4 APIs; operational writes use a separate internal token."""
 import hmac
 from datetime import datetime
+from time import perf_counter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -10,6 +11,7 @@ from backend.app.services.candidate.models import CandidateSearchRequest
 from backend.app.services.demand.models import DemandContext, RequestedServiceType
 from backend.app.services.demand.service import get_demand_service
 from backend.app.services.ranking.models import CandidateSearchEvidence, RecommendationResult
+from backend.app.services.realtime.location import resolve_current_location
 from backend.app.services.snapshots.models import (
     FrozenModel, QueueSnapshot, StateError, StationStateSnapshot, TrafficSnapshot, aware_utc,
 )
@@ -100,15 +102,33 @@ async def rank(request: RankRequest, workflow=Depends(get_workflow)):
 
 @router.post('/recommend', response_model=RecommendationResult)
 async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
+    started = perf_counter()
     try:
+        context = request.context
+        location = resolve_current_location(context.driver_id, context.raw_latitude,
+            context.raw_longitude, context.road_segment_id, context.timestamp)
+        context = context.model_copy(update={'raw_latitude': location.latitude,
+            'raw_longitude': location.longitude, 'road_segment_id': location.road_segment_id})
+        location_ms = (perf_counter() - started) * 1000
+        demand_started = perf_counter()
         demand = get_demand_service()
-        energy = (demand.process_driver_request(request.context, request.requested_service)
-                  if request.requested_service else demand.evaluate_auto_demand(request.context))
+        energy = (demand.process_driver_request(context, request.requested_service)
+                  if request.requested_service is not None else demand.evaluate_auto_demand(context))
+        demand_ms = (perf_counter() - demand_started) * 1000
+        # Invalid energy requests retain Week 4 validation; no-service needs no position.
+        if (energy.need_service and energy.request_valid and energy.reason_code not in
+                ('MISSING_DATA', 'INVALID_STATE', 'STALE_STATE') and location.latitude is None):
+            raise StateError('No current location available at request time', 'LOCATION_UNAVAILABLE', 422)
         search = CandidateSearchRequest(energy_request=energy,
             destination_latitude=request.destination_latitude,
             destination_longitude=request.destination_longitude,
             destination_node_id=request.destination_node_id)
-        return await workflow.recommend(search, top_n=request.top_n)
+        metrics = {}
+        result = await workflow.recommend(search, top_n=request.top_n, metrics=metrics)
+        metrics['timings_ms'].update(location_resolution=location_ms, demand=demand_ms,
+                                    total=(perf_counter() - started) * 1000)
+        return result.model_copy(update=metrics | {'location_source': location.source,
+                                                 'location_timestamp': location.timestamp})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
