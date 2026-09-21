@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir "uvicorn[standard]>=0.32.0" \
     "psycopg2-binary>=2.9.0" \
     "pandas>=2.0.0" \
     "asyncpg>=0.30.0" \
+    "redis>=5.2.0,<9" \
     "sqlalchemy>=2.0.0"
 
 COPY backend/app/ ./backend/app/

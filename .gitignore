@@ -58,6 +58,7 @@ data/external/vinfast_stations/
 runtime/graphhopper/gh-cache*/
 runtime/graphhopper/*.jar
 runtime/migration/
+runtime/week4/
 
 # Local agent memory, preserved outside the product source
 .claude/memory/

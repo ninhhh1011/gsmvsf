@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 class Settings(BaseSettings):
@@ -31,6 +32,17 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation"
     database_url_sync: str = "postgresql://postgres:postgres@db:5432/ev_recommendation"
+
+    # Week 4 project policy; freshness follows Dataset cadence, TTL is cache retention.
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    snapshot_cache_ttl_s: int = Field(default=60, ge=1)
+    snapshot_cache_timeout_s: float = Field(default=0.2, gt=0, allow_inf_nan=False)
+    snapshot_db_timeout_s: float = Field(default=5.0, gt=0, allow_inf_nan=False)
+    station_fresh_s: float = Field(default=600, ge=0, allow_inf_nan=False)
+    queue_fresh_s: float = Field(default=600, ge=0, allow_inf_nan=False)
+    traffic_fresh_s: float = Field(default=1800, ge=0, allow_inf_nan=False)
+    missing_queue_wait_s: float = Field(default=5400, ge=0, allow_inf_nan=False)
+    snapshot_ingestion_token: str = ""
 
     # Mapping
     mapping_dir: Path = Path("runtime/map_mapping")
