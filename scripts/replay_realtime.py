@@ -25,7 +25,7 @@ from pathlib import Path
 import httpx
 
 # Configuration
-API_BASE = "http://localhost:8000/api/v1"
+API_BASE = "http://127.0.0.1:8000/api/v1"
 DATASET_PATH = Path("dataset_v1")
 GPS_FILE = DATASET_PATH / "gps" / "gps_observations.csv.gz"
 
@@ -122,6 +122,9 @@ async def replay_trajectory(
     except Exception:
         pass
 
+    with open(DATASET_PATH / "trips/trips.csv", encoding="utf-8") as f:
+        trips = {row["trip_id"]: row for row in csv.DictReader(f)}
+    vehicle_id = trips[observations[0].trip_id]["vehicle_id"]
     start_wall_time = time.time()
     prev_obs_time = None
 
@@ -135,6 +138,8 @@ async def replay_trajectory(
 
         # Build request
         request = {
+            "vehicle_id": vehicle_id,
+            "observation_id": obs.observation_id,
             "timestamp": obs.timestamp.isoformat(),
             "latitude": obs.latitude,
             "longitude": obs.longitude,
@@ -151,6 +156,7 @@ async def replay_trajectory(
                 timeout=30.0,
             )
 
+            response.raise_for_status()
             if response.status_code == 200:
                 data = response.json()
                 status = data.get("status", "UNKNOWN")
@@ -177,8 +183,8 @@ async def replay_trajectory(
                 if trigger:
                     result.trigger_reasons[trigger] = result.trigger_reasons.get(trigger, 0) + 1
 
-        except Exception as e:
-            print(f"  Error: {e}")
+        except Exception:
+            raise
 
         prev_obs_time = obs.timestamp
 
@@ -248,7 +254,7 @@ async def main():
     print(f"Total Match calls: {total_matches}")
     print(f"Match success: {total_success} ({100*total_success/total_matches if total_matches else 0:.1f}%)")
     print(f"Match null: {total_null} ({100*total_null/total_matches if total_matches else 0:.1f}%)")
-    print(f"Calls/driver/min: {total_matches/len(results)/10:.1f} (estimated)")
+
 
     if all_latencies:
         all_latencies.sort()
@@ -267,7 +273,7 @@ async def main():
         print(f"  {s}: {c} ({100*c/total_obs:.1f}%)")
 
     # Save results
-    output_file = Path("runtime/replay_results.json")
+    output_file = Path("runtime/migration/replay_results.json")
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump({

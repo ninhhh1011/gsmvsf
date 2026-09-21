@@ -1,73 +1,24 @@
-.PHONY: help setup validate-data prepare-map up down logs test smoke clean prepare-external-gps validate-external-gps
-
-help:
-	@echo "EV Recommendation API - Available commands:"
-	@echo "  make setup                  - Install Python dependencies"
-	@echo "  make validate-data          - Run Dataset V1 validation"
-	@echo "  make prepare-map           - Preprocess OSRM map from baseline PBF"
-	@echo "  make up                    - Start all services (Docker Compose)"
-	@echo "  make down                  - Stop all services"
-	@echo "  make logs                  - View service logs"
-	@echo "  make test                  - Run pytest tests"
-	@echo "  make smoke                 - Run OSRM smoke tests with Dataset V1 GPS"
-	@echo "  make prepare-external-gps  - Preprocess external GPS dataset"
-	@echo "  make validate-external-gps - Validate external GPS processed data"
-	@echo "  make clean                 - Remove generated files"
-
+.PHONY: setup validate-data prepare-map up down logs test smoke prepare-external-gps validate-external-gps
 setup:
-	@echo "Installing Python dependencies..."
-	cd backend && pip install -e ".[dev]" -q
-	@echo "Setup complete."
-
+	python -m pip install -e "backend[dev]"
 validate-data:
-	@echo "Running Dataset V1 validation..."
-	python3 dataset_v1/validation/validate_dataset.py
-
+	python scripts/validate_frozen_dataset.py
 prepare-map:
-	@echo "Preprocessing OSRM map via Docker..."
-	mkdir -p runtime/osrm
-	cp dataset_v1/map/raw/hanoi-patched.osm.pbf runtime/osrm/
-	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-extract -p /usr/local/share/osrm/profiles/car.lua /data/hanoi-patched.osm.pbf
-	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-partition /data/hanoi-patched.osrm
-	-docker run --rm -v "//e/build6week/runtime/osrm:/data" osrm/osrm-backend osrm-customize /data/hanoi-patched.osrm
-	rm -f runtime/osrm/hanoi-patched.osm.pbf
-	@echo "OSRM preprocessing complete."
-
+	docker compose up -d --build graphhopper
 up:
-	@echo "Starting services..."
-	docker compose up -d
-	@echo "Waiting for services to be healthy..."
-	docker compose ps
-
+	docker compose up -d --build
+load-roads:
+	python scripts/load_road_network.py
 down:
 	docker compose down
-
 logs:
 	docker compose logs -f
-
 test:
-	cd backend && python3 -m pytest tests/ -v
-
+	python -m pytest backend/tests -q --basetemp=runtime/migration/pytest
 smoke:
-	@echo "Running OSRM smoke tests with Dataset V1 GPS..."
-	@docker run --rm --network build6week_default -v "//e/build6week/dataset_v1:/dataset_v1:ro" python:3.11-slim sh -c \
-		"pip install httpx -q 2>/dev/null; python3 - << 'EOF'; echo; echo 'SMOKE TEST COMPLETE'" 2>&1 || \
-	docker exec ev_api python3 -c "import httpx; print('OSRM reachable')"
-	python3 scripts/smoke_test.py 2>&1 || \
-		@echo "Smoke test requires running services: docker compose up"
-
-clean:
-	@echo "Cleaning generated files..."
-	rm -rf runtime/osrm/*.osrm runtime/osrm/*.osrm.* runtime/osrm/*.pbf
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete 2>/dev/null || true
-
+	python scripts/smoke_test.py
+	python scripts/smoke_test_week3.py
 prepare-external-gps:
-	@echo "Preprocessing external GPS dataset..."
 	python scripts/prepare_external_gps.py
-	@echo "External GPS preprocessing complete."
-
 validate-external-gps:
-	@echo "Validating external GPS processed data..."
 	python scripts/validate_external_gps.py
-	@echo "External GPS validation complete."

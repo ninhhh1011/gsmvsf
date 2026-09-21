@@ -1,197 +1,79 @@
-#!/usr/bin/env python3
-"""
-OSRM Smoke Test Script
-
-Tests OSRM with Dataset V1 GPS observations.
-Uses hanoi-patched.osm.pbf (primary map).
-
-Usage:
-    python scripts/smoke_test.py
-    make smoke
-
-Note: On Windows with Docker Desktop, run via Docker network:
-    docker run --rm --network build6week_default \\
-        -v "$(pwd)/dataset_v1:/dataset_v1:ro" python:3.11-slim sh -c \\
-        "pip install httpx -q && python3 /dataset_v1/../scripts/smoke_test.py"
-"""
+"""Test the deployed API, including real profiles or an explicitly unavailable engine."""
+import argparse
+import asyncio
+import csv
 import gzip
-import json
-import sys
-from pathlib import Path
-
+import statistics
+import time
 import httpx
-
-DATASET_PATH = Path("dataset_v1")
-OSRM_URL = "http://localhost:5000"
+from verify_graphhopper import dataset_cases, save_evidence
 
 
-def load_gps_observations():
-    """Load GPS observations from Dataset V1."""
-    gps_file = DATASET_PATH / "gps" / "gps_observations.csv.gz"
-    observations = []
-    with gzip.open(gps_file, "rt", encoding="utf-8") as f:
-        header = f.readline().strip().split(",")
-        for line in f:
-            parts = line.strip().split(",")
-            if len(parts) >= 6:
-                obs = dict(zip(header, parts))
-                observations.append(obs)
-    return observations
+async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--api-base", default="http://127.0.0.1:8000")
+    parser.add_argument("--expect-unavailable", action="store_true")
+    parser.add_argument("--benchmark", action="store_true")
+    args = parser.parse_args()
+    down = args.expect_unavailable
+    cases = dataset_cases()
+    evidence = {"api_base": args.api_base, "expect_unavailable": down, "checks": {}}
+    with gzip.open("dataset_v1/gps/gps_observations.csv.gz", "rt", encoding="utf-8") as handle:
+        gps = list(csv.DictReader(handle))
+    async with httpx.AsyncClient(base_url=args.api_base, timeout=120) as client:
+        for endpoint, code in [("/health", 200), ("/readiness", 503 if down else 200)]:
+            response = await client.get(endpoint)
+            assert response.status_code == code, response.text
+            evidence["checks"][endpoint] = {"http": code, "body": response.json()}
+        for group in ("car", "fixed_bike", "both"):
+            request = next(request for name, request in cases if name == group)
+            response = await client.post("/api/v1/candidate-search", json=request.model_dump(mode="json"))
+            assert response.status_code == (503 if down else 200), response.text
+            evidence["checks"]["candidate_" + group] = {"http": response.status_code, "body": response.json()}
+            route = {"origin": {"latitude": 21.028, "longitude": 105.854},
+                     "destination": {"latitude": 21.036, "longitude": 105.830},
+                     "profile": {"vehicle_category": "EV_CAR" if group == "car" else "EV_MOTORBIKE"}}
+            response = await client.post("/api/v1/route", json=route)
+            assert response.status_code == (503 if down else 200), response.text
+            evidence["checks"]["route_" + group] = {"http": response.status_code, "body": response.json()}
+            rows = [row for row in gps if row["trip_id"] == request.energy_request.trip_id][:20]
+            match = {"trip_id": request.energy_request.trip_id, "trajectory_id": rows[0]["trajectory_id"], "observations": rows}
+            started = time.perf_counter()
+            response = await client.post("/api/v1/map-match", json=match)
+            assert response.status_code == (503 if down else 200), response.text
+            evidence["checks"]["match_" + group] = {"http": response.status_code, "latency_ms": 1000 * (time.perf_counter() - started), "body": response.json()}
+            driver = "smoke_" + group
+            await client.delete("/api/v1/drivers/" + driver + "/location")
+            statuses = []
+            for row in rows:
+                body = {key: row[key] for key in ("timestamp", "observation_id", "latitude", "longitude", "speed_kmh", "heading_deg")}
+                body["vehicle_id"] = request.energy_request.vehicle_id
+                response = await client.post("/api/v1/drivers/" + driver + "/location", json=body)
+                assert response.status_code == 200, response.text
+                statuses.append(response.json())
+            assert any(row["status"] == ("ENGINE_UNAVAILABLE" if down else "MATCHED") for row in statuses), statuses
+            evidence["checks"]["realtime_" + group] = statuses
+        if args.benchmark and not down:
+            evidence["benchmark"] = {"label": "INITIAL LOCAL GRAPHHOPPER PERFORMANCE BASELINE", "measurement": "deployed HTTP API including serialization and station search"}
+            for concurrency in (1, 5, 10):
+                semaphore = asyncio.Semaphore(concurrency)
 
+                async def run_case(case):
+                    async with semaphore:
+                        start = time.perf_counter()
+                        response = await client.post("/api/v1/candidate-search", json=case[1].model_dump(mode="json"))
+                        assert response.status_code == 200, response.text
+                        return 1000 * (time.perf_counter() - start)
 
-async def test_osrm_nearest(lat: float, lon: float) -> dict:
-    """Test OSRM nearest service."""
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{OSRM_URL}/nearest/v1/driving/{lon},{lat}")
-            return {"status": response.status_code, "data": response.json()}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-async def test_osrm_route(lat1: float, lon1: float, lat2: float, lon2: float) -> dict:
-    """Test OSRM route service."""
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                f"{OSRM_URL}/route/v1/driving/{lon1},{lat1};{lon2},{lat2}",
-                params={"overview": "simplified"}
-            )
-            return {"status": response.status_code, "data": response.json()}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-async def test_osrm_match(gps_points: list[dict]) -> dict:
-    """Test OSRM match service with a sequence of GPS points.
-
-    Note: gps_precision param causes 400 errors with this OSRM version.
-    """
-    try:
-        coords = ";".join(f'{p["longitude"]},{p["latitude"]}' for p in gps_points)
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(
-                f"{OSRM_URL}/match/v1/driving/{coords}",
-                params={"overview": "simplified", "steps": "false"}
-            )
-            return {"status": response.status_code, "data": response.json()}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-async def run_smoke_tests():
-    """Run all smoke tests."""
-    print("=" * 60)
-    print("OSRM SMOKE TEST - Dataset V1 GPS")
-    print("=" * 60)
-
-    # Check OSRM availability
-    print(f"\n[1] Checking OSRM at {OSRM_URL}...")
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(f"{OSRM_URL}/route/v1/driving/105.8,21.0;105.85,21.05")
-            print(f"    OSRM reachable: HTTP {r.status_code}")
-    except Exception as e:
-        print(f"    ERROR: OSRM not reachable: {e}")
-        print("    Start OSRM with: docker compose up osrm")
-        return
-
-    # Load data
-    print("\n[2] Loading Dataset V1 GPS observations...")
-    gps_obs = load_gps_observations()
-    print(f"    Total GPS observations: {len(gps_obs):,}")
-
-    # Select T0001 trip observations
-    t0001_obs = [o for o in gps_obs if o.get("trip_id") == "T0001"]
-    if not t0001_obs:
-        trip_counts = {}
-        for obs in gps_obs:
-            trip_id = obs.get("trip_id", "")
-            trip_counts[trip_id] = trip_counts.get(trip_id, 0) + 1
-        sorted_trips = sorted(trip_counts.items(), key=lambda x: x[1], reverse=True)
-        if sorted_trips:
-            best_trip = sorted_trips[0][0]
-            sample_obs = [o for o in gps_obs if o.get("trip_id") == best_trip][:20]
-        else:
-            sample_obs = gps_obs[:20]
-    else:
-        sample_obs = t0001_obs[:20]
-
-    print(f"    Sample observations: {len(sample_obs)}")
-    if sample_obs:
-        first = sample_obs[0]
-        print(f"    First point: lat={first.get('latitude')}, lon={first.get('longitude')}")
-
-    # Test nearest
-    print("\n[3] Testing OSRM nearest...")
-    if sample_obs:
-        first = sample_obs[0]
-        lat, lon = float(first["latitude"]), float(first["longitude"])
-        result = await test_osrm_nearest(lat, lon)
-        if "error" in result:
-            print(f"    ERROR: {result['error']}")
-        else:
-            print(f"    Status: HTTP {result['status']}")
-            if result["status"] == 200:
-                data = result["data"]
-                if data.get("code") == "Ok":
-                    wp = data["waypoints"][0]
-                    print(f"    MATCHED: lat={wp['location'][1]:.6f}, lon={wp['location'][0]:.6f}")
-                    print(f"    distance to road: {wp['distance']:.3f}m")
-                    print(f"    nodes: {wp['nodes']}")
-                else:
-                    print(f"    Response: {json.dumps(data)}")
-
-    # Test route
-    print("\n[4] Testing OSRM route...")
-    if len(sample_obs) >= 2:
-        p1, p2 = sample_obs[0], sample_obs[len(sample_obs) // 2]
-        lat1, lon1 = float(p1["latitude"]), float(p1["longitude"])
-        lat2, lon2 = float(p2["latitude"]), float(p2["longitude"])
-        result = await test_osrm_route(lat1, lon1, lat2, lon2)
-        if "error" in result:
-            print(f"    ERROR: {result['error']}")
-        else:
-            print(f"    Status: HTTP {result['status']}")
-            if result["status"] == 200:
-                data = result["data"]
-                if data.get("code") == "Ok":
-                    route = data["routes"][0]
-                    print(f"    ROUTE: distance={route['distance']:.1f}m, duration={route['duration']:.1f}s")
-                else:
-                    print(f"    Response: {json.dumps(data)}")
-
-    # Test map matching
-    print("\n[5] Testing OSRM Match (map matching)...")
-    if len(sample_obs) >= 3:
-        match_points = sample_obs[:3]  # Use 3 points for reliable matching
-        result = await test_osrm_match(match_points)
-        if "error" in result:
-            print(f"    ERROR: {result['error']}")
-        else:
-            print(f"    Status: HTTP {result['status']}")
-            if result["status"] == 200:
-                data = result["data"]
-                if data.get("code") == "Ok":
-                    tracepoints = data.get("tracepoints") or []
-                    matched = [tp for tp in tracepoints if tp is not None]
-                    m = data["matchings"][0]
-                    print(f"    trajectory_id: {match_points[0]['trajectory_id']}")
-                    print(f"    input GPS points: {len(match_points)}")
-                    print(f"    matched tracepoints: {len(matched)}")
-                    print(f"    unmatched/null tracepoints: {len(tracepoints) - len(matched)}")
-                    print(f"    matching code: {data.get('code')}")
-                    print(f"    matching confidence: {m.get('confidence', 'N/A')}")
-                    print(f"    total matched distance: {m.get('distance', 'N/A')}m")
-                    print(f"    total matched duration: {m.get('duration', 'N/A')}s")
-                else:
-                    print(f"    Response: {json.dumps(data)}")
-
-    print("\n" + "=" * 60)
-    print("SMOKE TEST COMPLETE")
-    print("=" * 60)
+                start = time.perf_counter()
+                timings = sorted(await asyncio.gather(*(run_case(case) for case in cases)))
+                wall = time.perf_counter() - start
+                evidence["benchmark"][str(concurrency)] = {"requests": len(timings), "median_ms": statistics.median(timings), "p90_ms": timings[17], "p95_ms": timings[18], "max_ms": max(timings), "throughput_per_s": len(timings) / wall, "wall_s": wall}
+                print(concurrency, evidence["benchmark"][str(concurrency)], flush=True)
+    evidence["status"] = "PASS"
+    save_evidence("api-outage.json" if down else "api-smoke.json", evidence)
+    print("PASS: deployed API " + ("explicit outage" if down else "real profiles, matching, realtime, candidates"))
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(run_smoke_tests())
+    asyncio.run(main())

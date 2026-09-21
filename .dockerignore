@@ -1,0 +1,6 @@
+.git
+.claude
+dataset_v1
+runtime
+**/__pycache__
+.pytest_cache
