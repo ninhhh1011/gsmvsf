@@ -37,15 +37,11 @@ from backend.app.services.candidate.models import (
     EvaluatedCandidate,
 )
 from backend.app.services.candidate.station_catalog import StationCatalog, station_catalog
-from backend.app.services.demand.capability import (
-    CANONICAL_MODEL_CATALOG,
-    get_capability_resolver,
-)
-from backend.app.services.demand.models import EnergyServiceRequest, RequestSource
-from backend.app.services.routing.engine import RoutingEngine
+from backend.app.services.demand.capability import get_capability_resolver
+from backend.app.services.demand.models import EnergyServiceRequest, RequestSource, VehicleCategory
+from backend.app.services.routing.engine import RoutingEngine, RoutingInvalidRequestError
 from backend.app.services.routing.models import Position, VehicleRoutingProfile
 from backend.app.services.routing.multi_leg import MultiLegRouteCalculator
-from backend.app.services.routing.osrm_routing_adapter import OSRMRoutingAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +53,10 @@ class CandidateSearchService:
 
     def __init__(
         self,
-        routing_engine: Optional[RoutingEngine] = None,
+        routing_engine: RoutingEngine,
         catalog: Optional[StationCatalog] = None,
     ):
-        self.routing_engine = routing_engine or OSRMRoutingAdapter()
+        self.routing_engine = routing_engine
         self.catalog = catalog or station_catalog
         self.route_calculator = MultiLegRouteCalculator(self.routing_engine)
 
@@ -110,16 +106,19 @@ class CandidateSearchService:
                 candidates=[],
                 details="Missing driver location coordinates in request",
             )
-        driver_pos = Position(latitude=esr.latitude, longitude=esr.longitude, node_id=esr.road_segment_id)
+        try:
+            driver_pos = Position(latitude=esr.latitude, longitude=esr.longitude, node_id=esr.road_segment_id)
 
-        # 4. Establish destination position (if provided)
-        dest_pos: Optional[Position] = None
-        if request.destination_latitude is not None and request.destination_longitude is not None:
-            dest_pos = Position(
-                latitude=request.destination_latitude,
-                longitude=request.destination_longitude,
-                node_id=request.destination_node_id,
-            )
+            # 4. Establish destination position (if provided)
+            dest_pos: Optional[Position] = None
+            if request.destination_latitude is not None and request.destination_longitude is not None:
+                dest_pos = Position(
+                    latitude=request.destination_latitude,
+                    longitude=request.destination_longitude,
+                    node_id=request.destination_node_id,
+                )
+        except ValueError as exc:
+            raise RoutingInvalidRequestError(f"Invalid route coordinates: {exc}") from exc
 
         # 5. Resolve vehicle capability
         vehicle_cap = None
@@ -135,10 +134,15 @@ class CandidateSearchService:
             except Exception:
                 vehicle_cap = None
 
+        category = vehicle_cap.vehicle_category.value if vehicle_cap else esr.vehicle_type
+        if esr.vehicle_type and vehicle_cap and esr.vehicle_type != category:
+            raise RoutingInvalidRequestError("Vehicle category conflicts with resolved vehicle capability")
+        if category not in {item.value for item in VehicleCategory}:
+            raise RoutingInvalidRequestError("A supported vehicle category is required for routing")
         vehicle_profile = VehicleRoutingProfile(
             vehicle_id=esr.vehicle_id,
             vehicle_model=esr.vehicle_model,
-            vehicle_category=esr.vehicle_type,
+            vehicle_category=category,
         )
 
         # 6. Load all stations and expand candidate pairs
@@ -156,6 +160,7 @@ class CandidateSearchService:
 
         # 8. Evaluate all candidate pairs
         evaluated_candidates: list[EvaluatedCandidate] = []
+        station_routes = {}
 
         for station, service_type in candidate_pairs:
             station_pos = Position(
@@ -179,13 +184,15 @@ class CandidateSearchService:
             )
 
             # Route computation
-            is_reach, route_metrics, leg1_res = await self.route_calculator.compute_station_metrics(
-                driver_pos=driver_pos,
-                station_pos=station_pos,
-                destination_pos=dest_pos,
-                cached_direct_route=cached_direct,
-                profile=vehicle_profile,
-            )
+            if station.station_id not in station_routes:
+                station_routes[station.station_id] = await self.route_calculator.compute_station_metrics(
+                    driver_pos=driver_pos,
+                    station_pos=station_pos,
+                    destination_pos=dest_pos,
+                    cached_direct_route=cached_direct,
+                    profile=vehicle_profile,
+                )
+            is_reach, route_metrics, _ = station_routes[station.station_id]
 
             net_dist_m = route_metrics.distance_to_station_m if (is_reach and route_metrics) else None
 

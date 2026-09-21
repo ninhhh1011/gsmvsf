@@ -14,9 +14,12 @@ RUN pip install --no-cache-dir "uvicorn[standard]>=0.32.0" \
     "pydantic-settings>=2.6.0" \
     "httpx>=0.27.0" \
     "structlog>=24.0.0" \
-    "psycopg2-binary>=2.9.0"
+    "psycopg2-binary>=2.9.0" \
+    "pandas>=2.0.0" \
+    "asyncpg>=0.30.0" \
+    "sqlalchemy>=2.0.0"
 
-COPY backend/ ./backend/
+COPY backend/app/ ./backend/app/
 
 ENV PYTHONPATH=/app
 ENV LOG_LEVEL=INFO

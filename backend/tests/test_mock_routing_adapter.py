@@ -5,7 +5,7 @@ Tests for MockRoutingAdapter and RoutingEngine protocol.
 import pytest
 
 from backend.app.services.routing.engine import RoutingEngine
-from backend.app.services.routing.mock_adapter import MockRoutingAdapter
+from backend.tests.mock_routing_adapter import MockRoutingAdapter
 from backend.app.services.routing.models import (
     Position,
     RouteRequest,

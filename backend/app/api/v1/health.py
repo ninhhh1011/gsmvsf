@@ -1,40 +1,39 @@
-"""Health check endpoints."""
+"""Liveness and readiness of the sole production engine and segment database."""
+import asyncio
+from contextlib import closing
 import httpx
-from fastapi import APIRouter, HTTPException, status
-
+import psycopg2
+from fastapi import APIRouter, HTTPException
 from backend.app.config import settings
+from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 
 router = APIRouter()
 
+def _database_ready():
+    try:
+        with closing(psycopg2.connect(settings.database_url_sync, connect_timeout=3)) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT EXISTS(SELECT 1 FROM road_segments LIMIT 1)")
+                return cur.fetchone()[0]
+    except psycopg2.Error:
+        return False
+
+async def dependencies_ready():
+    async with httpx.AsyncClient(timeout=5) as client:
+        routing, database = await asyncio.gather(
+            GraphHopperRoutingAdapter(client=client, timeout_seconds=5).is_healthy(),
+            asyncio.to_thread(_database_ready),
+        )
+    return {"graphhopper": routing, "postgis": database}
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    """Basic health check. Returns 200 if the application is running."""
+async def health():
     return {"status": "healthy"}
 
-
 @router.get("/ready")
-async def ready() -> dict[str, str | bool]:
-    """
-    Readiness check. Verifies OSRM is reachable.
-    Database readiness is checked in later milestones.
-    """
-    osrm_ready = False
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{settings.osrm_base_url}/route/v1/driving/0,0")
-            osrm_ready = response.status_code in (200, 400, 422)
-    except Exception:
-        pass
-
-    if not osrm_ready:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"osrm": "not reachable"},
-        )
-
-    return {
-        "status": "ready",
-        "osrm": osrm_ready,
-        "dataset_path": str(settings.dataset_path),
-    }
+@router.get("/readiness")
+async def ready():
+    dependencies = await dependencies_ready()
+    if not all(dependencies.values()):
+        raise HTTPException(503, detail={"status": "not_ready", **dependencies})
+    return {"status": "ready", **dependencies}

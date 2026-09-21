@@ -16,7 +16,7 @@ import logging
 from typing import Optional
 
 from backend.app.services.candidate.models import CandidateRouteMetrics
-from backend.app.services.routing.engine import RoutingEngine
+from backend.app.services.routing.engine import RoutingEngine, raise_for_routing_failure
 from backend.app.services.routing.models import (
     Position,
     RouteRequest,
@@ -50,7 +50,8 @@ class MultiLegRouteCalculator:
 
         req = RouteRequest(origin=driver_pos, destination=destination_pos, profile=profile)
         res = await self.engine.route(req)
-        return res if res.status == RouteStatus.SUCCESS else None
+        raise_for_routing_failure(res)
+        return res
 
     async def compute_station_metrics(
         self,
@@ -68,6 +69,7 @@ class MultiLegRouteCalculator:
         # Leg 1: Driver -> Station
         req_leg1 = RouteRequest(origin=driver_pos, destination=station_pos, profile=profile)
         res_leg1 = await self.engine.route(req_leg1)
+        raise_for_routing_failure(res_leg1)
 
         if res_leg1.status != RouteStatus.SUCCESS:
             # Station unreachable from current driver position
@@ -88,24 +90,28 @@ class MultiLegRouteCalculator:
         # Leg 2: Station -> Destination
         req_leg2 = RouteRequest(origin=station_pos, destination=destination_pos, profile=profile)
         res_leg2 = await self.engine.route(req_leg2)
+        raise_for_routing_failure(res_leg2)
 
         # Direct route (use cached if provided)
         res_direct = cached_direct_route
         if res_direct is None:
             res_direct = await self.compute_direct_route(driver_pos, destination_pos, profile=profile)
 
-        if res_leg2.status == RouteStatus.SUCCESS and res_direct is not None and res_direct.status == RouteStatus.SUCCESS:
+        if res_direct is not None:
+            raise_for_routing_failure(res_direct)
+
+        if res_leg2.status == RouteStatus.SUCCESS:
             leg2_dist = res_leg2.distance_m
             leg2_dur = res_leg2.duration_s
 
             via_dist = leg1_dist + leg2_dist
             via_dur = leg1_dur + leg2_dur
 
-            direct_dist = res_direct.distance_m
-            direct_dur = res_direct.duration_s
-
-            detour_dist = max(0.0, via_dist - direct_dist)
-            detour_dur = max(0.0, via_dur - direct_dur)
+            direct_available = res_direct is not None and res_direct.status == RouteStatus.SUCCESS
+            direct_dist = res_direct.distance_m if direct_available else None
+            direct_dur = res_direct.duration_s if direct_available else None
+            detour_dist = max(0.0, via_dist - direct_dist) if direct_available else None
+            detour_dur = max(0.0, via_dur - direct_dur) if direct_available else None
 
             metrics = CandidateRouteMetrics(
                 distance_to_station_m=round(leg1_dist, 1),
@@ -114,15 +120,15 @@ class MultiLegRouteCalculator:
                 duration_station_to_dest_s=round(leg2_dur, 1),
                 via_total_distance_m=round(via_dist, 1),
                 via_total_duration_s=round(via_dur, 1),
-                direct_distance_m=round(direct_dist, 1),
-                direct_duration_s=round(direct_dur, 1),
-                detour_distance_m=round(detour_dist, 1),
-                detour_duration_s=round(detour_dur, 1),
+                direct_distance_m=round(direct_dist, 1) if direct_available else None,
+                direct_duration_s=round(direct_dur, 1) if direct_available else None,
+                detour_distance_m=round(detour_dist, 1) if direct_available else None,
+                detour_duration_s=round(detour_dur, 1) if direct_available else None,
                 eta_to_station_s=round(leg1_dur, 1),
             )
             return (True, metrics, res_leg1)
 
-        # If Leg 2 or direct route failed, still return reachable station metrics with partial destination metrics
+        # No onward road route: the station remains reachable, with station-leg metrics only.
         metrics = CandidateRouteMetrics(
             distance_to_station_m=round(leg1_dist, 1),
             duration_to_station_s=round(leg1_dur, 1),

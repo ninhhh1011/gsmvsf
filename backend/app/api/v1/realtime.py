@@ -10,7 +10,7 @@ import logging
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
@@ -26,6 +26,11 @@ from backend.app.services.realtime.state import (
 )
 from backend.app.services.realtime.trigger import HybridTrigger, get_default_policy
 from backend.app.services.map_matching.models import MapMatchRequest, MapMatchResponse, GPSObservation as ServiceGPSObservation
+from backend.app.services.map_matching.engine import MapMatchingEngineError, MapMatchingNoMatchError
+from backend.app.services.graphhopper import resolve_vehicle_category
+from backend.app.api.v1.map_match import get_map_matching_service
+import psycopg2
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +53,8 @@ class MatchingStatus(str, Enum):
 # Request/Response Models
 class LocationIngestionRequest(BaseModel):
     """Request to ingest a GPS observation."""
+    vehicle_id: Optional[str] = None
+    vehicle_category: Optional[Literal["EV_CAR", "EV_MOTORBIKE"]] = None
     observation_id: Optional[str] = None
     timestamp: datetime
     latitude: float = Field(..., ge=-90, le=90)
@@ -94,72 +101,24 @@ def _validate_observation(req: LocationIngestionRequest) -> tuple[bool, Optional
     return True, None
 
 
-async def _call_map_match(
-    observations: list[GPSObservation],
-) -> tuple[Optional[MapMatchResponse], float]:
-    """
-    Call map matching service.
-
-    Returns:
-        Tuple of (response, latency_ms)
-    """
-    import httpx
-
+async def _call_map_match(observations, vehicle_category=None, vehicle_id=None):
     if len(observations) < 2:
         return None, 0.0
-
-    # Build coordinates
-    coords = [(o.longitude, o.latitude) for o in observations]
-
-    coords_str = ";".join(f"{lon:.6f},{lat:.6f}" for lon, lat in coords)
-    url = f"{settings.osrm_base_url}/match/v1/driving/{coords_str}"
-
-    start = time.time()
+    category = resolve_vehicle_category(vehicle_category, vehicle_id, driver_id=observations[0].driver_id)
+    request = MapMatchRequest(
+        trajectory_id=observations[0].driver_id, trip_id="realtime", vehicle_category=category,
+        observations=[ServiceGPSObservation(
+            observation_id=o.observation_id, trajectory_id=o.driver_id, trip_id="realtime",
+            timestamp=o.timestamp.isoformat(), latitude=o.latitude, longitude=o.longitude,
+            speed_kmh=o.speed_kmh, heading_deg=o.heading_deg, accuracy_m=o.accuracy_m,
+        ) for o in observations],
+    )
+    start = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                url,
-                params={"overview": "simplified"},
-            )
-            latency_ms = (time.time() - start) * 1000
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("code") == "Ok":
-                    # Parse response into MapMatchResponse
-                    # For realtime, we return a simplified matched state
-                    matchings = data.get("matchings", [])
-                    if matchings:
-                        matching = matchings[0]
-                        tracepoints = data.get("tracepoints", [])
-
-                        # Get last matched point
-                        last_matched_tp = None
-                        for tp in reversed(tracepoints):
-                            if tp and tp.get("matchings_index") is not None:
-                                last_matched_tp = tp
-                                break
-
-                        if last_matched_tp:
-                            location = last_matched_tp.get("location", [])
-                            return MapMatchResponse(
-                                trajectory_id=observations[0].driver_id,
-                                trip_id="realtime",
-                                total_observations=len(observations),
-                                matched_count=len(observations),
-                                unmatched_count=0,
-                                observations=[],
-                                overall_confidence=matching.get("confidence", 0),
-                                trace_geometry=matching.get("geometry"),
-                            ), latency_ms
-
-                    return None, latency_ms
-
-            return None, latency_ms
-
-    except Exception as e:
-        logger.error(f"Map matching error: {e}")
-        return None, (time.time() - start) * 1000
+        result = await get_map_matching_service().match_trajectory(request)
+        return result, (time.perf_counter() - start) * 1000
+    except MapMatchingNoMatchError:
+        return None, (time.perf_counter() - start) * 1000
 
 
 @router.post("/drivers/{driver_id}/location", response_model=LocationResponse)
@@ -303,10 +262,23 @@ async def ingest_location(
         )
 
     # Call map matching
-    response, latency_ms = await _call_map_match(context)
+    try:
+        response, latency_ms = await _call_map_match(context, request.vehicle_category, request.vehicle_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except (MapMatchingEngineError, psycopg2.Error) as exc:
+        state.current_status = MatchingStatus.ENGINE_UNAVAILABLE.value
+        return LocationResponse(
+            driver_id=driver_id, status=MatchingStatus.ENGINE_UNAVAILABLE,
+            trigger_reason=reason, message=str(exc),
+            raw_position={"latitude": obs.latitude, "longitude": obs.longitude, "timestamp": obs.timestamp.isoformat()},
+            total_observations=state.total_observations_received,
+            total_match_calls=state.total_match_calls, buffered_points=len(state.observations),
+        )
     state.last_match_latency_ms = latency_ms
 
-    if response is None:
+    latest_match = next((o for o in reversed(response.observations) if o.observation_id == context[-1].observation_id), None) if response else None
+    if latest_match is None or not latest_match.matched:
         state.current_status = MatchingStatus.NO_MATCH.value
         state.last_trigger_reason = f"NO_MATCH({reason})"
         return LocationResponse(
@@ -325,21 +297,20 @@ async def ingest_location(
             buffered_points=len(state.observations),
             movement_since_match_m=state.movement_since_match,
             is_stationary=state.is_stationary(),
-            message="No match returned from OSRM",
+            message="No matched position for the latest observation",
         )
 
     # Parse response and update state
     match_resp = response
     state.current_status = MatchingStatus.MATCHED.value
 
-    # Get last matched position from geometry
-    # For simplicity, use the last context observation's matched position
-    # In production, would parse geometry to get road-snapped position
-    last_obs = context[-1]
     matched_state = MatchedState(
-        matched_latitude=last_obs.latitude,  # Would be from parsed geometry
-        matched_longitude=last_obs.longitude,
-        confidence=match_resp.overall_confidence,
+        matched_latitude=latest_match.matched_latitude,
+        matched_longitude=latest_match.matched_longitude,
+        road_segment_id=latest_match.road_segment_id,
+        osm_way_id=latest_match.osm_way_id,
+        direction=latest_match.direction,
+        confidence=latest_match.confidence if latest_match.confidence is not None else match_resp.overall_confidence,
         route_geometry=match_resp.trace_geometry,
     )
 

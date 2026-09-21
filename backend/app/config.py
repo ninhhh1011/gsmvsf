@@ -23,10 +23,10 @@ class Settings(BaseSettings):
     app_path: Path = Path(__file__).parent
     dataset_path: Path = Path("dataset_v1")
     primary_pbf_path: Path = Path("dataset_v1/map/raw/hanoi-patched.osm.pbf")
-    osrm_data_path: Path = Path("runtime/osrm")
 
-    # OSRM
-    osrm_base_url: str = "http://localhost:5000"
+    # GraphHopper
+    graphhopper_base_url: str = "http://127.0.0.1:8989"
+    graphhopper_data_path: Path = Path("runtime/graphhopper")
 
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation"

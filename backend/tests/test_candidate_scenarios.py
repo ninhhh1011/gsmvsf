@@ -33,7 +33,7 @@ from backend.app.services.demand.models import (
     RequestedServiceType,
     ServiceType,
 )
-from backend.app.services.routing.mock_adapter import MockRoutingAdapter
+from backend.tests.mock_routing_adapter import MockRoutingAdapter
 
 
 @pytest.fixture

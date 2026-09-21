@@ -24,9 +24,3 @@ async def client(app):
 def dataset_path():
     """Return dataset path."""
     return settings.dataset_path
-
-
-@pytest.fixture
-def osrm_base_url():
-    """Return OSRM base URL."""
-    return settings.osrm_base_url

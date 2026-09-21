@@ -1,7 +1,7 @@
 """
 In-Memory Mock Routing Adapter implementing RoutingEngine.
 
-Provides fast, deterministic route computation without requiring external OSRM HTTP daemon.
+Provides fast, deterministic route computation without requiring an external routing service.
 Uses Haversine distance with configurable urban road network tortuosity and speed.
 """
 

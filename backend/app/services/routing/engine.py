@@ -1,11 +1,11 @@
 """
 Routing Engine Interface and Exceptions.
 
-Defines the engine-independent protocol for all routing adapters (OSRM, Mock, etc.).
+Defines the engine-independent protocol for production and test routing adapters.
 """
 
 from typing import Protocol, runtime_checkable
-from backend.app.services.routing.models import RouteRequest, RouteResult
+from backend.app.services.routing.models import RouteRequest, RouteResult, RouteStatus
 
 
 class RoutingEngineError(Exception):
@@ -31,6 +31,17 @@ class RoutingTimeoutError(RoutingEngineError):
 class RoutingInvalidRequestError(RoutingEngineError):
     """Invalid routing coordinates, waypoints, or profile."""
     pass
+
+
+def raise_for_routing_failure(result: RouteResult) -> None:
+    """Keep infrastructure/request failures distinct from business unreachability."""
+    error_type = {
+        RouteStatus.ENGINE_ERROR: RoutingEngineUnavailableError,
+        RouteStatus.TIMEOUT: RoutingTimeoutError,
+        RouteStatus.INVALID_REQUEST: RoutingInvalidRequestError,
+    }.get(result.status)
+    if error_type:
+        raise error_type(result.error_message or result.status.value)
 
 
 @runtime_checkable

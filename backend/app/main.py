@@ -21,6 +21,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
+    app.include_router(health_router, tags=["health"])
     app.include_router(health_router, prefix="/api/v1", tags=["health"])
     app.include_router(map_match_router, prefix="/api/v1", tags=["map-matching"])
     app.include_router(realtime_router, prefix="/api/v1", tags=["realtime"])

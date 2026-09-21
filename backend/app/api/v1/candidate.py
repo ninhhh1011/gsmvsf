@@ -2,13 +2,14 @@
 FastAPI router for Week 3 Candidate Search and Routing.
 
 Provides:
+- POST /api/v1/route: Compute a road-network route for a vehicle category
 - POST /api/v1/candidate-search: Search eligible station candidates for an EnergyServiceRequest
 - POST /api/v1/candidate-search/evaluate: End-to-end evaluation from telemetry to candidate search
 """
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from backend.app.services.candidate.models import (
@@ -19,6 +20,12 @@ from backend.app.services.candidate.service import CandidateSearchService
 from backend.app.services.demand.models import DemandContext, EnergyServiceRequest
 from backend.app.services.demand.service import get_demand_service
 from backend.app.services.realtime.state import get_state_store
+from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
+from backend.app.services.routing.engine import (
+    RoutingEngineError, RoutingInvalidRequestError, RoutingTimeoutError,
+    RouteNotFoundError, raise_for_routing_failure,
+)
+from backend.app.services.routing.models import RouteRequest, RouteResult, RouteStatus
 
 router = APIRouter()
 
@@ -26,17 +33,43 @@ _candidate_service_instance: Optional[CandidateSearchService] = None
 
 
 def get_candidate_service() -> CandidateSearchService:
-    """Singleton provider for CandidateSearchService."""
+    """Singleton provider for CandidateSearchService with GraphHopper routing."""
     global _candidate_service_instance
     if _candidate_service_instance is None:
-        _candidate_service_instance = CandidateSearchService()
+        _candidate_service_instance = CandidateSearchService(routing_engine=GraphHopperRoutingAdapter())
     return _candidate_service_instance
 
 
-def set_candidate_service(service: CandidateSearchService) -> None:
+def set_candidate_service(service: Optional[CandidateSearchService]) -> None:
     """Override singleton for testing."""
     global _candidate_service_instance
     _candidate_service_instance = service
+
+
+def _routing_http_error(exc: RoutingEngineError) -> HTTPException:
+    code = 503
+    if isinstance(exc, RoutingTimeoutError):
+        code = 504
+    elif isinstance(exc, RoutingInvalidRequestError):
+        code = 422
+    elif isinstance(exc, RouteNotFoundError):
+        code = 404
+    return HTTPException(status_code=code, detail=str(exc))
+
+
+@router.post("/route", response_model=RouteResult, summary="Compute a road route for a vehicle")
+async def route(
+    request: RouteRequest,
+    service: CandidateSearchService = Depends(get_candidate_service),
+) -> RouteResult:
+    try:
+        result = await service.routing_engine.route(request)
+        raise_for_routing_failure(result)
+        if result.status in {RouteStatus.NO_ROUTE, RouteStatus.UNREACHABLE}:
+            raise RouteNotFoundError(result.error_message or "No road route found")
+        return result
+    except RoutingEngineError as exc:
+        raise _routing_http_error(exc) from exc
 
 
 class EvaluateAndSearchApiRequest(BaseModel):
@@ -80,7 +113,10 @@ async def search_candidates(
     """
     Execute Week 3 candidate search and multi-leg routing for an EnergyServiceRequest.
     """
-    return await service.search_candidates(request, eligible_only=eligible_only)
+    try:
+        return await service.search_candidates(request, eligible_only=eligible_only)
+    except RoutingEngineError as exc:
+        raise _routing_http_error(exc) from exc
 
 
 @router.post(
@@ -143,4 +179,7 @@ async def evaluate_and_search(
         max_candidates=request.max_candidates,
     )
 
-    return await service.search_candidates(search_req, eligible_only=request.eligible_only)
+    try:
+        return await service.search_candidates(search_req, eligible_only=request.eligible_only)
+    except RoutingEngineError as exc:
+        raise _routing_http_error(exc) from exc

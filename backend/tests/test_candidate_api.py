@@ -3,13 +3,16 @@ Tests for Candidate Search REST API endpoints.
 """
 
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from backend.app.api.v1.candidate import set_candidate_service
+from backend.app.api.v1.candidate import set_candidate_service, get_candidate_service
 from backend.app.main import app
 from backend.app.services.candidate.service import CandidateSearchService
-from backend.app.services.routing.mock_adapter import MockRoutingAdapter
+from backend.tests.mock_routing_adapter import MockRoutingAdapter
+from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 
 
 @pytest.fixture(autouse=True)
@@ -113,3 +116,57 @@ async def test_api_evaluate_and_search():
         data = resp.json()
         assert data["search_status"] == "SUCCESS"
         assert data["total_candidates_evaluated"] > 0
+
+
+def test_graphhopper_adapter_satisfies_protocol():
+    """Verify GraphHopperRoutingAdapter satisfies the RoutingEngine protocol."""
+    from backend.app.services.routing.engine import RoutingEngine
+
+    adapter = GraphHopperRoutingAdapter(base_url="http://localhost:8989")
+    assert isinstance(adapter, RoutingEngine)
+
+
+@pytest.mark.asyncio
+async def test_graphhopper_routing_adapter_route():
+    """Test GraphHopperRoutingAdapter with a mocked response."""
+    from backend.app.services.routing.models import Position, RouteRequest, VehicleRoutingProfile
+
+    mock_json = {
+        "paths": [
+            {
+                "distance": 5000.0,
+                "time": 600000,  # milliseconds
+                "points": "_p~iF~ps|U",
+                "details": {"leg_distance": [[0, 4, 5000.0]], "leg_time": [[0, 4, 600000]]},
+            }
+        ],
+        "waypoints": [
+            {"location": [105.8542, 21.0285]},
+            {"location": [105.8300, 21.0360]},
+        ],
+    }
+
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = mock_json
+
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_client.get.return_value = mock_resp
+
+    adapter = GraphHopperRoutingAdapter(
+        base_url="http://mock-gh:8989",
+        client=mock_client,
+    )
+
+    from backend.app.services.routing.models import RouteStatus
+
+    orig = Position(latitude=21.0285, longitude=105.8542)
+    dest = Position(latitude=21.0360, longitude=105.8300)
+    req = RouteRequest(origin=orig, destination=dest,
+                       profile=VehicleRoutingProfile(vehicle_category="EV_MOTORBIKE"))
+    result = await adapter.route(req)
+
+    assert result.status == RouteStatus.SUCCESS
+    assert result.distance_m == 5000.0
+    assert result.duration_s == 600.0
+    assert result.engine_name == "graphhopper"

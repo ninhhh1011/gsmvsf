@@ -1,7 +1,7 @@
 """
 Engine-independent routing domain models.
 
-Defines project-level routing concepts that remain decoupled from OSRM, Valhalla,
+Defines project-level routing concepts that remain decoupled from concrete engines,
 GraphHopper, or any specific HTTP/engine schema.
 """
 
@@ -15,8 +15,8 @@ class Position(BaseModel):
     """Geographic position with optional road network node reference."""
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    latitude: float
-    longitude: float
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
     node_id: Optional[str] = None
 
     @property
@@ -26,7 +26,7 @@ class Position(BaseModel):
 
     @property
     def coordinates_lon_lat(self) -> tuple[float, float]:
-        """Return (longitude, latitude) tuple standard for GeoJSON and OSRM."""
+        """Return (longitude, latitude) tuple standard for GeoJSON."""
         return (self.longitude, self.latitude)
 
 
@@ -54,7 +54,7 @@ class VehicleRoutingProfile(BaseModel):
     vehicle_id: Optional[str] = None
     vehicle_model: Optional[str] = None
     vehicle_category: Optional[str] = None
-    routing_profile_hint: str = "driving"
+    routing_profile_hint: Optional[str] = None
 
 
 class RouteConstraints(BaseModel):
