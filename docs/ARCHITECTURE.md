@@ -166,3 +166,25 @@ uses a configured token. Application lifespan owns the asyncpg pool, Redis clien
 and shared HTTP client. No Kafka, Redis Streams, continuous monitoring, live-feed
 integration or push transport is part of Week 4. See [WEEK_4](WEEK_4.md) for exact
 schema, cache policy, formulas, failure semantics and measured limitations.
+
+## Week 5 request-driven bridge
+
+`POST /api/v1/recommend` resolves location using the same small helper as the
+existing driver-demand and evaluate-candidate endpoints. Explicit paired
+coordinates take precedence (including zero), then current valid Week 1 matched
+state, then accepted raw GPS. Provenance and event timestamp distinguish these
+sources; a required missing location is HTTP 422 `LOCATION_UNAVAILABLE`.
+The bridge does not alter DriverStateStore or add another freshness policy.
+
+The endpoint retains Week 2 demand evaluation and calls the existing
+RecommendationWorkflow for Week 3 search and Week 4 ranking. Response metadata
+reports location source, stage timings and bounded workflow attempt/call/conflict
+counts. No recommendation lifecycle table or parallel orchestration service is
+introduced. Existing search evidence and immutable snapshot history remain.
+
+Finite historical replay uses an empty isolated PostgreSQL schema, fresh driver
+state and a dedicated `SNAPSHOT_CACHE_PREFIX`. Only source snapshots available
+at each event time enter that schema. The default cache prefix remains
+`week4:snapshot:`. Dataset labels are opened by a separate evaluation command
+after predictions are persisted. See [WEEK_5](WEEK_5.md) for scope, evidence and
+the production limitations retained for Week 6.

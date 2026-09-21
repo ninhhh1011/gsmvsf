@@ -12,7 +12,8 @@ Week 2 -> Week 3 -> Week 4 workflow. Drive existing APIs from a finite historica
 replay client. Preserve PostgreSQL snapshot authority and optional Redis KV.
 **Stack:** Existing Python, FastAPI/Pydantic, httpx, asyncpg, psycopg2/PostGIS,
 Redis, GraphHopper 11, pandas/numpy and pytest. No new dependency proposed.
-**Status:** EXECUTABLE. W5-00 PASS: authoritative user decisions recorded below.
+**Status:** COMPLETE. All implementation tasks PASS; freeze follows the clean-commit gate.
+The plan was made executable from the authoritative user decisions before coding.
 
 ## 1. Repository state and audit provenance
 
@@ -748,4 +749,4 @@ requires real infrastructure. All expected paths below are relative to root.
 | W5-04 | PASS | Predictions persisted and hashed before labels; 184 joined reference events; docs/reports/week5-evaluation.json |
 | W5-05 | PASS | Real isolated API probes PASS; Redis fallback, PG503/GH504, W1 outage, OFFLINE/FULL409; one retry200, second409; 15 focused/prior tests |
 | W5-06 | PASS | 9/9 warmups and 60/60 measured requests; concurrency 1/5/10, 20 each; real MATCHED car/20 eligible; performance report |
-| W5-07 | PENDING | Not yet executed |
+| W5-07 | PASS | Final 347 tests, 152 validator checks, 22 scenarios, 69 unchanged hashes; real smokes/infra/source identity; acceptance report; clean commit required before tag |

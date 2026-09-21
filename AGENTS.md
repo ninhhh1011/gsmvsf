@@ -50,8 +50,22 @@ Current evidence: `docs/WEEK_4.md`, `docs/WEEK_4_IMPLEMENTATION_PLAN.md`,
 Week 3 owns eligibility. Week 4 returns HTTP 409 `CANDIDATE_STATE_CHANGED` on invalidation;
 only the full workflow may repeat search once. PostgreSQL is snapshot authority,
 Redis KV is optional cache, and ranking uses only eligible station/service pairs.
-Do not start Week 5 without explicit authorization. Prior migration evidence and
-historical completion tags remain valid for their recorded baselines.
+**Week 5**: Request-driven realtime API and finite causal evaluation complete:
+347 backend tests, validator 152 PASS / 0 FAIL and 22/22 scenarios; 63 canonical
+Dataset files unchanged (69 total including pre-existing bytecode). Real replay:
+30 trajectories, 1952 GPS/SOC events, 308 successful recommendation requests,
+zero errors. Current location precedence is explicit coordinates (None checks),
+valid matched state, accepted raw GPS with RAW_GPS_FALLBACK, then unavailable.
+No parallel freshness policy or duplicate orchestration. Valid empty zero-cost
+GraphHopper paths are NO_MATCH, never false matched success or dependency outage.
+Evidence: `docs/WEEK_5.md`, `docs/WEEK_5_IMPLEMENTATION_PLAN.md`, and
+`docs/reports/week5-*.json`; freeze tag `week5-realtime-api-evaluation-complete`.
+Continuous means client/request-driven refresh; no streaming/push/daemon. Replay
+must use fresh isolated history/cache and consume only information available at
+event time. Labels remain offline evaluation-only. No numeric production SLA or
+durable recommendation lifecycle is introduced. Do not start Week 6 without
+explicit authorization. Prior migration evidence and historical completion tags
+remain valid for their recorded baselines.
 
 ---
 

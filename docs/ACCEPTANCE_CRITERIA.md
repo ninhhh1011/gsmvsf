@@ -66,6 +66,14 @@ Week 5 continuous recommendation or Week 6 productionization.
 - Historical replay evaluation pipeline functional
 - Recommendation API (POST /api/v1/recommend) operational
 
+The Week 5 contract was clarified by the project owner on 2026-09-21 (ADR-014):
+continuous recommendation means request-driven refresh. Replay/client requests
+reuse the existing workflow. No numeric latency SLA is specified; report an
+initial local baseline with warmup, measured sample counts, concurrency 1/5/10,
+median/P90/P95/max and errors. Correctness, causal historical replay, explicit
+dependency failures and bounded retries remain acceptance gates. Production
+latency optimization and durable recommendation lifecycle are outside Week 5.
+
 ### Week 6 — Productionization
 
 - Latency, caching, monitoring operational

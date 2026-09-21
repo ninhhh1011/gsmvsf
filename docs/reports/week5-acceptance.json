@@ -1,0 +1,204 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-09-21T08:00:28.115165+00:00",
+  "milestone": "Week 5 - Realtime API + Evaluation",
+  "baseline_commit": "0983164130fc9f0d399da12e1f1f63058e28c3ef",
+  "branch": "week5-realtime-api-evaluation",
+  "freeze_tag": "week5-realtime-api-evaluation-complete",
+  "production_readiness": "NOT READY",
+  "contracts": {
+    "continuous": "REQUEST_DRIVEN_REFRESH",
+    "numeric_latency_sla": null,
+    "durable_recommendation_lifecycle": false,
+    "maximum_search_attempts": 2,
+    "location_precedence": [
+      "EXPLICIT",
+      "MATCHED",
+      "RAW_GPS_FALLBACK",
+      "LOCATION_UNAVAILABLE"
+    ]
+  },
+  "backend": {
+    "passed": 347,
+    "failed": 0,
+    "skipped": 0,
+    "unit": "tests",
+    "errors": 0,
+    "week5_files": {
+      "tests.test_week5_benchmark": 2,
+      "tests.test_week5_evaluation": 3,
+      "tests.test_week5_location": 19,
+      "tests.test_week5_replay": 12,
+      "tests.test_week5_workflow": 3
+    },
+    "additional_adapter_regressions": 6,
+    "junit": "runtime/week5/tests-final.xml"
+  },
+  "dataset": {
+    "validator": {
+      "passed": 152,
+      "failed": 0,
+      "skipped": 0,
+      "unit": "checks"
+    },
+    "scenarios": {
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "unit": "checks"
+    },
+    "integrity": {
+      "status": "PASS",
+      "files_before": 69,
+      "files_after": 69,
+      "canonical_files": 63,
+      "preexisting_bytecode_files": 6,
+      "changed": [],
+      "added": []
+    }
+  },
+  "replay": {
+    "status": "PASS",
+    "counters": {
+      "events_processed": 1952,
+      "trajectories_replayed": 30,
+      "recommendation_requests": 308,
+      "matched_position_uses": 284,
+      "raw_gps_fallbacks": 24,
+      "no_service_short_circuits": 56,
+      "candidate_searches": 308,
+      "ranking_calls": 308,
+      "zero_candidate_results": 148,
+      "candidate_state_conflicts": 0,
+      "one_retry_recoveries": 0,
+      "second_conflict_failures": 0,
+      "recommendation_changes": 14,
+      "unchanged_recommendations": 196,
+      "stale_observations": 30,
+      "no_match_observations": 34,
+      "heading_wrap_normalizations": 1,
+      "graphhopper_failures": 0,
+      "total_errors": 0,
+      "station_snapshots_ingested": 930,
+      "queue_snapshots_ingested": 930,
+      "traffic_snapshots_ingested": 262691
+    },
+    "predictions_sha256": "14d8584b1a15ee139926930fb1ecd81fd57c29bba6d4ea82d92c123022a8fe21",
+    "report": "docs/reports/week5-replay.json"
+  },
+  "evaluation": {
+    "status": "PASS",
+    "report": "docs/reports/week5-evaluation.json",
+    "numeric_accuracy_threshold": null,
+    "label_leakage_audit": "PASS",
+    "runtime_label_filename_references": 0
+  },
+  "reliability": {
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0,
+    "unit": "checks",
+    "status": "PASS",
+    "named_checks": {
+      "redis_database_fallback": "PASS",
+      "postgresql_unavailable": "PASS",
+      "graphhopper_unavailable": "PASS",
+      "week1_graphhopper_unavailable": "PASS",
+      "stale_gps": "PASS",
+      "missing_location": "PASS",
+      "raw_fallback": "PASS",
+      "invalid_explicit_request": "PASS",
+      "no_service": "PASS",
+      "zero_eligible_candidates": "PASS",
+      "station_offline": "PASS",
+      "station_full": "PASS",
+      "one_retry_recovery": "PASS",
+      "second_conflict_failure": "PASS",
+      "missing_traffic": "PASS",
+      "missing_queue": "PASS",
+      "traffic_refresh": "PASS",
+      "queue_recommendation_change": "PASS",
+      "unchanged_refresh_new_evidence": "PASS"
+    },
+    "report": "docs/reports/week5-runtime.json",
+    "method": "Real external API plus in-process FastAPI with production adapters and real sockets/PG/Redis/GH; no live mock fallback"
+  },
+  "performance": {
+    "passed": 60,
+    "failed": 0,
+    "skipped": 0,
+    "unit": "measured requests",
+    "status": "PASS",
+    "warmup_passed": 9,
+    "report": "docs/reports/week5-performance.json"
+  },
+  "infrastructure": {
+    "status": "VERIFIED",
+    "counts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "road_segments": 701407,
+    "deployed_python_files": 56,
+    "deployed_source_identity": "PASS"
+  },
+  "previous_week_smokes": {
+    "week1": {
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "unit": "check groups"
+    },
+    "week2": {
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "unit": "HTTP checks"
+    },
+    "week3_graphhopper": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "unit": "4 search scenarios + missing destination + 2 via routes + route API"
+    },
+    "week4": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "unit": "service/vehicle scenarios"
+    }
+  },
+  "diff_audit": {
+    "status": "PASS",
+    "protected_policy_source_unchanged": true,
+    "dataset_source_unchanged": true,
+    "duplicate_orchestration": false,
+    "new_durable_tables": false,
+    "unbounded_retries": false,
+    "prior_tags_unchanged": true,
+    "temporary_artifacts": "Ignored runtime/week5 only"
+  },
+  "git_gate": "Clean committed tree and unchanged prior tags are enforced immediately before the Week 5 tag; final commit is identified by that tag.",
+  "artifacts": [
+    "runtime/week5/tests-final.xml",
+    "runtime/week5/validator.log",
+    "runtime/week5/dataset-integrity.json",
+    "runtime/week5/infrastructure-final.json",
+    "runtime/week5/deployed-source.json",
+    "runtime/week5/protected-tags.json"
+  ],
+  "limitations": [
+    "Finite 30 trajectories and 1712 source GPS observations; not full-Dataset replay.",
+    "One local car performance workload; not production capacity or SLA.",
+    "Driver state process-local; no durable recommendation lifecycle.",
+    "GraphHopper motorcycle shares car_access; geometric quality is not calibrated probability.",
+    "Reference objective and matched/runtime inputs differ; agreement is descriptive."
+  ],
+  "week6_handoff": [
+    "Profile candidate search/routing before optimization.",
+    "Define production workload and SLA separately.",
+    "Cross-process state/lifecycle require demonstrated product need.",
+    "Monitoring, retention, deployment hardening and scale remain future scope."
+  ]
+}

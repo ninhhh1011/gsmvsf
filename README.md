@@ -6,7 +6,10 @@ The project matches driver GPS to roads, determines energy-service demand, and
 finds eligible station/service alternatives with road-network distance, ETA and
 detour. Week 4 adds request-time ranking and recommendation from persisted
 traffic, station and queue snapshots, with Redis as a validated payload cache.
-The [Week 4 report](docs/WEEK_4.md) records implementation and acceptance evidence;
+Week 5 connects current driver location to the same recommendation endpoint and
+adds finite causal replay, evaluation and a measured local latency baseline.
+The [Week 5 report](docs/WEEK_5.md) records current acceptance evidence;
+the [Week 4 report](docs/WEEK_4.md) preserves its frozen baseline;
 the [migration report](docs/GRAPHHOPPER_MIGRATION_REPORT.md) preserves the prior
 GraphHopper baseline. Production readiness remains NOT READY.
 
@@ -158,8 +161,8 @@ are evaluation-only. Runtime inputs and relationships are documented in
 [DATA_CONTRACT](docs/DATA_CONTRACT.md).
 
 The six-week sequence remains map matching, demand, candidates/routing, ranking,
-realtime recommendation/evaluation, and productionization. This migration adds
-no Week 4 ranking, traffic-cost optimization, or additional runtime engines.
+realtime recommendation/evaluation, and productionization. The historical routing
+migration preceded the Week 4 ranking and Week 5 integration described below.
 
 The old Milestone 0 README described OSRM and four foundation tests. That is
 historical evidence, superseded for current operation by this document and
@@ -196,3 +199,23 @@ Use a new output path for each evaluation run; existing prediction artifacts
 are never silently overwritten or reused against potentially changed state. Real PostgreSQL and
 Redis are required by Week 4 integration tests. Logs, local secrets and large
 prediction evidence stay in ignored `runtime/week4/`.
+
+## Week 5 request-driven refresh and evaluation
+
+`POST /api/v1/recommend` now accepts current Week 1 location when explicit paired
+coordinates are omitted: valid matched position, then accepted raw GPS fallback,
+then explicit location-unavailable failure when service is needed. Zero coordinates
+remain explicit. Responses expose location provenance, stage timings and bounded
+workflow call/conflict counts. Week 3 eligibility and Week 4 ranking stay unchanged.
+
+The passing finite causal replay covers 30 trajectories and 308 recommendations;
+the full backend suite has 347 passing tests. Latency was measured at concurrency
+1/5/10 with 20 requests each and no invented SLA. [WEEK_5](docs/WEEK_5.md) contains
+exact replay scope, evaluation denominators, failures, latency and reproduction
+instructions. Historical replay requires an empty isolated PostgreSQL schema,
+fresh driver state and a unique `SNAPSHOT_CACHE_PREFIX`; do not preload full future
+snapshot history. Reports are checked in under `docs/reports/week5-*.json`, while
+large predictions/logs and local secrets stay in ignored `runtime/week5/`.
+
+Week 5 is request-driven, with no recommendation daemon or push/streaming system.
+Production tuning and lifecycle persistence remain Week 6/future work.
