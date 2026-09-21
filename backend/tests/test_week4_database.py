@@ -185,3 +185,12 @@ async def test_repository_reports_database_failure(repository):
         await repository.heads(['station:S001'], traffic().timestamp)
     assert exc.value.status == 503
     assert exc.value.detail['error_code'] == 'SNAPSHOT_DATABASE_UNAVAILABLE'
+
+
+@pytest.mark.asyncio
+async def test_snapshot_identity_survives_jsonb_signed_zero(repository):
+    value = station(swap_service_time_min=-0.0)
+    await repository.ingest(value)
+    loaded = (await repository.payloads([value.snapshot_id]))[value.snapshot_id]
+    assert loaded.snapshot_id == value.snapshot_id
+    assert loaded.snapshot_id == station(swap_service_time_min=0.0).snapshot_id

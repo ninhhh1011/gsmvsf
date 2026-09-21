@@ -28,6 +28,12 @@ class SnapshotBase(FrozenModel):
 
     _timestamp = field_validator('timestamp')(aware_utc)
 
+    @field_validator('*')
+    @classmethod
+    def normalize_signed_zero(cls, value):
+        # PostgreSQL JSONB normalizes -0.0; content identity must survive storage.
+        return 0.0 if isinstance(value, float) and value == 0 else value
+
     @property
     def snapshot_id(self) -> str:
         # Bind cache identity to validated content as well as logical row identity.

@@ -89,3 +89,36 @@ async def test_snapshot_search_and_rank_use_existing_candidate_service(repositor
 
 
 from backend.tests.test_week4_database import repository
+
+
+@pytest.mark.asyncio
+async def test_lifespan_real_resources_and_recommend_http_success(monkeypatch):
+    import os
+    from backend.app.config import settings
+    from backend.app.main import create_app
+    from backend.app.core.lifespan import lifespan
+    monkeypatch.setattr(settings, 'database_url', os.environ.get('WEEK4_TEST_DATABASE_URL',
+        'postgresql://postgres:postgres@127.0.0.1:5432/ev_recommendation'))
+    app = create_app()
+    async with lifespan(app):
+        resolver = app.state.snapshot_resolver
+        pool = resolver.repository.pool
+        redis = resolver.cache.client
+        assert await redis.ping()
+        connections = list(redis.connection_pool._available_connections)
+        client = app.state.recommendation_workflow.routing_engine._client
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as http:
+            response = await http.post('/api/v1/recommend', json={'context': {
+                'vehicle_id': 'V0001', 'timestamp': '2026-09-01T06:00:00+07:00',
+                'current_soc_pct': 95, 'estimated_remaining_range_km': 200,
+                'remaining_trip_distance_km': 1, 'raw_latitude': 21.028,
+                'raw_longitude': 105.854}})
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result['has_recommendation'] is False
+        assert result['ranked_candidates'] == []
+        assert not pool.is_closing()
+    assert pool.is_closing()
+    assert client.is_closed
+    assert all(not connection.is_connected for connection in connections)
+    assert app.state.recommendation_workflow is None
