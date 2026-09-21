@@ -49,7 +49,8 @@ class RecommendationWorkflow:
         if request.max_candidates is not None:
             raise StateError('Week 4 search requires the complete candidate set; use ranking top_n.',
                              'INVALID_CANDIDATE_REQUEST', 422)
-        if not request.energy_request.request_valid:
+        if (not energy.request_valid or energy.reason_code in
+                ('MISSING_DATA', 'INVALID_STATE', 'STALE_STATE')):
             raise StateError('Energy service request is invalid', 'INVALID_ENERGY_REQUEST', 422)
         stations = self.catalog.get_all_stations()
         baseline_catalog_digest = catalog_digest(self.catalog)

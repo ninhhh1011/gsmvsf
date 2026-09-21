@@ -92,6 +92,26 @@ from backend.tests.test_week4_database import repository
 
 
 @pytest.mark.asyncio
+async def test_recommend_rejects_invalid_inherited_telemetry():
+    from backend.app.main import create_app
+    from backend.app.api.v1.ranking import get_workflow
+    app = create_app()
+    workflow = SimpleNamespace(recommend=AsyncMock())
+    app.dependency_overrides[get_workflow] = lambda: workflow
+    context = dict(vehicle_id='V0001', timestamp='2026-09-01T06:00:00+07:00',
+                   current_soc_pct=1, estimated_remaining_range_km=100,
+                   remaining_trip_distance_km=10)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+        for field, value in [('minimum_safe_soc_pct', -100), ('minimum_safe_soc_pct', 101),
+                             ('consumption_wh_per_km', -1), ('consumption_wh_per_km', 0),
+                             ('planned_trip_distance_km', -1), ('distance_travelled_km', -1),
+                             ('remaining_energy_kwh', -1)]:
+            response = await client.post('/api/v1/recommend', json={'context': context | {field: value}})
+            assert response.status_code == 422, (field, response.text)
+    workflow.recommend.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_lifespan_real_resources_and_recommend_http_success(monkeypatch):
     import os
     from backend.app.config import settings
@@ -117,6 +137,11 @@ async def test_lifespan_real_resources_and_recommend_http_success(monkeypatch):
         result = response.json()
         assert result['has_recommendation'] is False
         assert result['ranked_candidates'] == []
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as http:
+            invalid = await http.post('/api/v1/recommend', json={'context': {
+                'vehicle_id': 'V0001', 'timestamp': '2026-09-01T06:00:00+07:00'}})
+        assert invalid.status_code == 422
+        assert invalid.json()['error_code'] == 'INVALID_ENERGY_REQUEST'
         assert not pool.is_closing()
     assert pool.is_closing()
     assert client.is_closed
