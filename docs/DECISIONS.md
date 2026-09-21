@@ -1,5 +1,58 @@
 # DECISIONS
 
+## ADR-013: Week 4 snapshot persistence and eligibility ownership
+
+**Date:** 2026-09-21. **Status:** Approved by the user for Week 4.
+
+Week 3 owns eligibility. Week 4 ranks an already-valid eligible candidate set.
+An eligibility-affecting change after search returns HTTP 409 with
+`error_code=CANDIDATE_STATE_CHANGED`, the candidate search ID, changed
+station/service identities, previous/current state and
+`action=RERUN_CANDIDATE_SEARCH`. Ranking must neither rerun eligibility nor drop
+invalidated candidates and proceed. The synchronous orchestrator may retry the
+whole candidate search exactly once; a second conflict is returned to the caller.
+Queue changes below the existing eligibility limit, traffic, service estimates
+and freshness changes are ranking context. OFFLINE, zero usable capacity, absent
+swap inventory, compatibility changes and represented reachability invalidation
+are candidate-set conflicts. No new dynamic routing state is implied.
+
+PostgreSQL stores immutable timestamped traffic, station and queue snapshots and
+server-issued candidate-search evidence. Redis is an optional KV payload cache,
+never a source of truth. An authoritative, single-statement database head lookup
+pins the snapshot IDs used by each context, including historical requests. Cache
+entries must match these IDs; a failed cache write cannot conceal a committed
+operational change. Redis failure falls back to PostgreSQL; database failure is
+explicit even when payloads are cached. No Kafka, Streams or background reranking.
+
+Use the existing asyncpg dependency for this first application repository (there
+is no existing ORM/repository implementation to duplicate). Unique
+`(kind, entity_id, timestamp)` identifies a snapshot: identical payload/source
+retries return the same ID; conflicting retries return 409. An atomic Redis
+compare-and-set prevents older snapshots from replacing newer cache values.
+
+Traffic uses the Dataset `delay_factor` for the driver's known directed segment
+as a labelled **origin-segment proxy** for the station leg, matching the reference
+generator's coarse approach. It is not route-segment traffic integration. Missing
+segment/state retains base GraphHopper duration with explicit missing provenance.
+Week 3 exposes no route-to-Dataset-segment traversal mapping; no routes are
+recomputed solely for ranking. Canonical estimated queue wait is used once.
+
+The initial runtime policy minimizes station service completion time: adjusted
+station travel + queue wait + service time. Detour, freshness and capacity break
+ties; no arbitrary generalized weights or urgency weights. The Dataset reference
+also includes onward travel and detour/capacity terms, so agreement is a measured
+comparison rather than an expected 100%. Unknown queue wait uses a configurable
+conservative project assumption of 90 minutes, visibly marked MISSING; it is not
+an observed wait or official VinFast policy. Snapshot freshness defaults follow
+Dataset cadence (traffic 30 minutes, operational/queue 10 minutes); Redis TTL is
+configurable at 60 seconds for memory retention, not validity.
+
+**Trade-off:** The metadata check retains a small database dependency on cache
+hits in exchange for deterministic invalidation and request-consistent evidence.
+This request-driven Week 4 extension explicitly authorizes persistence, Redis KV,
+lightweight observability and local performance measurements without starting
+Week 5 continuous recommendation or Week 6 productionization.
+
 Current runtime decisions are ADR-010 through ADR-012 below. ADR-002's initial
 OSRM engine choice is historical and superseded. ADR-006's patched-map selection
 remains active with GraphHopper. ADR-008's domain independence remains active;
