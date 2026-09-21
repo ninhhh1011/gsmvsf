@@ -1,10 +1,9 @@
 ﻿# Current architecture
 
-Updated 2026-09-21 for the sole-GraphHopper migration. Weeks 1–3 behavior is
-implemented; functional verification passed with 239 tests, live API/outage
-checks and all 63 Dataset file hashes unchanged. Final reporting and formal freeze
-remain tracked in [GRAPHHOPPER_FULL_MIGRATION_PLAN](GRAPHHOPPER_FULL_MIGRATION_PLAN.md)
-and the [migration report](GRAPHHOPPER_MIGRATION_REPORT.md).
+Updated 2026-09-21 for Week 4 snapshot-aware ranking. The sole-GraphHopper
+migration remains the verified Weeks 1?3 baseline; its evidence is retained in
+[the migration report](GRAPHHOPPER_MIGRATION_REPORT.md). Current Week 4 architecture
+and acceptance evidence are in [WEEK_4](WEEK_4.md) and ADR-013.
 Historical Week 1 freeze reports describe the earlier engine and do not certify
 this replacement runtime.
 
@@ -25,13 +24,13 @@ Telemetry / explicit driver intent --> Week 2 DemandService
     --> all stations --> station/service alternatives
     --> injected RoutingEngine --> GraphHopperRoutingAdapter --> GET /route
     --> multi-leg metrics + operational snapshots + eligibility
-    --> eligible candidate set for future Week 4 ranking
+    --> persisted versioned eligible candidate set -> Week 4 ranking/recommendation
 ```
 
 The modular monolith uses FastAPI and PostgreSQL 16/PostGIS. GraphHopper 11.0 is
 the sole production routing/matching service, built from its pinned official JAR
 on the pinned Java 21 image. Release 11.0 requires Java 17+. Compose runs `db`,
-`graphhopper` and `api`. No engine selectors, legacy engine services, or mock
+`graphhopper`, `redis` and `api`. No engine selectors, legacy engine services, or mock
 runtime fallback are part of the current architecture.
 
 The application lifespan creates one shared `httpx.AsyncClient` for both routing
@@ -142,3 +141,28 @@ engine adapters. ADR-010 supersedes that runtime choice and any active engine
 selection path. ADR-008's domain independence remains in force. Old benchmark
 or freeze documents remain historical evidence; they are not proof of current
 GraphHopper quality or production readiness.
+
+## Week 4 snapshot backend
+
+Static station/vehicle catalogs remain canonical. `state_snapshots` stores
+immutable timestamped traffic, queue and station data in PostgreSQL, while
+`candidate_searches` stores search-time versions, catalog digest and route/energy
+evidence. The new workflow injects one pinned operational view into the existing
+Week 3 service, preserving its eligibility rules and GraphHopper adapter.
+
+A single SQL statement pins latest-at-or-before-request versions. Redis KV
+payloads must match those IDs; misses/errors read PostgreSQL. Ingestion commits
+DB state before best-effort atomic latest-cache population. A metadata DB read
+remains mandatory on cache hits to prevent missed writes from hiding changes.
+
+Context construction preserves base travel duration, adds explicitly sourced
+traffic proxy, wait, service duration and freshness, then ranks only eligible
+station/service pairs by completion time. An eligibility-changing state fails the
+whole set with HTTP409 `CANDIDATE_STATE_CHANGED`; only the workflow may retry
+Candidate Search once. Queue/traffic/service-time changes otherwise update ranking.
+
+The public API is synchronous and request-driven. Internal snapshot ingestion
+uses a configured token. Application lifespan owns the asyncpg pool, Redis client
+and shared HTTP client. No Kafka, Redis Streams, continuous monitoring, live-feed
+integration or push transport is part of Week 4. See [WEEK_4](WEEK_4.md) for exact
+schema, cache policy, formulas, failure semantics and measured limitations.

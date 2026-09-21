@@ -1,0 +1,484 @@
+{
+  "status": "PASS",
+  "baseline": "d8574c0f19126984df7f965796b2c3355e0d3a2c",
+  "dataset": {
+    "tracked_canonical_files": 63,
+    "all_initial_disk_files": 69,
+    "all_hashes_unchanged": true,
+    "canonical_checks_pass": 152,
+    "canonical_checks_fail": 0,
+    "scenario_assertions_pass": 22
+  },
+  "protected_subsystem_changes": [],
+  "git_unmerged_entries": 0,
+  "regressions": {
+    "week4": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend\\tests\\test_week4_api.py",
+        "backend\\tests\\test_week4_database.py",
+        "backend\\tests\\test_week4_evaluation.py",
+        "backend\\tests\\test_week4_models.py",
+        "backend\\tests\\test_week4_ranking.py",
+        "backend\\tests\\test_week4_snapshots.py",
+        "backend\\tests\\test_week4_verification.py",
+        "-q",
+        "--basetemp=runtime\\week4\\pytest",
+        "--junitxml=runtime\\week4\\week4.xml"
+      ],
+      "exit_code": 0,
+      "wall_s": 12.487,
+      "files": [
+        "backend\\tests\\test_week4_api.py",
+        "backend\\tests\\test_week4_database.py",
+        "backend\\tests\\test_week4_evaluation.py",
+        "backend\\tests\\test_week4_models.py",
+        "backend\\tests\\test_week4_ranking.py",
+        "backend\\tests\\test_week4_snapshots.py",
+        "backend\\tests\\test_week4_verification.py"
+      ],
+      "passed": 63,
+      "failed": 0,
+      "skipped": 0
+    },
+    "dataset": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "scripts/validate_frozen_dataset.py"
+      ],
+      "exit_code": 0,
+      "wall_s": 50.784
+    },
+    "week3": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend\\tests\\test_candidate_api.py",
+        "backend\\tests\\test_candidate_compatibility.py",
+        "backend\\tests\\test_candidate_dataset_replay.py",
+        "backend\\tests\\test_candidate_eligibility.py",
+        "backend\\tests\\test_candidate_energy_feasibility.py",
+        "backend\\tests\\test_candidate_expansion.py",
+        "backend\\tests\\test_candidate_models.py",
+        "backend\\tests\\test_candidate_scenarios.py",
+        "backend\\tests\\test_candidate_search_service.py",
+        "backend\\tests\\test_mock_routing_adapter.py",
+        "backend\\tests\\test_multi_leg_routing.py",
+        "backend\\tests\\test_routing_models.py",
+        "backend\\tests\\test_station_catalog.py",
+        "-q",
+        "--basetemp=runtime\\week4\\pytest",
+        "--junitxml=runtime\\week4\\week3.xml"
+      ],
+      "exit_code": 0,
+      "wall_s": 5.15,
+      "files": [
+        "backend\\tests\\test_candidate_api.py",
+        "backend\\tests\\test_candidate_compatibility.py",
+        "backend\\tests\\test_candidate_dataset_replay.py",
+        "backend\\tests\\test_candidate_eligibility.py",
+        "backend\\tests\\test_candidate_energy_feasibility.py",
+        "backend\\tests\\test_candidate_expansion.py",
+        "backend\\tests\\test_candidate_models.py",
+        "backend\\tests\\test_candidate_scenarios.py",
+        "backend\\tests\\test_candidate_search_service.py",
+        "backend\\tests\\test_mock_routing_adapter.py",
+        "backend\\tests\\test_multi_leg_routing.py",
+        "backend\\tests\\test_routing_models.py",
+        "backend\\tests\\test_station_catalog.py"
+      ],
+      "passed": 71,
+      "failed": 0,
+      "skipped": 0
+    },
+    "week2": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend\\tests\\test_auto_detector.py",
+        "backend\\tests\\test_demand_api.py",
+        "backend\\tests\\test_demand_models.py",
+        "backend\\tests\\test_demand_service.py",
+        "backend\\tests\\test_driver_requester.py",
+        "backend\\tests\\test_energy_feasibility.py",
+        "backend\\tests\\test_scenarios_week2.py",
+        "backend\\tests\\test_vehicle_capability.py",
+        "-q",
+        "--basetemp=runtime\\week4\\pytest",
+        "--junitxml=runtime\\week4\\week2.xml"
+      ],
+      "exit_code": 0,
+      "wall_s": 3.645,
+      "files": [
+        "backend\\tests\\test_auto_detector.py",
+        "backend\\tests\\test_demand_api.py",
+        "backend\\tests\\test_demand_models.py",
+        "backend\\tests\\test_demand_service.py",
+        "backend\\tests\\test_driver_requester.py",
+        "backend\\tests\\test_energy_feasibility.py",
+        "backend\\tests\\test_scenarios_week2.py",
+        "backend\\tests\\test_vehicle_capability.py"
+      ],
+      "passed": 69,
+      "failed": 0,
+      "skipped": 0
+    },
+    "week1": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend\\tests\\test_config.py",
+        "backend\\tests\\test_health.py",
+        "backend\\tests\\test_map_matching.py",
+        "backend\\tests\\test_realtime.py",
+        "-q",
+        "--basetemp=runtime\\week4\\pytest",
+        "--junitxml=runtime\\week4\\week1.xml"
+      ],
+      "exit_code": 0,
+      "wall_s": 4.39,
+      "files": [
+        "backend\\tests\\test_config.py",
+        "backend\\tests\\test_health.py",
+        "backend\\tests\\test_map_matching.py",
+        "backend\\tests\\test_realtime.py"
+      ],
+      "passed": 37,
+      "failed": 0,
+      "skipped": 0
+    },
+    "graphhopper-regression": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend\\tests\\test_graphhopper_adapter.py",
+        "backend\\tests\\test_graphhopper_lifecycle.py",
+        "backend\\tests\\test_graphhopper_migration.py",
+        "backend\\tests\\test_graphhopper_routing_adapter.py",
+        "backend\\tests\\test_health_migration.py",
+        "backend\\tests\\test_matching_integration.py",
+        "backend\\tests\\test_routing_migration.py",
+        "-q",
+        "--basetemp=runtime\\week4\\pytest",
+        "--junitxml=runtime\\week4\\graphhopper-regression.xml"
+      ],
+      "exit_code": 0,
+      "wall_s": 4.347,
+      "files": [
+        "backend\\tests\\test_graphhopper_adapter.py",
+        "backend\\tests\\test_graphhopper_lifecycle.py",
+        "backend\\tests\\test_graphhopper_migration.py",
+        "backend\\tests\\test_graphhopper_routing_adapter.py",
+        "backend\\tests\\test_health_migration.py",
+        "backend\\tests\\test_matching_integration.py",
+        "backend\\tests\\test_routing_migration.py"
+      ],
+      "passed": 62,
+      "failed": 0,
+      "skipped": 0
+    },
+    "full-suite": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests",
+        "-q",
+        "--basetemp=runtime\\week4\\pytest",
+        "--junitxml=runtime\\week4\\full-suite.xml"
+      ],
+      "exit_code": 0,
+      "wall_s": 26.336,
+      "files": [
+        "backend/tests"
+      ],
+      "passed": 302,
+      "failed": 0,
+      "skipped": 0
+    },
+    "live-week3": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "scripts/verify_graphhopper.py"
+      ],
+      "exit_code": 0,
+      "wall_s": 8.85
+    },
+    "live-api-week1-week3": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "scripts/smoke_test.py"
+      ],
+      "exit_code": 0,
+      "wall_s": 8.29
+    },
+    "live-week4-final": {
+      "command": [
+        "C:\\Users\\nguye\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+        "-B",
+        "scripts/verify_week4.py",
+        "--smoke-only",
+        "--output",
+        "runtime\\week4\\final-smoke.json"
+      ],
+      "exit_code": 0,
+      "wall_s": 9.791
+    }
+  },
+  "tests_by_file": {
+    "test_auto_detector.py": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_api.py": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_compatibility.py": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_dataset_replay.py": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_eligibility.py": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_energy_feasibility.py": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_expansion.py": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_models.py": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_scenarios.py": {
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_candidate_search_service.py": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_config.py": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_demand_api.py": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_demand_models.py": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_demand_service.py": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_driver_requester.py": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_energy_feasibility.py": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_graphhopper_adapter.py": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_graphhopper_lifecycle.py": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_graphhopper_migration.py": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_graphhopper_routing_adapter.py": {
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_health.py": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_health_migration.py": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestModels.py": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestSegmentResolver.py": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestMapMatchingService.py": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_matching_integration.py": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_mock_routing_adapter.py": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_multi_leg_routing.py": {
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestGPSObservation.py": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestHaversine.py": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestDriverTraceState.py": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestDriverStateStore.py": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "TestTriggers.py": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_routing_migration.py": {
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_routing_models.py": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_scenarios_week2.py": {
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_station_catalog.py": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_vehicle_capability.py": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_week4_api.py": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_week4_database.py": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_week4_evaluation.py": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_week4_models.py": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_week4_ranking.py": {
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_week4_snapshots.py": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "test_week4_verification.py": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "full_suite": {
+    "passed": 302,
+    "failed": 0,
+    "skipped": 0
+  },
+  "independent_review": "Runtime correctness, evaluation leakage/metrics and final requirement coverage PASS; findings fixed and retested.",
+  "production_readiness": "NOT READY",
+  "test_environment": {
+    "DEBUG": "false",
+    "LOG_LEVEL": "INFO",
+    "dependency_host": "127.0.0.1",
+    "pytest_temporary_files": "runtime/week4/pytest",
+    "bytecode_writes": "disabled with python -B"
+  }
+}

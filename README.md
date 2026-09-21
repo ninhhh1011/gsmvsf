@@ -1,15 +1,14 @@
 # EV Charging and Battery Swap Station System
 
-Python/FastAPI, PostgreSQL/PostGIS, GraphHopper 11.0 and Docker.
+Python/FastAPI, PostgreSQL/PostGIS, Redis KV, GraphHopper 11.0 and Docker.
 
 The project matches driver GPS to roads, determines energy-service demand, and
 finds eligible station/service alternatives with road-network distance, ETA and
-detour. Weeks 1–3 are implemented. Ranking and recommendation remain later-week
-work. Functional GraphHopper migration verification has passed: 239 tests,
-live APIs, explicit outage behavior, and unchanged hashes for all 63 Dataset
-files. The [final migration report](docs/GRAPHHOPPER_MIGRATION_REPORT.md) records
-all migration gates, freeze tags and measured quality limitations. Production
-readiness remains NOT READY.
+detour. Week 4 adds request-time ranking and recommendation from persisted
+traffic, station and queue snapshots, with Redis as a validated payload cache.
+The [Week 4 report](docs/WEEK_4.md) records implementation and acceptance evidence;
+the [migration report](docs/GRAPHHOPPER_MIGRATION_REPORT.md) preserves the prior
+GraphHopper baseline. Production readiness remains NOT READY.
 
 ## Current runtime
 
@@ -48,9 +47,11 @@ In PowerShell, set `$env:DEBUG='false'`; in a POSIX shell, `export DEBUG=false`.
 ```bash
 python -m pip install -e "backend[dev]"
 python scripts/validate_frozen_dataset.py
-docker compose up -d --build db graphhopper
+docker compose up -d --build db graphhopper redis
 # Wait for PostgreSQL and the GraphHopper import to become healthy.
 python scripts/load_road_network.py
+python -B scripts/load_week4_snapshots.py
+# Configure SNAPSHOT_INGESTION_TOKEN in .env for internal state ingestion.
 docker compose up -d --build api
 ```
 
@@ -166,3 +167,32 @@ historical evidence, superseded for current operation by this document and
 Start further work with [AGENTS.md](AGENTS.md),
 [PROJECT_SCOPE](docs/PROJECT_SCOPE.md), [ACCEPTANCE_CRITERIA](docs/ACCEPTANCE_CRITERIA.md),
 and the [migration execution plan](docs/GRAPHHOPPER_FULL_MIGRATION_PLAN.md).
+
+## Week 4 snapshot ranking
+
+`POST /api/v1/recommend` synchronously runs Week 2 -> Week 3 -> Week 4.
+`POST /api/v1/ranking/candidates` persists a versioned search result;
+`POST /api/v1/ranking` ranks that search ID at an explicit request time.
+Only eligible station/service alternatives are ranked. An eligibility-changing
+snapshot returns structured HTTP 409 `CANDIDATE_STATE_CHANGED`; the full workflow
+can repeat Candidate Search once. Ranking never silently drops invalid candidates.
+
+Internal `/api/v1/internal/snapshots/{traffic,station,queue}` endpoints require
+`X-Ingestion-Token`. Exact retry is safe; PostgreSQL retains history and Redis
+cannot regress to an older latest state. Traffic/queue are project snapshots,
+not external production live feeds. See [Week 4](docs/WEEK_4.md) for assumptions,
+missing/stale handling, ETA definitions, setup, evaluation and performance.
+
+```bash
+python -B scripts/load_week4_snapshots.py
+python -B scripts/evaluate_week4.py --output runtime/week4/evaluation.json
+python -B scripts/verify_week4.py --smoke-only
+# Full verifier ingests labelled September 3 demo state; run after evaluation.
+# Provide --token-file pointing to a repository-local file containing your token.
+python -B scripts/verify_week4.py --samples 10 --token-file runtime/week4/ingestion-token.txt
+```
+
+Use a new output path for each evaluation run; existing prediction artifacts
+are never silently overwritten or reused against potentially changed state. Real PostgreSQL and
+Redis are required by Week 4 integration tests. Logs, local secrets and large
+prediction evidence stay in ignored `runtime/week4/`.

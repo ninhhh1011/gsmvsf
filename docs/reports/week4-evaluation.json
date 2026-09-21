@@ -2620,5 +2620,11 @@
         "20": 167
       }
     }
+  },
+  "execution_provenance": {
+    "prediction_run": "Uninterrupted1200-event real-backend run with stable source snapshot history and GraphHopper map.",
+    "executed_evaluator_archive": "runtime/week4/evaluation-executed-source.py",
+    "executed_evaluator_sha256": "a5e0c602477ae9441423d1a20b0e7f80f338ec88aef19bdd5ff31edcf30ef545",
+    "post_inference_changes": "Removed unused resume branch; added overall recommendation agreement and histograms by offline aggregation of completed predictions. No rerouting, replacement predictions or expected-label edits."
   }
 }

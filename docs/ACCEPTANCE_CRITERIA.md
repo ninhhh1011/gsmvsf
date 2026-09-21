@@ -49,6 +49,16 @@ Counts were corrected against the canonical V1.3.1 validator executed during mig
 - Ranking considers ETA, detour, traffic, queue, capacity
 - Best Station + Top-N alternatives returned
 - Ranking API operational
+- Snapshot ingestion persists validated, idempotent history in PostgreSQL
+- Request-time resolution, Redis KV/DB fallback and visible freshness verified
+- Composite station/service identity and explainable completion cost preserved
+- Eligibility-changing state returns HTTP409; ranking never silently filters it
+- Synchronous orchestration retries Candidate Search at most once
+- Dataset baseline evaluation, real state-change demo and local latency evidence
+
+The user-approved Week 4 extension (ADR-013) includes a synchronous
+`POST /api/v1/recommend`, snapshot caching and measurements. It does not complete
+Week 5 continuous recommendation or Week 6 productionization.
 
 ### Week 5 — Realtime API + Evaluation
 
@@ -67,4 +77,4 @@ Counts were corrected against the canonical V1.3.1 validator executed during mig
 1. **Labels are evaluation-only**: recommendation_labels, demand_labels, candidate_labels, ranking_reference must never be consumed as runtime prediction input
 2. **Dataset V1 is read-only**: do not modify, regenerate, or move files inside dataset_v1/
 3. **Map routing**: Map selection is documented in docs/DECISIONS.md (ADR-006) and runtime configuration. Primary map is set via PRIMARY_PBF_PATH.
-4. **Candidate-to-ranking contract**: All Stations → Candidate Search → eligible==true → top-N eligible → Ranking
+4. **Candidate-to-ranking contract**: All Stations -> Candidate Search -> eligible==true -> Ranking -> top-N output

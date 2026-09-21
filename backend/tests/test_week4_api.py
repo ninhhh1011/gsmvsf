@@ -147,3 +147,51 @@ async def test_lifespan_real_resources_and_recommend_http_success(monkeypatch):
     assert client.is_closed
     assert all(not connection.is_connected for connection in connections)
     assert app.state.recommendation_workflow is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('change_again', [False, True])
+async def test_http_orchestrator_retries_real_search_after_concurrent_state_change(repository, change_again):
+    from backend.app.api.v1.ranking import get_workflow
+    from backend.app.main import create_app
+    from backend.app.services.candidate.station_catalog import station_catalog
+    from backend.app.services.ranking.orchestration import RecommendationWorkflow
+    from backend.app.services.snapshots.resolver import SnapshotResolver
+    from backend.tests.mock_routing_adapter import MockRoutingAdapter
+    from backend.tests.test_week4_database import station, traffic
+    base = traffic().timestamp
+    for sid in ('S001', 'S002'):
+        await repository.ingest(station(entity_id=sid))
+    catalog = SimpleNamespace(get_all_stations=lambda: [station_catalog.get_station(s)
+                              for s in ('S001', 'S002')], get_station=station_catalog.get_station)
+    workflow = RecommendationWorkflow(repository, SnapshotResolver(repository), MockRoutingAdapter(), catalog)
+    actual_search, searches = workflow.search, []
+
+    async def search_with_concurrent_ingestion(request):
+        evidence = await actual_search(request)
+        searches.append(evidence)
+        if len(searches) == 1 or change_again:
+            await repository.ingest(station(entity_id='S001' if len(searches) == 1 else 'S002',
+                timestamp=base + timedelta(seconds=len(searches)), operating_status='OFFLINE'))
+        return evidence
+
+    workflow.search = search_with_concurrent_ingestion
+    app = create_app()
+    app.dependency_overrides[get_workflow] = lambda: workflow
+    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+        response = await client.post('/api/v1/recommend', json={'requested_service': 'CHARGING', 'context': {
+            'vehicle_id': 'V0001', 'timestamp': (base + timedelta(minutes=10)).isoformat(),
+            'current_soc_pct': 60, 'estimated_remaining_range_km': 200,
+            'raw_latitude': 21.028, 'raw_longitude': 105.854}})
+    assert len(searches) == 2
+    assert searches[0].result.eligible_count == 2
+    assert searches[1].result.eligible_count == 1
+    result = response.json()
+    if change_again:
+        assert response.status_code == 409, response.text
+        assert result['error_code'] == 'CANDIDATE_STATE_CHANGED'
+        assert result['changed_candidates'][0]['station_id'] == 'S002'
+    else:
+        assert response.status_code == 200, response.text
+        assert result['recommended_station_id'] == 'S002'
+        assert result['candidate_search_id'] == searches[1].candidate_search_id

@@ -42,7 +42,16 @@ Also read the active-week documentation when it exists (e.g., `docs/WEEK_1.md`).
 
 **Milestone 0**: Project Foundation — COMPLETE
 **Weeks 1–3**: Implemented; historical completion/freeze records describe the prior runtime.
-**Current work**: Sole-GraphHopper migration functional verification PASS: 239 tests, live API/outage checks, 63 Dataset file hashes unchanged. Migration gates and evidence are recorded in `docs/GRAPHHOPPER_MIGRATION_REPORT.md`; freeze tags identify the final clean commit. Do not infer acceptance from historical engine reports.
+**Week 4**: Snapshot-aware ranking/recommendation verified: 302 tests, canonical
+validator 152 PASS / 0 FAIL and 22/22 scenarios, unchanged 63 canonical Dataset
+files, real PostgreSQL/Redis/GraphHopper/API checks and local performance baseline.
+Current evidence: `docs/WEEK_4.md`, `docs/WEEK_4_IMPLEMENTATION_PLAN.md`,
+`docs/reports/week4-acceptance.json`; freeze tag `week4-ranking-recommendation-complete`.
+Week 3 owns eligibility. Week 4 returns HTTP 409 `CANDIDATE_STATE_CHANGED` on invalidation;
+only the full workflow may repeat search once. PostgreSQL is snapshot authority,
+Redis KV is optional cache, and ranking uses only eligible station/service pairs.
+Do not start Week 5 without explicit authorization. Prior migration evidence and
+historical completion tags remain valid for their recorded baselines.
 
 ---
 
