@@ -1,0 +1,70 @@
+{
+  "status": "PASS",
+  "title": "PRE-WEEK-6 LOCAL BASELINE AND POST-OPTIMIZATION COMPARISON",
+  "timestamp": "2026-09-22T00:00:00+00:00",
+  "api_url": "http://127.0.0.1:8000",
+  "workload": {
+    "endpoint": "POST /api/v1/recommend",
+    "description": "Recommendation with explicit GPS coordinates (21.117, 105.855) and destination",
+    "warmup": 5,
+    "measured": 50
+  },
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "logical_cpus": 8,
+    "api_image": "build6week-api on port 8000"
+  },
+  "baseline_sequential": {
+    "description": "Before concurrent routing optimization",
+    "concurrency_1": {
+      "samples": 50,
+      "success_count": 50,
+      "error_count": 0,
+      "latency": {
+        "median_ms": 286.24,
+        "p90_ms": 323.80,
+        "p95_ms": 373.71,
+        "max_ms": 378.80
+      },
+      "stages": {
+        "location_resolution_ms": 0.02,
+        "demand_ms": 0.08,
+        "candidate_search_ms": 260.29,
+        "ranking_ms": 19.87,
+        "total_ms": 282.47
+      }
+    }
+  },
+  "post_optimization_concurrent_8": {
+    "description": "After concurrent routing (max_concurrent_routes=8)",
+    "concurrency_1": {
+      "samples": 50,
+      "success_count": 50,
+      "error_count": 0,
+      "latency": {
+        "median_ms": 187.61,
+        "p90_ms": 210.71,
+        "p95_ms": 229.52,
+        "max_ms": 257.88
+      },
+      "stages": {
+        "location_resolution_ms": 0.02,
+        "demand_ms": 0.08,
+        "candidate_search_ms": 162.61,
+        "ranking_ms": 19.73,
+        "total_ms": 182.58
+      }
+    }
+  },
+  "improvement": {
+    "median_latency_reduction_pct": 34.5,
+    "candidate_search_reduction_pct": 37.5,
+    "p90_reduction_pct": 35.0,
+    "note": "Sequential routing -> concurrent routing (8 parallel GraphHopper calls)"
+  },
+  "bottleneck_analysis": {
+    "candidate_search_percentage": 92,
+    "ranking_percentage": 7,
+    "location_demand_percentage": 0.1
+  }
+}

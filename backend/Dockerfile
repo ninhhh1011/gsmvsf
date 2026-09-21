@@ -18,7 +18,8 @@ RUN pip install --no-cache-dir "uvicorn[standard]>=0.32.0" \
     "pandas>=2.0.0" \
     "asyncpg>=0.30.0" \
     "redis>=5.2.0,<9" \
-    "sqlalchemy>=2.0.0"
+    "sqlalchemy>=2.0.0" \
+    "prometheus-client>=0.21.0"
 
 COPY backend/app/ ./backend/app/
 

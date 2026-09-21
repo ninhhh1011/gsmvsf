@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # Week 6 productionization: routing concurrency
+    max_concurrent_routes: int = Field(default=8, ge=1, le=32,
+        description="Maximum concurrent GraphHopper route calls per candidate search")
+
     def validate_paths(self) -> list[str]:
         """Validate critical paths exist. Returns list of errors."""
         errors = []

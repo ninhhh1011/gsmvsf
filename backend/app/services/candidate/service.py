@@ -27,6 +27,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from backend.app.config import settings
 from backend.app.services.candidate.compatibility import check_station_service_compatibility
 from backend.app.services.candidate.eligibility import evaluate_candidate_eligibility
 from backend.app.services.candidate.energy_feasibility import check_energy_feasibility_to_station
@@ -55,10 +56,14 @@ class CandidateSearchService:
         self,
         routing_engine: RoutingEngine,
         catalog: Optional[StationCatalog] = None,
+        max_concurrent_routes: Optional[int] = None,
     ):
         self.routing_engine = routing_engine
         self.catalog = catalog or station_catalog
-        self.route_calculator = MultiLegRouteCalculator(self.routing_engine)
+        self.route_calculator = MultiLegRouteCalculator(
+            self.routing_engine,
+            max_concurrent_routes=max_concurrent_routes or settings.max_concurrent_routes,
+        )
 
     async def search_candidates(
         self,
@@ -158,17 +163,30 @@ class CandidateSearchService:
                 profile=vehicle_profile,
             )
 
-        # 8. Evaluate all candidate pairs
+        # 8. Pre-compute all station routes concurrently
+        # Collect unique stations that need routing
+        station_positions = {}  # station_id -> station_pos
+        for station, _ in candidate_pairs:
+            if station.station_id not in station_positions:
+                station_positions[station.station_id] = Position(
+                    latitude=station.latitude,
+                    longitude=station.longitude,
+                    node_id=station.access_node_id,
+                )
+
+        # Compute all routes concurrently with bounded parallelism
+        station_routes = await self.route_calculator.compute_all_station_metrics_concurrent(
+            driver_pos=driver_pos,
+            station_positions=station_positions,
+            destination_pos=dest_pos,
+            profile=vehicle_profile,
+            cached_direct_route=cached_direct,
+        )
+
+        # 9. Evaluate all candidate pairs using pre-computed routes
         evaluated_candidates: list[EvaluatedCandidate] = []
-        station_routes = {}
 
         for station, service_type in candidate_pairs:
-            station_pos = Position(
-                latitude=station.latitude,
-                longitude=station.longitude,
-                node_id=station.access_node_id,
-            )
-
             # Check service compatibility
             is_comp = check_station_service_compatibility(
                 vehicle=vehicle_cap or esr,
@@ -183,16 +201,8 @@ class CandidateSearchService:
                 timestamp=esr.timestamp,
             )
 
-            # Route computation
-            if station.station_id not in station_routes:
-                station_routes[station.station_id] = await self.route_calculator.compute_station_metrics(
-                    driver_pos=driver_pos,
-                    station_pos=station_pos,
-                    destination_pos=dest_pos,
-                    cached_direct_route=cached_direct,
-                    profile=vehicle_profile,
-                )
-            is_reach, route_metrics, _ = station_routes[station.station_id]
+            # Use pre-computed route
+            is_reach, route_metrics, _ = station_routes.get(station.station_id, (False, None, None))
 
             net_dist_m = route_metrics.distance_to_station_m if (is_reach and route_metrics) else None
 

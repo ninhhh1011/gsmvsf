@@ -8,10 +8,13 @@ Computes:
 - Via Total: Leg 1 + Leg 2
 - Detour: Via Total - Direct Route
 - Base ETA: duration_to_station_s
+
+Week 6: Supports configurable concurrent routing for improved latency.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -27,14 +30,19 @@ from backend.app.services.routing.models import (
 
 logger = logging.getLogger(__name__)
 
+# Default max concurrent route computations (Week 6 productionization)
+DEFAULT_MAX_CONCURRENT_ROUTES = 8
+
 
 class MultiLegRouteCalculator:
     """
     Computes multi-leg routing metrics between driver, station, and destination.
+    Supports concurrent routing for reduced latency.
     """
 
-    def __init__(self, engine: RoutingEngine):
+    def __init__(self, engine: RoutingEngine, max_concurrent_routes: int = DEFAULT_MAX_CONCURRENT_ROUTES):
         self.engine = engine
+        self.max_concurrent_routes = max_concurrent_routes
 
     async def compute_direct_route(
         self,
@@ -135,3 +143,65 @@ class MultiLegRouteCalculator:
             eta_to_station_s=round(leg1_dur, 1),
         )
         return (True, metrics, res_leg1)
+
+    async def compute_all_station_metrics_concurrent(
+        self,
+        driver_pos: Position,
+        station_positions: dict[str, Position],
+        destination_pos: Optional[Position],
+        profile: Optional[VehicleRoutingProfile] = None,
+        cached_direct_route: Optional[RouteResult] = None,
+    ) -> dict[str, tuple[bool, Optional[CandidateRouteMetrics], Optional[RouteResult]]]:
+        """
+        Compute route metrics for all stations concurrently with bounded parallelism.
+
+        Args:
+            driver_pos: Driver's current position
+            station_positions: Dict of station_id -> station Position
+            destination_pos: Trip destination position (optional)
+            profile: Vehicle routing profile
+            cached_direct_route: Pre-computed direct route (optional)
+
+        Returns:
+            Dict of station_id -> (is_reachable, route_metrics, leg1_route_result)
+        """
+        if not station_positions:
+            return {}
+
+        # Pre-compute direct route if not provided (avoid redundant calls)
+        if cached_direct_route is None and destination_pos is not None:
+            try:
+                cached_direct_route = await self.compute_direct_route(
+                    driver_pos, destination_pos, profile
+                )
+            except Exception:
+                # If direct route fails, continue without it
+                cached_direct_route = None
+
+        semaphore = asyncio.Semaphore(self.max_concurrent_routes)
+
+        async def compute_one(
+            station_id: str,
+            station_pos: Position,
+        ) -> tuple[str, bool, Optional[CandidateRouteMetrics], Optional[RouteResult]]:
+            async with semaphore:
+                result = await self.compute_station_metrics(
+                    driver_pos=driver_pos,
+                    station_pos=station_pos,
+                    destination_pos=destination_pos,
+                    cached_direct_route=cached_direct_route,
+                    profile=profile,
+                )
+                return (station_id, *result)
+
+        tasks = [
+            compute_one(station_id, station_pos)
+            for station_id, station_pos in station_positions.items()
+        ]
+
+        results = await asyncio.gather(*tasks)
+
+        return {
+            station_id: (reachable, metrics, leg1)
+            for station_id, reachable, metrics, leg1 in results
+        }
