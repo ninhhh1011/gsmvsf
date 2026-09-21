@@ -42,6 +42,7 @@ runtime/map_mapping/*.json
 runtime/map_mapping/*.csv
 runtime/map_mapping/*.parquet
 runtime/benchmark_results.json
+runtime/*.png
 samples/week1/*.csv
 samples/week1/*.json
 

@@ -62,10 +62,10 @@ class DemoApp {
     async loadCatalogs() {
         try {
             const [stResp, vResp, scResp, trResp] = await Promise.all([
-                fetch('./static/data/stations.json').then(r => r.json()),
-                fetch('./static/data/vehicles.json').then(r => r.json()),
-                fetch('./static/data/scenarios.json').then(r => r.json()),
-                fetch('./static/data/trips.json').then(r => r.json())
+                fetch('/demo/static/data/stations.json').then(r => r.json()),
+                fetch('/demo/static/data/vehicles.json').then(r => r.json()),
+                fetch('/demo/static/data/scenarios.json').then(r => r.json()),
+                fetch('/demo/static/data/trips.json').then(r => r.json())
             ]);
 
             this.stations = stResp || [];

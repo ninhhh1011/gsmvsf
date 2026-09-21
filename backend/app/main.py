@@ -2,8 +2,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.v1.health import router as health_router
@@ -64,8 +63,8 @@ def create_app() -> FastAPI:
     demo_index = demo_path / "index.html"
 
     if demo_path.exists() and demo_index.exists():
-        @app.get("/demo")
-        @app.get("/demo/")
+        @app.get("/demo", include_in_schema=False)
+        @app.get("/demo/", include_in_schema=False)
         async def demo_page():
             """Serve Week 5.5 Demo UI."""
             return HTMLResponse(content=demo_index.read_text(encoding="utf-8"))
