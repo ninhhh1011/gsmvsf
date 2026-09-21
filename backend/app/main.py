@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.v1.health import router as health_router
@@ -10,6 +11,10 @@ from backend.app.api.v1.map_match import router as map_match_router
 from backend.app.api.v1.realtime import router as realtime_router
 from backend.app.api.v1.demand import router as demand_router
 from backend.app.api.v1.candidate import router as candidate_router
+from backend.app.api.v1.ranking import router as ranking_router
+from backend.app.services.snapshots.models import StateError
+from backend.app.services.routing.engine import RoutingEngineError
+from backend.app.api.v1.candidate import _routing_http_error
 from backend.app.core.lifespan import lifespan
 from backend.app.config import settings
 
@@ -27,6 +32,16 @@ def create_app() -> FastAPI:
     app.include_router(realtime_router, prefix="/api/v1", tags=["realtime"])
     app.include_router(demand_router, prefix="/api/v1", tags=["demand"])
     app.include_router(candidate_router, prefix="/api/v1", tags=["candidate-search"])
+    app.include_router(ranking_router, prefix="/api/v1", tags=["ranking"])
+
+    @app.exception_handler(StateError)
+    async def state_error_handler(request, exc):
+        return JSONResponse(status_code=exc.status, content=exc.detail)
+
+    @app.exception_handler(RoutingEngineError)
+    async def routing_error_handler(request, exc):
+        error = _routing_http_error(exc)
+        return JSONResponse(status_code=error.status_code, content={'detail': error.detail})
 
     # Serve debug UI
     static_path = settings.app_path / "static" / "debug-map"
