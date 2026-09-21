@@ -1,3 +1,5 @@
+> Historical baseline: engine-specific instructions and measurements in this document predate the GraphHopper-only migration. Current runtime and verification are documented in [the migration report](GRAPHHOPPER_MIGRATION_REPORT.md).
+
 # WEEK 2 IMPLEMENTATION PLAN
 # VinFast EV Charging & Battery Swap Recommendation — Energy Service Need / Demand Detection
 

@@ -1,16 +1,5 @@
-# Claude Code Week 1 Skills
+# Archived Week 1 instructions
 
-Contains two project-specific skills:
+The original matching and OSRM workflow documents are retained as `HISTORICAL.md` for provenance. They are no longer discoverable skills and must not be installed as current project instructions.
 
-- `week1-map-matching`
-- `osrm-workflow`
-
-Copy/extract the `.claude` directory into the repository root.
-
-Recommended external project-level skill:
-
-```bash
-npx skills add jaakla/open-gis -a claude-code -y
-```
-
-After setup, start a fresh Claude Code session and verify with `/skills`.
+Use the repository's current [architecture](../docs/ARCHITECTURE.md) and [migration report](../docs/GRAPHHOPPER_MIGRATION_REPORT.md). GraphHopper is the sole routing and matching runtime.

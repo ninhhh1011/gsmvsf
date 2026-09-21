@@ -74,3 +74,47 @@ All line references below describe the superseded baseline, not the final runtim
 | `.claude/skills/open-map-stack/references/data-sources.md` | E historical documentation | 383 |
 | `.claude/skills/open-map-stack/references/analytics.md` | E historical documentation | 332, 336, 466 |
 | `.claude/skills/open-map-stack/references/services-and-scale.md` | E historical documentation | 22, 35, 153, 166 |
+
+
+## Final inventory ? 2026-09-21
+
+Active runtime dependencies: **0**. Search includes hidden checked-in instructions and frozen data; ignored generated caches, Git internals and local agent memory are excluded. General GIS catalogs retain references to alternatives but cannot select an engine for this application. Every remaining text file is classified below.
+
+| Remaining file | Justification |
+|---|---|
+| `.claude/skills/open-map-stack/README.md` | General GIS reference catalog of alternative technologies; no application dependency or project engine choice. |
+| `.claude/skills/open-map-stack/SKILL.md` | General GIS reference catalog of alternative technologies; no application dependency or project engine choice. |
+| `.claude/skills/open-map-stack/references/analytics.md` | General GIS reference catalog of alternative technologies; no application dependency or project engine choice. |
+| `.claude/skills/open-map-stack/references/data-sources.md` | General GIS reference catalog of alternative technologies; no application dependency or project engine choice. |
+| `.claude/skills/open-map-stack/references/services-and-scale.md` | General GIS reference catalog of alternative technologies; no application dependency or project engine choice. |
+| `.claude/skills/osrm-workflow/HISTORICAL.md` | Archived baseline instructions; not discoverable as active SKILL.md. |
+| `.claude/skills/week1-map-matching/HISTORICAL.md` | Archived baseline instructions; not discoverable as active SKILL.md. |
+| `.gitignore` | Ignore patterns for superseded generated local graph artifacts. |
+| `README.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `backend/tests/test_graphhopper_migration.py` | Negative architecture guards reject legacy fields; no legacy implementation/test adapter. |
+| `backend/tests/test_routing_models.py` | Negative architecture guards reject legacy fields; no legacy implementation/test adapter. |
+| `claude_week1_skills/.claude/skills/osrm-workflow/HISTORICAL.md` | Archived baseline instructions; not discoverable as active SKILL.md. |
+| `claude_week1_skills/.claude/skills/week1-map-matching/HISTORICAL.md` | Archived baseline instructions; not discoverable as active SKILL.md. |
+| `claude_week1_skills/README.md` | Archived baseline instructions; not discoverable as active SKILL.md. |
+| `dataset_v1/DATA_DICTIONARY.md` | Frozen canonical provenance; immutable, not executable application wiring. |
+| `dataset_v1/README.md` | Frozen canonical provenance; immutable, not executable application wiring. |
+| `dataset_v1/REQUIREMENT_DATA_MATRIX.md` | Frozen canonical provenance; immutable, not executable application wiring. |
+| `dataset_v1/generators/04_patch_semantic_dataset.py` | Frozen canonical provenance; immutable, not executable application wiring. |
+| `dataset_v1/validation/update_docs.py` | Frozen canonical provenance; immutable, not executable application wiring. |
+| `docs/ARCHITECTURE.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/DECISIONS.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/EXTERNAL_GPS_DATA.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/GRAPHHOPPER_FULL_MIGRATION_PLAN.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/GRAPHHOPPER_MATCHING_QUALITY.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/GRAPHHOPPER_MIGRATION_AUDIT.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/GRAPHHOPPER_MIGRATION_REPORT.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/GRAPHHOPPER_OSRM_INVENTORY.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_1.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_1_ACCEPTANCE_REPORT.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_1_FREEZE.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_1_REALTIME_POLICY.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_1_REMAINING_PLAN.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_1_TECHNICAL_AUDIT.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_2.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_2_IMPLEMENTATION_PLAN.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |
+| `docs/WEEK_3_IMPLEMENTATION_PLAN.md` | Historical baseline, superseded decisions, migration removal evidence or comparison; not current runtime configuration. |

@@ -1,349 +1,168 @@
-# EV Charging/Battery Swap Station Recommendation System
+# EV Charging and Battery Swap Station System
 
-**Project:** Tự động tìm trạm sạc/tủ đổi pin phù hợp nhất cho Driver
-**Author:** Nguyen Van Ninh (S.AI.20K)
-**Stack:** Python + FastAPI, PostgreSQL + PostGIS, OSRM, Docker
+Python/FastAPI, PostgreSQL/PostGIS, GraphHopper 11.0 and Docker.
 
----
+The project matches driver GPS to roads, determines energy-service demand, and
+finds eligible station/service alternatives with road-network distance, ETA and
+detour. Weeks 1–3 are implemented. Ranking and recommendation remain later-week
+work. Functional GraphHopper migration verification has passed: 239 tests,
+live APIs, explicit outage behavior, and unchanged hashes for all 63 Dataset
+files. The [final migration report](docs/GRAPHHOPPER_MIGRATION_REPORT.md) records
+all migration gates, freeze tags and measured quality limitations. Production
+readiness remains NOT READY.
 
-## Project Purpose
+## Current runtime
 
-Build an intelligent recommendation system for electric vehicle drivers to find the optimal charging or battery-swap station based on their current location, battery state, traffic conditions, and station availability.
+GraphHopper is the sole routing and map-matching runtime. There is no engine
+selector or fallback runtime. Mock adapters are test-only. Domain interfaces
+remain independent of GraphHopper's HTTP schema.
+The application lifespan owns one shared asynchronous HTTP client used by the
+routing and matching adapters, and closes it on shutdown.
 
-## Six-Week Scope
+| Domain vehicle category | Routing and matching profile |
+|---|---|
+| `EV_CAR` | `car` |
+| `EV_MOTORBIKE` | `motorcycle` |
 
-| Week | Milestone | Content |
-|------|-----------|---------|
-| Week 1 | **Map Matching** | GPS realtime → road segment, determine position and direction |
-| Week 2 | **Demand Detection** | Battery/SOC based need determination |
-| Week 3 | **Candidate + Routing** | Find candidates, compute routes, ETA, detour |
-| Week 4 | **Recommendation Model** | Ranking based on ETA, detour, traffic, queue, capacity |
-| Week 5 | **Realtime API + Evaluation** | Build API, test performance, evaluate recommendations |
-| Week 6 | **Productionization** | Optimize latency, caching, monitoring, deployment |
+OSM is canonical map data. GraphHopper imports the immutable
+`dataset_v1/map/raw/hanoi-patched.osm.pbf`; `hanoi-baseline.osm.pbf` is reference
+only. Generated graphs are stored under `runtime/graphhopper/gh-cache-11`.
+The patched map contains `motorcar=no` on Cầu Thanh Trì way `881947000`.
 
-## Current State: Milestone 0 — Project Foundation
+The motorcycle model excludes motorways, penalizes trunk roads, and caps modeled
+speed at 60 km/h. This is a project routing assumption, not a legal-speed claim.
+It still uses GraphHopper's `car_access`: `motorcar=no` therefore also excludes
+motorcycles, including on the patched bridge. Independent motorcycle access
+semantics are not implemented. See [routing strategy](docs/ROUTING_STRATEGY.md).
 
-Milestone 0 establishes the development project structure, infrastructure, and validation baseline. Week 1 has NOT started yet.
+## Setup and operation
 
-### What's Ready
+Requirements: Python 3.11+, Docker/Compose, and the existing Python dependencies.
+The GraphHopper image builds from the pinned official 11.0 JAR on Java 21;
+release 11.0 requires Java 17+, not the development branch's Java 25.
 
-- Git repository initialized
-- FastAPI application with `/health` and `/ready` endpoints
-- Docker Compose (PostgreSQL/PostGIS + OSRM)
-- Dataset V1 validation passed (163 checks / 21 scenarios)
-- OSRM preprocessing pipeline ready
-- Sample trajectory from Dataset V1 selected
-- Development commands (`make setup`, `make validate-data`, `make prepare-map`, `make up`, `make test`, `make smoke`)
-
----
-
-## Dataset V1
-
-Dataset V1 (`./dataset_v1/`) is the canonical development dataset for the full six-week project. It is **READ-ONLY**.
-
-### Contents
-
-| Category | Files | Records |
-|----------|-------|---------|
-| Road network | `road_nodes.csv.gz`, `road_segments.csv.gz` | 339K nodes, 701K segments |
-| GPS | `gps_observations.csv.gz` | 65,847 observations |
-| Ground truth | `true_trajectories.csv.gz` | 68,664 points |
-| Drivers/Vehicles | `drivers.csv`, `vehicles.csv` | 60 each |
-| Trips | `trips.csv` | 150 trips |
-| Stations | `stations.csv`, `station_status.csv.gz` | 30 stations |
-| Queue | `queue_status.csv.gz` | Service-specific queues |
-| Traffic | `traffic_snapshots.csv.gz` | 883K snapshots |
-| Labels | `demand_labels.csv`, `candidate_labels.csv`, `recommendation_labels.csv` | Evaluation-only |
-
-### Validation
-
-Dataset V1 has been validated:
-- **163 structural + semantic checks**: 163 PASS / 0 FAIL
-- **21 scenario assertions**: 21/21 PASS
-- **PBF integrity**: Both `hanoi-baseline.osm.pbf` and `hanoi-patched.osm.pbf` intact
-
-To re-validate:
-```bash
-make validate-data
-```
-
----
-
-## MAP STATUS — PRIMARY MAP FINALIZED
-
-- **`hanoi-patched.osm.pbf`** — Primary routing map (contains motorcar=no for Cầu Thanh Trì way 881947000)
-- **`hanoi-baseline.osm.pbf`** — Reference map (historical baseline)
-
-Both files remain untouched.
-
----
-
-## Requirements
-
-- Python 3.11+
-- Docker and Docker Compose
-- OSRM tools (for `make prepare-map`): `osrm-extract`, `osrm-partition`, `osrm-customize`
-- PostgreSQL client tools (optional, for DB inspection)
-
----
-
-## Environment Setup
-
-1. Copy environment template:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Review `.env` — defaults point to local paths:
-   ```
-   DATASET_PATH=./dataset_v1
-   PRIMARY_PBF_PATH=./dataset_v1/map/raw/hanoi-patched.osm.pbf
-   OSRM_DATA_PATH=./runtime/osrm
-   OSRM_BASE_URL=http://localhost:5000
-   DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/ev_recommendation
-   ```
-
----
-
-## Quick Start
+Run from the repository root. Copy `.env.example` to `.env` and retain the host
+URLs for host commands. Compose supplies container service URLs automatically.
+In PowerShell, set `$env:DEBUG='false'`; in a POSIX shell, `export DEBUG=false`.
 
 ```bash
-# 1. Validate Dataset V1
-make validate-data
-
-# 2. Preprocess OSRM map (requires osrm-extract, osrm-partition, osrm-customize)
-make prepare-map
-
-# 3. Start services (PostgreSQL/PostGIS + OSRM + FastAPI)
-make up
-
-# 4. Run tests
-make test
-
-# 5. Run OSRM smoke tests with Dataset V1 GPS
-make smoke
-
-# View logs
-make logs
-
-# Stop services
-make down
+python -m pip install -e "backend[dev]"
+python scripts/validate_frozen_dataset.py
+docker compose up -d --build db graphhopper
+# Wait for PostgreSQL and the GraphHopper import to become healthy.
+python scripts/load_road_network.py
+docker compose up -d --build api
 ```
 
-### On Windows (without make)
+`load_road_network.py` loads canonical directed road segments into PostGIS for
+Dataset segment resolution. A running GraphHopper alone is insufficient for
+application readiness. `/health` checks application liveness; `/ready` and
+`/readiness` require both routing profiles and populated PostGIS road data.
 
-```batch
-call make.bat setup
-call make.bat validate-data
-call make.bat prepare-map
-call make.bat up
-call make.bat test
-call make.bat smoke
-```
-
----
-
-## Running Tests
+Equivalent helpers include `make setup`, `make validate-data`, `make prepare-map`,
+`make load-roads`, `make up`, `make test`, and `make smoke`. `make prepare-map`
+builds/starts GraphHopper; no legacy preprocessing tools are required.
 
 ```bash
-cd backend
-pip install -e ".[dev]"
-pytest tests/ -v
-```
-
-Tests at Milestone 0:
-- `test_health.py` — `/health` and `/ready` endpoints
-- `test_config.py` — Configuration loading and path validation
-
----
-
-## OSRM Smoke Tests
-
-The smoke test script (`scripts/smoke_test.py`) validates that:
-1. OSRM is reachable
-2. Dataset V1 GPS observations can be matched to the road network
-3. Route computation works
-4. Map matching (OSRM Match endpoint) works
-
-```bash
+python -m pytest backend/tests -q --basetemp=runtime/migration/pytest
 python scripts/smoke_test.py
+python scripts/smoke_test_week3.py
+python scripts/benchmark_week3.py --iterations 20
+docker compose logs -f
+docker compose down
 ```
 
-Sample output:
-```
-============================================================
-OSRM SMOKE TEST - Dataset V1 GPS
-============================================================
+Live smoke/benchmark commands fail when GraphHopper is unavailable. They never
+substitute synthetic distances or mock matching. Generated verification evidence
+is written under `runtime/migration`.
 
-[1] Checking OSRM at http://localhost:5000...
-    OSRM reachable: HTTP 200
+## API boundaries
 
-[2] Loading Dataset V1 GPS observations...
-    Total GPS observations: 65,847
-    Sample observations: 20
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/map-match` | Batch GPS matching through GraphHopper and PostGIS resolution |
+| `POST /api/v1/drivers/{driver_id}/location` | Realtime GPS ingestion and matching |
+| `POST /api/v1/demand` | Week 2 demand evaluation |
+| `POST /api/v1/candidate-search` | Evaluate every station/service alternative |
+| `POST /api/v1/candidate-search/evaluate` | Demand evaluation followed by candidate search |
+| `POST /api/v1/route` | Domain route request, including optional via points |
 
-[3] Testing OSRM nearest...
-    Status: HTTP 200
-    MATCHED: Waypoint index 0
+Routing uses the vehicle category, never a global default profile or an overriding
+profile hint. Engine failures return 503, timeouts 504, invalid routing requests
+422, and a standalone route with no road path 404. Candidate unreachability is a
+business result only when there is actually no road route.
 
-[4] Testing OSRM route...
-    Status: HTTP 200
-    ROUTE: distance=1234.5m, duration=67.8s
+Map matching projects observations onto the actual GraphHopper matched path.
+The returned quality score is geometric proximity, not a calibrated probability
+or native GraphHopper observation confidence. PostGIS resolves Dataset segment
+IDs from matched locations, OSM way details and traversal direction; unresolved
+identities remain null. See [architecture](docs/ARCHITECTURE.md).
+At ambiguous revisits, crossings or directed-segment ties, the response withholds
+`road_segment_id` and `direction` and marks resolution `AMBIGUOUS`; a geometrically
+matched location does not by itself establish a directed Dataset identity.
 
-[5] Testing OSRM Match (map matching)...
-    Status: HTTP 200
-    MATCHED tracepoints: 8/10
-    Total distance: 4567.8m
+## Measured Week 3 baseline
 
-============================================================
-SMOKE TEST COMPLETE
-============================================================
-```
+The 2026-09-21 run used 20 distinct Dataset trip starts: five each for car charging,
+fixed-battery motorcycle charging, explicit swap, and ANY/BOTH services. Four
+warmup searches were excluded. Every measured search made 61 real GraphHopper
+route calls; BOTH retained 60 station/service alternatives.
 
----
+| Metric | Candidate service latency |
+|---|---:|
+| Median | 938.140 ms |
+| P90 | 1,295.715 ms |
+| P95 | 1,505.187 ms |
+| Maximum | 1,707.856 ms |
 
-## Repository Structure
+These are `CandidateSearchService.search_candidates` measurements with an injected
+shared HTTP client. Initial fixture/catalog loading and HTTP API overhead are
+excluded; these are not production endpoint latency or concurrency guarantees.
+Evidence: `runtime/migration/graphhopper-week3-benchmark.json` and
+`runtime/migration/graphhopper-routing-smoke.json`. Details and historical results
+are in [Week 3](docs/WEEK_3.md).
 
-```
-./                              # Project root
-├── AGENTS.md                   # Agent instructions
-├── README.md                   # This file
-├── .gitignore
-├── .env.example
-├── Makefile                    # Development commands
-├── docker-compose.yml          # PostgreSQL + OSRM + FastAPI
-│
-├── docs/
-│   ├── PROJECT_SCOPE.md        # Project problem and deliverables
-│   ├── ACCEPTANCE_CRITERIA.md  # Completion criteria
-│   ├── DATA_CONTRACT.md        # Dataset structure and relationships
-│   ├── ARCHITECTURE.md         # System architecture
-│   └── DECISIONS.md           # Architecture decision records
-│
-├── backend/
-│   ├── Dockerfile
-│   ├── pyproject.toml
-│   ├── app/
-│   │   ├── main.py            # FastAPI entry point
-│   │   ├── config.py          # Configuration
-│   │   └── api/v1/health.py   # /health, /ready endpoints
-│   └── tests/
-│       ├── conftest.py
-│       ├── test_health.py
-│       └── test_config.py
-│
-├── scripts/
-│   └── smoke_test.py           # OSRM smoke tests
-│
-├── runtime/
-│   └── osrm/                   # OSRM artifacts (generated)
-│
-├── samples/week1/
-│   ├── sample_normal.json      # Normal trajectory (T0001)
-│   └── sample_hard_todo.json   # Hard case for Week 1 testing
-│
-└── dataset_v1/                  # READ-ONLY canonical data
-    ├── README.md
-    ├── DATA_DICTIONARY.md
-    ├── REQUIREMENT_DATA_MATRIX.md
-    ├── gps/
-    ├── trajectories/
-    ├── labels/
-    ├── map/raw/
-    │   ├── hanoi-baseline.osm.pbf  # REFERENCE
-    │   └── hanoi-patched.osm.pbf   # PRIMARY
-    ├── validation/
-    └── ...
-```
+A separate deployed HTTP API run measured 20 candidate-search requests at each
+concurrency level, including serialization and station search with the application
+lifespan client. This is an initial local baseline, not a production capacity SLA.
 
----
+| Concurrent requests | Median ms | P90 ms | P95 ms | Maximum ms |
+|---|---:|---:|---:|---:|
+| 1 | 777.228 | 896.463 | 955.799 | 1,354.926 |
+| 5 | 2,384.797 | 2,917.589 | 2,945.508 | 2,974.883 |
+| 10 | 6,621.727 | 7,337.150 | 7,358.554 | 7,477.629 |
 
-## Week 1 Preview — Map Matching
+`runtime/migration/api-smoke.json` records that endpoint benchmark and passing
+car/fixed-bike/BOTH route, matching, candidate and realtime checks.
+`api-outage.json` records an API configured with an unavailable GraphHopper:
+route/matching/candidate calls return 503, realtime returns `ENGINE_UNAVAILABLE`,
+liveness stays 200 and readiness returns 503. No mock fallback occurs.
 
-Week 1 will deliver:
+The passing test distribution is Week 1: 37, Week 2: 69, Week 3: 71, migration:
+62 (239 total). `runtime/migration/dataset-integrity.json` confirms all 63 Dataset
+file hashes are unchanged. The deployed GraphHopper, PostgreSQL and API services
+passed their live health/readiness checks.
 
-- **MapMatchingService** — Core map matching logic
-- **POST /api/v1/map-match** — Map matching endpoint
-- **HMM-based algorithm** — Hidden Markov Model for GPS-to-road matching
-- **Candidate scoring** — Score and rank candidate road segments
-- **Confidence logic** — Confidence scores for matched results
+## Data and scope rules
 
-Week 1 does NOT start until Milestone 0 is verified as complete.
+`dataset_v1/` is read-only. Both PBFs remain untouched. `make validate-data` invokes
+`scripts/validate_frozen_dataset.py`, which runs the canonical validator while
+redirecting generated reports to `runtime/migration/validation`; it does not
+write reports into the frozen Dataset tree. The current canonical validator run (2026-09-21) reports 152 PASS / 0 FAIL
+and 22/22 scenario assertions, superseding the older 163/21 count references.
+Migration-quality acceptance remains tracked by its own execution gates.
 
----
+Demand, candidate, recommendation, ranking-reference and map-matching labels
+are evaluation-only. Runtime inputs and relationships are documented in
+[DATA_CONTRACT](docs/DATA_CONTRACT.md).
 
-## Critical Rules
+The six-week sequence remains map matching, demand, candidates/routing, ranking,
+realtime recommendation/evaluation, and productionization. This migration adds
+no Week 4 ranking, traffic-cost optimization, or additional runtime engines.
 
-1. **Labels are evaluation-only** — Never consume `demand_labels.csv`, `candidate_labels.csv`, `recommendation_labels.csv`, `ranking_reference.csv`, or `map_matching_labels.csv.gz` as runtime input.
-
-2. **Dataset V1 is read-only** — Do not modify, regenerate, or move files inside `dataset_v1/`.
-
-3. **Map routing** — `hanoi-patched.osm.pbf` is primary. `hanoi-baseline.osm.pbf` is reference.
-
-4. **Week boundaries** — Implement only the current week's scope. Do not build future weeks' features early.
-
----
-
-## Definition of Done
-
-Milestone 0 PASS requires:
-
-### Repository
-- [x] Git initialized
-- [x] Project structure created
-- [x] AGENTS.md created
-- [x] Documentation created
-
-### Data
-- [x] Dataset V1 untouched
-- [x] Dataset validation runnable
-- [x] Dataset validation passes (163/163 PASS)
-
-### Map
-- [x] Baseline PBF exists
-- [x] Patched PBF exists
-- [x] Neither PBF modified
-- [x] OSRM preprocessing pipeline ready
-- [x] OSRM artifacts stored outside Dataset V1
-
-### Infrastructure
-- [x] Docker Compose valid
-- [x] FastAPI running with /health
-- [x] PostgreSQL/PostGIS configured
-- [x] OSRM configured
-
-### FastAPI
-- [x] /health returns 200
-- [x] /ready works (checks OSRM)
-
-### OSRM
-- [x] Sample trajectory selected (T0001, 273 GPS observations)
-- [x] Smoke test script created
-
-### Testing
-- [x] pytest runs
-- [x] Milestone 0 tests pass (4/4)
-
-### Boundaries
-- [x] Dataset V1 not mutated
-- [x] No MapMatchingService
-- [x] No Week 2–6 features
-
----
-
-## Getting Help
-
-1. Read `docs/PROJECT_SCOPE.md` — Project overview
-2. Read `docs/ACCEPTANCE_CRITERIA.md` — What's required
-3. Read `docs/DATA_CONTRACT.md` — How the data is organized
-4. Read `docs/ARCHITECTURE.md` — Current and planned system
-5. Read `docs/DECISIONS.md` — Why decisions were made
-6. Read `AGENTS.md` — Rules for coding agents
-
----
-
-## Milestone 0 Status
-
-**MILESTONE 0: PASS** ✅
-
-**READY FOR WEEK 1 — MAP MATCHING**
+The old Milestone 0 README described OSRM and four foundation tests. That is
+historical evidence, superseded for current operation by this document and
+[ADR-010](docs/DECISIONS.md#adr-010-graphhopper-as-the-sole-routing-and-matching-runtime).
+Start further work with [AGENTS.md](AGENTS.md),
+[PROJECT_SCOPE](docs/PROJECT_SCOPE.md), [ACCEPTANCE_CRITERIA](docs/ACCEPTANCE_CRITERIA.md),
+and the [migration execution plan](docs/GRAPHHOPPER_FULL_MIGRATION_PLAN.md).

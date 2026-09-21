@@ -1,3 +1,7 @@
+# Archived Week 1 baseline instructions
+
+Historical evidence only. These instructions are superseded by `docs/ARCHITECTURE.md` and `docs/GRAPHHOPPER_MIGRATION_REPORT.md`; do not use them to configure the current runtime.
+
 ---
 name: week1-map-matching
 description: Use this skill for Week 1 implementation, review, debugging, or evaluation of the Green SM Map Matching scope. It governs the pipeline from Dataset V1 GPS observations through OSRM Match to normalized road-position outputs and evaluation against map-matching labels. Do not use it for Demand Detection, station search, ranking, or later-week features.

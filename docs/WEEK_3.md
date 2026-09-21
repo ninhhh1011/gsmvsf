@@ -1,214 +1,179 @@
-# WEEK 3: CANDIDATE SEARCH & ENGINE-INDEPENDENT ROUTING
+﻿# Week 3: Candidate Search and Routing
 
-**Project:** VinFast EV Charging & Battery-Swap Recommendation System  
-**Milestone:** Week 3 Complete  
-**Deliverables:** Candidate Search Pipeline, Engine-Independent Routing Domain, OSRM Routing Adapter, Multi-Leg Route & Detour Calculations, Deterministic Candidate Eligibility, REST API (`/api/v1/candidate-search`), Dataset V1.3.1 Evaluation Replay.
+Updated 2026-09-21. Candidate search and routing are implemented with GraphHopper
+as the sole runtime. Historical Week 3 completion and evaluation records are
+retained below as superseded evidence. Functional migration verification passed:
+239 tests including 71 Week 3 tests, live API/outage checks, and unchanged hashes
+for all 63 Dataset files. Final reporting and the formal freeze gate remain
+governed by [GRAPHHOPPER_FULL_MIGRATION_PLAN](GRAPHHOPPER_FULL_MIGRATION_PLAN.md).
 
----
+## Scope and interfaces
 
-## 1. Official Week 3 Scope & Objectives
+Week 3 consumes Week 2's normalized `EnergyServiceRequest`, evaluates every
+station/service alternative, and supplies eligibility plus physical routing
+metrics for later ranking. It adds no scores, ranking weights, selected best
+station, or Week 4 recommendation behavior.
 
-Week 3 consumes the normalized `EnergyServiceRequest` produced by Week 2 Demand Detection and answers:
-1. Which station/service alternatives are physically compatible with the vehicle?
-2. Which stations are operational and have capacity to serve the vehicle?
-3. Which stations are reachable with the driver's current energy state?
-4. What is the route from driver → station?
-5. What is the route from station → destination?
-6. What are the key routing metrics:
-   - Base ETA / route duration
-   - Network distance
-   - Via-route distance and duration
-   - Detour distance and detour duration
-7. Return a clean, evaluated candidate set for Week 4 Ranking.
+- `POST /api/v1/candidate-search`: evaluate an energy request and optional destination.
+- `POST /api/v1/candidate-search/evaluate`: telemetry through existing Week 2 demand evaluation, then search.
+- `POST /api/v1/route`: domain `RouteRequest` to a road-network `RouteResult`, with optional via points.
 
-### Strict Architectural Boundaries
-- **Week 3 does NOT decide**: "Which candidate is the final best station?"
-- **No Ranking Leakage**: No ranking weights, no ranking scores, no recommendations.
-- **Strict Ordering**: ALL STATIONS → EXPAND SERVICE ALTERNATIVES → FULL ELIGIBILITY → ELIGIBLE CANDIDATES. Never filter top-N by Euclidean distance prior to eligibility evaluation.
-- **Labels are Evaluation-Only**: `dataset_v1/labels/candidate_labels.csv` is strictly used for testing and offline evaluation. Runtime logic derives decisions dynamically.
+`CandidateSearchService` requires an injected `RoutingEngine`; production wiring
+uses GraphHopper only. `EV_CAR -> car` and `EV_MOTORBIKE -> motorcycle` apply to
+routing and matching. Missing category is resolved from vehicle capability where
+available, while conflicts and unsupported categories are rejected. Profile
+hints cannot override category. Nonempty constraints, dynamic context and
+objectives other than `MIN_TRAVEL_TIME` are explicitly unsupported.
+Production routing and matching share one asynchronous HTTP client created and
+closed by the application lifespan.
 
----
+GraphHopper 11 route geometry is the encoded `paths[0].points` string. Distance
+is meters; time is converted from milliseconds to seconds. The adapter requests
+real `leg_distance` and `leg_time` details; via-leg totals are never split equally
+as an estimate. Success payloads and metrics are validated.
 
-## 2. System Architecture & Boundaries
+## Candidate expansion and eligibility
 
-Aligned with the mentor directive:
-> *"custom route nhiều nhất, dynamic nhất có thể, không gò bó vào việc dễ triển khai, phải nhìn bao quát"*
+The required sequence remains:
 
-```
-                    Week 2: Demand Detection
-                               │ (EnergyServiceRequest)
-                               ▼
-               ┌───────────────────────────────┐
-               │    CandidateSearchService     │
-               └───────────────┬───────────────┘
-                               │
-       ┌───────────────────────┼───────────────────────┐
-       ▼                       ▼                       ▼
-┌──────────────┐      ┌─────────────────┐     ┌─────────────────┐
-│StationCatalog│      │EligibilityEngine│     │Routing Domain   │
-│(30 stations) │      │(Deterministic   │     │(RouteRequest,   │
-│              │      │ Precedence)     │     │ RouteResult)    │
-└──────────────┘      └─────────────────┘     └────────┬────────┘
-                                                       │
-                                                       ▼
-                                            ┌─────────────────────┐
-                                            │<<RoutingEngine>>    │
-                                            │Protocol             │
-                                            └──────────┬──────────┘
-                                                       │
-                                         ┌─────────────┴─────────────┐
-                                         ▼                           ▼
-                              ┌────────────────────┐      ┌────────────────────┐
-                              │ OSRMRoutingAdapter │      │ MockRoutingAdapter │
-                              │ (/route/v1/driving)│      │ (In-memory/offline)│
-                              └────────────────────┘      └────────────────────┘
+```text
+ALL STATIONS -> SERVICE ALTERNATIVES -> FULL ELIGIBILITY
+             -> ELIGIBLE CANDIDATES -> OPTIONAL DETERMINISTIC REDUCTION
 ```
 
----
+Candidate identity is `(station_id, service_type)`. All 30 stations are evaluated
+for CHARGING-only requests or explicit BATTERY_SWAP requests. Swap-capable
+unresolved AUTO or explicit ANY requests expand both services, yielding 60
+alternatives. A BOTH station remains two candidate identities. No nearest-N
+straight-line prefilter may exclude candidates before eligibility.
 
-## 3. Candidate Identity & Multi-Service Expansion
+Reason precedence remains:
 
-### 3.1 Candidate Identity
-Candidate identity is strictly represented as the composite tuple:
-$$\text{Candidate Identity} = (\text{station\_id}, \text{service\_type})$$
-
-This ensures that multi-service physical stations (e.g. S005, S010, S020, S025 which provide both `CHARGING` and `BATTERY_SWAP`) produce **two distinct candidate alternatives** for swap-capable vehicles.
-
-### 3.2 Service Expansion
-- **Car**: Only `CHARGING` is evaluated → yields 30 candidate alternatives across all 30 stations.
-- **Charge-Only Motorcycle**: Only `CHARGING` is evaluated → yields 30 candidate alternatives.
-- **Swap-Capable Motorcycle (AUTO Unresolved)**: Evaluates BOTH `CHARGING` and `BATTERY_SWAP` → yields 60 candidate alternatives (30 charging + 30 swap).
-- **Driver Request (ANY)**: Evaluates all allowed service types for the vehicle without forcing premature resolution.
-
----
-
-## 4. Candidate Eligibility & Deterministic Precedence
-
-Eligibility is evaluated using the exact deterministic chain frozen in Dataset V1.3.1:
-
-```
-Routing Reachability (np.isfinite(dist))
-  ├── False ──► UNREACHABLE
-  └── True
-        ▼
-Physical & Connector Compatibility
-  ├── False ──► INCOMPATIBLE
-  └── True
-        ▼
-Operational Status (status == 'OPEN')
-  ├── False ──► OFFLINE
-  └── True
-        ▼
-Swap Battery Inventory (service == BATTERY_SWAP and slots > 0 and batt <= 0)
-  ├── True ──► NO_SWAP_BATTERY
-  └── False
-        ▼
-Capacity (capacity <= 0)
-  ├── True ──► FULL
-  └── False
-        ▼
-Queue Wait Time (estimated_wait_min > 90.0 min)
-  ├── True ──► EXCESSIVE_QUEUE
-  └── False
-        ▼
-Energy Feasibility to Station (dist_km + 0.5 <= remaining_range_km)
-  ├── False ──► INSUFFICIENT_SOC_TO_REACH
-  └── True ──► ELIGIBLE
+```text
+UNREACHABLE -> INCOMPATIBLE -> OFFLINE -> NO_SWAP_BATTERY -> FULL
+            -> EXCESSIVE_QUEUE -> INSUFFICIENT_SOC_TO_REACH -> ELIGIBLE
 ```
 
----
+The existing operational, compatibility and demand policies are unchanged:
+closed station state, service-specific slot/battery availability, queue waiting
+over 90 minutes, and energy feasibility retain their established rules.
+Charging service time is 18 minutes; swap is 6 minutes. Energy feasibility is
+`network_distance_m / 1000 + 0.5 <= estimated_remaining_range_km`.
+Labels remain evaluation-only and are never loaded by the runtime search.
 
-## 5. Multi-Leg Routing & Detour Calculations
+## Multi-leg metrics and failures
 
-### 5.1 Route Legs
-For each candidate station and destination:
-- **Leg 1 (Driver → Station)**: $D_{1}$, $T_{1}$
-- **Leg 2 (Station → Destination)**: $D_{2}$, $T_{2}$
-- **Direct Route (Driver → Destination)**: $D_{\text{direct}}$, $T_{\text{direct}}$ (computed once per request and cached)
+For each physical station:
 
-### 5.2 Derived Metrics
-$$\text{Via Total Distance} = D_{\text{via}} = D_{1} + D_{2}$$
-$$\text{Via Total Duration} = T_{\text{via}} = T_{1} + T_{2}$$
-$$\text{Detour Distance} = \Delta D = \max(0.0, D_{\text{via}} - D_{\text{direct}})$$
-$$\text{Detour Duration} = \Delta T = \max(0.0, T_{\text{via}} - T_{\text{direct}})$$
-$$\text{Base ETA to Station} = T_{1}$$
+- Leg 1: driver to station, `D1`, `T1`; station ETA is `T1`.
+- Leg 2: station to destination, `D2`, `T2`.
+- Direct route: driver to destination, `Ddirect`, `Tdirect`.
+- Via totals: `D1 + D2`, `T1 + T2`.
+- Detour: `max(0, Dvia - Ddirect)`, `max(0, Tvia - Tdirect)`.
 
-### 5.3 Missing Destination Fallback
-When destination coordinates are not provided:
-- Leg 1 is computed normally.
-- Leg 2 and direct route are skipped.
-- Destination distance, direct distance, and detour metrics are returned as `None`.
-- Station candidates are evaluated on reachable and energy feasibility without error.
+Direct and station-route results are cached only within one request. Charging
+and swap alternatives share the same physical station routes. With a destination
+and 30 reachable stations this makes 61 route calls for either 30 or 60
+alternatives. Without a destination, only 30 station calls are made and onward,
+direct and detour fields remain null.
 
----
+A genuine failed direct route is cached so it is not retried per station. If
+both station legs succeed, their actual via totals are returned even when the
+direct route is NO_ROUTE; direct/detour metrics remain null. An onward NO_ROUTE
+retains station-only metrics. A no-route station leg yields UNREACHABLE.
 
-## 6. Energy Feasibility to Station
+Infrastructure failures from direct, station or onward calls propagate as 503;
+timeouts as 504; invalid routing requests as 422. They never become a successful
+search full of unreachable stations. Standalone `/route` returns 404 for a
+genuine no-path result. There is no alternate engine, fake distance or mock
+fallback.
 
-Candidate Search evaluates whether the vehicle can physically reach the station on current battery state:
-$$\text{soc\_feasible} = \left(\frac{\text{network\_distance\_m}}{1000.0} + 0.5 \le \text{estimated\_remaining\_range\_km}\right)$$
-- Always uses road network distance, never straight-line Euclidean distance as proof.
-- Uses canonical 0.5 km safety reserve buffer.
+## Live GraphHopper verification and benchmark
 
----
+Run from the repository root with `DEBUG=false`:
 
-## 7. Performance Baseline
-
-Measured using 100 end-to-end candidate search executions evaluating all 30 stations and 60 service alternatives:
-
-| Metric | Measured Value |
-|---|---|
-| End-to-End Latency (Min) | 61.19 ms |
-| End-to-End Latency (Median) | 86.38 ms |
-| End-to-End Latency (Mean) | 157.43 ms |
-| End-to-End Latency (P90) | 156.14 ms |
-| End-to-End Latency (P95) | 285.43 ms |
-| Route Calls per Search | 61 (1 direct route + 30 driver→station + 30 station→dest) |
-| Throughput | 11.6 searches / second |
-
----
-
-## 8. Dataset V1.3.1 Replay Evaluation
-
-Runtime candidate eligibility was evaluated against all 31,440 canonical rows in `dataset_v1/labels/candidate_labels.csv`:
-
-```
-==================================================
-DATASET V1.3.1 REPLAY EVALUATION REPORT
-==================================================
-Total Rows Evaluated: 31440
-Eligible/Ineligible Agreement: 31440/31440 (100.0%)
-Reason Code Agreement: 31440/31440 (100.0%)
-Confusion Matrix: TP=7474, TN=23966, FP=0, FN=0
-  CHARGING: Total=25440, Eligible Agreement=100.0%, Reason Agreement=100.0%
-  BATTERY_SWAP: Total=6000, Eligible Agreement=100.0%, Reason Agreement=100.0%
+```bash
+python scripts/smoke_test_week3.py
+python scripts/verify_graphhopper.py
+python scripts/benchmark_week3.py --iterations 20
 ```
 
----
+Smoke verifies both profiles, actual via legs, car/fixed-bike/swap/BOTH requests,
+missing destination and the `/route` API. It fails when GraphHopper is unavailable.
+The benchmark uses 20 distinct canonical trip starts, five per case, after four
+warmup searches. Its forwarding counter preserves every real adapter result.
+Inputs are vehicles, trips, road nodes and earliest SOC telemetry; explicit
+driver requests exercise the service alternatives without changing the data.
 
-## 9. Week 4 Handoff Contract
+Measured 2026-09-21:
 
-Candidate Search produces `CandidateSearchResult` containing a list of `EvaluatedCandidate` records. Each candidate provides Week 4 Ranking with:
-- `station_id`: Unique station identifier
-- `service_type`: `CHARGING` or `BATTERY_SWAP`
-- `eligible`: Boolean flag (`True` if all eligibility criteria met)
-- `reason`: Explainable reason code (`ELIGIBLE`, `OFFLINE`, `FULL`, `INCOMPATIBLE`, `INSUFFICIENT_SOC_TO_REACH`, etc.)
-- `station_latitude`, `station_longitude`: Geographic position
-- `network_distance_m`: True road distance to station
-- `soc_feasible`: Boolean reachability proof
-- `operational`:
-  - `operating_status`: Operational state (`OPEN`, `OFFLINE`)
-  - `available_service_slots`: Available bays
-  - `available_swap_batteries`: Charged swap batteries
-  - `available_capacity`: Usable capacity
-  - `queue_length`: Waiting vehicles
-  - `estimated_wait_min`: Estimated queue wait time
-  - `service_time_min`: Nominal service duration
-- `route_metrics`:
-  - `distance_to_station_m`: Route distance to station
-  - `duration_to_station_s`: Base ETA to station
-  - `distance_station_to_dest_m`: Leg 2 distance
-  - `via_total_distance_m`: Total trip distance via station
-  - `detour_distance_m`: Added distance over direct route
-  - `detour_duration_s`: Added travel time over direct route
+| Case | Searches | Median ms | P90 ms | P95 ms | Maximum ms |
+|---|---:|---:|---:|---:|---:|
+| Car charging | 5 | 819.065 | 1,172.857 | 1,205.560 | 1,238.263 |
+| Fixed-battery bike charging | 5 | 1,201.373 | 1,259.034 | 1,266.330 | 1,273.626 |
+| Explicit swap | 5 | 1,005.768 | 1,622.522 | 1,665.189 | 1,707.856 |
+| ANY/BOTH | 5 | 764.405 | 787.806 | 791.276 | 794.746 |
+| All cases | 20 | 938.140 | 1,295.715 | 1,505.187 | 1,707.856 |
 
-**Week 4 Ranking Boundary**: Week 4 will filter `[c for c in result.candidates if c.eligible]` and apply multi-criteria scoring (travel time + queue wait + service time + detour + battery availability) to produce the final recommendation.
+All 1,220 measured route calls succeeded. Every search made exactly 61 calls;
+BOTH retained 60 alternatives. Percentiles use linear interpolation. These are
+`CandidateSearchService.search_candidates` measurements using an injected shared
+HTTP client; initial catalog/fixture loading and HTTP API overhead are excluded.
+They are not production endpoint latency, concurrency capacity, or an acceptance
+claim against an unmeasured production target.
+
+Evidence lives in `runtime/migration/graphhopper-routing-smoke.json` and
+`runtime/migration/graphhopper-week3-benchmark.json`, including full requests,
+trip identities, candidate metrics, per-search times and route counts.
+
+A separate deployed HTTP API benchmark includes serialization and station search
+using the shared application client. Each concurrency level used 20 requests;
+the evidence labels it an initial local GraphHopper performance baseline.
+
+| Concurrency | Requests | Median ms | P90 ms | P95 ms | Maximum ms | Throughput/s |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 20 | 777.228 | 896.463 | 955.799 | 1,354.926 | 1.230 |
+| 5 | 20 | 2,384.797 | 2,917.589 | 2,945.508 | 2,974.883 | 2.059 |
+| 10 | 20 | 6,621.727 | 7,337.150 | 7,358.554 | 7,477.629 | 1.457 |
+
+These are actual endpoint measurements, distinct from the earlier service-only
+benchmark above. They show increased per-request latency under concurrency and
+do not establish a production SLA. `runtime/migration/api-smoke.json` preserves
+the exact numbers and normal route/matching/candidate/realtime checks.
+`api-outage.json` confirms route/matching/candidate 503, realtime
+`ENGINE_UNAVAILABLE`, liveness 200 and readiness 503 when GraphHopper is unavailable.
+
+The motorcycle model shares `car_access`; `motorcar=no` excludes motorcycles too,
+including the patched bridge. No complete independent motorcycle-access claim
+is made. [ROUTING_STRATEGY](ROUTING_STRATEGY.md) describes this limitation and the
+current matching projection/PostGIS quality semantics.
+Ambiguous projected traversal or PostGIS directed-segment ties return
+`AMBIGUOUS` with road segment and direction withheld, even when the geometric
+location matched. Matching coverage must not be substituted for resolved-identity
+or direction accuracy.
+
+## Historical evidence: superseded for current runtime
+
+The earlier Week 3 report recorded 100 searches with minimum 61.19 ms, median
+86.38 ms, mean 157.43 ms, P90 156.14 ms and P95 285.43 ms; it reported 61 calls and
+11.6 searches/second. The inherited benchmark used a mock routing adapter, so
+those figures do not measure the current live GraphHopper deployment and must
+not be presented as its realtime latency.
+
+The earlier eligibility replay reported 31,440/31,440 eligible/ineligible and
+reason-code agreement (TP 7,474; TN 23,966; FP/FN 0), split as 25,440 CHARGING and
+6,000 BATTERY_SWAP rows. This is historical eligibility-policy evidence. It does
+not establish current GraphHopper route agreement, map-matching quality, or new
+freeze acceptance. Any migration evaluation must identify its actual runtime,
+fixture scope and evaluation-only label use.
+
+## Week 4 handoff remains unchanged
+
+`CandidateSearchResult` carries search status, evaluated count, eligible count,
+and `EvaluatedCandidate` records. Each record includes station/service identity,
+eligibility/reason, location/access node, network distance, energy feasibility,
+operational snapshot and `CandidateRouteMetrics`. Operational snapshots include
+status, capacity, queue, wait, service time and timestamp. Route metrics include
+station and onward legs, via/direct/detour distance and duration, and station ETA.
+Future ranking consumes eligible candidates and these domain fields; it must
+not depend on GraphHopper HTTP fields or invent missing traffic adjustments.

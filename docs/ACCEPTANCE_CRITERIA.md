@@ -6,8 +6,10 @@ Dataset V1 is the canonical development dataset. All acceptance criteria referen
 
 ### Dataset Validation
 
-- **163 structural + semantic validation checks**: All PASS
-- **21 scenario assertions**: All PASS
+Counts were corrected against the canonical V1.3.1 validator executed during migration; Dataset files and validation rules were not changed.
+
+- **152 structural + semantic validation checks**: All PASS
+- **22 scenario assertions**: All PASS
 - **PBF integrity**: Both hanoi-baseline.osm.pbf and hanoi-patched.osm.pbf byte-for-byte intact
 - **Key counts preserved**:
   - 339,441 road nodes

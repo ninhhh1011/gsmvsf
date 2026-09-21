@@ -18,7 +18,7 @@ regressions, not engine choice.
   recorded in the Dockerfile and execution report. No floating GraphHopper image.
 - Import only read-only `dataset_v1/map/raw/hanoi-patched.osm.pbf`. Import occurs
   with `java -jar graphhopper.jar server config.yml`, cached under ignored
-  `runtime/graphhopper/graph-cache-11`. Existing snapshot cache is not reused.
+  `runtime/graphhopper/gh-cache-11`. Existing snapshot cache is not reused.
 - Port 8989; only car and motorcycle profiles. CH for routing; matching uses
   the same profile weighting and disables CH internally.
 
@@ -45,7 +45,7 @@ edge/node IDs are never represented as Dataset segment or OSM identifiers.
 Segment IDs come from the existing PostGIS resolver, constrained by actual
 matched OSM way where present and path traversal bearing; unresolved identities
 remain null. Matching confidence is a project-defined geometric residual quality
-`exp(-0.5 * (distance_m / gps_accuracy_m)^2)`, not the historical engine confidence.
+`max(0, 1 - distance_m / 100)`, not the historical engine confidence.
 Report the method and parameters; never describe it as a calibrated probability.
 
 ## Motorcycle semantics

@@ -1,0 +1,1138 @@
+{
+  "date": "2026-09-21",
+  "tests": {
+    "Week 2": 69,
+    "Week 3": 71,
+    "Week 1": 37,
+    "GraphHopper migration": 62
+  },
+  "dataset": {
+    "files_checked": 63,
+    "changed": [],
+    "status": "PASS"
+  },
+  "validation": {
+    "checks_passed": 152,
+    "checks_failed": 0,
+    "scenarios_passed": 22,
+    "scenarios_failed": 0
+  },
+  "matching": {
+    "all_observations": {
+      "counts": {
+        "labeled": 65847,
+        "matched": 65078,
+        "resolved": 24263,
+        "directed_segment": 17543,
+        "base_segment": 17703,
+        "osm_way": 52690,
+        "direction": 22399
+      },
+      "match_rate": 0.9883214117575592,
+      "accuracy_among_matched": {
+        "directed_segment": 0.26956882510218505,
+        "base_segment": 0.2720274132579366,
+        "osm_way": 0.8096438120409355,
+        "direction": 0.3441869756292449
+      },
+      "accuracy_among_all_labeled": {
+        "directed_segment": 0.2664206417908181,
+        "base_segment": 0.2688505171078409,
+        "osm_way": 0.8001883153370692,
+        "direction": 0.3401673576624599
+      },
+      "position_error_m_among_matched": {
+        "count": 65078,
+        "mean": 8.100820586527698,
+        "median": 5.043303993243747,
+        "p90": 16.511894449986464,
+        "p95": 25.751675301394396,
+        "max": 131.4961260058346
+      },
+      "mismatch_categories": {
+        "unresolved_segment": 40815,
+        "different_way": 3755,
+        "different_segment_same_way": 2805,
+        "wrong_direction_same_base": 160
+      },
+      "largest_error_mismatches": [
+        {
+          "observation_id": "O00051151",
+          "position_error_m": 131.4961260058346,
+          "expected_segment": "973038844_0_R",
+          "actual_segment": null,
+          "expected_way": 973038844,
+          "actual_way": 896452399,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00051300",
+          "position_error_m": 129.87499009218737,
+          "expected_segment": "973038851_0_R",
+          "actual_segment": null,
+          "expected_way": 973038851,
+          "actual_way": 973038845,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00051215",
+          "position_error_m": 124.11826961139455,
+          "expected_segment": "973038851_0_R",
+          "actual_segment": null,
+          "expected_way": 973038851,
+          "actual_way": null,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00051146",
+          "position_error_m": 115.85389487415708,
+          "expected_segment": "973038844_5_R",
+          "actual_segment": "896452399_3_F",
+          "expected_way": 973038844,
+          "actual_way": 896452399,
+          "expected_direction": "REVERSE",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00051316",
+          "position_error_m": 115.49444269388216,
+          "expected_segment": "896452847_3_R",
+          "actual_segment": null,
+          "expected_way": 896452847,
+          "actual_way": 709651124,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00051148",
+          "position_error_m": 115.3891604165619,
+          "expected_segment": "973038844_3_R",
+          "actual_segment": null,
+          "expected_way": 973038844,
+          "actual_way": 896452399,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00051263",
+          "position_error_m": 114.78854650002631,
+          "expected_segment": "896452847_2_F",
+          "actual_segment": "777614206_1_F",
+          "expected_way": 896452847,
+          "actual_way": 777614206,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00051004",
+          "position_error_m": 112.74142326768191,
+          "expected_segment": "973038851_0_F",
+          "actual_segment": null,
+          "expected_way": 973038851,
+          "actual_way": 896452399,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00051033",
+          "position_error_m": 112.18663110061655,
+          "expected_segment": "896452847_2_F",
+          "actual_segment": "777614206_1_F",
+          "expected_way": 896452847,
+          "actual_way": 777614206,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00051207",
+          "position_error_m": 111.07081818691522,
+          "expected_segment": "973038844_6_F",
+          "actual_segment": "896452399_4_F",
+          "expected_way": 973038844,
+          "actual_way": 896452399,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        }
+      ],
+      "first_mismatches": [
+        {
+          "observation_id": "O00000001",
+          "position_error_m": 0.1431537963369131,
+          "expected_segment": "897474222_0_F",
+          "actual_segment": null,
+          "expected_way": 897474222,
+          "actual_way": 897474222,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000016",
+          "position_error_m": 4.0601928383515835,
+          "expected_segment": "897474871_1_F",
+          "actual_segment": "945225810_0_R",
+          "expected_way": 897474871,
+          "actual_way": 945225810,
+          "expected_direction": "FORWARD",
+          "actual_direction": "REVERSE",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000019",
+          "position_error_m": 4.2342478617479165,
+          "expected_segment": "897474871_2_F",
+          "actual_segment": null,
+          "expected_way": 897474871,
+          "actual_way": null,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000020",
+          "position_error_m": 13.639145578305326,
+          "expected_segment": "897474869_0_F",
+          "actual_segment": "897474871_1_F",
+          "expected_way": 897474869,
+          "actual_way": 897474871,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000026",
+          "position_error_m": 3.587514627467347,
+          "expected_segment": "897474869_2_F",
+          "actual_segment": "897474869_1_F",
+          "expected_way": 897474869,
+          "actual_way": 897474869,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000028",
+          "position_error_m": 1.433591085703591,
+          "expected_segment": "897474869_4_F",
+          "actual_segment": null,
+          "expected_way": 897474869,
+          "actual_way": 897474869,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000029",
+          "position_error_m": 5.71619933562107,
+          "expected_segment": "897474869_5_F",
+          "actual_segment": "897474869_4_F",
+          "expected_way": 897474869,
+          "actual_way": 897474869,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000030",
+          "position_error_m": 9.48787109420098,
+          "expected_segment": "897474222_3_R",
+          "actual_segment": "897474869_4_F",
+          "expected_way": 897474222,
+          "actual_way": 897474869,
+          "expected_direction": "REVERSE",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000031",
+          "position_error_m": 1.3051117669494758,
+          "expected_segment": "897474222_2_R",
+          "actual_segment": null,
+          "expected_way": 897474222,
+          "actual_way": 897474222,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000033",
+          "position_error_m": 2.8165016276170998,
+          "expected_segment": "897473997_3_R",
+          "actual_segment": "897473997_4_R",
+          "expected_way": 897473997,
+          "actual_way": 897473997,
+          "expected_direction": "REVERSE",
+          "actual_direction": "REVERSE",
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "ROUTE_SPATIAL"
+        }
+      ]
+    },
+    "selected_observations": {
+      "counts": {
+        "labeled": 5029,
+        "matched": 4967,
+        "resolved": 1846,
+        "directed_segment": 1345,
+        "base_segment": 1356,
+        "osm_way": 3983,
+        "direction": 1698
+      },
+      "match_rate": 0.9876715052694373,
+      "accuracy_among_matched": {
+        "directed_segment": 0.27078719549023555,
+        "base_segment": 0.2730018119589289,
+        "osm_way": 0.8018924904368834,
+        "direction": 0.3418562512583048
+      },
+      "accuracy_among_all_labeled": {
+        "directed_segment": 0.2674487969775303,
+        "base_segment": 0.2696361105587592,
+        "osm_way": 0.7920063630940545,
+        "direction": 0.33764167826605684
+      },
+      "position_error_m_among_matched": {
+        "count": 4967,
+        "mean": 8.104059057376007,
+        "median": 5.019365053573823,
+        "p90": 16.4719623223368,
+        "p95": 26.604231943515753,
+        "max": 101.84918876391595
+      },
+      "mismatch_categories": {
+        "unresolved_segment": 3121,
+        "different_way": 290,
+        "different_segment_same_way": 200,
+        "wrong_direction_same_base": 11
+      },
+      "largest_error_mismatches": [
+        {
+          "observation_id": "O00003199",
+          "position_error_m": 101.84918876391595,
+          "expected_segment": "1237194362_1_F",
+          "actual_segment": null,
+          "expected_way": 1237194362,
+          "actual_way": 1237194362,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00002432",
+          "position_error_m": 98.01604239002717,
+          "expected_segment": "1312361107_3_R",
+          "actual_segment": "180085312_38_F",
+          "expected_way": 1312361107,
+          "actual_way": 180085312,
+          "expected_direction": "REVERSE",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00002536",
+          "position_error_m": 97.91400279282297,
+          "expected_segment": "1312361107_3_R",
+          "actual_segment": null,
+          "expected_way": 1312361107,
+          "actual_way": 180085312,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00010011",
+          "position_error_m": 96.88223963943011,
+          "expected_segment": "825636872_7_R",
+          "actual_segment": null,
+          "expected_way": 825636872,
+          "actual_way": 1474965706,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00009933",
+          "position_error_m": 95.46359116300637,
+          "expected_segment": "825636872_32_R",
+          "actual_segment": null,
+          "expected_way": 825636872,
+          "actual_way": 1207058962,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00053249",
+          "position_error_m": 90.10039229956013,
+          "expected_segment": "896892087_3_R",
+          "actual_segment": null,
+          "expected_way": 896892087,
+          "actual_way": 897004581,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00009920",
+          "position_error_m": 89.90916702866944,
+          "expected_segment": "825636872_38_F",
+          "actual_segment": null,
+          "expected_way": 825636872,
+          "actual_way": 1207058962,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00047386",
+          "position_error_m": 88.59220871455183,
+          "expected_segment": "601548947_0_F",
+          "actual_segment": null,
+          "expected_way": 601548947,
+          "actual_way": 601548949,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00009881",
+          "position_error_m": 88.21419800062661,
+          "expected_segment": "825636872_12_F",
+          "actual_segment": null,
+          "expected_way": 825636872,
+          "actual_way": 1207058962,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00051247",
+          "position_error_m": 87.55070776324229,
+          "expected_segment": "896452847_1_R",
+          "actual_segment": null,
+          "expected_way": 896452847,
+          "actual_way": 709651124,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "AMBIGUOUS"
+        }
+      ],
+      "first_mismatches": [
+        {
+          "observation_id": "O00000001",
+          "position_error_m": 0.1431537963369131,
+          "expected_segment": "897474222_0_F",
+          "actual_segment": null,
+          "expected_way": 897474222,
+          "actual_way": 897474222,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000053",
+          "position_error_m": 15.367118772941668,
+          "expected_segment": "326184604_18_F",
+          "actual_segment": "326184607_22_F",
+          "expected_way": 326184604,
+          "actual_way": 326184607,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000157",
+          "position_error_m": 16.94417062185106,
+          "expected_segment": "601916835_5_F",
+          "actual_segment": "601916855_3_F",
+          "expected_way": 601916835,
+          "actual_way": 601916855,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000170",
+          "position_error_m": 6.176670277145472,
+          "expected_segment": "326184607_37_F",
+          "actual_segment": "326184607_36_F",
+          "expected_way": 326184607,
+          "actual_way": 326184607,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000196",
+          "position_error_m": 4.858012871295333,
+          "expected_segment": "326184604_1_F",
+          "actual_segment": "326481659_0_F",
+          "expected_way": 326184604,
+          "actual_way": 326481659,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": false,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000222",
+          "position_error_m": 6.634081002655003,
+          "expected_segment": "326184604_7_F",
+          "actual_segment": "326184604_6_F",
+          "expected_way": 326184604,
+          "actual_way": 326184604,
+          "expected_direction": "FORWARD",
+          "actual_direction": "FORWARD",
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "ROUTE_SPATIAL"
+        },
+        {
+          "observation_id": "O00000261",
+          "position_error_m": 3.162010038040368,
+          "expected_segment": "897474871_12_F",
+          "actual_segment": null,
+          "expected_way": 897474871,
+          "actual_way": 897474871,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000274",
+          "position_error_m": 6.154692354265832,
+          "expected_segment": "1008994656_2_F",
+          "actual_segment": null,
+          "expected_way": 1008994656,
+          "actual_way": 1008994656,
+          "expected_direction": "FORWARD",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000287",
+          "position_error_m": 4.554674623311036,
+          "expected_segment": "1008994658_2_R",
+          "actual_segment": null,
+          "expected_way": 1008994658,
+          "actual_way": 1008994658,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        },
+        {
+          "observation_id": "O00000300",
+          "position_error_m": 13.030999513348759,
+          "expected_segment": "1008994657_2_R",
+          "actual_segment": null,
+          "expected_way": 1008994657,
+          "actual_way": 1008994657,
+          "expected_direction": "REVERSE",
+          "actual_direction": null,
+          "same_base": false,
+          "same_way": true,
+          "resolution_status": "AMBIGUOUS"
+        }
+      ]
+    },
+    "request_statuses": {
+      "SUCCESS": 150
+    },
+    "latency_ms": {
+      "all": {
+        "http_latency_ms": {
+          "count": 150,
+          "mean": 263.3517226654415,
+          "median": 119.14535000687465,
+          "p90": 482.1724399691446,
+          "p95": 701.0645999922401,
+          "max": 5982.719100022223
+        },
+        "service_latency_ms": {
+          "count": 150,
+          "mean": 2223.220985332349,
+          "median": 1733.6692000098992,
+          "p90": 4184.902930021052,
+          "p95": 6047.07966999558,
+          "max": 12211.703400011174
+        }
+      },
+      "2_to_250": {
+        "http_latency_ms": {
+          "count": 22,
+          "mean": 157.027436359468,
+          "median": 46.86319999746047,
+          "p90": 173.90561999054637,
+          "p95": 217.79288495890793,
+          "max": 2066.7747000115924
+        },
+        "service_latency_ms": {
+          "count": 22,
+          "mean": 632.9057545438197,
+          "median": 546.0967500403058,
+          "p90": 993.1157999613795,
+          "p95": 1337.5491400336612,
+          "max": 2470.5379999941215
+        }
+      },
+      "251_to_500": {
+        "http_latency_ms": {
+          "count": 68,
+          "mean": 232.8831147058415,
+          "median": 117.31529998360202,
+          "p90": 312.3177999863403,
+          "p95": 600.4925099550745,
+          "max": 3792.657899961341
+        },
+        "service_latency_ms": {
+          "count": 68,
+          "mean": 1841.598194114768,
+          "median": 1456.8819500273094,
+          "p90": 2871.0898999823266,
+          "p95": 3493.489235008018,
+          "max": 9512.43149995571
+        }
+      },
+      "501_plus": {
+        "http_latency_ms": {
+          "count": 60,
+          "mean": 336.8683833318452,
+          "median": 166.22779998579063,
+          "p90": 604.7385499987286,
+          "p95": 745.9134399861795,
+          "max": 5982.719100022223
+        },
+        "service_latency_ms": {
+          "count": 60,
+          "mean": 3238.8424000014006,
+          "median": 2569.6505999949295,
+          "p90": 5976.951040007407,
+          "p95": 7183.52295497898,
+          "max": 12211.703400011174
+        }
+      }
+    },
+    "source_unchanged_during_run": false
+  },
+  "api_benchmark": {
+    "label": "INITIAL LOCAL GRAPHHOPPER PERFORMANCE BASELINE",
+    "measurement": "deployed HTTP API including serialization and station search",
+    "1": {
+      "requests": 20,
+      "median_ms": 777.2275000170339,
+      "p90_ms": 896.4625000371598,
+      "p95_ms": 955.7989000459202,
+      "max_ms": 1354.926300002262,
+      "throughput_per_s": 1.2300597247497296,
+      "wall_s": 16.259373100008816
+    },
+    "5": {
+      "requests": 20,
+      "median_ms": 2384.7973000083584,
+      "p90_ms": 2917.589099961333,
+      "p95_ms": 2945.508199976757,
+      "max_ms": 2974.882600014098,
+      "throughput_per_s": 2.0594189740583277,
+      "wall_s": 9.711477000033483
+    },
+    "10": {
+      "requests": 20,
+      "median_ms": 6621.727349993307,
+      "p90_ms": 7337.150000035763,
+      "p95_ms": 7358.5543999797665,
+      "max_ms": 7477.628500026185,
+      "throughput_per_s": 1.4565612187490604,
+      "wall_s": 13.730971099983435
+    }
+  },
+  "service_benchmark": {
+    "timestamp_utc": "2026-09-21T02:53:29.071949+00:00",
+    "engine": "graphhopper",
+    "base_url": "http://127.0.0.1:8989",
+    "runtime_inputs": [
+      "vehicles/vehicles.csv",
+      "trips/trips.csv",
+      "map/processed/road_nodes.csv.gz",
+      "battery/soc_history.csv.gz"
+    ],
+    "labels_consumed": false,
+    "transport": "real HTTP with shared request client",
+    "fixture_method": "Canonical trip origins/destinations and earliest SOC; explicit driver requests",
+    "iterations": 20,
+    "warmup_searches": 4,
+    "percentile_method": "linear interpolation",
+    "latency": {
+      "count": 20,
+      "min_ms": 725.92,
+      "median_ms": 938.14,
+      "p90_ms": 1295.715,
+      "p95_ms": 1505.187,
+      "max_ms": 1707.856
+    },
+    "by_case": {
+      "car": {
+        "count": 5,
+        "min_ms": 725.92,
+        "median_ms": 819.065,
+        "p90_ms": 1172.857,
+        "p95_ms": 1205.56,
+        "max_ms": 1238.263,
+        "route_calls": [
+          61,
+          61,
+          61,
+          61,
+          61
+        ],
+        "alternatives": [
+          30,
+          30,
+          30,
+          30,
+          30
+        ]
+      },
+      "fixed_bike": {
+        "count": 5,
+        "min_ms": 972.83,
+        "median_ms": 1201.373,
+        "p90_ms": 1259.034,
+        "p95_ms": 1266.33,
+        "max_ms": 1273.626,
+        "route_calls": [
+          61,
+          61,
+          61,
+          61,
+          61
+        ],
+        "alternatives": [
+          30,
+          30,
+          30,
+          30,
+          30
+        ]
+      },
+      "swap": {
+        "count": 5,
+        "min_ms": 837.652,
+        "median_ms": 1005.768,
+        "p90_ms": 1622.522,
+        "p95_ms": 1665.189,
+        "max_ms": 1707.856,
+        "route_calls": [
+          61,
+          61,
+          61,
+          61,
+          61
+        ],
+        "alternatives": [
+          30,
+          30,
+          30,
+          30,
+          30
+        ]
+      },
+      "both": {
+        "count": 5,
+        "min_ms": 747.446,
+        "median_ms": 764.405,
+        "p90_ms": 787.806,
+        "p95_ms": 791.276,
+        "max_ms": 794.746,
+        "route_calls": [
+          61,
+          61,
+          61,
+          61,
+          61
+        ],
+        "alternatives": [
+          60,
+          60,
+          60,
+          60,
+          60
+        ]
+      }
+    },
+    "status": "PASS"
+  },
+  "api_routes": {
+    "route_car": {
+      "http": 200,
+      "body": {
+        "status": "SUCCESS",
+        "distance_m": 3615.227,
+        "duration_s": 289.719,
+        "legs": [
+          {
+            "from_position": {
+              "latitude": 21.028,
+              "longitude": 105.854,
+              "node_id": null
+            },
+            "to_position": {
+              "latitude": 21.036,
+              "longitude": 105.83,
+              "node_id": null
+            },
+            "distance_m": 3615.227087001829,
+            "duration_s": 289.719,
+            "geometry": null,
+            "annotation_nodes": []
+          }
+        ],
+        "geometry": "a_j_CkraeSp@uJJUB@HAb@HhB^nJvBg@tCy@dEENIPu@zDc@zBkDxQMx@mAlGw@nEgAzFUfAK`@Sn@c@`BENIJcH~GGLsDpDMBi@d@ITc@b@SNwJjJqDz\\KXG@EFCHYjI@RFHQAqCt@@hC@^?t@Wv@]?Eh@I?k@Ac@@@W",
+        "engine_name": "graphhopper",
+        "error_message": null,
+        "raw_metadata": {
+          "profile": "car"
+        }
+      }
+    },
+    "route_fixed_bike": {
+      "http": 200,
+      "body": {
+        "status": "SUCCESS",
+        "distance_m": 3885.175,
+        "duration_s": 349.387,
+        "legs": [
+          {
+            "from_position": {
+              "latitude": 21.028,
+              "longitude": 105.854,
+              "node_id": null
+            },
+            "to_position": {
+              "latitude": 21.036,
+              "longitude": 105.83,
+              "node_id": null
+            },
+            "distance_m": 3885.1750870018295,
+            "duration_s": 349.387,
+            "geometry": null,
+            "annotation_nodes": []
+          }
+        ],
+        "geometry": "a_j_CkraeSp@uJJUB@HAb@HhB^nJvBg@tCy@dEENIPu@zDc@zBkDxQMx@mAlGw@nEgAzFUfAK`@Sn@c@`BENIJcH~GGLsDpDMBi@d@ITc@b@SNwJjJqDz\\KXG@EFCHYjI@RFHDZq@~Q[A?@_AACOA]E]_@]COCYa@?uABIB@y@FuA",
+        "engine_name": "graphhopper",
+        "error_message": null,
+        "raw_metadata": {
+          "profile": "motorcycle"
+        }
+      }
+    },
+    "route_both": {
+      "http": 200,
+      "body": {
+        "status": "SUCCESS",
+        "distance_m": 3885.175,
+        "duration_s": 349.387,
+        "legs": [
+          {
+            "from_position": {
+              "latitude": 21.028,
+              "longitude": 105.854,
+              "node_id": null
+            },
+            "to_position": {
+              "latitude": 21.036,
+              "longitude": 105.83,
+              "node_id": null
+            },
+            "distance_m": 3885.1750870018295,
+            "duration_s": 349.387,
+            "geometry": null,
+            "annotation_nodes": []
+          }
+        ],
+        "geometry": "a_j_CkraeSp@uJJUB@HAb@HhB^nJvBg@tCy@dEENIPu@zDc@zBkDxQMx@mAlGw@nEgAzFUfAK`@Sn@c@`BENIJcH~GGLsDpDMBi@d@ITc@b@SNwJjJqDz\\KXG@EFCHYjI@RFHDZq@~Q[A?@_AACOA]E]_@]COCYa@?uABIB@y@FuA",
+        "engine_name": "graphhopper",
+        "error_message": null,
+        "raw_metadata": {
+          "profile": "motorcycle"
+        }
+      }
+    }
+  },
+  "api_matches": {
+    "match_car": {
+      "http": 200,
+      "latency_ms": 91.46159997908399,
+      "profile": "car",
+      "matched_count": 20,
+      "resolved_count": 17,
+      "geometry_prefix": "wyx_C{q~eS????gAo@??@Cj@kAh@gAr@{A@Ei@YOICEBDNH"
+    },
+    "match_fixed_bike": {
+      "http": 200,
+      "latency_ms": 51.9139000098221,
+      "profile": "motorcycle",
+      "matched_count": 20,
+      "resolved_count": 11,
+      "geometry_prefix": "s_b_C{}deSRDABb@LHKf@L?D?F?G?E?D?Fh@N^LAFOb@Nc@@G@@RFr@V^N`@"
+    },
+    "match_both": {
+      "http": 200,
+      "latency_ms": 55.46140001388267,
+      "profile": "motorcycle",
+      "matched_count": 20,
+      "resolved_count": 10,
+      "geometry_prefix": "g_i_CumheS@EN_AF_@DYDm@@C?GE?IAQAs@EQAm@El@DP@r@DP@QAs@EQAm@"
+    }
+  },
+  "candidate_searches": {
+    "candidate_car": {
+      "http": 200,
+      "alternatives": 30,
+      "eligible": 19,
+      "sample_route_metrics": {
+        "distance_to_station_m": 34325.2,
+        "duration_to_station_s": 2214.9,
+        "distance_station_to_dest_m": 35030.0,
+        "duration_station_to_dest_s": 2281.3,
+        "via_total_distance_m": 69355.2,
+        "via_total_duration_s": 4496.2,
+        "direct_distance_m": 525.1,
+        "direct_duration_s": 63.0,
+        "detour_distance_m": 68830.1,
+        "detour_duration_s": 4433.2,
+        "eta_to_station_s": 2214.9,
+        "traffic_delay_factor": null,
+        "traffic_adjusted_duration_to_station_s": null
+      }
+    },
+    "candidate_fixed_bike": {
+      "http": 200,
+      "alternatives": 30,
+      "eligible": 0,
+      "sample_route_metrics": {
+        "distance_to_station_m": 21676.7,
+        "duration_to_station_s": 1628.8,
+        "distance_station_to_dest_m": 22196.2,
+        "duration_station_to_dest_s": 1624.3,
+        "via_total_distance_m": 43872.9,
+        "via_total_duration_s": 3253.1,
+        "direct_distance_m": 1244.8,
+        "direct_duration_s": 117.0,
+        "detour_distance_m": 42628.1,
+        "detour_duration_s": 3136.1,
+        "eta_to_station_s": 1628.8,
+        "traffic_delay_factor": null,
+        "traffic_adjusted_duration_to_station_s": null
+      }
+    },
+    "candidate_both": {
+      "http": 200,
+      "alternatives": 60,
+      "eligible": 13,
+      "sample_route_metrics": {
+        "distance_to_station_m": 19337.6,
+        "duration_to_station_s": 1473.5,
+        "distance_station_to_dest_m": 22795.1,
+        "duration_station_to_dest_s": 1748.1,
+        "via_total_distance_m": 42132.7,
+        "via_total_duration_s": 3221.7,
+        "direct_distance_m": 12663.1,
+        "direct_duration_s": 909.2,
+        "detour_distance_m": 29469.6,
+        "detour_duration_s": 2312.4,
+        "eta_to_station_s": 1473.5,
+        "traffic_delay_factor": null,
+        "traffic_adjusted_duration_to_station_s": null
+      }
+    }
+  },
+  "outage": {
+    "/health": {
+      "http": 200,
+      "body": {
+        "status": "healthy"
+      }
+    },
+    "/readiness": {
+      "http": 503,
+      "body": {
+        "detail": {
+          "status": "not_ready",
+          "graphhopper": false,
+          "postgis": true
+        }
+      }
+    },
+    "candidate_car": {
+      "http": 503,
+      "body": {
+        "detail": "GraphHopper connection failed: All connection attempts failed"
+      }
+    },
+    "route_car": {
+      "http": 503,
+      "body": {
+        "detail": "GraphHopper connection failed: All connection attempts failed"
+      }
+    },
+    "match_car": {
+      "http": 503,
+      "body": {
+        "detail": {
+          "status": "ENGINE_UNAVAILABLE",
+          "message": "GraphHopper unavailable"
+        }
+      }
+    },
+    "realtime_car": {
+      "statuses": [
+        "ENGINE_UNAVAILABLE",
+        "GPS_ACCEPTED",
+        "WARMING_UP"
+      ]
+    },
+    "candidate_fixed_bike": {
+      "http": 503,
+      "body": {
+        "detail": "GraphHopper connection failed: All connection attempts failed"
+      }
+    },
+    "route_fixed_bike": {
+      "http": 503,
+      "body": {
+        "detail": "GraphHopper connection failed: All connection attempts failed"
+      }
+    },
+    "match_fixed_bike": {
+      "http": 503,
+      "body": {
+        "detail": {
+          "status": "ENGINE_UNAVAILABLE",
+          "message": "GraphHopper unavailable"
+        }
+      }
+    },
+    "realtime_fixed_bike": {
+      "statuses": [
+        "ENGINE_UNAVAILABLE",
+        "GPS_ACCEPTED",
+        "WARMING_UP"
+      ]
+    },
+    "candidate_both": {
+      "http": 503,
+      "body": {
+        "detail": "GraphHopper connection failed: All connection attempts failed"
+      }
+    },
+    "route_both": {
+      "http": 503,
+      "body": {
+        "detail": "GraphHopper connection failed: All connection attempts failed"
+      }
+    },
+    "match_both": {
+      "http": 503,
+      "body": {
+        "detail": {
+          "status": "ENGINE_UNAVAILABLE",
+          "message": "GraphHopper unavailable"
+        }
+      }
+    },
+    "realtime_both": {
+      "statuses": [
+        "ENGINE_UNAVAILABLE",
+        "WARMING_UP"
+      ]
+    }
+  }
+}

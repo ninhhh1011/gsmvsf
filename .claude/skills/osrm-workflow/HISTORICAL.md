@@ -1,3 +1,7 @@
+# Archived Week 1 baseline instructions
+
+Historical evidence only. These instructions are superseded by `docs/ARCHITECTURE.md` and `docs/GRAPHHOPPER_MIGRATION_REPORT.md`; do not use them to configure the current runtime.
+
 ---
 name: osrm-workflow
 description: Use this skill whenever working with, debugging, testing, configuring, or integrating OSRM in this Green SM repository, especially OSRM preprocessing, MLD runtime, nearest/route/match calls, Dataset V1 traces, Docker networking, or FastAPI-to-OSRM integration.

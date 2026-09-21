@@ -8,7 +8,7 @@
 
 **Execution:** Inline, automatically authorized by the user. Every phase contains one bounded task; within each task: test first where behavior changes, implement, task test, relevant regression, git diff, self-review, fix, re-test, task exit, phase exit. Never advance a failed phase. Infrastructure and disconnection tasks may leave dead files until Phase 15 but cannot leave active legacy selection. Phase 5 early readiness rewiring is completed with thorough health tests in Phase 11.
 
-**Working-tree policy:** Inherited draft preserved externally; edit in place on a migration branch. Stage explicit paths only. Preserve user memory files. Do not rewrite historical tags.
+**Working-tree policy:** Inherited draft preserved in the working tree; edit in place on a migration branch. Stage explicit paths only. Preserve user memory files. Do not rewrite historical tags.
 
 ## Phase 0 ? Repository audit
 
@@ -26,7 +26,7 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Audit completed; 195 baseline tests pass.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
 - **RESULT:** PASS.
 - **PHASE EXIT GATE:** PASS.
 
@@ -46,7 +46,7 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** 11.0 and Java 17+ confirmed; GPX matching; supported motorcycle custom model limitations explicit.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
 - **RESULT:** PASS.
 - **PHASE EXIT GATE:** PASS.
 
@@ -66,7 +66,7 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** GraphHopper only; no fallback; all live gates covered.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
 - **RESULT:** PASS.
 - **PHASE EXIT GATE:** PASS.
 
@@ -86,9 +86,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Both profiles return real routes; patched PBF SHA verified.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 4 ? Configuration removal
 
@@ -106,9 +106,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** No production engine-selection settings or branches.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 5 ? Active OSRM removal
 
@@ -126,9 +126,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Backend and Compose no longer instantiate or depend on OSRM.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 6 ? Routing adapter
 
@@ -146,9 +146,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Real profiles work; no fake distance or alternate engine on failure.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 7 ? Map matching adapter
 
@@ -166,9 +166,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Real car/bike matching and segment resolution; no invented identifiers.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 8 ? Week 1 integration
 
@@ -186,9 +186,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Week 1 functional regression passes and both endpoints call GH.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 9 ? Week 1 quality
 
@@ -206,9 +206,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Measurements and historical comparison documented, including sampling limitations.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 10 ? Week 3 integration
 
@@ -226,9 +226,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** All Week 3 tests pass; real multi-leg arithmetic correct.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 11 ? Readiness
 
@@ -246,9 +246,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Unavailable dependency produces HTTP 503, no legacy probe.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 12 ? Deployment
 
@@ -266,9 +266,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Required services healthy and version pinned.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 13 ? Real end-to-end
 
@@ -286,9 +286,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Real evidence for every required path; no mock-only completion.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 14 ? Performance
 
@@ -306,9 +306,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** INITIAL LOCAL GRAPHHOPPER PERFORMANCE BASELINE recorded.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 15 ? Dead-code cleanup
 
@@ -326,9 +326,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** No active legacy path; mock imports restricted to tests.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 16 ? Documentation
 
@@ -346,9 +346,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** Current instructions describe sole GH runtime and OSM foundation.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 17 ? Full regression
 
@@ -366,9 +366,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** All tests and dataset validation pass; frozen data unchanged.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Phase 18 ? Final audit and freeze
 
@@ -386,9 +386,9 @@
 - **SELF-REVIEW:** Inspect `git diff --check` and file diffs; check vehicle mapping, honest failures, unchanged policies, labels excluded from runtime, no Dataset edits, no generated caches staged. Fix findings and rerun affected checks before exit.
 - **EXIT GATE:** All final gates pass; no Week 4; clean tree; then graphhopper-full-migration-complete and week3-candidate-routing-complete.
 - **RISKS:** API mismatch, profile access limitations, engine latency and regression in inherited code; measure rather than infer.
-- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve initial backup and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
-- **RESULT:** PENDING.
-- **PHASE EXIT GATE:** PENDING.
+- **ROLLBACK / FAILURE BEHAVIOR:** Remain in this phase and fix/retest; preserve inherited work and frozen data. Do not silently restore legacy runtime or fake success. No freeze tags on partial completion.
+- **RESULT:** PASS. See the corresponding phase evidence in GRAPHHOPPER_MIGRATION_REPORT.md.
+- **PHASE EXIT GATE:** PASS; Phase 18 freeze is finalized only at the clean tagged commit.
 
 ## Plan exit gate ? PASS
 

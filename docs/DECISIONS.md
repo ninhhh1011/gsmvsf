@@ -1,5 +1,13 @@
 # DECISIONS
 
+Current runtime decisions are ADR-010 through ADR-012 below. ADR-002's initial
+OSRM engine choice is historical and superseded. ADR-006's patched-map selection
+remains active with GraphHopper. ADR-008's domain independence remains active;
+its initial engine and conceptual future interfaces are not current runtime
+requirements. ADR-009's candidate policy remains active; its historical latency
+and agreement statements do not certify the new runtime.
+
+
 ## ADR-001: Modular Monolith Initially
 
 **Decision**: Use Modular Monolith architecture for the initial implementation.
@@ -13,6 +21,8 @@
 ---
 
 ## ADR-002: OSRM as Initial Map Matching / Routing Engine
+
+**Status: HISTORICAL; superseded by ADR-010.**
 
 **Decision**: Use OSRM (Open Source Routing Machine) as the routing and map-matching engine.
 
@@ -62,6 +72,8 @@
 
 ## ADR-006: hanoi-patched.osm.pbf is Primary Routing Map (Supersedes v1)
 
+**Status: map selection ACTIVE; engine wording superseded by ADR-010.**
+
 **Decision**: Use `hanoi-patched.osm.pbf` as the primary OSRM routing map.
 
 **Reason**: The patched PBF has been approved for production use. It contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì bridge), which is the intended project behavior.
@@ -86,6 +98,8 @@
 
 ## ADR-008: Engine-Independent Dynamic Routing Domain
 
+**Status: domain boundary ACTIVE; initial engine and future-interface proposal superseded/refined by ADR-010.**
+
 **Decision**: Represent route requests, constraints, objectives, vehicle capabilities, and dynamic context at the project/domain level. Routing engines are adapters behind these contracts.
 
 **Reason**: The six-week project requires increasingly dynamic routing decisions (vehicle-specific access, energy-aware routing, traffic-adjusted ETA, avoid constraints, multi-objective optimization). Hardcoding OSRM's current capabilities into business logic will make future extensions brittle and engine-switching expensive. OSRM remains the initial engine implementation.
@@ -106,6 +120,8 @@
 
 ## ADR-009: Candidate Search Ordering, Composite Identity, and Evaluation Precedence
 
+**Status: policy ACTIVE. The old ~86 ms benchmark used a mock adapter; it is historical, not current GraphHopper latency. Agreement claims below describe the earlier eligibility replay, not current engine accuracy.**
+
 **Decision**:
 1. Represent candidate identity as the composite tuple `(station_id, service_type)`.
 2. Enforce strict pipeline ordering: All Stations → Service Alternatives Expansion → Full Eligibility Evaluation → Eligible Candidates → Optional Deterministic Top-N Reduction.
@@ -122,3 +138,116 @@ The deterministic precedence guarantees 100% semantic alignment with canonical D
 
 **Revisit condition**: If the station network expands from 30 stations to >1,000 stations in production, introduce spatial grid/quadtree bounding-box prefiltering with safety reachability buffers.
 
+
+---
+
+## ADR-010: GraphHopper as the Sole Routing and Matching Runtime
+
+**Date:** 2026-09-21. **Decision:** GraphHopper 11.0 replaces the prior production
+engine for both routing and map matching. No engine selectors, alternate-engine
+services or mock runtime fallback remain authorized. Mock adapters remain only
+for tests. The existing domain protocols and request/result types stay separate
+from GraphHopper's HTTP schema. This supersedes ADR-002's runtime choice and the
+old dual-engine root plan; it does not change Week 2 policies or add Week 4 work.
+
+Use the pinned official 11.0 JAR on the pinned Java 21 runtime. Release 11.0
+requires Java 17+, not Java 25. Import only the read-only approved
+`hanoi-patched.osm.pbf`; OSM is canonical. The baseline PBF is reference-only.
+Generated graph data belongs in `runtime/graphhopper/gh-cache-11`.
+
+Map vehicle categories deterministically: `EV_CAR -> car`,
+`EV_MOTORBIKE -> motorcycle`, identically for routing and matching. Missing or
+conflicting category metadata is an explicit request error. Global profile
+defaults and overriding profile hints are unsupported. Routing requests use real
+per-leg details, encoded geometry strings and explicit dependency errors.
+Unsupported constraints, alternate objectives and dynamic context are rejected
+rather than silently ignored.
+
+**Reason:** The user selected a complete sole-engine migration with consistent
+vehicle-aware behavior. The existing adapter contracts support that replacement
+while keeping candidate, demand and future ranking logic engine-independent.
+
+**Trade-offs:** The maintained motorcycle model uses `car_access`; therefore
+`motorcar=no` conservatively excludes motorcycles, including patched Cầu Thanh
+Trì way 881947000. The project model excludes motorways, penalizes trunk roads,
+and caps modeled speed at 60 km/h, which is an assumption rather than a legal
+speed claim. Full independent motorcycle access requires a validated separate
+parser and reimport; the frozen PBF must not be altered to bypass this limit.
+
+**Connection ownership:** Routing and matching use one asynchronous HTTP client
+owned and closed by the application lifespan. This pools connections while
+retaining request-local route-result caching and explicit dependency failures.
+
+**Evidence and gate:** See `GRAPHHOPPER_MIGRATION_RESEARCH.md`, live smoke evidence,
+and the measured Week 3 benchmark documented in `WEEK_3.md`. Benchmarks diagnose
+behavior and regressions, not a fallback engine choice. Functional verification
+passed with 239 tests, live API/outage checks and all 63 Dataset hashes unchanged.
+Final reporting and formal freeze still require the migration execution gate;
+this ADR alone does not declare a freeze.
+
+---
+
+## ADR-011: Honest Matching Reconstruction and Dataset Identity
+
+**Date:** 2026-09-21. **Decision:** Submit GPX to GraphHopper matching and request
+actual unsimplified path geometry with OSM way details. Reconstruct observation
+locations by projecting each onto that geometry, with a 100 m residual cutoff.
+Use PostGIS to resolve canonical directed Dataset segments from the projected
+location, actual OSM way when available, and path traversal bearing. Unresolved
+identities stay null with resolution provenance; never relabel GraphHopper
+internal edge/node IDs as Dataset or OSM identities.
+
+When projected traversal is ambiguous at revisited geometry, or PostGIS directed
+segments remain tied, return resolution `AMBIGUOUS` and withhold
+`road_segment_id` and `direction`. A matched geometric location can remain
+available without inventing a directed identity. Regression checks cover this
+distinction.
+
+Per-observation quality is `max(0, 1 - residual_m / 100)` for matched observations;
+overall quality averages proximity scores across all observations. This is
+project geometric quality, not calibrated probability, native GraphHopper
+posterior or historical engine confidence. The matching request uses GPS
+accuracy 20 m. No raw-GPS success fallback is permitted on dependency failure.
+
+**Reason:** The maintained matching JSON does not provide a reliable one-to-one
+observation result array or the earlier engine's confidence semantics. Explicit
+reconstruction and identity provenance preserve truthful domain outputs.
+
+**Trade-offs and gate:** Projection can be ambiguous at loops, crossings and
+parallel roads, and unresolved identity coverage can differ from geometric
+matching coverage. Ground-truth direction/identity tests and live matching
+quality evaluation must report these separately. Existing freeze/quality reports
+are historical and cannot certify this implementation automatically.
+
+---
+
+## ADR-012: Frozen Validation and Live Migration Evidence
+
+**Date:** 2026-09-21. **Decision:** Run the canonical Dataset validator through
+`scripts/validate_frozen_dataset.py`, redirecting generated report writes into
+`runtime/migration/validation`. Preserve every Dataset file, including its
+validator source and PBFs. The current run has 152 PASS / 0 FAIL and 22/22 scenario
+assertions; older 163/21 references are retained only as superseded history.
+
+Live smoke/benchmark scripts must forward requests to the actual GraphHopper
+adapter and fail on outage. Request-local caching shares station route results
+between service alternatives and caches direct NO_ROUTE; no cross-request
+runtime cache is introduced. Benchmark fixtures use runtime Dataset inputs,
+while labels stay offline-evaluation-only. Reports record request counts,
+measurement scope and engine/profile evidence under `runtime/migration`.
+
+**Reason:** A canonical validator can generate reports without requiring writes
+to frozen source data. Real-engine evidence must remain distinguishable from
+unit-test mocks and historical business-policy replay.
+
+**Trade-off:** The documented Week 3 benchmark measures the candidate service
+with a shared injected HTTP client, excluding initial fixture/catalog loading
+and HTTP API overhead. It is not a production endpoint or concurrency benchmark.
+A separate deployed HTTP run (`runtime/migration/api-smoke.json`) measures 20
+requests each at concurrency 1, 5 and 10, including serialization and station
+search. Its median/P95 values are 777.228/955.799 ms, 2,384.797/2,945.508 ms and
+6,621.727/7,358.554 ms respectively. These are an initial local baseline, not a
+production SLA. `api-outage.json` confirms explicit failures without a fallback.
+The final passing test distribution is Week 1: 37, Week 2: 69, Week 3: 71 and
+migration: 62. The integrity manifest records 63 unchanged files. Larger
+performance work remains subject to the project's week boundaries.

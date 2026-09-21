@@ -12,8 +12,9 @@ Actual code takes precedence over historical implementation claims.
 
 - Existing uncommitted dual-engine draft: 11 modified tracked files, new
   GraphHopper adapters/tests/config/models, `PLAN.md`, and `.claude/memory/`.
-  Preserved before edits in
-  `C:/Users/nguye/AppData/Local/Temp/build6week-pre-gh-q1voys04`.
+  Preserved in the working tree. An inherited concurrent audit claimed an external
+  backup; this continuation did not create or rely on it. All continuation writes
+  are confined to the repository.
 - The complete pre-deletion text inventory is `GRAPHHOPPER_OSRM_INVENTORY.md`:
   583 occurrences, A=182, B=9, C=25, D=41, E=325, F=1.
 - Active adapters: `services/routing/osrm_routing_adapter.py` and
@@ -46,7 +47,7 @@ Week 3: preserve station/service identity, expansion, eligibility precedence,
 network reachability, SOC buffer and multi-leg arithmetic. No Week 4 work.
 
 Dataset V1.3.1 is frozen. All 63 source files were SHA-256 inventoried in the
-external backup. Patched PBF SHA-256:
+repository-local `runtime/migration/dataset-before.json`. Patched PBF SHA-256:
 `0d3a66b2fb03019fd9d7877115c1ed9efbb736a83c5ac6f6e5440d71ddcfff60`.
 Labels remain evaluation-only. Validation must not leave generated changes in
 the frozen directory. No dataset file has been changed by this audit.

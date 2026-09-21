@@ -1,6 +1,6 @@
 # DATA_CONTRACT
 
-**MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary OSRM map. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
+**MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary GraphHopper map; OSM remains canonical map data. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
 
 ## Dataset V1 Location
 
@@ -14,8 +14,8 @@ Dataset V1 is located at `./dataset_v1/` and is the canonical development datase
 
 | File | Description |
 |------|-------------|
-| `map/raw/hanoi-baseline.osm.pbf` | Primary OSRM routing map (baseline OSM) |
-| `map/raw/hanoi-patched.osm.pbf` | Patched OSM (pending human review for Cầu Thanh Trì) |
+| `map/raw/hanoi-baseline.osm.pbf` | Historical baseline OSM reference; not the active runtime map |
+| `map/raw/hanoi-patched.osm.pbf` | Approved primary OSM PBF; immutable GraphHopper import source |
 | `map/processed/road_nodes.csv.gz` | 339,441 topological road nodes |
 | `map/processed/road_segments.csv.gz` | 701,407 directed road segments |
 
@@ -73,7 +73,7 @@ Dataset V1 is located at `./dataset_v1/` and is the canonical development datase
 
 | File | Description |
 |------|-------------|
-| `scenarios/scenario_coverage.csv` | 21 scenario definitions with quantitative evidence |
+| `scenarios/scenario_coverage.csv` | 21 scenario-definition rows; the current validator runs 22 scenario assertions |
 | `realtime/events.csv.gz` | 109,193 chronological replay events |
 
 ## Key Relationships
@@ -96,7 +96,7 @@ Dataset V1 is located at `./dataset_v1/` and is the canonical development datase
 
 ### Runtime Inputs (Used at Runtime)
 - GPS observations (gps_observations.csv.gz)
-- Road network (from OSRM / road_segments.csv.gz)
+- Road network (GraphHopper graph imported from the patched PBF, plus canonical road_segments.csv.gz for PostGIS identity resolution)
 - Stations + temporal state (stations.csv + station_status.csv.gz + queue_status.csv.gz)
 - Traffic snapshots (traffic_snapshots.csv.gz)
 - SOC history (soc_history.csv.gz)
@@ -139,3 +139,39 @@ python scripts/validate_external_gps.py  # validate
 - CHARGING capacity: available_charging_slots
 - BATTERY_SWAP capacity: min(available_swap_slots, available_swap_batteries)
 - FARTHER_BUT_FASTER threshold: ≥500 m farther AND ≥10 min lower total ETA
+
+## Current Runtime and Validation (2026-09-21)
+
+The migration integrity manifest (`runtime/migration/dataset-integrity.json`)
+reports all 63 Dataset file hashes identical to the pre-migration manifest.
+Functional verification passed with 239 tests and live normal/outage API checks;
+formal reporting and freeze remain separate final gates. Ambiguous projected
+traversal or PostGIS directed-segment ties withhold road segment and direction,
+returning `AMBIGUOUS` even when the geometric location is matched.
+
+GraphHopper 11.0 is the only production routing and matching engine. Both profiles
+use the same immutable patched PBF: `EV_CAR -> car`, `EV_MOTORBIKE -> motorcycle`.
+The motorcycle model shares `car_access`; `motorcar=no` therefore excludes
+motorcycles too. This includes patched way 881947000 and is a documented access
+limitation, not permission to alter the map.
+
+`scripts/load_road_network.py` loads the 701,407 canonical directed road segments
+into PostGIS for matched Dataset identity resolution. GraphHopper internal graph
+IDs are not equivalent to Dataset segment/node IDs or OSM IDs. Matching projects
+observations onto actual returned matched geometry; PostGIS uses that location,
+OSM way details and traversal bearing. Unresolved IDs stay null. Quality scores
+measure geometric proximity and must not be treated as native engine confidence
+or ground-truth accuracy; see [ARCHITECTURE](ARCHITECTURE.md).
+
+`make validate-data` runs `scripts/validate_frozen_dataset.py`. It executes the
+canonical validator while redirecting generated reports to
+`runtime/migration/validation`, preserving the frozen tree. The current run
+reports **152 PASS / 0 FAIL and 22/22 scenario assertions**. Historical references
+to 163 checks and 21 scenarios describe an earlier validator baseline and are
+superseded for current counts. Dataset hashes and migration-quality gates remain
+separate verification obligations.
+
+Live routing smoke/benchmark fixtures consume only vehicles, trips, canonical
+road nodes and SOC telemetry. All labels and ranking references remain confined
+to offline evaluation. Neither smoke results nor business-eligibility agreement
+alone establish matching accuracy or recommendation quality.

@@ -1,492 +1,134 @@
-# Routing Strategy
-
-**Purpose:** Define the project-level routing domain model, engine strategy, and Week alignment for the full 6-week project.
-
-**Status:** PLANNED — not yet implemented. Week 1 is frozen with OSRM-coupled map matching.
-
----
-
-## 1. MENTOR DIRECTION
-
-> "để có thể custom route nhiều nhất, dynamic nhất có thể,
-> k gò bó vào việc dễ triển khai, phải nhìn bao quát"
-
-**Interpretation:**
-- Do NOT design around the easiest implementation
-- Do NOT design around one routing engine's API
-- Routing, candidate selection, recommendation, vehicle capability, and dynamic conditions must remain configurable and extensible
-- Goal: **FLEXIBLE DOMAIN DESIGN + DYNAMIC ROUTING INPUTS + ENGINE INDEPENDENCE + MEASURABLE DECISIONS**
-
-**NOT the goal:**
-- MORE TECHNOLOGY
-- Pre-implementing all engines
-- Over-engineering
-
----
-
-## 2. ROUTING VS RECOMMENDATION SEPARATION
-
-This is the most critical architectural boundary.
-
-```
-Candidate Search
-        ↓
-Route Calculation (ROUTING)
-        ↓
-Route Metrics (geometry, distance, base ETA)
-        ↓
-Dynamic Service Metrics (queue, capacity, traffic) (RECOMMENDATION)
-        ↓
-Ranking / Recommendation
-```
-
-### What Routing Answers
-
-- How can the driver reach this station?
-- How long does it take? (base ETA)
-- How far is it? (distance)
-- What is the detour compared to going directly?
-
-### What Recommendation Answers
-
-- Which station should the driver choose?
-- Based on: ETA + traffic-adjusted ETA + queue + capacity + service time + energy feasibility
-
-### Boundary Rule
-
-> **Recommendation logic must NOT depend directly on OSRM HTTP API. Use domain RouteResult.**
-
----
-
-## 3. DOMAIN ROUTING MODEL
-
-### 3.1 RouteRequest
-
-```
-RouteRequest
-├── origin: Position (lat, lon)
-├── destination: Position (lat, lon)
-├── via: list[Position]  (optional intermediate stops)
-├── vehicle_profile: VehicleRoutingProfile
-├── service_context: ServiceContext  (enum: CHARGING | BATTERY_SWAP)
-├── constraints: RouteConstraints
-├── optimization_objective: OptimizationObjective
-├── dynamic_context: DynamicRoutingContext  (inputs that affect route, not recommendation)
-└── metadata: RouteMetadata
-```
-
-**Note on via routing:** The model supports multiple via points for future requirements (e.g., driver → station A → station B → destination). Week 3 initially uses origin → destination and origin → station.
-
-### 3.2 Position
-
-```
-Position
-├── latitude: float
-├── longitude: float
-└── node_id: Optional[str]  (road node ID for precision)
-```
-
-### 3.3 VehicleRoutingProfile
-
-```
-VehicleRoutingProfile
-├── vehicle_id: str
-├── vehicle_model: str  (e.g., "VF6", "VF8", "VinFast VF3")
-├── vehicle_category: VehicleCategory  (enum: COMPACT | SEDAN | SUV | VAN)
-├── battery_capacity_kwh: float
-├── current_soc_percent: float
-├── energy_consumption_kwh_per_km: float
-├── service_capabilities: set[ServiceType]  (CHARGING, BATTERY_SWAP, or both)
-├── max_charging_power_kw: Optional[float]
-├── road_access_restrictions: set[RoadRestriction]  (enum values)
-└── routing_profile_hint: Optional[str]  (engine-specific profile hint: "car", "ev", etc.)
-```
-
-**Design principle:** The profile captures vehicle reality, not engine reality. If a vehicle cannot use a road, that is a constraint. If an engine does not support that constraint natively, the routing adapter translates.
-
-### 3.4 RouteConstraints
-
-```
-RouteConstraints
-├── avoid_segments: set[str]  (OSM way IDs or segment IDs)
-├── avoid_road_classes: set[RoadClass]  (enum: MOTORWAY, TRUNK, RESIDENTIAL, etc.)
-├── max_detour_meters: Optional[float]
-├── max_route_distance_m: Optional[float]
-├── required_service_type: ServiceType  (station must support this)
-├── station_compatibility: StationCompatibility  (which stations this vehicle can use)
-├── exclude_temporarily_unavailable: bool  (exclude roads with temporary restrictions)
-└── custom: dict[str, Any]  (engine-specific, parsed by adapter)
-```
-
-**Note:** Week 3 uses a minimal subset. This contract allows extension without breaking existing consumers.
-
-### 3.5 OptimizationObjective
-
-```
-OptimizationObjective
-├── primary: ObjectiveType
-│   ├── MIN_TRAVEL_TIME      (default — fastest route)
-│   ├── MIN_DISTANCE         (shortest path)
-│   ├── MIN_DETOUR           (minimize detour from direct)
-│   ├── MIN_GENERALIZED_COST (multi-factor: time + energy + tolls)
-│   └── CUSTOM: str          (engine-specific named objective)
-├── weights: Optional[ObjectiveWeights]
-│   ├── time_weight: float
-│   ├── distance_weight: float
-│   └── energy_weight: float
-└── traffic_aware: bool  (if engine supports real-time traffic)
-```
-
-**Design principle:** OSRM defaults to MIN_TRAVEL_TIME (shortest by time). The explicit enum makes this configurable. Recommendation ranking can also use these objectives without reverse-engineering OSRM flags.
-
-### 3.6 DynamicRoutingContext
-
-This captures data that **may affect the road path** (not recommendation ranking).
-
-```
-DynamicRoutingContext
-├── timestamp: datetime
-├── traffic_state: Optional[TrafficState]
-│   ├── level: TrafficLevel  (enum: FREE, MODERATE, HEAVY, BLOCKED)
-│   ├── delay_factor: float  (multiplier on base ETA)
-│   └── affected_segments: set[str]
-├── road_incidents: list[RoadIncident]
-│   ├── segment_id: str
-│   ├── incident_type: IncidentType  (enum: CLOSED, ONEWAY, CONSTRUCTION)
-│   └── estimated_clear_time: Optional[datetime]
-└── engine_config_overrides: Optional[EngineConfigOverrides]
-    └── custom_cost_function: Optional[str]  (for engines that support it)
-```
-
-**Critical distinction:**
-
-| Data | Effects ROUTE PATH? | Effects RANKING? |
-|------|---------------------|------------------|
-| traffic_state | YES (traffic-aware ETA) | YES (traffic-adjusted recommendation) |
-| queue_status | NO (station internal) | YES (ranking score) |
-| station_capacity | NO | YES (ranking score) |
-| current_SOC | NO (pre-routing filter) | YES (energy feasibility) |
-| road_incidents | YES (if engine supports) | INDIRECTLY (via route) |
-
-### 3.7 RouteResult
-
-```
-RouteResult
-├── status: RouteStatus  (enum: SUCCESS, NO_ROUTE, UNREACHABLE, ERROR)
-├── geometry: Optional[str]  (polyline encoded)
-├── distance_meters: float
-├── duration_seconds: float
-├── traffic_adjusted_duration_seconds: Optional[float]
-├── legs: list[RouteLeg]
-│   ├── from_position: Position
-│   ├── to_position: Position
-│   ├── distance_meters: float
-│   ├── duration_seconds: float
-│   └── geometry: Optional[str]
-├── via_points: list[Position]  (intermediate stops reached)
-├── detour_from_direct: Optional[DetourMetrics]
-│   ├── direct_distance_m: float
-│   ├── route_distance_m: float
-│   ├── detour_distance_m: float
-│   └── detour_ratio: float  (route/direct)
-├── road_segment_ids: list[str]  (for downstream compatibility)
-├── engine_metadata: EngineMetadata
-│   ├── engine: str  ("osrm", "valhalla", "graphhopper")
-│   ├── profile: str  ("driving", "car", etc.)
-│   └── raw_response_id: Optional[str]
-└── error_message: Optional[str]
-```
-
----
-
-## 4. ROUTING ENGINE ABSTRACTION
-
-### 4.1 RoutingEngine Interface (Conceptual)
-
-```python
-class RoutingEngine(Protocol):
-    """Project-level routing engine contract."""
-
-    async def route(self, request: RouteRequest) -> RouteResult:
-        """Compute a route from origin to destination."""
-        ...
-
-    async def route_via(
-        self,
-        origin: Position,
-        waypoints: list[Position],
-        destination: Position,
-        request: RouteRequest,
-    ) -> RouteResult:
-        """Compute a route with intermediate stops."""
-        ...
-
-    async def matrix(
-        self,
-        sources: list[Position],
-        destinations: list[Position],
-        profile: VehicleRoutingProfile,
-    ) -> MatrixResult:
-        """Compute distance/duration matrix for multiple points."""
-        ...
-
-    async def map_match(
-        self,
-        coordinates: list[Position],
-        profile: VehicleRoutingProfile,
-    ) -> MapMatchResult:
-        """Match GPS coordinates to road network."""
-        ...
-```
-
-**Note:** Map Matching and Routing MAY use separate adapters. They share the Position type but serve different purposes. Week 1's `OsrmMapMatchingAdapter` remains as-is.
-
-### 4.2 Adapter Pattern
-
-```
-Domain Layer
-    │
-    ▼
-RoutingService  (uses RouteRequest, returns RouteResult)
-    │
-    ▼
-RoutingEngineAdapter  (e.g., OsrmRoutingAdapter, ValhallaRoutingAdapter)
-    │
-    ▼
-Engine HTTP API  (OSRM, Valhalla, GraphHopper)
-```
-
-**Principle:** Domain logic depends on project contracts, NOT on OSRM HTTP API.
-
----
-
-## 5. ENGINE CAPABILITY MATRIX
-
-| Capability | OSRM | GraphHopper | Valhalla |
-|------------|------|-------------|----------|
-| Basic routing | ✅ | ✅ | ✅ |
-| Route with via | ✅ | ✅ | ✅ |
-| Distance matrix | ✅ | ✅ | ✅ |
-| Map Matching | ✅ | ✅ | ✅ |
-| Vehicle profiles | limited (car, bike, foot) | extended | custom profiles |
-| Custom costing | ❌ (profile rebuild) | ✅ (custom models) | ✅ (JSON costing) |
-| Dynamic cost | ❌ | limited | ✅ |
-| Avoid roads | ✅ (flags) | ✅ | ✅ |
-| Traffic support | ❌ (no live traffic) | ✅ (optional) | ✅ (optional) |
-| Multi-modal | limited | limited | limited |
-| Runtime flexibility | low (rebuild needed) | medium | high |
-| Performance/TPS | high | medium | medium |
-| Operational complexity | low | medium | medium |
-| Docker support | ✅ | ✅ | ✅ |
-
-**Legend:**
-- ✅ = Supported natively
-- ⚠️ = Partial / needs research
-- ❌ = Not supported
-- NEEDS BENCHMARK = Capability not verified in this project
-
-**Benchmark requirements before engine switch:**
-- Route latency at p50, p95, p99
-- Matrix latency for 30×30 (station × candidate)
-- Map matching accuracy comparison
-- Custom constraint support verification
-
----
-
-## 6. ENGINE DECISION GATE
-
-OSRM remains the initial engine. Consider alternatives when:
-
-1. **Week 3 benchmark shows a specific OSRM limitation:**
-   - Required route constraint cannot be expressed (e.g., vehicle-specific access)
-   - Custom costing required and OSRM profile rebuild is too slow
-
-2. **Dynamic requirements emerge:**
-   - Real-time traffic cost propagation needed
-   - Per-vehicle custom routing profiles at runtime
-
-3. **Hard Week 3/4 use cases fail:**
-   - EV range constraint routing (battery-aware path)
-   - Multi-stop optimization (driver → station → station → destination)
-
-4. **Evidence-based decision:**
-   - Another engine materially improves requirement coverage
-   - Benchmark data shows >20% improvement in relevant metric
-
-**Do NOT switch because:**
-- Another engine has more features on paper
-- Vendor marketing suggests better performance
-- Week 1/2 were difficult with OSRM
-
----
-
-## 7. WEEK ALIGNMENT
-
-### Week 2: Demand Detection
-
-**Input:** Driver state from Week 1 + vehicle profile
-
-```
-EnergyServiceRequest
-├── driver_id: str
-├── driver_state: DriverState
-│   ├── raw_position: Position
-│   ├── matched_position: Optional[Position]
-│   ├── road_segment_id: Optional[str]
-│   └── direction: Optional[str]
-├── vehicle_profile: VehicleRoutingProfile
-├── request_source: RequestSource  (enum: REALTIME | REPLAY | BATCH)
-├── allowed_service_types: set[ServiceType]
-├── requested_service_type: Optional[ServiceType]  (if driver specified)
-├── current_location: Position
-├── destination: Optional[Position]
-├── trip_context: Optional[TripContext]
-│   ├── trip_id: Optional[str]
-│   └── estimated_remaining_distance_m: Optional[float]
-└── energy_state: EnergyState
-    ├── current_soc_percent: float
-    ├── estimated_range_km: float
-    └── last_update_timestamp: datetime
-```
-
-**Routing boundary:** Week 2 does NOT call routing directly. It produces `EnergyServiceRequest` for Week 3.
-
-### Week 3: Candidate Search + Routing
-
-```
-EnergyServiceRequest
-        ↓
-Candidate Search
-        ↓
-eligible station-service pairs
-(station_id, service_type)
-        ↓
-For each candidate:
-  RouteRequest(origin → station)
-  RouteRequest(station → destination)
-        ↓
-RoutingEngine
-        ↓
-RouteResult
-        ↓
-route metrics:
-  - ETA to station
-  - distance to station
-  - detour distance
-  - ETA to destination
-```
-
-**Key concept:** Candidate entity is `(station_id, service_type)` not just `station_id`. One physical station may support multiple energy services.
-
-### Week 4: Recommendation Ranking
-
-Ranking consumes **generic features**, not routing engine fields:
-
-```
-RankingFeatures
-├── route_eta_seconds: float  (from RouteResult.duration_seconds)
-├── route_distance_meters: float  (from RouteResult.distance_meters)
-├── detour_distance_meters: float  (from RouteResult.detour_from_direct)
-├── traffic_adjusted_eta_seconds: Optional[float]
-├── queue_length: int
-├── available_capacity: int
-├── service_time_seconds: float  (18 min for CHARGING, 6 min for BATTERY_SWAP)
-├── energy_feasibility: bool  (can vehicle reach and leave station?)
-├── waiting_time_seconds: Optional[float]  (estimated)
-└── total_station_time_seconds: float  (queue_wait + service_time)
-```
-
-**RankingPolicy** (configurable):
-
-```
-RankingPolicy
-├── weights: dict[FeatureName, float]
-├── score_formula: ScoreFormula  (enum: WEIGHTED_SUM, LOGISTIC, ML_MODEL)
-└── fallback_policy: FallbackPolicy  (what if all scores are tied/zero)
-```
-
-**Do NOT:** Hardcode weights in domain logic. Make them configurable via policy.
-
-### Week 5: Realtime Dynamic Updates
-
-```
-Events that may invalidate recommendation:
-├── GPS change → new origin → re-route
-├── SOC change → energy feasibility check
-├── traffic change → traffic-adjusted ETA update
-├── queue change → ranking score update
-├── station status change → capacity/availability update
-
-Optimization (later implementation):
-├── Invalidation check before full recomputation
-├── Partial route update (OSRM supports via points)
-└── Cache routes by (origin, destination, timestamp_bucket)
-```
-
-**Note:** Not every event requires full recomputation. Later implementation may add smart invalidation.
-
-### Week 6: Performance Benchmarking
-
-```
-Performance targets (to be measured):
-├── Route call latency: p50 < X ms, p95 < Y ms
-├── Matrix call latency: p50 < X ms, p95 < Y ms
-├── Candidate count per request: expected range
-├── Cache hit rate: target > 60%
-├── Concurrent drivers: target > 1000
-└── Total recommendation latency: p95 < 500 ms
-
-Benchmark targets:
-├── Route calls: ~N per recommendation (origin→station, station→destination)
-├── Matrix calls: N×M per candidate search (if used)
-├── Engine latency: isolate OSRM vs business logic
-└── Parallel request capacity: concurrent driver load
-```
-
----
-
-## 8. CURRENT OSRM ROLE
-
-### Week 1 (Frozen)
-
-- Map Matching: `POST /api/v1/map-match`, `POST /api/v1/drivers/{id}/location`
-- Adapter: `OsrmMapMatchingAdapter`
-- Direct OSRM HTTP API usage in business logic: ✅ contained in adapter
-
-### Week 2 (Planned)
-
-- No routing changes
-- Demand Detection produces `EnergyServiceRequest`
-
-### Week 3 (Planned)
-
-- RoutingService introduced
-- `OsrmRoutingAdapter` implements `RoutingEngine` interface
-- Candidate routing uses domain `RouteRequest` → `RouteResult`
-- Original OSRM map matching adapter remains unchanged
-
-### Week 4+ (Planned)
-
-- Recommendation ranking uses `RouteResult` fields
-- Engine can be replaced without changing ranking logic
-- Benchmark gates engine decision (see Section 6)
-
----
-
-## 9. FILES UPDATED BY THIS DOCUMENT
-
-This document defines planned architecture. It does NOT modify working code.
-
-**Updated files:**
-- `docs/ROUTING_STRATEGY.md` — new (this file)
-- `docs/ARCHITECTURE.md` — updated with routing domain layer
-- `docs/DECISIONS.md` — ADR-008 added for engine-independent routing
-- `AGENTS.md` — routing architecture rule added
-
----
-
-## 10. REVISION HISTORY
-
-| Date | Change | Reason |
-|------|--------|--------|
-| 2026-09-17 | Initial | Mentor direction: flexible dynamic routing |
+﻿# Routing strategy
+
+Current implementation, 2026-09-21. The previous multi-engine proposal is
+superseded by ADR-010; domain independence from ADR-008 remains required.
+GraphHopper 11.0 is the sole production routing and matching engine. Benchmarks
+measure this migration's behavior and regressions; they do not reopen engine
+selection or authorize an automatic fallback.
+
+## Domain boundary
+
+Business logic consumes `RouteRequest` and `RouteResult`, not GraphHopper URLs or
+JSON. `CandidateSearchService` requires an injected `RoutingEngine`; the production
+factory injects `GraphHopperRoutingAdapter`. Mock engines are test-only.
+`MapMatchingService` uses a separate engine contract shared by batch and realtime
+flows. No additional runtime engine, matrix service or ranking implementation is
+needed for Weeks 1–3.
+
+The implemented `RouteRequest` contains origin, destination, optional via points,
+vehicle profile, optional constraints, objective and optional dynamic context.
+`Position` validates finite coordinates and geographic bounds. `RouteResult`
+contains status, meters, seconds, optional encoded geometry, actual legs and
+engine metadata. Candidate multi-leg metrics contain station distance/ETA,
+onward distance/time, direct metrics, via totals and detour.
+
+Only `MIN_TRAVEL_TIME` is implemented. Nonempty `RouteConstraints`, nonempty
+`DynamicRoutingContext`, alternate objectives and nonempty profile hints produce
+explicit invalid-request results. They are domain extension points, not claims
+that dynamic traffic, energy-aware path search or arbitrary avoid rules already
+work. A future requirement must add measured support behind the existing domain
+contract rather than silently ignoring inputs.
+
+## Vehicle-aware runtime
+
+Production routing and matching share one asynchronous HTTP client owned by the
+application lifespan and closed on shutdown. Connection pooling does not reuse
+candidate route results between searches.
+
+| Domain category | GraphHopper profile |
+|---|---|
+| `EV_CAR` | `car` |
+| `EV_MOTORBIKE` | `motorcycle` |
+
+Both routing and matching use the same mapping. Candidate search derives an
+omitted category from actual resolved capability and rejects conflicts. Missing
+or unknown categories cannot silently become car or motorcycle routes.
+The deployment has no routing-engine selector or single default profile.
+
+The approved immutable patched OSM PBF supplies the graph. The baseline PBF is
+reference-only. The project motorcycle custom model excludes MOTORWAY, penalizes
+TRUNK, uses 90% of car speed with a 60 km/h modeling cap, and preserves
+rough-surface restrictions. The cap is not a Vietnamese legal-speed assertion.
+
+The maintained motorcycle model still depends on `car_access`. Consequently,
+`motorcar=no` excludes motorcycles too, including Cầu Thanh Trì way `881947000`.
+This is a conservative known limitation, not complete motorcycle-specific OSM
+access support. An independent access parser requires separately validated
+rules and graph reimport; modifying Dataset V1 to bypass it is prohibited.
+
+## HTTP adapter semantics
+
+Routing uses GET `/route` with repeated `point=lat,lon`, deterministic profile,
+encoded points and `leg_distance`/`leg_time` details. GraphHopper's encoded
+`paths[0].points` is a string. Time and leg time are milliseconds converted to
+seconds. Each leg uses the returned detail values; dividing totals evenly would
+fabricate metrics. Missing/malformed success payloads and invalid/nonfinite
+metrics are engine failures. Known no-path HTTP 400 errors remain NO_ROUTE;
+other invalid requests are separate from dependency failures.
+
+Matching uses POST `/match` with GPX, unsimplified path geometry and OSM way
+details. The project projects each observation onto that returned geometry and
+uses a 100 m residual cutoff. PostGIS resolves Dataset directed segments using
+matched OSM way identity and path traversal direction; unresolved IDs stay null.
+GraphHopper internal edge IDs are not Dataset or OSM IDs.
+
+Matching quality is geometric proximity: `max(0, 1 - residual_m / 100)` per
+matched observation, averaged across all observations for overall quality. It
+is not a probability or native GraphHopper posterior. Path projection can be
+ambiguous at loops, crossings and parallel roads; matching-quality acceptance
+requires measured direction/identity/coverage evidence. Historical engine
+confidence thresholds and old freeze reports do not establish equivalence.
+
+## Candidate search remains Week 3
+
+Ambiguous projected traversal or PostGIS directed-segment ties return
+`AMBIGUOUS` with `road_segment_id` and `direction` withheld. A geometric matched
+location can remain available without proving the directed Dataset identity.
+
+The sequence is all stations, service expansion, road routing and complete
+eligibility, eligible candidates, then optional deterministic reduction. It
+never prefilters nearest-N by straight-line distance. Candidate identity remains
+`(station_id, service_type)`; station service alternatives remain separate even
+when they share a request-local route calculation.
+
+For a destination and 30 reachable stations: one direct call, 30 station calls,
+30 onward calls. BOTH therefore has 60 alternatives with 61 route calls. This
+cache is request-local and does not reuse dynamic results across drivers or
+searches. Without a destination only the 30 station calls are needed. Direct
+NO_ROUTE is cached and leaves detour undefined while retaining real via totals.
+Onward NO_ROUTE preserves station-only metrics.
+
+Engine failures/timeouts from any leg fail the request with 503/504; invalid
+routing requests return 422. A standalone no-route result returns 404. Only real
+no-route results make candidates unreachable. No outage substitutes Euclidean
+distances, raw-GPS matching or a mock adapter.
+
+Energy feasibility remains road distance in km plus the existing 0.5 km reserve
+against remaining range. Queue, station capacity and service duration remain
+operational inputs to eligibility and future ranking; they do not modify the
+road path in this implementation. Week 4 ranking remains outside this migration.
+
+## Verification and historical evidence
+
+Functional verification passed with 239 tests (Week 1: 37; Week 2: 69; Week 3: 71;
+migration: 62), live API and explicit outage checks, and identical hashes for all
+63 Dataset files. Formal reporting/freeze remains a separate final gate.
+`runtime/migration/api-smoke.json` also records deployed HTTP request latency at
+concurrency 1/5/10: median 777.228/2,384.797/6,621.727 ms and P95
+955.799/2,945.508/7,358.554 ms for 20 requests per level. These local endpoint
+measurements include serialization/search and are distinct from the service-only
+benchmark; they do not establish a production SLA. `api-outage.json` confirms
+route/matching/candidate 503, realtime `ENGINE_UNAVAILABLE`, health 200 and
+readiness 503 with GraphHopper unavailable.
+
+`scripts/verify_graphhopper.py` and `scripts/smoke_test_week3.py` verify both
+profiles, actual via legs, Dataset candidate searches, BOTH call sharing, missing
+destination behavior and `/api/v1/route` against live GraphHopper. They fail on
+outage. `scripts/benchmark_week3.py --iterations 20` records 20 distinct Dataset
+trip starts and exact forwarded HTTP route counts. See [WEEK_3](WEEK_3.md) for
+measured distributions and their shared-client/service measurement scope.
+
+The old strategy contained conceptual future types, additional engine choices,
+unimplemented matrix calls and speculative performance targets. Those are not
+current contracts or acceptance results. Final migration quality/freeze is
+tracked in [GRAPHHOPPER_FULL_MIGRATION_PLAN](GRAPHHOPPER_FULL_MIGRATION_PLAN.md).
