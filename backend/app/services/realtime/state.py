@@ -29,6 +29,15 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def make_naive(dt: datetime) -> datetime:
+    """Convert datetime to naive (no timezone) UTC for consistent comparison."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None)
+    return dt
+
+
 @dataclass
 class GPSObservation:
     """A single GPS observation."""

@@ -29,6 +29,10 @@ from backend.app.services.map_matching.models import MapMatchRequest, MapMatchRe
 from backend.app.services.map_matching.engine import MapMatchingEngineError, MapMatchingNoMatchError
 from backend.app.services.graphhopper import resolve_vehicle_category
 from backend.app.api.v1.map_match import get_map_matching_service
+from backend.app.services.realtime.hybrid_state_manager import (
+    get_hybrid_manager,
+    HybridDriverStateManager,
+)
 import psycopg2
 
 
@@ -121,6 +125,15 @@ async def _call_map_match(observations, vehicle_category=None, vehicle_id=None):
         return None, (time.perf_counter() - start) * 1000
 
 
+async def _persist_state(driver_id: str, state: DriverTraceState):
+    """Persist driver state to Redis if repository is configured."""
+    try:
+        manager = get_hybrid_manager()
+        await manager.save(state)
+    except Exception:
+        pass  # Best effort - local state is still valid
+
+
 @router.post("/drivers/{driver_id}/location", response_model=LocationResponse)
 async def ingest_location(
     driver_id: str,
@@ -156,13 +169,20 @@ async def ingest_location(
         accuracy_m=request.accuracy_m,
     )
 
-    # Get driver state
-    store = get_state_store()
-    state = store.get_or_create(driver_id)
+    # Get driver state (hybrid: local + Redis)
+    manager = get_hybrid_manager()
+    state, _ = await manager.get_or_create(driver_id)
 
     # Check for stale observation (before last observation timestamp)
-    if (state.last_observation_timestamp and
-        obs.timestamp < state.last_observation_timestamp):
+    # Normalize both to naive for comparison
+    obs_ts = obs.timestamp
+    if obs_ts.tzinfo is not None:
+        obs_ts = obs_ts.replace(tzinfo=None)
+    last_ts = state.last_observation_timestamp
+    if last_ts and last_ts.tzinfo is not None:
+        last_ts = last_ts.replace(tzinfo=None)
+
+    if last_ts and obs_ts < last_ts:
         return LocationResponse(
             driver_id=driver_id,
             status=MatchingStatus.STALE_OBSERVATION,
@@ -174,6 +194,9 @@ async def ingest_location(
 
     # Add observation
     gap_reset, gap_reason = state.add_observation(obs)
+
+    # Persist after observation added
+    await _persist_state(driver_id, state)
 
     if gap_reset:
         state.current_status = MatchingStatus.GAP_RESET.value
@@ -351,14 +374,8 @@ async def get_driver_location(
     """
     Get current state for a driver.
     """
-    store = get_state_store()
-    state = store.get(driver_id)
-
-    if state is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Driver {driver_id} not found",
-        )
+    manager = get_hybrid_manager()
+    state, _ = await manager.get_or_create(driver_id)
 
     raw_pos = state.get_current_raw_position()
 

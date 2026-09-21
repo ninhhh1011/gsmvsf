@@ -18,22 +18,60 @@ def _database_ready():
     except psycopg2.Error:
         return False
 
+
+def _redis_ready():
+    """Check Redis connectivity for driver state and snapshot cache."""
+    try:
+        import redis
+        r = redis.from_url(settings.redis_url, socket_connect_timeout=3)
+        r.ping()
+        r.close()
+        return True
+    except Exception:
+        return False
+
+
 async def dependencies_ready():
+    """Check all required dependencies for recommendation service."""
     async with httpx.AsyncClient(timeout=5) as client:
-        routing, database = await asyncio.gather(
+        routing, database, redis_state = await asyncio.gather(
             GraphHopperRoutingAdapter(client=client, timeout_seconds=5).is_healthy(),
             asyncio.to_thread(_database_ready),
+            asyncio.to_thread(_redis_ready),
         )
-    return {"graphhopper": routing, "postgis": database}
+    return {
+        "graphhopper": routing,
+        "postgis": database,
+        "redis": redis_state,
+    }
+
 
 @router.get("/health")
 async def health():
+    """
+    Liveness probe - returns 200 if the process is running.
+    """
     return {"status": "healthy"}
+
 
 @router.get("/ready")
 @router.get("/readiness")
 async def ready():
+    """
+    Readiness probe - returns 200 if all required dependencies are available.
+
+    Required dependencies:
+    - GraphHopper: routing and map matching
+    - PostgreSQL/PostGIS: segment data and candidate state
+
+    Optional dependencies (service can operate in degraded mode):
+    - Redis: snapshot cache (has PostgreSQL fallback), driver state (has local-only fallback)
+    """
     dependencies = await dependencies_ready()
-    if not all(dependencies.values()):
+
+    # Required: GraphHopper and PostgreSQL
+    required = {"graphhopper": dependencies["graphhopper"], "postgis": dependencies["postgis"]}
+    if not all(required.values()):
         raise HTTPException(503, detail={"status": "not_ready", **dependencies})
+
     return {"status": "ready", **dependencies}
