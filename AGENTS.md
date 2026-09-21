@@ -66,6 +66,16 @@ event time. Labels remain offline evaluation-only. No numeric production SLA or
 durable recommendation lifecycle is introduced. Do not start Week 6 without
 explicit authorization. Prior migration evidence and historical completion tags
 remain valid for their recorded baselines.
+**Week 5.5**: Demo / Integration UI complete: 350 backend tests PASS, 4 Node.js
+frontend unit tests PASS, canonical validator 152 PASS / 0 FAIL and 22/22
+scenarios; 63 canonical Dataset files unchanged. Dedicated Driver Mode
+(distraction-free, SAFE/ADVISORY/CRITICAL warnings, trip complete card) and
+Simulation / Debug Mode (A/B map picker, vehicle catalog, SOC slider, candidate
+table, ranking explanation, pipeline latency, trajectory replay). All 8 canonical
+demo scenarios verified live against real FastAPI, GraphHopper, PostgreSQL, and
+Redis. No business logic in frontend. Evidence: `docs/DEMO_UI_IMPLEMENTATION_PLAN.md`
+and `docs/WEEK_5_5_DEMO_REPORT.md`; freeze tag `demo-ui-integration-complete`.
+Do not start Week 6 without explicit authorization.
 
 ---
 

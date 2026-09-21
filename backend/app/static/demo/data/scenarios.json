@@ -1,0 +1,205 @@
+[
+  {
+    "id": "scenario_1",
+    "title": "Scenario 1: Driver Trip Safe",
+    "tag": "SAFE",
+    "description": "Driver is on a normal trip with ample battery (SOC 85%). Backend demand evaluation returns SAFE (SUFFICIENT_SOC_RANGE) with no service needed.",
+    "trip_id": "T0001",
+    "driver_id": "D0001",
+    "vehicle_id": "V0001",
+    "vehicle_model": "VF_3",
+    "vehicle_category": "EV_CAR",
+    "soc_pct": 85.0,
+    "estimated_range_km": 100.0,
+    "remaining_trip_distance_km": 3.5,
+    "safety_reserve_km": 1.0,
+    "timestamp": "2026-09-01T06:06:00Z",
+    "origin": {
+      "latitude": 21.0182,
+      "longitude": 105.8152
+    },
+    "destination": {
+      "latitude": 21.0365,
+      "longitude": 105.8341
+    },
+    "expected_level": "SAFE"
+  },
+  {
+    "id": "scenario_2",
+    "title": "Scenario 2: Reserve Insufficient (Advisory)",
+    "tag": "ADVISORY",
+    "description": "Vehicle can reach destination (10 km trip, 12 km range) but cannot preserve post-destination reserve (5 km). Backend returns INSUFFICIENT_POST_DESTINATION_RESERVE.",
+    "trip_id": "T0003",
+    "driver_id": "D0003",
+    "vehicle_id": "V0004",
+    "vehicle_model": "VF_6",
+    "vehicle_category": "EV_CAR",
+    "soc_pct": 22.0,
+    "estimated_range_km": 12.0,
+    "remaining_trip_distance_km": 10.0,
+    "safety_reserve_km": 5.0,
+    "timestamp": "2026-09-01T06:40:00Z",
+    "origin": {
+      "latitude": 21.0285,
+      "longitude": 105.8542
+    },
+    "destination": {
+      "latitude": 20.985,
+      "longitude": 105.812
+    },
+    "expected_level": "ADVISORY"
+  },
+  {
+    "id": "scenario_3",
+    "title": "Scenario 3: Destination Not Reachable (Critical)",
+    "tag": "CRITICAL",
+    "description": "Vehicle SOC is 25% (above safe threshold of 20%), but estimated remaining range (30 km) is strictly less than trip distance (45 km). Backend demand evaluation returns DESTINATION_NOT_REACHABLE.",
+    "trip_id": "T0003",
+    "driver_id": "D0003",
+    "vehicle_id": "V0004",
+    "vehicle_model": "VF_6",
+    "vehicle_category": "EV_CAR",
+    "soc_pct": 25.0,
+    "estimated_range_km": 30.0,
+    "remaining_trip_distance_km": 45.0,
+    "safety_reserve_km": 5.0,
+    "timestamp": "2026-09-01T06:40:00Z",
+    "origin": {
+      "latitude": 21.0285,
+      "longitude": 105.8542
+    },
+    "destination": {
+      "latitude": 20.985,
+      "longitude": 105.812
+    },
+    "expected_level": "CRITICAL"
+  },
+  {
+    "id": "scenario_4",
+    "title": "Scenario 4: Car Charging Recommendation",
+    "tag": "CHARGING",
+    "description": "Electric car (VF_6) low on SOC requires charging. Recommendation engine evaluates station slots, travel ETA, and queue wait to rank best charging station.",
+    "trip_id": "T0004",
+    "driver_id": "D0004",
+    "vehicle_id": "V0004",
+    "vehicle_model": "VF_6",
+    "vehicle_category": "EV_CAR",
+    "soc_pct": 12.0,
+    "estimated_range_km": 25.0,
+    "remaining_trip_distance_km": 4.1,
+    "safety_reserve_km": 2.0,
+    "timestamp": "2026-09-01T06:24:00Z",
+    "origin": {
+      "latitude": 21.0285,
+      "longitude": 105.8542
+    },
+    "destination": {
+      "latitude": 21.045,
+      "longitude": 105.835
+    },
+    "requested_service": "CHARGING",
+    "expected_level": "RECOMMEND_CHARGING"
+  },
+  {
+    "id": "scenario_5",
+    "title": "Scenario 5: Motorbike Battery Swap Recommendation",
+    "tag": "SWAP",
+    "description": "Electric motorbike (EVO) with battery swap support requests energy service. Swap cabinet (6 min duration) is selected, giving fast completion time.",
+    "trip_id": "T0110",
+    "driver_id": "D0003",
+    "vehicle_id": "V0003",
+    "vehicle_model": "EVO",
+    "vehicle_category": "EV_MOTORBIKE",
+    "soc_pct": 10.0,
+    "estimated_range_km": 15.0,
+    "remaining_trip_distance_km": 4.0,
+    "safety_reserve_km": 2.0,
+    "timestamp": "2026-09-01T00:40:00Z",
+    "origin": {
+      "latitude": 21.031,
+      "longitude": 105.855
+    },
+    "destination": {
+      "latitude": 21.05,
+      "longitude": 105.82
+    },
+    "requested_service": "BATTERY_SWAP",
+    "expected_level": "RECOMMEND_SWAP"
+  },
+  {
+    "id": "scenario_6",
+    "title": "Scenario 6: Queue Snapshot Invalidation (S022 -> S016)",
+    "tag": "QUEUE_CHANGE",
+    "description": "Demonstrates dynamic queue snapshot behavior. At 07:42, S022 has 0 wait and is recommended. At 07:52, queue snapshot updates to 46.29 min, causing S016 to be recommended instead!",
+    "trip_id": "T0017",
+    "driver_id": "D0017",
+    "vehicle_id": "V0017",
+    "vehicle_model": "VF_6",
+    "vehicle_category": "EV_CAR",
+    "soc_pct": 12.0,
+    "estimated_range_km": 25.0,
+    "remaining_trip_distance_km": 7.1,
+    "safety_reserve_km": 2.0,
+    "timestamp_t1": "2026-09-01T00:42:00Z",
+    "timestamp_t2": "2026-09-01T00:52:00Z",
+    "origin": {
+      "latitude": 20.9729508,
+      "longitude": 105.8750792
+    },
+    "destination": {
+      "latitude": 20.9717137,
+      "longitude": 105.8749075
+    },
+    "expected_station_t1": "S022",
+    "expected_station_t2": "S016"
+  },
+  {
+    "id": "scenario_7",
+    "title": "Scenario 7: Station Status Change / Offline (S001)",
+    "tag": "STATION_OFFLINE",
+    "description": "Station S001 is OPEN at 07:50 but transitions to OFFLINE at 08:00. Backend Candidate Search flags S001 as ineligible (OFFLINE) and Ranking rejects invalidated candidate sets.",
+    "trip_id": "T0019",
+    "driver_id": "D0019",
+    "vehicle_id": "V0001",
+    "vehicle_model": "VF_3",
+    "vehicle_category": "EV_CAR",
+    "soc_pct": 15.0,
+    "estimated_range_km": 25.0,
+    "remaining_trip_distance_km": 6.0,
+    "safety_reserve_km": 2.0,
+    "timestamp_t1": "2026-09-01T07:50:00+07:00",
+    "timestamp_t2": "2026-09-01T08:00:00+07:00",
+    "origin": {
+      "latitude": 21.09,
+      "longitude": 105.757
+    },
+    "destination": {
+      "latitude": 21.05,
+      "longitude": 105.78
+    },
+    "station_id": "S001",
+    "timestamp": "2026-09-01T08:00:00+07:00"
+  },
+  {
+    "id": "scenario_8",
+    "title": "Scenario 8: Interactive Simulation (Custom A -> B)",
+    "tag": "SIMULATION",
+    "description": "Interactive simulation where origin and destination coordinates can be clicked on the map or entered manually, with any vehicle and SOC level.",
+    "vehicle_id": "V0002",
+    "vehicle_model": "VF_5",
+    "vehicle_category": "EV_CAR",
+    "soc_pct": 18.0,
+    "estimated_range_km": 30.0,
+    "remaining_trip_distance_km": 8.0,
+    "safety_reserve_km": 2.0,
+    "timestamp": "2026-09-01T07:00:00Z",
+    "origin": {
+      "latitude": 21.0285,
+      "longitude": 105.8542
+    },
+    "destination": {
+      "latitude": 21.015,
+      "longitude": 105.78
+    }
+  }
+]

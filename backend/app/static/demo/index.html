@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VinFast EV Recommendation & Routing System — Demo</title>
+    <!-- Leaflet 1.9.4 CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- App Design System Stylesheet -->
+    <link rel="stylesheet" href="./static/style.css" />
+</head>
+<body>
+
+    <!-- Main Navigation Header -->
+    <header class="app-header">
+        <div class="brand-section">
+            <div class="brand-logo">V</div>
+            <div>
+                <span class="brand-title">VinFast Green Mobility</span>
+                <span class="brand-subtitle">EV Energy Recommendation System</span>
+            </div>
+        </div>
+
+        <!-- Mode Switcher -->
+        <div class="mode-switcher" role="tablist">
+            <button id="tab-driver-mode" class="mode-tab-btn active" role="tab" aria-selected="true">
+                Driver Mode
+            </button>
+            <button id="tab-sim-mode" class="mode-tab-btn" role="tab" aria-selected="false">
+                Simulation / Debug Mode
+            </button>
+        </div>
+
+        <!-- Backend Health Pills -->
+        <div class="header-status-pills">
+            <div class="pill-group" title="FastAPI Liveness">
+                <span id="health-pill-api" class="pill-dot gray"></span>
+                <span>API</span>
+            </div>
+            <div class="pill-group" title="GraphHopper 11 Routing Engine">
+                <span id="health-pill-gh" class="pill-dot gray"></span>
+                <span>GraphHopper</span>
+            </div>
+            <div class="pill-group" title="PostGIS Road Database">
+                <span id="health-pill-db" class="pill-dot gray"></span>
+                <span>PostGIS</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Body -->
+    <main class="app-body">
+        
+        <!-- Left Sidebar Panel (Driver Mode or Simulation Mode) -->
+        <section class="sidebar-panel">
+
+            <!-- DRIVER MODE CONTAINER -->
+            <div id="driver-view-container" class="driver-mode-container">
+                <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="text-sm text-muted">DRIVER STATUS</span>
+                    <span id="driver-status-badge" class="status-badge badge-available">AVAILABLE</span>
+                </div>
+
+                <!-- Dynamic Content Rendered by DriverModeController -->
+                <div id="driver-panel-content">
+                    <!-- Initial content rendered via JS -->
+                </div>
+            </div>
+
+            <!-- SIMULATION / DEBUG MODE CONTAINER (Default Hidden) -->
+            <div id="sim-view-container" class="sim-mode-container" style="display: none;">
+                
+                <!-- Scenario Presets -->
+                <div class="sim-section-card">
+                    <h4>Demo Scenarios (Dataset V1)</h4>
+                    <div id="sim-scenarios-container">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div id="sim-scenario-desc" class="mt-2"></div>
+                </div>
+
+                <!-- Interactive A/B Controls -->
+                <div class="sim-section-card">
+                    <h4>Trip Origin & Destination</h4>
+                    
+                    <div class="form-group">
+                        <label>Origin (A):</label>
+                        <div class="coord-row">
+                            <input type="number" id="sim-origin-lat" class="form-control" step="0.0001" value="21.0285">
+                            <input type="number" id="sim-origin-lng" class="form-control" step="0.0001" value="105.8542">
+                            <button id="btn-pick-origin" class="btn btn-outline btn-sm" title="Pick from Map">📍 Map</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Destination (B):</label>
+                        <div class="coord-row">
+                            <input type="number" id="sim-dest-lat" class="form-control" step="0.0001" value="21.0150">
+                            <input type="number" id="sim-dest-lng" class="form-control" step="0.0001" value="105.7800">
+                            <button id="btn-pick-dest" class="btn btn-outline btn-sm" title="Pick from Map">📍 Map</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vehicle & Telemetry Controls -->
+                <div class="sim-section-card">
+                    <h4>Vehicle Telemetry & Service Request</h4>
+                    
+                    <div class="form-group">
+                        <label>Vehicle Model:</label>
+                        <select id="sim-vehicle-select" class="form-control">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <label style="margin:0;">Battery SOC:</label>
+                            <span id="sim-soc-val" style="font-weight:700; color:var(--brand-blue);">15%</span>
+                        </div>
+                        <input type="range" id="sim-soc-slider" min="1" max="100" value="15" style="width:100%;">
+                        <div class="text-sm text-muted mt-1" style="font-size:11px;">
+                            Est. Range: <strong id="sim-est-range-val">25.0 km</strong>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Requested Service Intent:</label>
+                        <select id="sim-service-intent" class="form-control">
+                            <option value="AUTO">AUTO (System decides based on vehicle)</option>
+                            <option value="CHARGING">CHARGING (Explicit Driver Request)</option>
+                            <option value="BATTERY_SWAP">BATTERY_SWAP (Explicit Swap Request)</option>
+                            <option value="ANY">ANY (Driver accepts either service)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Snapshot Timestamp (UTC):</label>
+                        <input type="text" id="sim-timestamp" class="form-control" value="2026-09-01T07:00:00Z">
+                    </div>
+
+                    <button id="btn-run-sim" class="btn btn-primary btn-lg btn-block mt-2">
+                        RUN SIMULATION
+                    </button>
+                </div>
+
+                <!-- Trajectory Replay Controls -->
+                <div class="sim-section-card">
+                    <h4>Trajectory Replay (Week 1 Ingestion)</h4>
+                    <div class="form-group">
+                        <label>Select Trajectory:</label>
+                        <select id="select-trajectory" class="form-control">
+                            <option value="TRJ0001">TRJ0001 (Car Normal)</option>
+                            <option value="TRJ0002">TRJ0002 (Car Safe)</option>
+                            <option value="TRJ0003">TRJ0003 (Car Low SOC)</option>
+                            <option value="TRJ0004">TRJ0004 (Car Need Charging)</option>
+                            <option value="TRJ0005">TRJ0005 (Car High Traffic)</option>
+                        </select>
+                    </div>
+
+                    <div class="d-flex gap-2 mb-2" style="display:flex; gap:6px; margin-bottom:8px;">
+                        <button id="btn-load-trajectory" class="btn btn-outline btn-sm">Load</button>
+                        <button id="btn-replay-play" class="btn btn-primary btn-sm">▶ Play</button>
+                        <button id="btn-replay-pause" class="btn btn-outline btn-sm" disabled>⏸ Pause</button>
+                        <button id="btn-replay-step" class="btn btn-outline btn-sm">⏭ Step</button>
+                        <button id="btn-replay-reset" class="btn btn-outline btn-sm">↺ Reset</button>
+                    </div>
+
+                    <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-secondary);">
+                        <span>Speed: 
+                            <select id="select-replay-speed" style="font-size:11px;">
+                                <option value="1">1x</option>
+                                <option value="5" selected>5x</option>
+                                <option value="10">10x</option>
+                                <option value="25">25x</option>
+                                <option value="50">50x</option>
+                            </select>
+                        </span>
+                        <span>Progress: <strong id="replay-progress">0 / 0</strong></span>
+                    </div>
+
+                    <div id="replay-status" class="mt-2" style="font-size:11px; color:var(--text-muted);">Replay Ready</div>
+                </div>
+
+                <!-- Simulation Outputs -->
+                <div id="sim-pipeline-container"></div>
+                <div id="sim-warning-container"></div>
+                <div id="sim-recommendation-container"></div>
+                <div id="sim-demand-detail-container"></div>
+                <div id="sim-candidates-container"></div>
+
+            </div>
+
+        </section>
+
+        <!-- Right Map Viewport -->
+        <section class="map-viewport">
+            <div id="map-picking-indicator" class="map-picking-indicator">
+                Click on the map to select coordinates...
+            </div>
+            <div id="map"></div>
+        </section>
+
+    </main>
+
+    <!-- Leaflet 1.9.4 JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- App Modular ES6 Scripts -->
+    <script type="module" src="./static/js/app.js"></script>
+
+</body>
+</html>

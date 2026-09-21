@@ -53,11 +53,27 @@ def create_app() -> FastAPI:
             """Serve debug map index page."""
             return HTMLResponse(content=index_file.read_text())
 
-        # Also mount static files under /debug-map/assets
         app.mount(
             "/debug-map/static",
             StaticFiles(directory=str(static_path)),
             name="debug-map-static"
+        )
+
+    # Serve Demo UI (Week 5.5)
+    demo_path = settings.app_path / "static" / "demo"
+    demo_index = demo_path / "index.html"
+
+    if demo_path.exists() and demo_index.exists():
+        @app.get("/demo")
+        @app.get("/demo/")
+        async def demo_page():
+            """Serve Week 5.5 Demo UI."""
+            return HTMLResponse(content=demo_index.read_text(encoding="utf-8"))
+
+        app.mount(
+            "/demo/static",
+            StaticFiles(directory=str(demo_path)),
+            name="demo-static"
         )
 
     @app.get("/")

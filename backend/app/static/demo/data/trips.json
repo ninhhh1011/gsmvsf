@@ -1,0 +1,192 @@
+[
+  {
+    "trip_id": "T0001",
+    "driver_id": "D0001",
+    "vehicle_id": "V0001",
+    "scenario_id": "NORMAL_TRIP",
+    "start_time": "2026-09-01T06:06:00+07:00",
+    "end_time": "2026-09-01T06:12:18.907387714+07:00",
+    "planned_distance_m": 3537.6,
+    "origin": {
+      "node_id": "N0131468",
+      "latitude": 21.1038023,
+      "longitude": 106.0023809
+    },
+    "destination": {
+      "node_id": "N0117109",
+      "latitude": 21.1025933,
+      "longitude": 106.0065203
+    }
+  },
+  {
+    "trip_id": "T0002",
+    "driver_id": "D0002",
+    "vehicle_id": "V0002",
+    "scenario_id": "NO_SERVICE_NEEDED",
+    "start_time": "2026-09-01T06:12:00+07:00",
+    "end_time": "2026-09-01T06:23:19.085058999+07:00",
+    "planned_distance_m": 4694.5,
+    "origin": {
+      "node_id": "N0248520",
+      "latitude": 20.9583763,
+      "longitude": 105.909126
+    },
+    "destination": {
+      "node_id": "N0096925",
+      "latitude": 20.9552447,
+      "longitude": 105.9050892
+    }
+  },
+  {
+    "trip_id": "T0003",
+    "driver_id": "D0003",
+    "vehicle_id": "V0003",
+    "scenario_id": "LOW_SOC",
+    "start_time": "2026-09-01T06:18:00+07:00",
+    "end_time": "2026-09-01T06:31:21.795826+07:00",
+    "planned_distance_m": 4882.3,
+    "origin": {
+      "node_id": "N0152511",
+      "latitude": 20.9849862,
+      "longitude": 105.7935256
+    },
+    "destination": {
+      "node_id": "N0028975",
+      "latitude": 20.9899215,
+      "longitude": 105.7894319
+    }
+  },
+  {
+    "trip_id": "T0004",
+    "driver_id": "D0004",
+    "vehicle_id": "V0004",
+    "scenario_id": "NEED_CHARGING",
+    "start_time": "2026-09-01T06:24:00+07:00",
+    "end_time": "2026-09-01T06:33:22.235364785+07:00",
+    "planned_distance_m": 4110.6,
+    "origin": {
+      "node_id": "N0055149",
+      "latitude": 21.0872633,
+      "longitude": 105.7776544
+    },
+    "destination": {
+      "node_id": "N0018979",
+      "latitude": 21.0775658,
+      "longitude": 105.7688616
+    }
+  },
+  {
+    "trip_id": "T0017",
+    "driver_id": "D0017",
+    "vehicle_id": "V0017",
+    "scenario_id": "QUEUE_REALTIME_CHANGE",
+    "start_time": "2026-09-01T07:42:00+07:00",
+    "end_time": "2026-09-01T07:59:05.677872+07:00",
+    "planned_distance_m": 7122.8,
+    "origin": {
+      "node_id": "N0104908",
+      "latitude": 20.9729508,
+      "longitude": 105.8750792
+    },
+    "destination": {
+      "node_id": "N0104924",
+      "latitude": 20.9717137,
+      "longitude": 105.8749075
+    }
+  },
+  {
+    "trip_id": "T0018",
+    "driver_id": "D0018",
+    "vehicle_id": "V0018",
+    "scenario_id": "TRAFFIC_REALTIME_CHANGE",
+    "start_time": "2026-09-01T07:48:00+07:00",
+    "end_time": "2026-09-01T08:03:56.007975999+07:00",
+    "planned_distance_m": 5547.6,
+    "origin": {
+      "node_id": "N0187119",
+      "latitude": 21.0638856,
+      "longitude": 105.7789431
+    },
+    "destination": {
+      "node_id": "N0127108",
+      "latitude": 21.0686225,
+      "longitude": 105.7809994
+    }
+  },
+  {
+    "trip_id": "T0019",
+    "driver_id": "D0019",
+    "vehicle_id": "V0019",
+    "scenario_id": "STATION_STATUS_CHANGE",
+    "start_time": "2026-09-01T07:54:00+07:00",
+    "end_time": "2026-09-01T08:14:31.658875+07:00",
+    "planned_distance_m": 7189.0,
+    "origin": {
+      "node_id": "N0296380",
+      "latitude": 20.9517686,
+      "longitude": 105.8094838
+    },
+    "destination": {
+      "node_id": "N0082859",
+      "latitude": 20.95374,
+      "longitude": 105.809353
+    }
+  },
+  {
+    "trip_id": "T0073",
+    "driver_id": "D0013",
+    "vehicle_id": "V0013",
+    "scenario_id": "FARTHER_BUT_FASTER",
+    "start_time": "2026-09-01T13:18:00+07:00",
+    "end_time": "2026-09-01T13:38:27.181054499+07:00",
+    "planned_distance_m": 9004.2,
+    "origin": {
+      "node_id": "N0225265",
+      "latitude": 20.9696394,
+      "longitude": 106.0073744
+    },
+    "destination": {
+      "node_id": "N0225228",
+      "latitude": 20.9709422,
+      "longitude": 106.0069477
+    }
+  },
+  {
+    "trip_id": "T0110",
+    "driver_id": "D0018",
+    "vehicle_id": "V0018",
+    "scenario_id": "NEED_SWAP",
+    "start_time": "2026-09-01T17:00:00+07:00",
+    "end_time": "2026-09-01T17:21:17.620245571+07:00",
+    "planned_distance_m": 7291.4,
+    "origin": {
+      "node_id": "N0139854",
+      "latitude": 21.0854992,
+      "longitude": 105.7736164
+    },
+    "destination": {
+      "node_id": "N0018792",
+      "latitude": 21.0855547,
+      "longitude": 105.7792039
+    }
+  },
+  {
+    "trip_id": "T0129",
+    "driver_id": "D0009",
+    "vehicle_id": "V0009",
+    "scenario_id": "LOW_SOC",
+    "start_time": "2026-09-01T18:54:00+07:00",
+    "end_time": "2026-09-01T19:17:31.566517+07:00",
+    "planned_distance_m": 8231.3,
+    "origin": {
+      "node_id": "N0000802",
+      "latitude": 21.0434219,
+      "longitude": 105.8456115
+    },
+    "destination": {
+      "node_id": "N0188662",
+      "latitude": 21.0450209,
+      "longitude": 105.8512973
+    }
+  }
+]
