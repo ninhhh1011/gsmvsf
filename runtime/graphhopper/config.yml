@@ -1,0 +1,36 @@
+graphhopper:
+  datareader.file: /osm/hanoi-patched.osm.pbf
+  graph.location: /data/gh-cache-11
+  custom_models.directory: custom_models
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+      turn_costs:
+        vehicle_types: [motorcar, motor_vehicle]
+        u_turn_costs: 60
+    - name: motorcycle
+      custom_model_files: [hanoi_motorcycle.json]
+      turn_costs:
+        vehicle_types: [motorcycle, motor_vehicle]
+        u_turn_costs: 60
+  profiles_ch:
+    - profile: car
+    - profile: motorcycle
+  graph.encoded_values: car_access, car_average_speed, road_access, road_class, road_environment, roundabout, max_speed, surface, track_type, osm_way_id
+  import.osm.ignored_highways: footway,cycleway,path,steps,construction,proposed
+  routing.max_visited_nodes: 1000000
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: 0.0.0.0
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: 127.0.0.1
+  request_log:
+    appenders: []
+logging:
+  level: INFO
+  appenders:
+    - type: console
