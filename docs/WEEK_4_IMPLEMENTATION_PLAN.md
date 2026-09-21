@@ -340,9 +340,9 @@ No Kafka, Redis Streams, live feed, continuous monitoring, push or ML runtime.
 |---|---|---|
 | 0 | Audit | PASS: 239 baseline tests, validator 152/22, live routing smoke |
 | Plan | Detailed design / ADR-013 | PASS: approved boundary recorded; coverage reviewed |
-| 1 | W4-01 | Pending implementation |
-| 2 | W4-02, W4-03 | Pending implementation |
-| 3 | W4-04 | Pending implementation |
+| 1 | W4-01 | PASS: 9 contract tests; 21 with prior model regression; reviewed/fixed provenance |
+| 2 | W4-02, W4-03 | PASS: 7 real DB tests; 890,137 imported, exact retry created 0; independent review |
+| 3 | W4-04 | PASS: 7 real cache tests + 7 DB tests; historical/empty-cache fix verified |
 | 4 | W4-05, W4-06 | Pending implementation |
 | 5 | W4-07 | Pending implementation |
 | 6 | W4-08, W4-09 | Pending implementation |

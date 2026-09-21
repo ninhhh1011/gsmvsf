@@ -51,12 +51,11 @@ class IngestionService:
     async def _cache(self, snapshots: list[Snapshot]) -> None:
         if self.cache is None:
             return
-        for snapshot in snapshots:
-            try:
-                await self.cache.put(snapshot)
-            except Exception:
-                # The committed DB version remains authoritative after cache failure.
-                logger.warning('Snapshot cache write failed: %s', snapshot.key, exc_info=True)
+        try:
+            await self.cache.populate_latest(self.repository, sorted({s.key for s in snapshots}))
+        except Exception:
+            # The committed DB version remains authoritative after cache failure.
+            logger.warning('Snapshot cache write failed', exc_info=True)
 
     async def ingest(self, snapshot: Snapshot) -> tuple[Snapshot, bool]:
         await self._validate_many([snapshot])

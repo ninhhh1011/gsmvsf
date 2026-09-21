@@ -131,3 +131,17 @@ async def test_warm_healthy_cache_does_not_mask_database_failure(repository, cac
     with pytest.raises(StateError) as exc:
         await SnapshotResolver(repository, cache).resolve([snap.key], snap.timestamp)
     assert exc.value.status == 503
+
+
+@pytest.mark.asyncio
+async def test_empty_latest_cache_never_receives_older_database_state(repository, cache):
+    from backend.app.services.snapshots.resolver import SnapshotResolver
+    from backend.app.services.snapshots.ingestion import IngestionService
+    old = traffic()
+    new = traffic(timestamp=old.timestamp + timedelta(hours=1))
+    await repository.ingest(new)
+    await IngestionService(repository, cache=cache).ingest(old)
+    assert (await cache.get_many([old.key]))[old.key] == new
+    await cache.client.delete(cache.key(old.key))
+    assert (await SnapshotResolver(repository, cache).resolve([old.key], old.timestamp))[old.key].snapshot == old
+    assert (await cache.get_many([old.key]))[old.key] == new

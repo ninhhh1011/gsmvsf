@@ -1,6 +1,7 @@
 """Pin DB versions once; use Redis only for validated immutable payloads."""
 import json
 from collections import Counter
+from datetime import datetime, timezone
 from time import perf_counter
 
 from pydantic import ValidationError
@@ -57,6 +58,13 @@ class SnapshotCache:
         value = json.dumps({'stamp': stamp, 'payload': snapshot.model_dump(mode='json')})
         return await self.client.eval(LATEST_CAS, 1, self.key(snapshot.key), stamp, value, self.ttl_s)
 
+    async def populate_latest(self, repository, keys):
+        """An empty/expired cache must not turn a historical read into latest state."""
+        heads = await repository.heads(list(keys), datetime.max.replace(tzinfo=timezone.utc))
+        values = await repository.payloads([sid for sid in heads.values() if sid])
+        for snapshot in values.values():
+            await self.put(snapshot)
+
 
 class SnapshotResolver:
     def __init__(self, repository, cache=None, policy=None):
@@ -95,12 +103,14 @@ class SnapshotResolver:
                 if value is None or value.snapshot_id != sid or value.key != key:
                     raise StateError('Pinned snapshot payload is unavailable or inconsistent')
                 selected[key] = value
-                if self.cache is not None:
-                    try:
-                        await self.cache.put(value)
-                    except (RedisError, OSError, TimeoutError):
-                        self.metrics['cache_error'] += 1
-                        logger.warning('snapshot_cache_unavailable', operation='write')
+        if misses and self.cache is not None:
+            try:
+                await self.cache.populate_latest(self.repository,
+                    [key for key in keys if heads[key] in missing_ids])
+            except (RedisError, OSError, TimeoutError, StateError):
+                # Pinned payloads are already read; cache maintenance is best effort.
+                self.metrics['cache_error'] += 1
+                logger.warning('snapshot_cache_unavailable', operation='write')
         result = {key: ResolvedSnapshot.resolve(selected.get(key), request_time,
                   getattr(self.policy, key.split(':', 1)[0] + '_fresh_s')) for key in keys}
         self.metrics.update(cache_hit=hits, cache_miss=misses, db_fallback=misses,
