@@ -1,0 +1,139 @@
+{
+  "status": "PASS",
+  "labels_consumed": false,
+  "scope": "Controlled synthetic operational probes; actual routing and canonical vehicle/station identities",
+  "cases": {
+    "refresh": {
+      "missing_queue_traffic": "PASS",
+      "initial_station": "S029",
+      "changed_station": "S007",
+      "recommendation_changes": 1,
+      "unchanged_recommendations": 1,
+      "refresh_new_search_evidence": true,
+      "traffic_snapshot_id": "d1864b30-51c3-5cbb-adc3-c56a7ac260cf",
+      "traffic_update": "PASS",
+      "traffic_scope": "Synthetic road_segment_id using a canonical segment, no matched-origin claim",
+      "invalidations": [
+        {
+          "reason": "OFFLINE",
+          "status": 409,
+          "response": {
+            "error_code": "CANDIDATE_STATE_CHANGED",
+            "message": "Candidate eligibility state changed after candidate search.",
+            "candidate_search_id": "c26fc74d-116e-409e-bb69-56fd575d968f",
+            "changed_candidates": [
+              {
+                "station_id": "S029",
+                "service_type": "CHARGING",
+                "previous_state": "ELIGIBLE",
+                "current_state": "OFFLINE"
+              }
+            ],
+            "action": "RERUN_CANDIDATE_SEARCH"
+          }
+        },
+        {
+          "reason": "FULL",
+          "status": 409,
+          "response": {
+            "error_code": "CANDIDATE_STATE_CHANGED",
+            "message": "Candidate eligibility state changed after candidate search.",
+            "candidate_search_id": "1dfdca6e-d609-4d5f-aeca-16a9981f4778",
+            "changed_candidates": [
+              {
+                "station_id": "S029",
+                "service_type": "CHARGING",
+                "previous_state": "ELIGIBLE",
+                "current_state": "FULL"
+              }
+            ],
+            "action": "RERUN_CANDIDATE_SEARCH"
+          }
+        }
+      ],
+      "zero_candidates": 0
+    },
+    "location": {
+      "missing_location_status": 422,
+      "raw_fallback": "RAW_GPS_FALLBACK",
+      "stale_status": "STALE_OBSERVATION",
+      "stale_did_not_replace_current": true,
+      "invalid_explicit_status": 422,
+      "no_service_short_circuit": true
+    },
+    "one_retry": {
+      "status": 200,
+      "searches": 2,
+      "ranking_calls": 2,
+      "conflicts": 1,
+      "recovered": true,
+      "method": "Real in-process FastAPI /recommend with real PostgreSQL, Redis and GraphHopper; timed ingestion after real search"
+    },
+    "second_conflict": {
+      "status": 409,
+      "searches": 2,
+      "ranking_calls": 2,
+      "conflicts": 2,
+      "recovered": false,
+      "method": "Real in-process FastAPI /recommend with real PostgreSQL, Redis and GraphHopper; timed ingestion after real search"
+    },
+    "dependencies": {
+      "method": "Real in-process FastAPI HTTP with real adapters and bound non-listening sockets; no fake responses",
+      "redis_unavailable": {
+        "status": 200,
+        "database_fallback": true,
+        "cache_metrics": {
+          "cache_error": 4,
+          "cache_hit": 0,
+          "cache_miss": 96,
+          "db_fallback": 96,
+          "lookups": 2,
+          "stale": 0,
+          "missing": 0
+        }
+      },
+      "postgresql_unavailable": {
+        "status": 503,
+        "warm_cache_not_authoritative": true,
+        "response": {
+          "error_code": "SNAPSHOT_DATABASE_UNAVAILABLE",
+          "message": "Snapshot database unavailable"
+        }
+      },
+      "graphhopper_unavailable": {
+        "status": 504,
+        "response": {
+          "detail": "GraphHopper request timed out: "
+        }
+      },
+      "week1_graphhopper_unavailable": {
+        "status": 200,
+        "observation_count": 5,
+        "observations": [
+          {
+            "observation_id": "O00000001",
+            "status": "WARMING_UP"
+          },
+          {
+            "observation_id": "O00000002",
+            "status": "WARMING_UP"
+          },
+          {
+            "observation_id": "O00000003",
+            "status": "GPS_ACCEPTED"
+          },
+          {
+            "observation_id": "O00000004",
+            "status": "GPS_ACCEPTED"
+          },
+          {
+            "observation_id": "O00000005",
+            "status": "ENGINE_UNAVAILABLE"
+          }
+        ],
+        "no_false_matched_position": true
+      }
+    }
+  },
+  "timestamp": "2026-09-21T07:50:09.031200+00:00"
+}
