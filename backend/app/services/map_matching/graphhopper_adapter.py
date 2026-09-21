@@ -97,7 +97,7 @@ class GraphHopperMapMatchingAdapter:
                     raise MapMatchingNoMatchError("GraphHopper returned no path")
                 path = data["paths"][0]
                 geometry = path["points"]["coordinates"]
-                if len(geometry) < 2 or any(len(p) != 2 or not all(math.isfinite(v) for v in p)
+                if any(len(p) != 2 or not all(math.isfinite(v) for v in p)
                                            or not (-180 <= p[0] <= 180 and -90 <= p[1] <= 90) for p in geometry):
                     raise ValueError("Invalid matched path geometry")
                 distance, duration = float(path["distance"]), float(path["time"]) / 1000
@@ -108,6 +108,11 @@ class GraphHopperMapMatchingAdapter:
                     if not (isinstance(start, int) and isinstance(end, int) and 0 <= start <= end < len(geometry)
                             and isinstance(way, int) and way > 0):
                         raise ValueError("Invalid OSM way detail")
+                if len(geometry) < 2:
+                    # GraphHopper emits an empty zero-cost path for degenerate traces.
+                    if geometry == [] and distance == 0 and duration == 0:
+                        raise MapMatchingNoMatchError("Matched path has no traversable geometry")
+                    raise ValueError("Invalid matched path geometry")
             except (KeyError, TypeError, ValueError, IndexError, AttributeError) as exc:
                 raise MapMatchingEngineError("Malformed GraphHopper matching response") from exc
             tracepoints = []

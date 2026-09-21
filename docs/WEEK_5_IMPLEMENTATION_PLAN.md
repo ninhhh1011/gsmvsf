@@ -630,6 +630,22 @@ requires real infrastructure. All expected paths below are relative to root.
 - **RISKS:** Current state is not a history store; request timestamps can precede it.
 - **FAILURE / FALLBACK BEHAVIOR:** Future/missing current state cannot be invented; request fails explicitly when a location is needed.
 
+#### W5-02A - Classify real degenerate GraphHopper matches
+
+- **TASK ID:** W5-02A
+- **OBJECTIVE:** Treat validated empty zero-distance/time GraphHopper paths as no match.
+- **WHY:** Replay reproduced 34 real HTTP 200 zero-path responses incorrectly classified as malformed dependency failures; raw response evidence is retained.
+- **INPUTS:** runtime/week5/graphhopper-degenerate-probe.json; production adapter; existing MapMatchingNoMatchError contract.
+- **OUTPUTS:** Minimal adapter classification fix and focused regression cases.
+- **DEPENDENCIES:** W5-02; diagnosis from initial finite replay b.
+- **FILES EXPECTED TO CHANGE:** backend/app/services/map_matching/graphhopper_adapter.py; backend/tests/test_graphhopper_adapter.py (or existing matching adapter test file).
+- **IMPLEMENTATION APPROACH:** Validate structure and metrics, map only valid empty zero-cost geometry to existing no-match exception. Preserve malformed/nonzero errors and existing Week 1 handling.
+- **TEST PLAN:** Reproduce the real zero-path response as a failing adapter test, verify corrected classification and malformed-response protection, rerun prior matching/realtime tests, then fresh complete causal replay.
+- **SELF-REVIEW CHECKLIST:** No raw GPS substituted as matched; no trigger/freshness/eligibility/ranking change; no engine fallback; no Dataset writes; preserve real outage errors.
+- **EXIT GATE:** Focused/prior tests and diff review pass; actual replay records NO_MATCH with explicit fallback rather than false ENGINE_UNAVAILABLE.
+- **RISKS:** Overbroad no-match classification could hide malformed responses; require validated zero metrics and empty geometry.
+- **FAILURE / FALLBACK BEHAVIOR:** Unrecognized/malformed responses remain explicit dependency errors; accepted raw GPS retains RAW_GPS_FALLBACK provenance.
+
 ### Phase 3 - Finite causal replay
 
 #### W5-03 - Finite causal replay
@@ -727,7 +743,8 @@ requires real infrastructure. All expected paths below are relative to root.
 | W5-00 | PASS | User contracts, retained 302/152/22 audit baseline, plan reviewed |
 | W5-01 | PASS | 5 reproductions failed before fix; 54 focused/prior tests passed; shared accessor/None diff reviewed |
 | W5-02 | PASS | 321 full protected tests; independent 19-test review PASS; actual APIs healthy on isolated schemas; location-bridge-tests.xml |
-| W5-03 | PENDING | Not yet executed |
+| W5-02A | IN PROGRESS | 34/34 real zero-path responses reproduced; adapter regression and fresh replay required |
+| W5-03 | IN PROGRESS | Replay a precision defect fixed; replay b retained with 34 correctly reported adapter errors; fresh c required |
 | W5-04 | PENDING | Not yet executed |
 | W5-05 | PENDING | Not yet executed |
 | W5-06 | PENDING | Not yet executed |
