@@ -53,3 +53,8 @@ data/external/gps/raw/*.csv
 
 # External station data
 data/external/vinfast_stations/
+
+# Generated GraphHopper and migration evidence
+runtime/graphhopper/gh-cache*/
+runtime/graphhopper/*.jar
+runtime/migration/
