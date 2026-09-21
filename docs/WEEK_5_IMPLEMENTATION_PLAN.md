@@ -747,5 +747,5 @@ requires real infrastructure. All expected paths below are relative to root.
 | W5-03 | PASS | replay-c: 30 trajectories, 1952 events, 308 requests, zero errors; causal provenance/cache audit; 26 focused/prior tests |
 | W5-04 | PASS | Predictions persisted and hashed before labels; 184 joined reference events; docs/reports/week5-evaluation.json |
 | W5-05 | PASS | Real isolated API probes PASS; Redis fallback, PG503/GH504, W1 outage, OFFLINE/FULL409; one retry200, second409; 15 focused/prior tests |
-| W5-06 | PENDING | Not yet executed |
+| W5-06 | PASS | 9/9 warmups and 60/60 measured requests; concurrency 1/5/10, 20 each; real MATCHED car/20 eligible; performance report |
 | W5-07 | PENDING | Not yet executed |
