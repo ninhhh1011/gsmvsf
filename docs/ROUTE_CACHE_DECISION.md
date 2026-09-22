@@ -24,7 +24,7 @@ For a route cache keyed by `(origin_lat, origin_lon, station_id)`:
 - **Same driver, 30-120s apart**: ~20% hit rate
 - **Different drivers**: ~5% hit rate (different routes happen to overlap)
 
-**Weighted average**: ~15-25% hit rate for realistic traffic patterns.
+**Weighted average (estimated, not measured)**: ~15-25% hit rate for realistic traffic patterns.
 
 ### What We Already Have
 
