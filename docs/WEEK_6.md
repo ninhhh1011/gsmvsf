@@ -66,7 +66,7 @@ Sequential GraphHopper routing calls in candidate search. Each request computed 
 
 **Default: `max_concurrent_routes=4`**
 
-Rationale: Conservative setting that balances parallelism within a request while avoiding GraphHopper overload. The primary benefit comes from GraphHopper's internal caching, not from intra-request concurrency.
+Rationale: Conservative setting that balances parallelism within a request while avoiding GraphHopper overload.
 
 ---
 
@@ -81,14 +81,12 @@ Rationale: Conservative setting that balances parallelism within a request while
 | Candidate Search P50 | 291.97 ms | ~163 ms | **-44.2%** |
 | Success Rate | 100% | 100% | No change |
 
-*Note: Pre-cache baseline was ~286ms; post-cache warm state is ~186ms. The 38.5% improvement includes both concurrent routing and GraphHopper cache warming.*
+*Note: The overall 38.5% improvement is attributed to multiple factors:*
+- *Concurrent routing within requests*
+- *GraphHopper internal cache warming*
+- *Runtime/environment differences between benchmarks*
 
-### Implementation
-
-- Added `compute_all_station_metrics_concurrent()` to `MultiLegRouteCalculator`
-- Semaphore-based bounded parallelism (configurable via `max_concurrent_routes`)
-- Pre-compute direct route once, then parallel station leg computation
-- 15 new tests for concurrent routing correctness
+*The controlled routing-concurrency experiment showed similar P50 (~186-190ms) for max_routes=1-4, suggesting the primary benefit comes from warm GraphHopper cache, not intra-request concurrency.*
 
 ---
 
@@ -96,7 +94,7 @@ Rationale: Conservative setting that balances parallelism within a request while
 
 **Status: NOT IMPLEMENTED**
 
-**Rationale:** Expected hit rate of 15-25% doesn't justify implementation complexity.
+**Rationale (estimated, not measured):** Expected hit rate of 15-25% doesn't justify implementation complexity.
 
 See [docs/ROUTE_CACHE_DECISION.md](ROUTE_CACHE_DECISION.md) for full analysis.
 
@@ -109,12 +107,12 @@ See [docs/ROUTE_CACHE_DECISION.md](ROUTE_CACHE_DECISION.md) for full analysis.
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        API Instance A                        │
-│  ┌─────────────┐      ┌─────────────────────────────────┐ │
-│  │ Local Store │ ←─── │ HybridDriverStateManager        │ │
-│  │ (in-memory) │      │  - Check local first             │ │
-│  └─────────────┘      │  - Load from Redis if miss       │ │
-│                       │  - Persist on write              │ │
-│                       └─────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │          DriverStateManager (Production)            │   │
+│  │  - Requires Redis                                   │   │
+│  │  - No local fallback                               │   │
+│  │  - Raises error if Redis unavailable               │   │
+│  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                               ↓
                     ┌─────────────────────┐
@@ -126,12 +124,12 @@ See [docs/ROUTE_CACHE_DECISION.md](ROUTE_CACHE_DECISION.md) for full analysis.
                               ↑
 ┌─────────────────────────────────────────────────────────────┐
 │                        API Instance B                        │
-│  ┌─────────────┐      ┌─────────────────────────────────┐ │
-│  │ Local Store │ ←─── │ HybridDriverStateManager        │ │
-│  │ (in-memory) │      │  - Check local first             │ │
-│  └─────────────┘      │  - Load from Redis if miss       │ │
-│                       │  - Persist on write              │ │
-│                       └─────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │          DriverStateManager (Production)            │   │
+│  │  - Requires Redis                                   │   │
+│  │  - No local fallback                               │   │
+│  │  - Raises error if Redis unavailable               │   │
+│  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -153,11 +151,23 @@ TTL:   3600 seconds (1 hour)
 
 ### Failure Semantics
 
-**Driver State Redis Failure:**
+**Driver State Redis Failure (PRODUCTION):**
 
-- **Read path**: Falls back to local-only state
-- **Write path**: Best-effort; local state remains valid
-- **Result**: Single-instance behavior; no split-brain
+- **Read path**: Raises `DriverStateUnavailableError` → HTTP 503
+- **Write path**: Raises `DriverStateUnavailableError` → HTTP 503
+- **Result**: Stateful operations fail explicitly; no split-brain
+
+**Local-only Mode (TESTING/DEVELOPMENT):**
+
+- Uses in-memory store only
+- No Redis dependency
+- Not available in production
+
+### Policy
+
+- **Production**: Redis required, no fallback
+- **Local**: InMemory only
+- **Testing**: InMemory only
 
 This differs from **Snapshot Cache Redis** which falls back to PostgreSQL.
 
@@ -206,7 +216,7 @@ This differs from **Snapshot Cache Redis** which falls back to PostgreSQL.
 |------------|----------|----------|
 | GraphHopper | ✅ | Service unavailable |
 | PostgreSQL/PostGIS | ✅ | Service unavailable |
-| Redis (driver state) | ❌ | Local-only mode |
+| Redis (shared driver state) | ✅ | HTTP 503 |
 | Redis (snapshot cache) | ❌ | PostgreSQL fallback |
 
 ---
@@ -219,18 +229,20 @@ This differs from **Snapshot Cache Redis** which falls back to PostgreSQL.
 - **Persistence:** None (intentional)
 - **Recovery:** Rebuilds from PostgreSQL automatically
 - **Config:** `--save "" --appendonly no`
+- **Failure:** Degrades gracefully, PostgreSQL fallback
 
 ### Driver State (Redis)
 
 - **Purpose:** Cross-process shared state for multi-instance deployments
 - **Persistence:** None (intentional)
-- **Recovery:** Drivers reconnect with fresh state; recommendation falls back to local
+- **Recovery:** Drivers reconnect with fresh state
 - **TTL:** 1 hour per driver (refreshed on access)
+- **Failure:** Stateful operations fail with HTTP 503 (NO local fallback)
 
 ### On Redis Restart
 
-1. **Snapshot reads:** Fall back to PostgreSQL (transparency to users)
-2. **Driver state:** Lost; drivers start fresh; recommendation uses explicit location if provided
+1. **Driver state:** Lost; drivers start fresh; HTTP 503 until Redis recovers
+2. **Snapshot reads:** Fall back to PostgreSQL (transparency to users)
 
 ---
 
@@ -248,7 +260,7 @@ This differs from **Snapshot Cache Redis** which falls back to PostgreSQL.
 ### Startup Ordering
 
 ```
-db (healthy) → graphhopper (healthy) → api (starts)
+db (healthy) → graphhopper (healthy) → redis (always up) → api (starts)
 ```
 
 ### Resource Limits
@@ -264,20 +276,19 @@ Production would add:
 
 ## 10. Failure & Recovery
 
-### A. Snapshot Redis Failure
+### A. Driver State Redis Failure
 
-1. Redis stops
-2. Snapshot reads fall back to PostgreSQL
+1. Redis stops or becomes unreachable
+2. Driver state reads fail with HTTP 503 `DriverStateUnavailableError`
+3. Stateful driver operations return 503
+4. Redis restarts → driver state operations recover
+
+### B. Snapshot Redis Failure
+
+1. Redis stops or becomes unreachable
+2. Snapshot cache reads fall back to PostgreSQL (transparent)
 3. Service continues with slightly higher latency
-4. Redis restarts → cache operations recover
-
-### B. Driver State Redis Failure
-
-1. Redis stops
-2. Driver state reads fall back to local
-3. Cross-process state sharing disabled (single-instance behavior)
-4. Redis restarts → state sharing recovers
-5. Some driver state may be lost (acceptable for non-critical state)
+4. Redis restarts → snapshot cache recovers
 
 ### C. GraphHopper Failure
 

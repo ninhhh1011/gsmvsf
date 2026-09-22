@@ -138,9 +138,9 @@ docker compose exec db pg_isready -U postgres
 ### C. Redis Failure
 
 **Symptoms:**
-- `/ready` returns with `redis: false`
+- `/ready` returns 503 with `redis: false`
+- Driver state operations fail with HTTP 503 `DriverStateUnavailableError`
 - Snapshot cache falls back to PostgreSQL (transparent)
-- Driver state uses local-only (single-instance behavior)
 
 **Recovery:**
 ```bash
@@ -150,8 +150,8 @@ docker compose exec redis redis-cli ping
 ```
 
 **Impact:**
+- Driver state: Stateful operations fail with HTTP 503
 - Snapshot cache: Slightly higher latency (DB fallback)
-- Driver state: Cross-process sharing disabled (local-only)
 - Recommendation: Works with explicit location fallback
 
 ---
