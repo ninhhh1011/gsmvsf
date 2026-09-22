@@ -1,4 +1,4 @@
-"""Tests for driver state repository."""
+"""Tests for driver state repository and manager."""
 import pytest
 from datetime import datetime
 

@@ -29,9 +29,10 @@ from backend.app.services.map_matching.models import MapMatchRequest, MapMatchRe
 from backend.app.services.map_matching.engine import MapMatchingEngineError, MapMatchingNoMatchError
 from backend.app.services.graphhopper import resolve_vehicle_category
 from backend.app.api.v1.map_match import get_map_matching_service
-from backend.app.services.realtime.hybrid_state_manager import (
-    get_hybrid_manager,
-    HybridDriverStateManager,
+from backend.app.services.realtime.driver_state_manager import (
+    get_driver_state_manager,
+    DriverStateManager,
+    DriverStateUnavailableError,
 )
 import psycopg2
 
@@ -126,12 +127,9 @@ async def _call_map_match(observations, vehicle_category=None, vehicle_id=None):
 
 
 async def _persist_state(driver_id: str, state: DriverTraceState):
-    """Persist driver state to Redis if repository is configured."""
-    try:
-        manager = get_hybrid_manager()
-        await manager.save(state)
-    except Exception:
-        pass  # Best effort - local state is still valid
+    """Persist driver state to shared store. Raises error if unavailable."""
+    state_manager = get_driver_state_manager()
+    await state_manager.save(state)
 
 
 @router.post("/drivers/{driver_id}/location", response_model=LocationResponse)
@@ -169,9 +167,15 @@ async def ingest_location(
         accuracy_m=request.accuracy_m,
     )
 
-    # Get driver state (hybrid: local + Redis)
-    manager = get_hybrid_manager()
-    state, _ = await manager.get_or_create(driver_id)
+    # Get driver state from shared store
+    state_manager = get_driver_state_manager()
+    try:
+        state = await state_manager.get_or_create(driver_id)
+    except DriverStateUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Driver state store unavailable: {str(e)}",
+        )
 
     # Check for stale observation (before last observation timestamp)
     # Normalize both to naive for comparison
@@ -374,8 +378,14 @@ async def get_driver_location(
     """
     Get current state for a driver.
     """
-    manager = get_hybrid_manager()
-    state, _ = await manager.get_or_create(driver_id)
+    state_manager = get_driver_state_manager()
+    try:
+        state = await state_manager.get_or_create(driver_id)
+    except DriverStateUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Driver state store unavailable: {str(e)}",
+        )
 
     raw_pos = state.get_current_raw_position()
 

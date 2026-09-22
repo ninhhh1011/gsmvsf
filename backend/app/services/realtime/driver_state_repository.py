@@ -216,6 +216,22 @@ class InMemoryDriverStateRepository(DriverStateRepository):
     async def health_check(self) -> bool:
         return True
 
+    async def get_or_create_local(self, driver_id: str):
+        """
+        Get or create driver state using the global in-memory store.
+
+        This is used when InMemoryDriverStateRepository is the configured store.
+        """
+        from backend.app.services.realtime.state import get_state_store
+        local = get_state_store()
+        return local.get_or_create(driver_id)
+
+    async def save_local(self, state: DriverTraceState) -> None:
+        """Save state to the global in-memory store."""
+        from backend.app.services.realtime.state import get_state_store
+        local = get_state_store()
+        local._states[state.driver_id] = state
+
 
 class RedisDriverStateRepository(DriverStateRepository):
     """

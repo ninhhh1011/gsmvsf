@@ -63,14 +63,23 @@ async def ready():
     Required dependencies:
     - GraphHopper: routing and map matching
     - PostgreSQL/PostGIS: segment data and candidate state
+    - Redis: shared driver state store (stateful driver operations)
 
-    Optional dependencies (service can operate in degraded mode):
-    - Redis: snapshot cache (has PostgreSQL fallback), driver state (has local-only fallback)
+    Degradable dependencies (service can operate in degraded mode):
+    - None for core functionality
+    - Snapshot cache Redis is optional because PostgreSQL fallback exists
+
+    Note: Redis is used for both shared driver state and snapshot caching.
+    For stateful driver workflows, Redis is required.
     """
     dependencies = await dependencies_ready()
 
-    # Required: GraphHopper and PostgreSQL
-    required = {"graphhopper": dependencies["graphhopper"], "postgis": dependencies["postgis"]}
+    # Required: GraphHopper, PostgreSQL, and Redis for shared driver state
+    required = {
+        "graphhopper": dependencies["graphhopper"],
+        "postgis": dependencies["postgis"],
+        "redis": dependencies["redis"],  # Required for shared driver state
+    }
     if not all(required.values()):
         raise HTTPException(503, detail={"status": "not_ready", **dependencies})
 

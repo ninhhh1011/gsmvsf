@@ -67,6 +67,19 @@ class GPSObservation:
             accuracy_m=data.get("accuracy_m"),
         )
 
+    def to_dict(self) -> dict:
+        """Export to dict for serialization."""
+        return {
+            "observation_id": self.observation_id,
+            "driver_id": self.driver_id,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "speed_kmh": self.speed_kmh,
+            "heading_deg": self.heading_deg,
+            "accuracy_m": self.accuracy_m,
+        }
+
 
 @dataclass
 class MatchedState:
@@ -79,6 +92,19 @@ class MatchedState:
     confidence: Optional[float] = None
     route_geometry: Optional[str] = None
     matched_at: datetime = field(default_factory=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        """Export to dict for serialization."""
+        return {
+            "matched_latitude": self.matched_latitude,
+            "matched_longitude": self.matched_longitude,
+            "road_segment_id": self.road_segment_id,
+            "osm_way_id": self.osm_way_id,
+            "direction": self.direction,
+            "confidence": self.confidence,
+            "route_geometry": self.route_geometry,
+            "matched_at": self.matched_at.isoformat() if self.matched_at else None,
+        }
 
 
 @dataclass

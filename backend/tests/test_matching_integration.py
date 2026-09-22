@@ -48,7 +48,19 @@ def test_resolver_uses_way_and_travel_orientation():
 async def test_realtime_uses_matched_coordinates_and_explicit_outage(client, monkeypatch):
     from backend.app.api.v1 import realtime
     from backend.app.services.map_matching.models import MapMatchResponse, MatchedObservation
+    from backend.app.services.realtime.driver_state_manager import (
+        reset_driver_state_manager,
+        set_driver_state_manager,
+        DriverStateManager,
+    )
+
+    # Reset state stores
     reset_state_store()
+    reset_driver_state_manager()
+
+    # Set up local-only driver state manager for testing
+    set_driver_state_manager(DriverStateManager.for_local())
+
     result = MapMatchResponse(trajectory_id="D0001", trip_id="realtime", total_observations=3, matched_count=3, unmatched_count=0,
         overall_confidence=.9, observations=[MatchedObservation(observation_id="2", timestamp="earlier", raw_latitude=21, raw_longitude=105.8, matched=True, matched_latitude=21, matched_longitude=105.8), MatchedObservation(observation_id="2", timestamp="t", raw_latitude=21.002,
         raw_longitude=105.8, matched=True, matched_latitude=21.003, matched_longitude=105.801,
@@ -65,6 +77,7 @@ async def test_realtime_uses_matched_coordinates_and_explicit_outage(client, mon
         "timestamp":(start+timedelta(seconds=40)).isoformat()})
     assert r.json()["status"] == "ENGINE_UNAVAILABLE"
     reset_state_store()
+    reset_driver_state_manager()
 
 
 @pytest.mark.asyncio

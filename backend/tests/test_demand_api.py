@@ -14,6 +14,11 @@ from backend.app.services.demand.models import (
     ServiceType,
 )
 from backend.app.services.realtime.state import reset_state_store
+from backend.app.services.realtime.driver_state_manager import (
+    reset_driver_state_manager,
+    set_driver_state_manager,
+    DriverStateManager,
+)
 
 
 @pytest.fixture
@@ -141,11 +146,17 @@ async def test_get_vehicle_capability(app):
 
 
 @pytest.mark.asyncio
-async def test_week1_realtime_state_integration(app):
+async def test_week1_realtime_state_integration():
     """
     Test POST /api/v1/drivers/{driver_id}/demand/evaluate integrates with
     Week 1 realtime GPS tracking state.
     """
+    # Set up local-only driver state manager for testing
+    reset_state_store()
+    reset_driver_state_manager()
+    set_driver_state_manager(DriverStateManager.for_local())
+
+    app = create_app()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         driver_id = "D0001"
@@ -180,3 +191,7 @@ async def test_week1_realtime_state_integration(app):
         assert data["driver_id"] == driver_id
         assert data["need_service"] is True
         assert data["resolved_service_type"] == ServiceType.CHARGING.value
+
+    # Clean up
+    reset_state_store()
+    reset_driver_state_manager()
