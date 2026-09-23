@@ -44,22 +44,6 @@ def create_app() -> FastAPI:
         error = _routing_http_error(exc)
         return JSONResponse(status_code=error.status_code, content={'detail': error.detail})
 
-    # Serve debug UI
-    static_path = settings.app_path / "static" / "debug-map"
-    index_file = static_path / "index.html"
-
-    if index_file.exists():
-        @app.get("/debug-map")
-        async def debug_map_index():
-            """Serve debug map index page."""
-            return HTMLResponse(content=index_file.read_text())
-
-        app.mount(
-            "/debug-map/static",
-            StaticFiles(directory=str(static_path)),
-            name="debug-map-static"
-        )
-
     # Serve Demo UI (Week 5.5)
     demo_path = settings.app_path / "static" / "demo"
     demo_index = demo_path / "index.html"
