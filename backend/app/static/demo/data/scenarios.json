@@ -11,16 +11,16 @@
     "vehicle_category": "EV_CAR",
     "soc_pct": 85.0,
     "estimated_range_km": 100.0,
-    "remaining_trip_distance_km": 3.5,
+    "remaining_trip_distance_km": 3.54,
     "safety_reserve_km": 1.0,
     "timestamp": "2026-09-01T06:06:00Z",
     "origin": {
-      "latitude": 21.0182,
-      "longitude": 105.8152
+      "latitude": 21.1038023,
+      "longitude": 106.0023809
     },
     "destination": {
-      "latitude": 21.0365,
-      "longitude": 105.8341
+      "latitude": 21.1025933,
+      "longitude": 106.0065203
     },
     "expected_level": "SAFE"
   },
@@ -31,21 +31,21 @@
     "description": "Vehicle can reach destination (10 km trip, 12 km range) but cannot preserve post-destination reserve (5 km). Backend returns INSUFFICIENT_POST_DESTINATION_RESERVE.",
     "trip_id": "T0003",
     "driver_id": "D0003",
-    "vehicle_id": "V0004",
+    "vehicle_id": "V0003",
     "vehicle_model": "VF_6",
     "vehicle_category": "EV_CAR",
     "soc_pct": 22.0,
     "estimated_range_km": 12.0,
-    "remaining_trip_distance_km": 10.0,
+    "remaining_trip_distance_km": 4.88,
     "safety_reserve_km": 5.0,
     "timestamp": "2026-09-01T06:40:00Z",
     "origin": {
-      "latitude": 21.0285,
-      "longitude": 105.8542
+      "latitude": 20.9849862,
+      "longitude": 105.7935256
     },
     "destination": {
-      "latitude": 20.985,
-      "longitude": 105.812
+      "latitude": 20.9899215,
+      "longitude": 105.7894319
     },
     "expected_level": "ADVISORY"
   },
@@ -56,21 +56,21 @@
     "description": "Vehicle SOC is 25% (above safe threshold of 20%), but estimated remaining range (30 km) is strictly less than trip distance (45 km). Backend demand evaluation returns DESTINATION_NOT_REACHABLE.",
     "trip_id": "T0003",
     "driver_id": "D0003",
-    "vehicle_id": "V0004",
+    "vehicle_id": "V0003",
     "vehicle_model": "VF_6",
     "vehicle_category": "EV_CAR",
     "soc_pct": 25.0,
     "estimated_range_km": 30.0,
-    "remaining_trip_distance_km": 45.0,
+    "remaining_trip_distance_km": 4.88,
     "safety_reserve_km": 5.0,
     "timestamp": "2026-09-01T06:40:00Z",
     "origin": {
-      "latitude": 21.0285,
-      "longitude": 105.8542
+      "latitude": 20.9849862,
+      "longitude": 105.7935256
     },
     "destination": {
-      "latitude": 20.985,
-      "longitude": 105.812
+      "latitude": 20.9899215,
+      "longitude": 105.7894319
     },
     "expected_level": "CRITICAL"
   },
@@ -86,16 +86,16 @@
     "vehicle_category": "EV_CAR",
     "soc_pct": 12.0,
     "estimated_range_km": 25.0,
-    "remaining_trip_distance_km": 4.1,
+    "remaining_trip_distance_km": 4.11,
     "safety_reserve_km": 2.0,
     "timestamp": "2026-09-01T06:24:00Z",
     "origin": {
-      "latitude": 21.0285,
-      "longitude": 105.8542
+      "latitude": 21.0872633,
+      "longitude": 105.7776544
     },
     "destination": {
-      "latitude": 21.045,
-      "longitude": 105.835
+      "latitude": 21.0775658,
+      "longitude": 105.7688616
     },
     "requested_service": "CHARGING",
     "expected_level": "RECOMMEND_CHARGING"
@@ -107,21 +107,21 @@
     "description": "Electric motorbike (EVO) with battery swap support requests energy service. Swap cabinet (6 min duration) is selected, giving fast completion time.",
     "trip_id": "T0110",
     "driver_id": "D0003",
-    "vehicle_id": "V0003",
+    "vehicle_id": "V0018",
     "vehicle_model": "EVO",
     "vehicle_category": "EV_MOTORBIKE",
     "soc_pct": 10.0,
     "estimated_range_km": 15.0,
-    "remaining_trip_distance_km": 4.0,
+    "remaining_trip_distance_km": 7.29,
     "safety_reserve_km": 2.0,
     "timestamp": "2026-09-01T00:40:00Z",
     "origin": {
-      "latitude": 21.031,
-      "longitude": 105.855
+      "latitude": 21.0854992,
+      "longitude": 105.7736164
     },
     "destination": {
-      "latitude": 21.05,
-      "longitude": 105.82
+      "latitude": 21.0855547,
+      "longitude": 105.7792039
     },
     "requested_service": "BATTERY_SWAP",
     "expected_level": "RECOMMEND_SWAP"
@@ -138,7 +138,7 @@
     "vehicle_category": "EV_CAR",
     "soc_pct": 12.0,
     "estimated_range_km": 25.0,
-    "remaining_trip_distance_km": 7.1,
+    "remaining_trip_distance_km": 7.12,
     "safety_reserve_km": 2.0,
     "timestamp_t1": "2026-09-01T00:42:00Z",
     "timestamp_t2": "2026-09-01T00:52:00Z",
@@ -160,22 +160,22 @@
     "description": "Station S001 is OPEN at 07:50 but transitions to OFFLINE at 08:00. Backend Candidate Search flags S001 as ineligible (OFFLINE) and Ranking rejects invalidated candidate sets.",
     "trip_id": "T0019",
     "driver_id": "D0019",
-    "vehicle_id": "V0001",
+    "vehicle_id": "V0019",
     "vehicle_model": "VF_3",
     "vehicle_category": "EV_CAR",
     "soc_pct": 15.0,
     "estimated_range_km": 25.0,
-    "remaining_trip_distance_km": 6.0,
+    "remaining_trip_distance_km": 7.19,
     "safety_reserve_km": 2.0,
     "timestamp_t1": "2026-09-01T07:50:00+07:00",
     "timestamp_t2": "2026-09-01T08:00:00+07:00",
     "origin": {
-      "latitude": 21.09,
-      "longitude": 105.757
+      "latitude": 20.9517686,
+      "longitude": 105.8094838
     },
     "destination": {
-      "latitude": 21.05,
-      "longitude": 105.78
+      "latitude": 20.95374,
+      "longitude": 105.809353
     },
     "station_id": "S001",
     "timestamp": "2026-09-01T08:00:00+07:00"

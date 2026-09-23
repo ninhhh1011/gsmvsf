@@ -164,4 +164,24 @@ export class TrajectoryReplayController {
         const statusElem = document.getElementById('replay-status');
         if (statusElem) statusElem.textContent = 'Replay Ready';
     }
+
+    /** Returns true when all observations have been replayed. */
+    isReplayComplete() {
+        return this.observations.length > 0 && this.currentIndex >= this.observations.length;
+    }
+
+    /** Returns a human-readable progress string. */
+    getProgressText() {
+        if (this.observations.length === 0) return 'No trajectory loaded';
+        return `${this.currentIndex} / ${this.observations.length} obs`;
+    }
+
+    /** Returns the current raw position (from last observation) without re-fetching. */
+    getCurrentRawPosition() {
+        if (this.currentIndex > 0 && this.currentIndex <= this.observations.length) {
+            const obs = this.observations[this.currentIndex - 1];
+            return { latitude: obs.latitude, longitude: obs.longitude };
+        }
+        return null;
+    }
 }
