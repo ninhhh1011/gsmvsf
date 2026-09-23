@@ -1,5 +1,5 @@
 /**
- * Simulation and Debug Mode Controller for VinFast EV Recommendation Demo.
+ * Simulation Mode Controller for VinFast EV Recommendation Demo.
  * 
  * Strict rule: Simulation controls supply inputs.
  * Backend owns all demand evaluation, candidate search, routing, and ranking.
@@ -253,7 +253,7 @@ export class SimModeController {
         const btn = document.getElementById('btn-run-sim');
         if (btn) {
             btn.disabled = true;
-            btn.textContent = 'Executing Simulation...';
+            btn.textContent = 'Finding Best Station...';
         }
 
         const vehicle = this.vehicles.find(v => v.vehicle_id === this.vehicleId) || this.vehicles[0];
@@ -371,7 +371,7 @@ export class SimModeController {
         } finally {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'RUN SIMULATION';
+                btn.textContent = 'FIND BEST STATION';
             }
         }
     }
@@ -401,7 +401,7 @@ export class SimModeController {
             const ctx = recResult.energy_context;
             demandContainer.innerHTML = `
                 <div class="demand-card">
-                    <h4>Week 2 Demand Detection Decision</h4>
+                    <h4>Demand Detection</h4>
                     <div class="demand-grid">
                         <div>Need Service: <strong>${ctx.need_service ? 'YES' : 'NO'}</strong></div>
                         <div>Reason Code: <code>${ctx.reason_code}</code></div>

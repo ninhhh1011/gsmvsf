@@ -1,7 +1,7 @@
 /**
  * Trajectory Replay Controller for VinFast EV Recommendation Demo.
  * 
- * Replays real Dataset V1 GPS observations via /api/v1/drivers/{id}/location.
+ * Replays real GPS observations via the backend realtime endpoint.
  * Strict rule: Request-driven client replay; no backend streaming or websocket.
  */
 

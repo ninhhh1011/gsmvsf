@@ -102,8 +102,7 @@ export class ApiClient {
     }
 
     /**
-     * Primary Recommendation API (Week 4 & Week 5)
-     * Performs demand detection, candidate search, and snapshot ranking.
+     * Recommendation API: demand detection, candidate search, and ranking.
      */
     async getRecommendation(recommendRequest) {
         return this._request('/api/v1/recommend', {
@@ -174,7 +173,7 @@ export class ApiClient {
     }
 
     /**
-     * Load trajectory observations from Dataset V1 for replay.
+     * Load trajectory observations for replay.
      */
     async getTrajectory(trajectoryId) {
         return this._request(`/api/v1/debug/trajectories/${trajectoryId}`);

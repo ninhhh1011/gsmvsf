@@ -13,7 +13,7 @@ async def test_demo_page_serving():
         resp = await client.get("/demo")
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
-        assert "VinFast EV Recommendation" in resp.text
+        assert "VinFast" in resp.text
         assert 'id="map"' in resp.text
 
         resp_slash = await client.get("/demo/")

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VinFast EV Recommendation & Routing System — Demo</title>
+    <title>VinFast EV Energy Routing — Demo</title>
     <!-- Leaflet 1.9.4 Local CSS -->
     <link rel="stylesheet" href="/demo/static/vendor/leaflet/leaflet.css" />
     <!-- App Design System Stylesheet -->
@@ -16,8 +16,8 @@
         <div class="brand-section">
             <div class="brand-logo">V</div>
             <div>
-                <span class="brand-title">VinFast Green Mobility</span>
-                <span class="brand-subtitle">EV Energy Recommendation System</span>
+                <span class="brand-title">VinFast EV</span>
+                <span class="brand-subtitle">Energy Routing</span>
             </div>
         </div>
 
@@ -27,7 +27,7 @@
                 Driver Mode
             </button>
             <button id="tab-sim-mode" class="mode-tab-btn" role="tab" aria-selected="false">
-                Simulation / Debug Mode
+                Explore Scenarios
             </button>
         </div>
 
@@ -67,12 +67,12 @@
                 </div>
             </div>
 
-            <!-- SIMULATION / DEBUG MODE CONTAINER (Default Hidden) -->
+            <!-- SCENARIO EXPLORER MODE CONTAINER (Default Hidden) -->
             <div id="sim-view-container" class="sim-mode-container" style="display: none;">
                 
                 <!-- Scenario Presets -->
                 <div class="sim-section-card">
-                    <h4>Demo Scenarios (Dataset V1)</h4>
+                    <h4>Demo Scenarios</h4>
                     <div id="sim-scenarios-container">
                         <!-- Populated by JS -->
                     </div>
@@ -146,7 +146,7 @@
 
                 <!-- Trajectory Replay Controls -->
                 <div class="sim-section-card">
-                    <h4>Trajectory Replay (Week 1 Ingestion)</h4>
+                    <h4>Trajectory Replay</h4>
                     <div class="form-group">
                         <label>Select Trajectory:</label>
                         <select id="select-trajectory" class="form-control">

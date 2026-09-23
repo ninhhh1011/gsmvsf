@@ -4,7 +4,7 @@
  * State model: OFFLINE -> AVAILABLE -> TRIP_ACTIVE -> TRIP_COMPLETE
  *
  * STRICT RULES:
- * - No fake movement. Driver advances through real Dataset V1 GPS observations.
+ * - No fake movement. Driver advances through real GPS observations via the backend realtime pipeline.
  * - No hardcoded SOC decrement. SOC is fixed per scenario.
  * - No straight-line interpolation. Positions come from matched road segments.
  * - No frontend ETA calculation. ETA comes from backend routing result.

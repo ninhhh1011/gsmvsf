@@ -155,9 +155,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
             <div class="card-explanation">
                 <div class="exp-title">Why this recommendation?</div>
                 <div class="exp-body">
-                    Optimized via <code>${recResult.policy?.name || 'TOTAL_SERVICE_COMPLETION_V1'}</code>:
-                    Travel (${etaStationMin}m) + Queue (${queueWaitMin}m) + Service (${serviceMin}m) = <strong>${etaCompleteMin} min total</strong>.
-                    Station snapshot is <em>${stationFresh}</em>; queue snapshot is <em>${queueFresh}</em>.
+                    Selected to minimize total time: travel to station (${etaStationMin}m) + wait in queue (${queueWaitMin}m) + service (${serviceMin}m) = <strong>${etaCompleteMin} min to complete</strong>.
                 </div>
             </div>
         </div>
@@ -178,22 +176,22 @@ export function renderPipelineLatency(timingsMs) {
     return `
         <div class="pipeline-card">
             <div class="pipeline-header">
-                <h4>Pipeline Latency Breakdown</h4>
-                <span class="total-latency">${total.toFixed(1)} ms total</span>
+                <h4>Recommendation Breakdown</h4>
+                <span class="total-latency">${total.toFixed(1)} ms</span>
             </div>
             
             <div class="pipeline-progress-bar">
-                <div class="bar-seg seg-w1" style="width: ${pct(loc)}%;" title="W1 Location: ${loc.toFixed(2)} ms"></div>
-                <div class="bar-seg seg-w2" style="width: ${pct(dem)}%;" title="W2 Demand: ${dem.toFixed(2)} ms"></div>
-                <div class="bar-seg seg-w3" style="width: ${pct(cand)}%;" title="W3 Candidate Search: ${cand.toFixed(1)} ms"></div>
-                <div class="bar-seg seg-w4" style="width: ${pct(rank)}%;" title="W4 Snapshot Ranking: ${rank.toFixed(1)} ms"></div>
+                <div class="bar-seg seg-w1" style="width: ${pct(loc)}%;" title="Location: ${loc.toFixed(2)} ms"></div>
+                <div class="bar-seg seg-w2" style="width: ${pct(dem)}%;" title="Demand Detection: ${dem.toFixed(2)} ms"></div>
+                <div class="bar-seg seg-w3" style="width: ${pct(cand)}%;" title="Candidate Search: ${cand.toFixed(1)} ms"></div>
+                <div class="bar-seg seg-w4" style="width: ${pct(rank)}%;" title="Ranking: ${rank.toFixed(1)} ms"></div>
             </div>
 
             <div class="pipeline-legend">
-                <div class="legend-item"><span class="dot dot-w1"></span> W1 Matching: <b>${loc.toFixed(2)} ms</b></div>
-                <div class="legend-item"><span class="dot dot-w2"></span> W2 Demand: <b>${dem.toFixed(2)} ms</b></div>
-                <div class="legend-item"><span class="dot dot-w3"></span> W3 Search: <b>${cand.toFixed(1)} ms</b></div>
-                <div class="legend-item"><span class="dot dot-w4"></span> W4 Ranking: <b>${rank.toFixed(1)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w1"></span> Location: <b>${loc.toFixed(2)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w2"></span> Demand: <b>${dem.toFixed(2)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w3"></span> Candidate Search: <b>${cand.toFixed(1)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w4"></span> Ranking: <b>${rank.toFixed(1)} ms</b></div>
             </div>
         </div>
     `;
