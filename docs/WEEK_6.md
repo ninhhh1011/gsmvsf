@@ -64,9 +64,9 @@ Sequential GraphHopper routing calls in candidate search. Each request computed 
 
 ### Selected Configuration
 
-**Default: `max_concurrent_routes=4`**
+**Default: `max_concurrent_routes=8`** (configurable via `MAX_CONCURRENT_ROUTES` environment variable)
 
-Rationale: Conservative setting that balances parallelism within a request while avoiding GraphHopper overload.
+Rationale: Configurable setting that balances parallelism within a request while avoiding GraphHopper overload. The controlled experiment showed similar P50 (~186-190ms) for max_routes=1-4, suggesting the primary latency benefit comes from GraphHopper internal cache warming, not intra-request concurrency alone.
 
 ---
 

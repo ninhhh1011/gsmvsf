@@ -192,14 +192,14 @@ docker compose exec redis redis-cli KEYS "driver_state:*" > driver_keys.txt
 | `DATABASE_URL` | postgresql+asyncpg://... | Async database connection |
 | `GRAPHHOPPER_BASE_URL` | http://graphhopper:8989 | GraphHopper endpoint |
 | `REDIS_URL` | redis://redis:6379/0 | Redis connection |
-| `MAX_CONCURRENT_ROUTES` | 4 | Max parallel GraphHopper calls |
+| `MAX_CONCURRENT_ROUTES` | 8 | Max parallel GraphHopper calls |
 | `LOG_LEVEL` | INFO | Logging verbosity |
 
 ### Tuning Parameters
 
 | Parameter | Default | Range | Effect |
 |-----------|---------|-------|--------|
-| `max_concurrent_routes` | 4 | 1-32 | GraphHopper parallelism |
+| `max_concurrent_routes` | 8 | 1-32 | GraphHopper parallelism |
 | `snapshot_cache_ttl_s` | 60 | 1-3600 | Cache TTL |
 
 ---
