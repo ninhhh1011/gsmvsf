@@ -51,8 +51,10 @@ def create_app() -> FastAPI:
     if demo_path.exists() and demo_index.exists():
         @app.get("/demo", include_in_schema=False)
         @app.get("/demo/", include_in_schema=False)
+        @app.get("/demo/technical", include_in_schema=False)
+        @app.get("/demo/technical/", include_in_schema=False)
         async def demo_page():
-            """Serve Week 5.5 Demo UI."""
+            """Serve Demo UI (Driver Product & Technical View)."""
             return HTMLResponse(content=demo_index.read_text(encoding="utf-8"))
 
         app.mount(

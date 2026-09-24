@@ -1,9 +1,11 @@
 /**
  * UI Component Renderers for VinFast EV Recommendation Demo.
- * 
+ *
  * Strict rule: All energy warnings and recommendation decisions reflect backend truth.
  * No recalculation of scores or energy thresholds.
  */
+
+import { ApiError } from './api.js';
 
 export function classifyEnergyWarning(energyContext) {
     if (!energyContext) {
@@ -302,6 +304,87 @@ export function renderConflictAlert(conflictDetail, onRefresh) {
             <div class="conflict-actions">
                 <button id="btn-refresh-conflict" class="btn btn-primary btn-sm">Refresh Recommendation</button>
             </div>
+        </div>
+    `;
+}
+
+/**
+ * Render error state for HTTP errors (409, 422, 503, etc.)
+ */
+export function renderErrorState(error, onRetry = null) {
+    if (!error) return '';
+
+    const isApiError = error instanceof ApiError;
+    const status = isApiError ? error.status : 0;
+    const message = isApiError ? error.message : (error.message || 'Unknown error');
+    const code = isApiError ? error.code : null;
+
+    // Determine error class and title
+    let errorClass = '';
+    let errorTitle = '';
+    let errorCode = '';
+    let errorMessage = '';
+
+    if (status === 409) {
+        errorClass = 'error-409';
+        errorTitle = 'Station Availability Changed';
+        errorCode = '409 Conflict';
+        errorMessage = 'Candidate stations changed during processing. The ranking model rejected stale data.';
+    } else if (status === 422) {
+        errorClass = 'error-422';
+        errorTitle = 'Invalid Request';
+        errorCode = '422 Unprocessable';
+        errorMessage = code === 'LOCATION_UNAVAILABLE'
+            ? 'Location could not be determined from GPS or map matching.'
+            : (message || 'The request contained invalid or missing parameters.');
+    } else if (status === 503) {
+        errorClass = 'error-503';
+        errorTitle = 'Service Unavailable';
+        errorCode = '503 Unavailable';
+        errorMessage = code === 'DRIVER_STATE_UNAVAILABLE'
+            ? 'Driver state service is temporarily unavailable. Please retry.'
+            : 'A required dependency (GraphHopper, PostgreSQL, or Redis) is unavailable.';
+    } else if (status === 504) {
+        errorClass = 'error-503';
+        errorTitle = 'Gateway Timeout';
+        errorCode = '504 Timeout';
+        errorMessage = 'The routing engine did not respond in time. Please retry.';
+    } else if (status === 0 || !isApiError) {
+        errorClass = 'error-503';
+        errorTitle = 'Connection Error';
+        errorCode = 'NETWORK';
+        errorMessage = 'Could not connect to the backend server.';
+    } else {
+        errorClass = 'error-503';
+        errorTitle = `Error ${status}`;
+        errorCode = `${status}`;
+        errorMessage = message;
+    }
+
+    return `
+        <div class="error-state ${errorClass}" role="alert">
+            <div class="error-state-header">
+                <span class="error-state-code">${errorCode}</span>
+                <span class="error-state-title">${errorTitle}</span>
+            </div>
+            <div class="error-state-message">${errorMessage}</div>
+            ${onRetry ? `
+                <div class="error-state-actions">
+                    <button class="btn btn-primary btn-sm" data-action="retry">Retry</button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+/**
+ * Render loading state
+ */
+export function renderLoadingState(message = 'Loading...') {
+    return `
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <span>${message}</span>
         </div>
     `;
 }

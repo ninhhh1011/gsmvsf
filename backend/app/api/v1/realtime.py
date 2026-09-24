@@ -417,18 +417,32 @@ async def get_driver_location(
 @router.delete("/drivers/{driver_id}/location")
 async def reset_driver_state(driver_id: str) -> dict:
     """Reset driver's trace state."""
-    store = get_state_store()
-    removed = store.remove(driver_id)
+    state_manager = get_driver_state_manager()
+    try:
+        await state_manager.delete(driver_id)
+        removed = True
+    except DriverStateUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Driver state store unavailable",
+        )
     return {"driver_id": driver_id, "reset": removed}
 
 
 @router.get("/drivers")
 async def list_drivers() -> dict:
     """List all active drivers."""
-    store = get_state_store()
+    state_manager = get_driver_state_manager()
+    try:
+        drivers = await state_manager.list_drivers()
+    except DriverStateUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Driver state store unavailable",
+        )
     return {
-        "active_drivers": store.list_drivers(),
-        "count": len(store),
+        "active_drivers": drivers,
+        "count": len(drivers),
     }
 
 

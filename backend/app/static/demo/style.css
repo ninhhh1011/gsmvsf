@@ -911,6 +911,532 @@ body {
     margin-top: 10px;
 }
 
+/* ==================================================
+   PHASE 4: TECHNICAL / DEBUG VIEW (DEVTOOLS / OBSERVABILITY)
+   ================================================== */
+
+.btn-tech-toggle {
+    background: #1e293b;
+    color: #38bdf8;
+    border: 1px solid #38bdf8;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+
+.btn-tech-toggle:hover {
+    background: #38bdf8;
+    color: #0f172a;
+}
+
+/* Technical Slide-over Drawer */
+.tech-drawer {
+    position: fixed;
+    top: 60px;
+    right: 0;
+    width: 680px;
+    max-width: 92vw;
+    height: calc(100vh - 60px);
+    background: #0f172a;
+    color: #e2e8f0;
+    z-index: 1200;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(105%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+}
+
+.tech-drawer.open {
+    transform: translateX(0);
+}
+
+.tech-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #0f172a;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+}
+
+.tech-drawer-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #f8fafc;
+    letter-spacing: 0.5px;
+    margin: 0;
+}
+
+.tech-drawer-subtitle {
+    font-size: 11px;
+    color: #38bdf8;
+    font-weight: 500;
+}
+
+/* Map Layer Toggles Toolbar */
+.tech-layer-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 16px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    font-size: 11px;
+    color: #cbd5e1;
+    flex-shrink: 0;
+}
+
+.layer-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #94a3b8;
+    user-select: none;
+}
+
+.layer-toggle-label input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: #38bdf8;
+}
+
+.layer-toggle-label:hover {
+    color: #f1f5f9;
+}
+
+/* Pipeline Stepper Navigation */
+.tech-pipeline-stepper {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    background: #090d16;
+    border-bottom: 1px solid #334155;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
+    scrollbar-width: thin;
+}
+
+.tech-stepper-btn {
+    background: #1e293b;
+    color: #94a3b8;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tech-stepper-btn:hover {
+    background: #334155;
+    color: #f8fafc;
+}
+
+.tech-stepper-btn.active {
+    background: #0284c7;
+    color: white;
+    border-color: #38bdf8;
+}
+
+/* Scrollable Drawer Content */
+.tech-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Tech Inspector Cards */
+.tech-inspector-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 14px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.tech-card-header h4 {
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #38bdf8;
+    margin: 0 0 10px 0;
+}
+
+.tech-card-header.sub-header h5 {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin: 0 0 8px 0;
+}
+
+/* System Health Grid */
+.tech-health-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.health-col {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.health-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.health-col small {
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+/* Tech Key-Value Grid */
+.tech-keyval-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    font-size: 11px;
+}
+
+.kv-item {
+    background: #0f172a;
+    border: 1px solid #273549;
+    border-radius: 4px;
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.kv-label {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.kv-val {
+    color: #f8fafc;
+    font-weight: 600;
+}
+
+.kv-val code {
+    background: #1e293b;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #38bdf8;
+}
+
+/* Tech Data Table */
+.tech-table-wrapper {
+    overflow-x: auto;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.tech-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    text-align: left;
+}
+
+.tech-table th {
+    background: #1e293b;
+    color: #94a3b8;
+    font-weight: 700;
+    padding: 6px 8px;
+    border-bottom: 1px solid #334155;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.tech-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #273549;
+    color: #cbd5e1;
+}
+
+.tech-table tr:hover td {
+    background: rgba(56, 189, 248, 0.08);
+}
+
+.tech-table tr.row-eligible td {
+    border-left: 2px solid #10b981;
+}
+
+.tech-table tr.row-rejected td {
+    opacity: 0.65;
+}
+
+.tech-table tr.row-top-rec td {
+    background: rgba(16, 185, 129, 0.12);
+    border-left: 3px solid #10b981;
+}
+
+/* Timing Breakdown Rows */
+.tech-timing-rows {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 11px;
+}
+
+.timing-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 4px;
+}
+
+.timing-row.timing-total {
+    border-top: 1px solid #334155;
+    padding-top: 6px;
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.timing-stage {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.timing-value {
+    color: #38bdf8;
+    font-weight: 700;
+}
+
+.timing-total .timing-value {
+    color: #10b981;
+}
+
+/* Collapsible JSON Payloads */
+.tech-payload-details {
+    cursor: pointer;
+}
+
+.tech-payload-summary {
+    font-size: 12px;
+    font-weight: 700;
+    color: #38bdf8;
+    outline: none;
+    user-select: none;
+}
+
+.tech-payload-container {
+    cursor: default;
+}
+
+.payload-box {
+    background: #090d16;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.payload-box strong {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.payload-box pre {
+    margin: 6px 0 0 0;
+    max-height: 180px;
+    overflow-y: auto;
+    font-size: 10px;
+    color: #a5f3fc;
+    background: transparent;
+    border: none;
+}
+
+/* Pipeline Week Indicator */
+.pipeline-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.pipeline-step {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.pipeline-step .step-num {
+    font-weight: 700;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.pipeline-step .step-label {
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.pipeline-step.active {
+    background: rgba(13, 148, 136, 0.3);
+}
+
+.pipeline-step.active .step-num,
+.pipeline-step.active .step-label {
+    color: var(--brand-teal);
+}
+
+.pipeline-step.completed {
+    background: rgba(16, 185, 129, 0.2);
+}
+
+.pipeline-step.completed .step-num {
+    color: var(--color-safe);
+}
+
+.pipeline-arrow {
+    color: var(--text-muted);
+    font-size: 10px;
+    opacity: 0.5;
+}
+
+/* Collapsible Scenario Panel */
+.collapsible-panel .collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.collapsible-panel .collapsible-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Error State Styles */
+.error-state {
+    background: var(--color-critical-bg);
+    border: 1px solid var(--color-critical-border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin: 12px 0;
+}
+
+.error-state.error-409 {
+    background: #fef3c7;
+    border-color: #fcd34d;
+}
+
+.error-state.error-422 {
+    background: #fce7f3;
+    border-color: #f9a8d4;
+}
+
+.error-state.error-503 {
+    background: var(--color-critical-bg);
+    border-color: var(--color-critical-border);
+}
+
+.error-state-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.error-state-code {
+    font-weight: 700;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--color-critical);
+    color: white;
+}
+
+.error-state.error-409 .error-state-code {
+    background: #d97706;
+}
+
+.error-state.error-422 .error-state-code {
+    background: #db2777;
+}
+
+.error-state-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.error-state-message {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.error-state-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Loading State */
+.loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px;
+    color: var(--text-muted);
+}
+
+.loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--brand-teal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 /* Responsive Media Queries */
 @media (max-width: 900px) {
     .app-body {
@@ -935,5 +1461,22 @@ body {
 
     .header-status-pills {
         display: none;
+    }
+
+    .pipeline-indicator {
+        display: none;
+    }
+
+    .tech-drawer {
+        width: 100vw;
+        max-width: 100vw;
+    }
+
+    .tech-health-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .tech-keyval-grid {
+        grid-template-columns: 1fr;
     }
 }

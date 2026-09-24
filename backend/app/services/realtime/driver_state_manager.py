@@ -291,6 +291,20 @@ class DriverStateManager:
             return True
         return await repo.health_check()
 
+    async def list_drivers(self) -> list[str]:
+        """List all active driver IDs."""
+        repo = self._get_repo()
+
+        if repo is None:
+            local = get_state_store()
+            return local.list_drivers()
+
+        if isinstance(repo, InMemoryDriverStateRepository):
+            return await repo.list_drivers()
+
+        # Redis mode
+        return await repo.list_drivers()
+
 
 # Global manager instance
 _driver_state_manager: Optional[DriverStateManager] = None

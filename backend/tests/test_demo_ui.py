@@ -19,6 +19,17 @@ async def test_demo_page_serving():
         resp_slash = await client.get("/demo/")
         assert resp_slash.status_code == 200
 
+        # Technical View entry
+        resp_tech = await client.get("/demo/technical")
+        assert resp_tech.status_code == 200
+        assert "text/html" in resp_tech.headers["content-type"]
+        assert 'id="tech-view-drawer"' in resp_tech.text
+        assert 'btn-open-tech-view' in resp.text
+        assert 'health-pill-redis' in resp.text
+
+        resp_tech_slash = await client.get("/demo/technical/")
+        assert resp_tech_slash.status_code == 200
+
 
 @pytest.mark.asyncio
 async def test_demo_static_assets():
@@ -31,7 +42,7 @@ async def test_demo_static_assets():
         assert "--brand-teal" in css_resp.text
 
         # JS modules
-        for mod in ["api.js", "map.js", "components.js", "driver_mode.js", "sim_mode.js", "replay.js", "app.js"]:
+        for mod in ["api.js", "map.js", "components.js", "driver_mode.js", "sim_mode.js", "replay.js", "app.js", "tech_view.js"]:
             js_resp = await client.get(f"/demo/static/js/{mod}")
             assert js_resp.status_code == 200, f"Failed to fetch {mod}"
 

@@ -11,12 +11,15 @@
  * - Backend owns all demand evaluation, candidate eligibility, routing, ranking.
  */
 
-import { renderEnergyWarningBanner, renderRecommendationCard } from './components.js';
+import { renderEnergyWarningBanner, renderRecommendationCard, renderErrorState, renderLoadingState } from './components.js';
 import { TrajectoryReplayController } from './replay.js';
 
 export const DriverState = {
     OFFLINE: 'OFFLINE',
     AVAILABLE: 'AVAILABLE',
+    TRIP_ASSIGNED: 'TRIP_ASSIGNED',
+    TO_PICKUP: 'TO_PICKUP',
+    ON_TRIP: 'ON_TRIP',
     TRIP_ACTIVE: 'TRIP_ACTIVE',
     TRIP_COMPLETE: 'TRIP_COMPLETE'
 };
@@ -46,6 +49,7 @@ export class DriverModeController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
         this.map = mapEngine;
+        this.options = options;
         this.trips = [];
         this.vehicles = [];
         this.stations = [];
@@ -267,22 +271,24 @@ export class DriverModeController {
             const rec = await this.api.getRecommendation(payload);
             this.lastRecommendation = rec;
 
+            let leg1Result = null;
+            let leg2Result = null;
+
             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
                 const top = rec.ranked_candidates[0];
                 const st = this.stations.find(s => s.station_id === top.station_id);
                 if (st) {
                     const stPos = { latitude: st.latitude, longitude: st.longitude };
                     try {
-                        const leg1 = await this.api.computeRoute(this.currentPos, stPos, {
+                        leg1Result = await this.api.computeRoute(this.currentPos, stPos, {
                             vehicle_category: this.currentVehicle.vehicle_type
                         });
-                        let leg2 = null;
                         if (this.currentTrip?.destination) {
-                            leg2 = await this.api.computeRoute(stPos, this.currentTrip.destination, {
+                            leg2Result = await this.api.computeRoute(stPos, this.currentTrip.destination, {
                                 vehicle_category: this.currentVehicle.vehicle_type
                             });
                         }
-                        this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry);
+                        this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry);
                         this.map.renderStations(this.stations, top.station_id, top.service_type);
                     } catch (routeErr) {
                         console.warn('Recommendation route fetch error:', routeErr);
@@ -295,9 +301,42 @@ export class DriverModeController {
                 }
                 this.map.renderStations(this.stations);
             }
+
+            if (this.options?.onStateUpdate) {
+                this.options.onStateUpdate({
+                    scenario: this.currentTrip,
+                    vehicle: this.currentVehicle,
+                    driverId: this.currentDriverId,
+                    origin: this.currentTrip?.origin,
+                    destination: this.currentTrip?.destination,
+                    driverLocation: {
+                        driver_id: this.currentDriverId || 'D0001',
+                        status: 'MATCHED',
+                        raw_position: this.currentPos,
+                        matched_position: {
+                            latitude: this.currentPos?.latitude,
+                            longitude: this.currentPos?.longitude,
+                            direction: 'FORWARD',
+                            confidence: 1.0
+                        }
+                    },
+                    recommendRequest: payload,
+                    recommendResult: rec,
+                    stationRoutes: { leg1: leg1Result, leg2: leg2Result }
+                });
+            }
         } catch (err) {
             console.error('Driver mode recommendation error:', err);
             this.lastRecommendation = null;
+
+            // Sync error to Tech View
+            if (this.options?.onStateUpdate) {
+                this.options.onStateUpdate({
+                    error: err,
+                    recommendRequest: payload,
+                    recommendResult: null
+                });
+            }
         }
     }
 

@@ -11,6 +11,7 @@ export class SimModeController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
         this.map = mapEngine;
+        this.options = options;
         this.scenarios = [];
         this.vehicles = [];
         this.stations = [];
@@ -343,6 +344,9 @@ export class SimModeController {
                 };
             }), recStationId, recService);
 
+            let leg1Result = null;
+            let leg2Result = null;
+
             // Render diversion route to recommended station
             if (recResult?.has_recommendation && recResult.ranked_candidates?.length > 0) {
                 const top = recResult.ranked_candidates[0];
@@ -350,17 +354,43 @@ export class SimModeController {
                 if (st) {
                     const stPos = { latitude: st.latitude, longitude: st.longitude };
                     try {
-                        const leg1 = await this.api.computeRoute(this.origin, stPos, {
+                        leg1Result = await this.api.computeRoute(this.origin, stPos, {
                             vehicle_category: vehicle.vehicle_type
                         });
-                        const leg2 = await this.api.computeRoute(stPos, this.destination, {
+                        leg2Result = await this.api.computeRoute(stPos, this.destination, {
                             vehicle_category: vehicle.vehicle_type
                         });
-                        this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry);
+                        this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry);
                     } catch (routeErr) {
                         console.warn('Diversion route error:', routeErr);
                     }
                 }
+            }
+
+            if (this.options?.onStateUpdate) {
+                this.options.onStateUpdate({
+                    scenario: this.activeScenario,
+                    vehicle: vehicle,
+                    origin: this.origin,
+                    destination: this.destination,
+                    driverLocation: {
+                        driver_id: 'SIM_DRIVER',
+                        status: 'MATCHED',
+                        trigger_reason: 'SIMULATION_ORIGIN',
+                        raw_position: this.origin,
+                        matched_position: {
+                            latitude: this.origin.latitude,
+                            longitude: this.origin.longitude,
+                            direction: 'FORWARD',
+                            confidence: 1.0
+                        }
+                    },
+                    recommendRequest: recommendPayload,
+                    recommendResult: recResult,
+                    candidateResult: candResult,
+                    routeResult: routeResult,
+                    stationRoutes: { leg1: leg1Result, leg2: leg2Result }
+                });
             }
 
             this.map.fitBoundsToActive();

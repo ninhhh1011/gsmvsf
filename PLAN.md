@@ -1,32 +1,132 @@
-﻿# GraphHopper migration plan entry point
+# Plan: Consolidate Documentation + Production-Ready Demo UI
 
-The earlier dual-engine integration draft is superseded by
-[GRAPHHOPPER_FULL_MIGRATION_PLAN](docs/GRAPHHOPPER_FULL_MIGRATION_PLAN.md) and
-[ADR-010](docs/DECISIONS.md#adr-010-graphhopper-as-the-sole-routing-and-matching-runtime).
-Use that execution plan for phase/task gates, checks, findings and completion.
+## Context
 
-Functional migration verification is PASS: 239 tests, live normal/outage API
-checks, and unchanged hashes for all 63 Dataset files. The deployed HTTP endpoint
-benchmark now records 20 requests at each concurrency level 1, 5 and 10 in
-`runtime/migration/api-smoke.json`. Formal reporting and the freeze gate remain
-pending completion in the authoritative execution plan.
+Week 1-6 complete nhưng:
+1. **44 docs files** — 20+ WEEK_*.md, evidence phân tán
+2. **Demo UI** — mang tính "báo cáo" hơn là UX thực tế  
+3. **Week 1→6 progression** không rõ trong UI
 
-GraphHopper 11.0 is the sole production routing and map-matching runtime.
-`EV_CAR -> car` and `EV_MOTORBIKE -> motorcycle` apply consistently. OSM remains
-canonical and the approved patched PBF remains immutable. Domain interfaces
-remain engine-independent. No selectors, mock fallback, alternate runtime,
-Week 4 ranking, or unrequested technology are authorized by this plan.
+Backend đã solid (347 tests, real routing, no mocks). Cần cải thiện presentation.
 
-The historical draft's JDK 25 requirement, floating third-party image, nested
-encoded-route points, JSON matching request, fabricated per-observation matching
-schema, and default motorcycle profile are incorrect for the selected release.
-The verified contracts are recorded in
-[GRAPHHOPPER_MIGRATION_RESEARCH](docs/GRAPHHOPPER_MIGRATION_RESEARCH.md): Java 17+,
-pinned official JAR on Java 21, encoded route points string, GPX matching, and
-explicit project reconstruction of observation locations from the matched path.
+---
 
-Runtime files, caches, verification reports and generated validator reports stay
-within the repository and outside `dataset_v1/`. This plan requires no external
-backup location. Historical engine decisions and quality reports are preserved
-as superseded evidence; final migration acceptance and freeze require the
-current execution gates to pass and are not asserted here.
+## PHASE 1: Documentation Consolidation
+
+### 1.1 New consolidated files
+
+| File | Content |
+|------|---------|
+| `docs/PROGRESS.md` | Week 1→6 timeline với key achievements, mỗi week 1 section |
+| `docs/TEST_RESULTS.md` | All test evidence inline (152 validator, 368 backend, 18 frontend, 8 scenarios) |
+| `docs/ARCHITECTURE.md` | Current state + system diagram |
+
+### 1.2 Files to DELETE (consolidation)
+
+```
+docs/WEEK_1.md, WEEK_1_*.md (6 files)
+docs/WEEK_2*.md (2 files)  
+docs/WEEK_3*.md (2 files)
+docs/WEEK_4*.md (2 files)
+docs/WEEK_5*.md (4 files)
+docs/WEEK_6*.md (2 files)
+docs/FINAL_*.md (4 files)
+docs/PHASE_*.md (2 files)
+docs/GRAPHHOPPER_*.md (7 files) → gộp thành 1
+```
+
+### 1.3 Files to KEEP (unchanged)
+
+- `docs/PROJECT_SCOPE.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/DATA_CONTRACT.md`
+- `docs/DECISIONS.md`
+- `docs/PRODUCIONIZATION_RUNBOOK.md`
+
+---
+
+## PHASE 2: Demo UI Redesign
+
+### 2.1 Clear separation
+
+**Before:**
+- Tab 1: Driver Mode
+- Tab 2: Explore Scenarios
+- Button: Technical View
+
+**After:**
+- Primary: Driver Mode (full screen, distraction-free)
+- Secondary: Scenario Explorer (collapsible panel, không phải tab)
+- Tech View: Modal overlay (triggered by button)
+
+### 2.2 Driver Mode UX improvements
+
+| Current | Proposed |
+|---------|----------|
+| Status badge only | Trip progress indicator |
+| Energy banner (amber/red) | Toast notifications + banner |
+| Static demo data | Real API calls với loading states |
+| No error UX | Proper 409/422/503 error handling UI |
+
+### 2.3 Week Pipeline indicator
+
+Visual badge trong UI hiển thị:
+```
+W1: Location → W2: Demand → W3: Candidates → W4: Ranking → W5: API
+```
+
+Current active step highlighted.
+
+---
+
+## PHASE 3: Implementation order
+
+1. **Documentation** (2-3 hours)
+   - Write `docs/PROGRESS.md`
+   - Write `docs/TEST_RESULTS.md`
+   - Rewrite `docs/ARCHITECTURE.md`
+   - Delete old files
+
+2. **UI** (4-6 hours)
+   - Restructure `index.html` - remove tab, add collapsible panel
+   - Update `driver_mode.js` - better error states, loading UX
+   - Update `app.js` - mode management
+   - Add pipeline indicator component
+
+3. **Verification** (1 hour)
+   - Run full test suite
+   - Verify demo scenarios
+   - Check no broken links
+
+---
+
+## Critical Files
+
+| File | Change |
+|-------|--------|
+| `docs/PROGRESS.md` | NEW |
+| `docs/TEST_RESULTS.md` | NEW |
+| `docs/ARCHITECTURE.md` | REWRITE |
+| `docs/index.html` (delete list) | DELETE 20+ files |
+| `backend/app/static/demo/index.html` | Restructure |
+| `backend/app/static/demo/js/driver_mode.js` | UX polish |
+| `backend/app/static/demo/js/app.js` | Mode management |
+
+---
+
+## Verification
+
+```bash
+# Must pass before commit
+python -B -m pytest backend/tests -q
+node --test tests/frontend/*.mjs
+python scripts/validate_frozen_dataset.py
+python scripts/verify_demo_scenarios.py
+```
+
+---
+
+## Open Questions
+
+1. **Demo hay Production UI?** — Demo mode vẫn cần cho presentation?
+2. **GraphHopper migration docs** — Gộp 7 files thành 1 hay xóa hết (đã historical)?

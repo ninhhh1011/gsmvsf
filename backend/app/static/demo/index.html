@@ -21,14 +21,32 @@
             </div>
         </div>
 
-        <!-- Mode Switcher -->
-        <div class="mode-switcher" role="tablist">
-            <button id="tab-driver-mode" class="mode-tab-btn active" role="tab" aria-selected="true">
-                Driver Mode
-            </button>
-            <button id="tab-sim-mode" class="mode-tab-btn" role="tab" aria-selected="false">
-                Explore Scenarios
-            </button>
+        <!-- Week Pipeline Indicator -->
+        <div class="pipeline-indicator" id="pipeline-indicator" title="Recommendation Pipeline Stages">
+            <span class="pipeline-step" data-week="1" title="W1: Location">
+                <span class="step-num">W1</span>
+                <span class="step-label">Location</span>
+            </span>
+            <span class="pipeline-arrow">→</span>
+            <span class="pipeline-step" data-week="2" title="W2: Demand">
+                <span class="step-num">W2</span>
+                <span class="step-label">Demand</span>
+            </span>
+            <span class="pipeline-arrow">→</span>
+            <span class="pipeline-step" data-week="3" title="W3: Candidates">
+                <span class="step-num">W3</span>
+                <span class="step-label">Candidates</span>
+            </span>
+            <span class="pipeline-arrow">→</span>
+            <span class="pipeline-step" data-week="4" title="W4: Ranking">
+                <span class="step-num">W4</span>
+                <span class="step-label">Ranking</span>
+            </span>
+            <span class="pipeline-arrow">→</span>
+            <span class="pipeline-step" data-week="5" title="W5: API">
+                <span class="step-num">W5</span>
+                <span class="step-label">API</span>
+            </span>
         </div>
 
         <!-- Backend Health Pills -->
@@ -45,16 +63,32 @@
                 <span id="health-pill-db" class="pill-dot gray"></span>
                 <span>PostGIS</span>
             </div>
+            <div class="pill-group" title="Redis Driver State & Snapshot Cache">
+                <span id="health-pill-redis" class="pill-dot gray"></span>
+                <span>Redis</span>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="header-actions">
+            <!-- Scenario Explorer Toggle (Collapsible) -->
+            <button id="btn-toggle-sim-panel" class="btn btn-outline btn-sm" title="Open Scenario Explorer">
+                🔬 Scenarios
+            </button>
+            <!-- Technical View -->
+            <button id="btn-open-tech-view" class="btn btn-outline btn-sm btn-tech-toggle" title="Inspect system pipeline architecture and telemetry">
+                🛠 Tech View
+            </button>
         </div>
     </header>
 
     <!-- Main Content Body -->
     <main class="app-body">
-        
-        <!-- Left Sidebar Panel (Driver Mode or Simulation Mode) -->
+
+        <!-- Left Sidebar Panel -->
         <section class="sidebar-panel">
 
-            <!-- DRIVER MODE CONTAINER -->
+            <!-- DRIVER MODE CONTAINER (Always Visible) -->
             <div id="driver-view-container" class="driver-mode-container">
                 <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; align-items:center;">
                     <span class="text-sm text-muted">DRIVER STATUS</span>
@@ -67,22 +101,27 @@
                 </div>
             </div>
 
-            <!-- SCENARIO EXPLORER MODE CONTAINER (Default Hidden) -->
-            <div id="sim-view-container" class="sim-mode-container" style="display: none;">
-                
-                <!-- Scenario Presets -->
+            <!-- SCENARIO EXPLORER PANEL (Collapsible) -->
+            <div id="sim-view-container" class="sim-mode-container collapsible-panel" style="display: none; border-top: 1px solid var(--border-color); margin-top: 16px; padding-top: 16px;">
+
+                <!-- Panel Header with Collapse Toggle -->
+                <div class="collapsible-header">
+                    <h4>🔬 Scenario Explorer</h4>
+                    <button id="btn-collapse-sim-panel" class="btn btn-outline btn-sm">−</button>
+                </div>
+
+                <!-- Interactive A/B Controls -->
                 <div class="sim-section-card">
-                    <h4>Demo Scenarios</h4>
+                    <h5>Demo Scenarios</h5>
                     <div id="sim-scenarios-container">
                         <!-- Populated by JS -->
                     </div>
                     <div id="sim-scenario-desc" class="mt-2"></div>
                 </div>
 
-                <!-- Interactive A/B Controls -->
                 <div class="sim-section-card">
-                    <h4>Trip Origin & Destination</h4>
-                    
+                    <h5>Trip Origin & Destination</h5>
+
                     <div class="form-group">
                         <label>Origin (A):</label>
                         <div class="coord-row">
@@ -104,8 +143,8 @@
 
                 <!-- Vehicle & Telemetry Controls -->
                 <div class="sim-section-card">
-                    <h4>Vehicle Telemetry & Service Request</h4>
-                    
+                    <h5>Vehicle & Service</h5>
+
                     <div class="form-group">
                         <label>Vehicle Model:</label>
                         <select id="sim-vehicle-select" class="form-control">
@@ -125,28 +164,28 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Requested Service Intent:</label>
+                        <label>Service Intent:</label>
                         <select id="sim-service-intent" class="form-control">
-                            <option value="AUTO">AUTO (System decides based on vehicle)</option>
-                            <option value="CHARGING">CHARGING (Explicit Driver Request)</option>
-                            <option value="BATTERY_SWAP">BATTERY_SWAP (Explicit Swap Request)</option>
-                            <option value="ANY">ANY (Driver accepts either service)</option>
+                            <option value="AUTO">AUTO</option>
+                            <option value="CHARGING">CHARGING</option>
+                            <option value="BATTERY_SWAP">BATTERY_SWAP</option>
+                            <option value="ANY">ANY</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label>Snapshot Timestamp (UTC):</label>
+                        <label>Snapshot Timestamp:</label>
                         <input type="text" id="sim-timestamp" class="form-control" value="2026-09-01T07:00:00Z">
                     </div>
 
-                    <button id="btn-run-sim" class="btn btn-primary btn-lg btn-block mt-2">
+                    <button id="btn-run-sim" class="btn btn-primary btn-block mt-2">
                         RUN SIMULATION
                     </button>
                 </div>
 
                 <!-- Trajectory Replay Controls -->
                 <div class="sim-section-card">
-                    <h4>Trajectory Replay</h4>
+                    <h5>Trajectory Replay</h5>
                     <div class="form-group">
                         <label>Select Trajectory:</label>
                         <select id="select-trajectory" class="form-control">
@@ -161,13 +200,13 @@
                     <div class="d-flex gap-2 mb-2" style="display:flex; gap:6px; margin-bottom:8px;">
                         <button id="btn-load-trajectory" class="btn btn-outline btn-sm">Load</button>
                         <button id="btn-replay-play" class="btn btn-primary btn-sm">▶ Play</button>
-                        <button id="btn-replay-pause" class="btn btn-outline btn-sm" disabled>⏸ Pause</button>
-                        <button id="btn-replay-step" class="btn btn-outline btn-sm">⏭ Step</button>
-                        <button id="btn-replay-reset" class="btn btn-outline btn-sm">↺ Reset</button>
+                        <button id="btn-replay-pause" class="btn btn-outline btn-sm" disabled>⏸</button>
+                        <button id="btn-replay-step" class="btn btn-outline btn-sm">⏭</button>
+                        <button id="btn-replay-reset" class="btn btn-outline btn-sm">↺</button>
                     </div>
 
                     <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-secondary);">
-                        <span>Speed: 
+                        <span>Speed:
                             <select id="select-replay-speed" style="font-size:11px;">
                                 <option value="1">1x</option>
                                 <option value="5" selected>5x</option>
@@ -200,6 +239,132 @@
             </div>
             <div id="map"></div>
         </section>
+
+        <!-- Technical / Debug View Drawer -->
+        <aside id="tech-view-drawer" class="tech-drawer" aria-hidden="true">
+            <div class="tech-drawer-header">
+                <div>
+                    <h3 class="tech-drawer-title">System Architecture & Pipeline Inspector</h3>
+                    <div class="tech-drawer-subtitle">End-to-End Telemetry • Zero Fabricated Metrics</div>
+                </div>
+                <button id="btn-close-tech-view" class="btn btn-outline btn-sm" title="Return to Product View">
+                    ← Return to Product View
+                </button>
+            </div>
+
+            <!-- Map Layer Toggles -->
+            <div class="tech-layer-toggles">
+                <span class="text-xs font-semibold text-muted">MAP OVERLAYS:</span>
+                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-raw" checked> Raw GPS</label>
+                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-matched" checked> Matched Road</label>
+                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-stations" checked> Stations</label>
+                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-direct" checked> Direct Route</label>
+                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-rec" checked> Rec Diversion</label>
+            </div>
+
+            <!-- Pipeline Stepper Navigation -->
+            <div class="tech-pipeline-stepper" role="tablist">
+                <button class="tech-stepper-btn active" data-stage="overview">All Stages</button>
+                <button class="tech-stepper-btn" data-stage="health">0. Health</button>
+                <button class="tech-stepper-btn" data-stage="gps">1. GPS & Location</button>
+                <button class="tech-stepper-btn" data-stage="demand">2. Demand</button>
+                <button class="tech-stepper-btn" data-stage="candidate">3. Candidate Search</button>
+                <button class="tech-stepper-btn" data-stage="routing">4. Routing</button>
+                <button class="tech-stepper-btn" data-stage="ranking">5. Ranking</button>
+                <button class="tech-stepper-btn" data-stage="recommendation">6. Recommendation</button>
+            </div>
+
+            <!-- Scrollable Content Body -->
+            <div class="tech-drawer-body">
+                <!-- 0. Health Card -->
+                <div id="tech-section-health" class="tech-inspector-card">
+                    <div class="tech-card-header">
+                        <h4>System Health & Dependencies</h4>
+                    </div>
+                    <div id="tech-health-content" class="tech-card-body"></div>
+                </div>
+
+                <!-- 1. Location & Map Matching Inspector -->
+                <div id="tech-section-gps" class="tech-inspector-card">
+                    <div class="tech-card-header">
+                        <h4>1. Realtime Location & Map Matching Inspector</h4>
+                    </div>
+                    <div id="tech-location-content" class="tech-card-body"></div>
+                </div>
+
+                <!-- 2. Demand Detection Inspector -->
+                <div id="tech-section-demand" class="tech-inspector-card">
+                    <div class="tech-card-header">
+                        <h4>2. Demand Detection Inspector</h4>
+                    </div>
+                    <div id="tech-demand-content" class="tech-card-body"></div>
+                </div>
+
+                <!-- 3. Candidate Search Inspector -->
+                <div id="tech-section-candidate" class="tech-inspector-card">
+                    <div class="tech-card-header d-flex justify-between items-center" style="display:flex; justify-content:space-between; align-items:center;">
+                        <h4>3. Candidate Search Inspector (Composite Identity)</h4>
+                        <div class="btn-group">
+                            <button class="btn btn-xs btn-outline tech-cand-filter-btn active" data-filter="ALL">All (30)</button>
+                            <button class="btn btn-xs btn-outline tech-cand-filter-btn" data-filter="ELIGIBLE">Eligible</button>
+                            <button class="btn btn-xs btn-outline tech-cand-filter-btn" data-filter="REJECTED">Rejected</button>
+                        </div>
+                    </div>
+                    <div id="tech-candidates-content" class="tech-card-body"></div>
+                </div>
+
+                <!-- 4. Routing Inspector -->
+                <div id="tech-section-routing" class="tech-inspector-card">
+                    <div class="tech-card-header">
+                        <h4>4. Multi-Leg Routing Inspector (GraphHopper 11.0)</h4>
+                    </div>
+                    <div id="tech-routing-content" class="tech-card-body"></div>
+                </div>
+
+                <!-- 5. Ranking Inspector -->
+                <div id="tech-section-ranking" class="tech-inspector-card">
+                    <div class="tech-card-header">
+                        <h4>5. Snapshot Ranking Inspector (Ranked Candidates)</h4>
+                    </div>
+                    <div id="tech-ranking-content" class="tech-card-body"></div>
+                </div>
+
+                <!-- 6. Recommendation Inspector & Timing -->
+                <div id="tech-section-recommendation" class="tech-inspector-card">
+                    <div class="tech-card-header">
+                        <h4>6. Realtime Recommendation API & Latency Breakdown</h4>
+                    </div>
+                    <div id="tech-recommendation-content" class="tech-card-body mb-3"></div>
+                    <div class="tech-card-header sub-header" style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:12px;">
+                        <h5>Pipeline Execution Latency (Backend timings_ms)</h5>
+                    </div>
+                    <div id="tech-timing-content" class="tech-card-body"></div>
+                </div>
+
+                <!-- 7. Collapsible Raw Request / Response Inspector -->
+                <div id="tech-section-payloads" class="tech-inspector-card">
+                    <details class="tech-payload-details">
+                        <summary class="tech-payload-summary">Raw JSON Payloads (Request / Response)</summary>
+                        <div class="tech-payload-container mt-2">
+                            <div class="payload-box mb-2">
+                                <div class="d-flex justify-between items-center mb-1" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <strong>Latest Recommendation Request:</strong>
+                                    <button id="btn-copy-req-json" class="btn btn-xs btn-outline">Copy JSON</button>
+                                </div>
+                                <pre><code id="json-req-content">{}</code></pre>
+                            </div>
+                            <div class="payload-box">
+                                <div class="d-flex justify-between items-center mb-1" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <strong>Latest Recommendation Response:</strong>
+                                    <button id="btn-copy-resp-json" class="btn btn-xs btn-outline">Copy JSON</button>
+                                </div>
+                                <pre><code id="json-resp-content">{}</code></pre>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </aside>
 
     </main>
 
