@@ -9,8 +9,18 @@ export class TrajectoryReplayController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
         this.map = mapEngine;
+        this.options = options;
 
-        this.driverId = `replay_${Date.now().toString(36)}`;
+        // Use shared session context for driver_id (set by DriverModeController.startTrip)
+        this.session = options.session || {
+            session_id: crypto.randomUUID(),
+            driver_id: null,
+            vehicle_id: null,
+            vehicle_category: null,
+            trip_id: null,
+            trajectory_id: null
+        };
+
         this.observations = [];
         this.currentIndex = 0;
         this.isPlaying = false;
@@ -18,6 +28,11 @@ export class TrajectoryReplayController {
         this.speedMultiplier = 5; // default 5x
 
         this.onStep = options.onStep || (() => {});
+    }
+
+    /** Get current driver ID from shared session */
+    get driverId() {
+        return this.session.driver_id || `replay_${Date.now().toString(36)}`;
     }
 
     init() {
@@ -74,6 +89,9 @@ export class TrajectoryReplayController {
     }
 
     async step() {
+        // Guard: don't queue steps during autoplay (prevents race condition)
+        if (this.isPlaying) return;
+
         if (this.currentIndex >= this.observations.length) {
             this.pause();
             const statusElem = document.getElementById('replay-status');
@@ -90,14 +108,19 @@ export class TrajectoryReplayController {
         }
 
         try {
-            // Ingest to Week 1 endpoint
-            const locResp = await this.api.ingestDriverLocation(this.driverId, {
+            // Build observation payload with vehicle metadata from session
+            const observationPayload = {
                 latitude: obs.latitude,
                 longitude: obs.longitude,
                 timestamp: obs.timestamp,
                 speed_kmh: obs.speed_kmh,
-                heading_deg: obs.heading_deg
-            });
+                heading_deg: obs.heading_deg,
+                vehicle_id: this.session.vehicle_id,
+                vehicle_category: this.session.vehicle_category
+            };
+
+            // Ingest to Week 1 endpoint
+            const locResp = await this.api.ingestDriverLocation(this.driverId, observationPayload);
 
             // Update map
             const rawPos = { latitude: obs.latitude, longitude: obs.longitude };
@@ -163,6 +186,12 @@ export class TrajectoryReplayController {
         if (progressElem) progressElem.textContent = `0 / ${this.observations.length}`;
         const statusElem = document.getElementById('replay-status');
         if (statusElem) statusElem.textContent = 'Replay Ready';
+    }
+
+    /** Clear session context (called by DriverModeController on reset/cancel). */
+    clearSession() {
+        // Reset driver location on backend
+        this.api.resetDriverLocation(this.session.driver_id).catch(() => {});
     }
 
     /** Returns true when all observations have been replayed. */

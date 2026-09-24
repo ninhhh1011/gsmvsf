@@ -50,6 +50,14 @@ export class DriverModeController {
         this.api = apiClient;
         this.map = mapEngine;
         this.options = options;
+        this.session = options.session || {
+            session_id: crypto.randomUUID(),
+            driver_id: null,
+            vehicle_id: null,
+            vehicle_category: null,
+            trip_id: null,
+            trajectory_id: null
+        };
         this.trips = [];
         this.vehicles = [];
         this.stations = [];
@@ -58,7 +66,6 @@ export class DriverModeController {
         this.state = DriverState.AVAILABLE;
         this.currentTrip = null;
         this.currentVehicle = null;
-        this.currentDriverId = null;  // assigned on trip start
 
         // Energy state — owned by scenario data, NOT self-computed
         this.currentSocPct = 85.0;
@@ -79,8 +86,10 @@ export class DriverModeController {
         this.lastRecommendation = null;
 
         // Trajectory replay — real GPS observations via backend realtime pipeline
+        // Session is passed for consistent driver_id across Driver Mode + Replay
         this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
-            onStep: (stepData) => this._onReplayStep(stepData)
+            onStep: (stepData) => this._onReplayStep(stepData),
+            session: this.session
         });
 
         // Callbacks
@@ -105,10 +114,14 @@ export class DriverModeController {
     }
 
     updateHeaderBadge() {
-        const badge = document.getElementByById('driver-status-badge');
-        if (badge) {
-            badge.textContent = this.state;
-            badge.className = `status-badge badge-${this.state.toLowerCase()}`;
+        try {
+            const badge = document.getElementById('driver-status-badge');
+            if (badge) {
+                badge.textContent = this.state;
+                badge.className = `status-badge badge-${this.state.toLowerCase()}`;
+            }
+        } catch (err) {
+            // Guard: ignore DOM errors during SSR/testing
         }
     }
 
@@ -131,6 +144,10 @@ export class DriverModeController {
         this.safetyReserveKm = 2.0;
         this.remainingTripDistanceKm = trip.planned_distance_m / 1000;
 
+        // Clear previous state BEFORE rendering new trip
+        this.map.clearAll();
+        this.map.renderTripEndpoints(trip.origin, trip.destination);
+
         // Compute direct route via GraphHopper
         try {
             const routeResult = await this.api.computeRoute(
@@ -146,9 +163,8 @@ export class DriverModeController {
             console.warn('Direct route computation error:', err);
         }
 
-        this.map.clearAll();
-        this.map.renderTripEndpoints(trip.origin, trip.destination);
         this.map.fitBoundsToActive();
+        this.setState(DriverState.TRIP_ASSIGNED);
         this.renderTripAssignedUI();
     }
 
@@ -158,13 +174,17 @@ export class DriverModeController {
     async startTrip() {
         if (!this.currentTrip) return;
 
-        // Fresh driver ID per trip
-        this.currentDriverId = `driver_${Date.now().toString(36)}`;
+        // Assign driver ID in shared session context (consistent across Driver Mode + Replay)
+        this.session.driver_id = `driver_${Date.now().toString(36)}`;
+        this.session.vehicle_id = this.currentVehicle?.vehicle_id;
+        this.session.vehicle_category = this.currentVehicle?.vehicle_type;
+        this.session.trip_id = this.currentTrip.trip_id;
 
         this.setState(DriverState.TRIP_ACTIVE);
 
         // Load trajectory observations for this trip
         const trajId = this._tripToTrajectory(this.currentTrip.trip_id);
+        this.session.trajectory_id = trajId;
         await this.replay.loadTrajectory(trajId);
 
         // Initial recommendation at trip start
@@ -179,7 +199,8 @@ export class DriverModeController {
 
     /**
      * Map trajectory trip_id to a trajectory replay ID.
-     * Falls back to TRJ0001 for unmapped trips.
+     * Throws if trip is not mapped to a known trajectory.
+     * Only trips T0001-T0005 have trajectory data in the demo.
      */
     _tripToTrajectory(tripId) {
         const mapping = {
@@ -188,8 +209,20 @@ export class DriverModeController {
             'T0003': 'TRJ0003',
             'T0004': 'TRJ0004',
             'T0005': 'TRJ0005',
+            // T0017, T0018, T0019, T0073, T0110, T0129 use TRJ0001 as demo baseline
+            'T0017': 'TRJ0001',
+            'T0018': 'TRJ0001',
+            'T0019': 'TRJ0001',
+            'T0073': 'TRJ0001',
+            'T0110': 'TRJ0001',
+            'T0129': 'TRJ0001',
         };
-        return mapping[tripId] || 'TRJ0001';
+        const trajId = mapping[tripId];
+        if (!trajId) {
+            console.error(`Trip '${tripId}' has no mapped trajectory. Available mappings: ${Object.keys(mapping).join(', ')}`);
+            throw new Error(`UNMAPPED_TRIP: Trip '${tripId}' not mapped to any trajectory`);
+        }
+        return trajId;
     }
 
     /**
@@ -248,10 +281,12 @@ export class DriverModeController {
     async _evaluateAtCurrentPosition() {
         if (!this.currentVehicle || !this.currentPos) return;
 
+        const driverId = this.session.driver_id || 'UNASSIGNED';
+
         const payload = {
             context: {
                 vehicle_id: this.currentVehicle.vehicle_id,
-                driver_id: this.currentDriverId,
+                driver_id: driverId,
                 trip_id: this.currentTrip?.trip_id,
                 timestamp: new Date().toISOString(),
                 // Fixed per scenario — NOT decremented by frontend
@@ -306,11 +341,11 @@ export class DriverModeController {
                 this.options.onStateUpdate({
                     scenario: this.currentTrip,
                     vehicle: this.currentVehicle,
-                    driverId: this.currentDriverId,
+                    driverId: driverId,
                     origin: this.currentTrip?.origin,
                     destination: this.currentTrip?.destination,
                     driverLocation: {
-                        driver_id: this.currentDriverId || 'D0001',
+                        driver_id: driverId,
                         status: 'MATCHED',
                         raw_position: this.currentPos,
                         matched_position: {
@@ -367,6 +402,7 @@ export class DriverModeController {
      * Return to available state.
      */
     returnToAvailable() {
+        this.replay.clearSession();
         this.replay.reset();
         this.map.clearAll();
         this.currentTrip = null;
@@ -375,6 +411,12 @@ export class DriverModeController {
         this.lastRecommendation = null;
         this.directRouteGeometry = null;
         this.remainingTripDistanceKm = 0.0;
+        // Clear session context
+        this.session.driver_id = null;
+        this.session.vehicle_id = null;
+        this.session.vehicle_category = null;
+        this.session.trip_id = null;
+        this.session.trajectory_id = null;
         this.setState(DriverState.AVAILABLE);
         this.renderAvailableUI();
     }
@@ -390,6 +432,7 @@ export class DriverModeController {
     }
 
     cancelTrip() {
+        this.replay.clearSession();
         this.replay.reset();
         this.map.clearAll();
         this.currentTrip = null;
@@ -397,6 +440,12 @@ export class DriverModeController {
         this.matchedPos = null;
         this.lastRecommendation = null;
         this.directRouteGeometry = null;
+        // Clear session context
+        this.session.driver_id = null;
+        this.session.vehicle_id = null;
+        this.session.vehicle_category = null;
+        this.session.trip_id = null;
+        this.session.trajectory_id = null;
         this.setState(DriverState.AVAILABLE);
         this.renderAvailableUI();
     }
