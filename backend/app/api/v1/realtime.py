@@ -295,6 +295,8 @@ async def ingest_location(
         raise HTTPException(400, str(exc)) from exc
     except (MapMatchingEngineError, psycopg2.Error) as exc:
         state.current_status = MatchingStatus.ENGINE_UNAVAILABLE.value
+        # Persist ENGINE_UNAVAILABLE state to maintain continuity
+        await _persist_state(driver_id, state)
         return LocationResponse(
             driver_id=driver_id, status=MatchingStatus.ENGINE_UNAVAILABLE,
             trigger_reason=reason, message=str(exc),
@@ -308,6 +310,8 @@ async def ingest_location(
     if latest_match is None or not latest_match.matched:
         state.current_status = MatchingStatus.NO_MATCH.value
         state.last_trigger_reason = f"NO_MATCH({reason})"
+        # Persist NO_MATCH state to maintain observation continuity
+        await _persist_state(driver_id, state)
         return LocationResponse(
             driver_id=driver_id,
             status=MatchingStatus.NO_MATCH,
@@ -342,6 +346,9 @@ async def ingest_location(
     )
 
     state.reset_after_match(matched_state)
+
+    # Persist the matched state to shared store
+    await _persist_state(driver_id, state)
 
     return LocationResponse(
         driver_id=driver_id,

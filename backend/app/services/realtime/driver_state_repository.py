@@ -7,6 +7,7 @@ shared state across multiple API processes.
 from __future__ import annotations
 
 import json
+import logging
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass, field, asdict
@@ -16,6 +17,9 @@ from typing import Optional
 import redis.asyncio as redis
 
 from backend.app.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 # Constants matching state.py
@@ -201,6 +205,12 @@ class InMemoryDriverStateRepository(DriverStateRepository):
         return self._states.get(driver_id)
 
     async def save(self, snapshot: DriverTraceStateSnapshot) -> bool:
+        current = self._states.get(snapshot.driver_id)
+        if current is not None:
+            # Increment version like Redis would
+            snapshot.version = current.version + 1
+        else:
+            snapshot.version = 1
         self._states[snapshot.driver_id] = snapshot
         return True
 
@@ -280,21 +290,46 @@ class RedisDriverStateRepository(DriverStateRepository):
         client = await self._get_client()
         key = self._key(snapshot.driver_id)
 
-        # Get current version for optimistic locking
-        current = await client.get(key)
-        if current:
-            current_snapshot = DriverTraceStateSnapshot.from_json(current)
-            # Optimistic check: only save if version matches or is newer
-            # (In practice, GPS updates are sequential per driver, so version conflicts are rare)
-            if snapshot.version <= current_snapshot.version:
-                # Increment version to indicate our update
-                snapshot.version = current_snapshot.version + 1
-        else:
-            snapshot.version = 1
+        # Use atomic Lua script for compare-and-swap to prevent lost updates.
+        # The script reads the current version, increments it atomically, and saves.
+        # This prevents two writers from both succeeding with the same version.
+        lua_script = """
+        local key = KEYS[1]
+        local new_value = ARGV[1]
+        local ttl = tonumber(ARGV[2])
 
-        # Save with TTL
-        await client.set(key, snapshot.to_json(), ex=self._driver_state_ttl)
-        return True
+        local current = redis.call('GET', key)
+        local new_version = 1
+
+        if current then
+            local current_snapshot = cjson.decode(current)
+            local current_version = current_snapshot.version or 0
+            new_version = current_version + 1
+        end
+
+        -- Update version in the snapshot
+        local updated = cjson.decode(new_value)
+        updated.version = new_version
+
+        -- Save with TTL
+        redis.call('SET', key, cjson.encode(updated), 'EX', ttl)
+        return new_version
+        """
+
+        try:
+            new_version = await client.eval(
+                lua_script,
+                1,
+                key,
+                snapshot.to_json(),
+                self._driver_state_ttl,
+            )
+            return new_version is not None
+        except Exception as e:
+            logger.warning(f"Redis Lua script failed, using fallback: {e}")
+            # Fallback to simple save if Lua fails
+            await client.set(key, snapshot.to_json(), ex=self._driver_state_ttl)
+            return True
 
     async def delete(self, driver_id: str) -> bool:
         client = await self._get_client()

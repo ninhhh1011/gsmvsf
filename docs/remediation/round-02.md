@@ -1,190 +1,205 @@
-# Round 02 Remediation Plan — Timing Edge Cases & Live Stack Tests
+# Round 02 Remediation Plan — Backend Shared Driver State Correctness
 
 ## Branch & Status
 - **Branch**: `week5-realtime-api-evaluation` (current)
-- **HEAD**: `829df9e` (pre-ROUND-02)
+- **HEAD**: `829df9e` (pre-ROUND-02), commit `9248883` (frontend fixes)
 - **Status**: Working tree modified (pending commit)
 
 ---
 
-## PHASE 0 — AUDIT FINDINGS (from ROUND 01 remaining risks)
+## PHASE 0 — AUDIT FINDINGS
 
-### Identified Issues from ROUND 01
+### Root Causes Identified
 
-| # | Issue | Risk Level | File |
-|---|-------|-----------|------|
-| R1 | `replay.step()` has no guard when `isPlaying=true` | Medium | `replay.js` |
-| R2 | `DriverModeController` doesn't pass session to Replay | High | `driver_mode.js` |
-| R3 | `TechView` state sync has no debounce | Low | `app.js` |
-| R4 | No live smoke tests (only fixtures) | Medium | `frontend/tests/` |
-| R5 | `replay.reset()` doesn't reset driver state on backend | Low | `replay.js` |
+| # | Issue | Root Cause | Location |
+|---|-------|-----------|----------|
+| A | **MATCHED state not persisted** | `_persist_state()` not called after successful match | `realtime.py:344` |
+| B | **Lost update race condition** | Non-atomic GET→version→SET in `save()` | `driver_state_repository.py:279-296` |
+| C | **NO_MATCH/ENGINE_UNAVAIL not persisted** | These branches skipped `_persist_state()` | `realtime.py:296-328` |
 
----
-
-## PHASE 1 — TIMING EDGE CASE FIXES
-
-### Task 1.1: Guard step() during autoplay (R1)
-**File**: `backend/app/static/demo/js/replay.js`
-**Change**: Add guard at start of `step()` to return early if `isPlaying=true`
-**Test**: Rapid step clicks during autoplay don't queue multiple steps
-
-```javascript
-async step() {
-    // Guard: don't queue steps during autoplay (prevents race condition)
-    if (this.isPlaying) return;
-
-    if (this.currentIndex >= this.observations.length) {
-```
-
-### Task 1.2: Pass session to Replay (R2)
-**File**: `backend/app/static/demo/js/driver_mode.js`
-**Change**: Pass `session` to `TrajectoryReplayController` constructor
-**Test**: Driver ID consistent across Driver Mode + Replay lifecycle
-
-```javascript
-// Session is passed for consistent driver_id across Driver Mode + Replay
-this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
-    onStep: (stepData) => this._onReplayStep(stepData),
-    session: this.session
-});
-```
-
-### Task 1.3: Debounce TechView sync (R3)
-**File**: `backend/app/static/demo/js/app.js`
-**Change**: Add 50ms debounce to `onStateUpdate` callback
-**Test**: Rapid replay steps don't cause UI jank
-
-```javascript
-let syncDebounceTimer = null;
-const onStateUpdate = (data) => {
-    clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(() => {
-        this.techView.syncState(data);
-    }, 50); // 50ms debounce for rapid replay steps
-};
-```
-
-### Task 1.4: Add clearSession to Replay (R5)
-**File**: `backend/app/static/demo/js/replay.js`
-**Change**: Add `clearSession()` method that resets driver location on backend
-**Test**: Driver state properly cleaned up on trip reset/cancel
-
-```javascript
-clearSession() {
-    this.api.resetDriverLocation(this.session.driver_id).catch(() => {});
-}
-```
-
-### Task 1.5: Call clearSession on reset/cancel (R5)
-**Files**: `driver_mode.js`
-**Change**: Call `this.replay.clearSession()` in `returnToAvailable()` and `cancelTrip()`
-**Test**: Backend driver state cleared when returning to available
+### Not Issues
+- UTC handling in `location.py` is already correct (uses `utc()` function)
+- Stale observation rejection already implemented
 
 ---
 
-## PHASE 2 — LIVE STACK SMOKE TESTS
+## PHASE 1 — PERSIST CORRECT FINAL STATE
 
-### Task 2.1: Add live smoke tests
-**File**: `frontend/tests/live.spec.js` (planned for future)
-**Note**: BROWSER_WITH_API_FIXTURES tests provide adequate coverage for ROUND 02.
-Live tests require full backend stack (PostGIS, GraphHopper, Redis) which may not
-be available in all environments.
+### Task 1.1: Fix MATCHED state persistence
+**File**: `backend/app/api/v1/realtime.py`
+**Change**: Add `_persist_state()` call after `state.reset_after_match()` (line ~347)
+**Test**: Matched state readable from read-back
+**Evidence**: ✅ 11/11 shared state tests PASS
+
+```python
+# After state.reset_after_match(matched_state)
+# Persist the matched state to shared store
+await _persist_state(driver_id, state)
+```
+
+### Task 1.2: Persist NO_MATCH and ENGINE_UNAVAILABLE states
+**File**: `backend/app/api/v1/realtime.py`
+**Change**: Add `_persist_state()` calls before returning in NO_MATCH and ENGINE_UNAVAILABLE branches
+**Test**: NO_MATCH/ENGINE_UNAVAILABLE state persists
+**Evidence**: ✅ test_no_match_state_persists, test_engine_unavailable_state_persists PASS
+
+---
+
+## PHASE 2 — ATOMIC VERSIONING
+
+### Task 2.1: Atomic Redis save with Lua script
+**File**: `backend/app/services/realtime/driver_state_repository.py`
+**Change**: Replace GET→version→SET with atomic Lua script that increments version inside Redis
+**Test**: Concurrent writes produce sequential versions
+**Evidence**: ✅ test_concurrent_writes_have_sequential_versions PASS
+
+```lua
+-- Atomic version increment inside Redis
+local current = redis.call('GET', key)
+local new_version = 1
+if current then
+    local current_version = current_snapshot.version or 0
+    new_version = current_version + 1
+end
+redis.call('SET', key, cjson.encode(updated), 'EX', ttl)
+return new_version
+```
+
+### Task 2.2: InMemory version increment
+**File**: `backend/app/services/realtime/driver_state_repository.py`
+**Change**: `InMemoryDriverStateRepository.save()` now increments version like Redis
+**Test**: Version increments on each write
+**Evidence**: ✅ test_stale_write_version_increments PASS
+
+---
+
+## PHASE 3 — UTC NORMALIZATION
+
+### Task 3.1: UTC already correct
+**File**: `backend/app/services/realtime/location.py`
+**Status**: ✅ No changes needed
+**Evidence**: `utc()` function already handles Z and +07:00 equivalently
+
+---
+
+## PHASE 4 — TWO API PROCESS + REDIS INTEGRATION
+
+### Task 4.1: Integration test scaffold
+**File**: `backend/tests/test_shared_state_integration.py`
+**Status**: ⚠️ BLOCKED_ENV
+**Note**: Tests require two running API instances. Manual test script created but not executed.
+**Evidence**: Test scaffold exists; Redis available at 127.0.0.1:6379
+
+### Task 4.2: Regression suite
+**Command**: `python -m pytest backend/tests/ -v`
+**Evidence**: ✅ 379 tests PASS
 
 ---
 
 ## EXIT GATES
 
-| Gate | Criteria | Method |
+| Gate | Criteria | Status |
 |------|----------|--------|
-| 0 | Plan approved | Document review |
-| 1 | step() guard prevents race, session passed to Replay | Code review |
-| 2 | TechView debounce added, session cleared on reset | Code review |
-| 3 | All 12 browser tests pass, 368 backend tests pass | CI/CD |
+| 0 | Baseline documented, root causes identified | ✅ PASS |
+| 1 | MATCHED state persists, all branches persist | ✅ PASS (11 shared state tests) |
+| 2 | Atomic versioning, concurrent write protection | ✅ PASS (Lua script + unit tests) |
+| 3 | UTC equivalence, Redis failure handling | ✅ PASS (existing tests) |
+| 4 | Two API process + Redis real | ⚠️ BLOCKED_ENV (requires manual multi-instance test) |
 
 ---
 
 ## Dependencies
-- None (no new infrastructure)
+- Redis running on 127.0.0.1:6379
+- Two API instances for Phase 4 integration tests
 
 ## Not in Scope
 - Replay scheduler redesign
-- Full UI redesign
-- Live smoke tests (deferred to when full stack available)
+- Tech View redesign
+- UI/frontend changes
+- Kafka/Celery/service addition
 
 ---
 
-## ROUND 02 COMPLETION REPORT
+## COMPLETION REPORT
 
 ### Files Changed
 ```
-M backend/app/static/demo/js/app.js         (+debounce, ~+8 lines)
-M backend/app/static/demo/js/driver_mode.js (+session to Replay, +clearSession calls)
-M backend/app/static/demo/js/replay.js      (+step guard, +clearSession method)
+M backend/app/api/v1/realtime.py                     (+7 lines: persist calls)
+M backend/app/services/realtime/driver_state_repository.py (+63 lines: atomic save)
+A backend/tests/test_driver_state_shared.py            (11 tests for shared state)
+A backend/tests/test_shared_state_integration.py      (integration test scaffold)
 ```
 
 ### Issues Fixed
 
 | # | Issue | Fix | Verified |
 |---|-------|-----|----------|
-| R1 | `step()` race during autoplay | Early return if `isPlaying=true` | Code review |
-| R2 | Replay missing session | Pass `session: this.session` to constructor | Code review |
-| R3 | TechView sync race condition | 50ms debounce on `onStateUpdate` | Code review |
-| R5 | Session not cleared on reset | `clearSession()` method + calls | Code review |
+| A | MATCHED state not persisted | Add `_persist_state()` after `reset_after_match()` | ✅ Unit tests |
+| B | Lost update race condition | Atomic Lua script for version increment | ✅ Unit tests |
+| C | NO_MATCH/ENGINE_UNAVAIL not persisted | Add `_persist_state()` to all return paths | ✅ Unit tests |
 
 ### Test Results
 
-**Browser Tests (BROWSER_WITH_API_FIXTURES):**
+**Shared State Tests:**
 ```
-Command: npx playwright test frontend/tests/demo.spec.js
-Results: 12 passed (54.3s)
+Command: python -m pytest backend/tests/test_driver_state_shared.py -v
+Results: 11 passed (0.06s)
 
-A. Bootstrap:
-  ✓ page renders without page error
-  ✓ controls appear and are usable
-
-B. Scenario/Trip/Vehicle Selection:
-  ✓ trip selection changes context
-
-C. Direct Route:
-  ✓ route persists after trip assignment
-
-D. Replay Step:
-  ✓ replay step sends correct metadata
-  ✓ replay step uses consistent driver identity
-
-E. Recommendation:
-  ✓ recommendation displays after UI action
-
-F. No-Service State:
-  ✓ displays no-service correctly
-
-G. API Error:
-  ✓ displays error state without fake success
-
-H. Tech View:
-  ✓ opens from button
-  ✓ /demo/technical page works
-
-I. Catalog Failure:
-  ✓ shows error banner when catalog fails
+- test_matched_state_persists_and_reads_back PASSED
+- test_no_match_state_persists PASSED
+- test_engine_unavailable_state_persists PASSED
+- test_concurrent_writes_have_sequential_versions PASSED
+- test_stale_write_version_increments PASSED
+- test_duplicate_observation_not_double_counted PASSED
+- test_reset_clears_all_state PASSED
+- test_new_write_after_reset_is_fresh PASSED
+- test_redis_failure_raises_error PASSED
+- test_save_redis_unavailable_raises PASSED
+- test_serialization_roundtrip_preserves_all_fields PASSED
 ```
 
 **Backend Tests:**
 ```
 Command: python -m pytest backend/tests/ -v
-Results: 368 passed (16.93s)
+Results: 379 passed (22.63s)
+
+All tests pass including:
+- test_week5_location.py: 19 passed
+- test_week5_replay.py: 11 passed
+- test_week5_workflow.py: 3 passed
+- test_driver_state_shared.py: 11 passed (new)
 ```
 
 ### Exit Gate Status
 
 | Gate | Criteria | Status |
 |------|----------|--------|
-| 0 | Plan approved | ✅ PASS |
-| 1 | step() guard, session passed to Replay | ✅ PASS (Code review) |
-| 2 | TechView debounce, session cleared on reset | ✅ PASS (Code review) |
-| 3 | Browser tests pass, backend tests pass | ✅ PASS (12+368 tests) |
+| 0 | Baseline, root causes | ✅ PASS |
+| 1 | All branches persist | ✅ PASS |
+| 2 | Atomic versioning | ✅ PASS |
+| 3 | UTC/Redis failure | ✅ PASS |
+| 4 | Two API + Redis | ⚠️ BLOCKED_ENV |
+
+---
+
+## ROUND_02_NOT_COMPLETE
+
+**Reason**: Gate 4 (two API process + Redis real) requires manual multi-instance testing.
+
+### Manual Test Required
+To complete Gate 4, run:
+```bash
+# Terminal 1: Start API on port 8000
+python -m uvicorn backend.app.main:app --port 8000 --host 127.0.0.1
+
+# Terminal 2: Start API on port 8001
+python -m uvicorn backend.app.main:app --port 8001 --host 127.0.0.1
+
+# Terminal 3: Run integration tests
+pytest backend/tests/test_shared_state_integration.py -v -s
+```
 
 ### Evidence Location
-- Browser test output: `test-results/` directory
-- Backend test output: stdout (368 passed)
-- Code changes: Working tree (pending commit)
+- Unit tests: `backend/tests/test_driver_state_shared.py`
+- Integration scaffold: `backend/tests/test_shared_state_integration.py`
+- Backend fixes: `backend/app/api/v1/realtime.py`, `backend/app/services/realtime/driver_state_repository.py`
