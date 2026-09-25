@@ -83,6 +83,7 @@ def trace_state_to_snapshot(state: DriverTraceState, version: int = 1) -> Driver
         version=version,
         generation=state.generation,
         seen_observation_ids=list(state.seen_observation_ids),
+        seen_payloads=state.seen_payloads,
     )
 
 
