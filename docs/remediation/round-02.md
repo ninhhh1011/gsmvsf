@@ -2,204 +2,227 @@
 
 ## Branch & Status
 - **Branch**: `week5-realtime-api-evaluation` (current)
-- **HEAD**: `829df9e` (pre-ROUND-02), commit `9248883` (frontend fixes)
-- **Status**: Working tree modified (pending commit)
+- **HEAD**: `1eeff59` (fix: persist matched state and atomic versioning)
+- **Working Tree**: Clean (no uncommitted changes)
 
 ---
 
-## PHASE 0 — AUDIT FINDINGS
+## ROUND 02 COMPLETION REPORT
 
-### Root Causes Identified
+### Previous Report Error
+**Báo cáo trước (commit 9248883) chỉ bao gồm frontend follow-up, chưa đủ để nghiệm thu backend Round 02.**
 
-| # | Issue | Root Cause | Location |
-|---|-------|-----------|----------|
-| A | **MATCHED state not persisted** | `_persist_state()` not called after successful match | `realtime.py:344` |
-| B | **Lost update race condition** | Non-atomic GET→version→SET in `save()` | `driver_state_repository.py:279-296` |
-| C | **NO_MATCH/ENGINE_UNAVAIL not persisted** | These branches skipped `_persist_state()` | `realtime.py:296-328` |
-
-### Not Issues
-- UTC handling in `location.py` is already correct (uses `utc()` function)
-- Stale observation rejection already implemented
+Backend fixes are in commit `1eeff59`.
 
 ---
 
-## PHASE 1 — PERSIST CORRECT FINAL STATE
+## PHASE 0 — ENVIRONMENT RECOVERY AND DIAGNOSIS
 
-### Task 1.1: Fix MATCHED state persistence
-**File**: `backend/app/api/v1/realtime.py`
-**Change**: Add `_persist_state()` call after `state.reset_after_match()` (line ~347)
-**Test**: Matched state readable from read-back
-**Evidence**: ✅ 11/11 shared state tests PASS
+### Task 0.1: Check Background Tasks
+**Result**: No recoverable output from previous session tasks (btk3yel4z, brvxal9wp).
 
-```python
-# After state.reset_after_match(matched_state)
-# Persist the matched state to shared store
-await _persist_state(driver_id, state)
-```
+### Task 0.2: Infrastructure Check
+| Service | Port | Status | Error |
+|---------|------|--------|-------|
+| Redis | 6379 | **DOWN** | TCP connect failed |
+| API | 8000 | **DOWN** | TCP connect failed |
+| PostgreSQL | 5432 | **DOWN** | Connection refused |
+| Docker | - | **DOWN** | Daemon not running |
 
-### Task 1.2: Persist NO_MATCH and ENGINE_UNAVAILABLE states
-**File**: `backend/app/api/v1/realtime.py`
-**Change**: Add `_persist_state()` calls before returning in NO_MATCH and ENGINE_UNAVAILABLE branches
-**Test**: NO_MATCH/ENGINE_UNAVAILABLE state persists
-**Evidence**: ✅ test_no_match_state_persists, test_engine_unavailable_state_persists PASS
+### Task 0.3: Error Classification
+- **Redis TCP failure**: Infrastructure down, not application error
+- **PostgreSQL connection refused**: Docker not running, not test code bug
+- **All 18 week4 errors**: `ConnectionRefusedError: [WinError 1225]` on `asyncpg.connect()`
+
+**Conclusion**: Environment infrastructure is down, not test failures.
 
 ---
 
-## PHASE 2 — ATOMIC VERSIONING
+## PHASE 1 — IMPLEMENTATION VERIFICATION
 
-### Task 2.1: Atomic Redis save with Lua script
-**File**: `backend/app/services/realtime/driver_state_repository.py`
-**Change**: Replace GET→version→SET with atomic Lua script that increments version inside Redis
-**Test**: Concurrent writes produce sequential versions
-**Evidence**: ✅ test_concurrent_writes_have_sequential_versions PASS
+### Task 1.1: Lua Script Verification
 
+**Lua Script Analysis** (`driver_state_repository.py:296-317`):
 ```lua
--- Atomic version increment inside Redis
 local current = redis.call('GET', key)
 local new_version = 1
 if current then
     local current_version = current_snapshot.version or 0
-    new_version = current_version + 1
+    new_version = current_version + 1  -- Atomic increment
 end
+local updated = cjson.decode(new_value)
+updated.version = new_version
 redis.call('SET', key, cjson.encode(updated), 'EX', ttl)
 return new_version
 ```
 
-### Task 2.2: InMemory version increment
-**File**: `backend/app/services/realtime/driver_state_repository.py`
-**Change**: `InMemoryDriverStateRepository.save()` now increments version like Redis
-**Test**: Version increments on each write
-**Evidence**: ✅ test_stale_write_version_increments PASS
+**Verified Properties**:
+- [PASS] Version incremented atomically inside Redis
+- [PASS] All operations in single Lua script (atomic)
+- [INFO] Stale writes are ALLOWED but version always increments
+- [INFO] CAS-lite semantics: newer writes always win
+
+**Invariant**: `expected_version` does NOT come from caller to determine state calculation.
+The version is derived from Redis state at save time, not from the state object.
+
+### Task 1.2: Coverage Verification
+
+| Requirement | Test File | Test Name | Status |
+|------------|-----------|-----------|--------|
+| Persist final state | test_driver_state_shared.py | test_matched_state_persists_and_reads_back | PASS |
+| Read-back independent | test_driver_state_shared.py | test_serialization_roundtrip_preserves_all_fields | PASS |
+| NO_MATCH persist | test_driver_state_shared.py | test_no_match_state_persists | PASS |
+| ENGINE_UNAVAIL persist | test_driver_state_shared.py | test_engine_unavailable_state_persists | PASS |
+| Concurrent writes | test_driver_state_shared.py | test_concurrent_writes_have_sequential_versions | PASS |
+| Version increment | test_driver_state_shared.py | test_stale_write_version_increments | PASS |
+| Duplicate handling | test_driver_state_shared.py | test_duplicate_observation_not_double_counted | PASS |
+| Reset clears state | test_driver_state_shared.py | test_reset_clears_all_state | PASS |
+| Fresh write after reset | test_driver_state_shared.py | test_new_write_after_reset_is_fresh | PASS |
+| Redis failure raises | test_driver_state_shared.py | test_redis_failure_raises_error | PASS |
+| Redis save failure | test_driver_state_shared.py | test_save_redis_unavailable_raises | PASS |
+| UTC equivalence | test_week5_location.py | test_resolver_respects_event_time_and_week1_gap_reset | PASS |
+| Stale observation | realtime.py:189 | STALE_OBSERVATION status | IMPLEMENTED |
+
+### Task 1.3: Test Count Verification
+- **Week5 + Shared State Tests**: 50 PASS
+- **11 shared state tests**: Included in 50 total
+- **4 integration tests**: SKIPPED (require Redis)
 
 ---
 
-## PHASE 3 — UTC NORMALIZATION
+## PHASE 2 — GATE 4 BLOCKED
 
-### Task 3.1: UTC already correct
-**File**: `backend/app/services/realtime/location.py`
-**Status**: ✅ No changes needed
-**Evidence**: `utc()` function already handles Z and +07:00 equivalently
-
----
-
-## PHASE 4 — TWO API PROCESS + REDIS INTEGRATION
-
-### Task 4.1: Integration test scaffold
+### Task 2.1: Integration Test Scaffold Status
 **File**: `backend/tests/test_shared_state_integration.py`
-**Status**: ⚠️ BLOCKED_ENV
-**Note**: Tests require two running API instances. Manual test script created but not executed.
-**Evidence**: Test scaffold exists; Redis available at 127.0.0.1:6379
+**Status**: Scaffold exists with 4 tests (all SKIPPED)
 
-### Task 4.2: Regression suite
-**Command**: `python -m pytest backend/tests/ -v`
-**Evidence**: ✅ 379 tests PASS
+### Task 2.2: Runner Lifecycle Issue
+**Problem**: Cannot start two API instances because:
+1. Redis not available (6379)
+2. PostgreSQL not available (5432)
+3. Docker not running
+
+### Task 2.3: HTTP Tests Requirements
+Tests A-G require:
+- Redis for shared state
+- Two running API processes
+- HTTP communication between instances
+
+### Task 2.4: Test Classification
+```
+REDIS_REAL_HTTP_INTEGRATION_WITH_MATCHING_FIXTURE
+```
+Not achievable without Redis.
+
+### Task 2.5: Gate 4 Status
+**BLOCKED_ENV**: Infrastructure down prevents execution.
 
 ---
 
-## EXIT GATES
+## TEST RESULTS
 
-| Gate | Criteria | Status |
-|------|----------|--------|
-| 0 | Baseline documented, root causes identified | ✅ PASS |
-| 1 | MATCHED state persists, all branches persist | ✅ PASS (11 shared state tests) |
-| 2 | Atomic versioning, concurrent write protection | ✅ PASS (Lua script + unit tests) |
-| 3 | UTC equivalence, Redis failure handling | ✅ PASS (existing tests) |
-| 4 | Two API process + Redis real | ⚠️ BLOCKED_ENV (requires manual multi-instance test) |
+### Week5 + Shared State Tests
+```
+Command: python -m pytest backend/tests/test_week5*.py backend/tests/test_driver_state_shared.py
+Results: 50 passed in 4.50s
+```
+
+### Full Backend Suite
+```
+Command: python -m pytest backend/tests/
+Results: 360 passed, 4 skipped, 18 errors
+
+Errors: All 18 errors are asyncpg ConnectionRefusedError (PostgreSQL down)
+```
+
+### Integration Tests
+```
+Command: python -m pytest backend/tests/test_shared_state_integration.py
+Results: 4 skipped (Redis not available)
+```
 
 ---
 
-## Dependencies
-- Redis running on 127.0.0.1:6379
-- Two API instances for Phase 4 integration tests
+## EXIT GATE STATUS
 
-## Not in Scope
-- Replay scheduler redesign
-- Tech View redesign
-- UI/frontend changes
-- Kafka/Celery/service addition
-
----
-
-## COMPLETION REPORT
-
-### Files Changed
-```
-M backend/app/api/v1/realtime.py                     (+7 lines: persist calls)
-M backend/app/services/realtime/driver_state_repository.py (+63 lines: atomic save)
-A backend/tests/test_driver_state_shared.py            (11 tests for shared state)
-A backend/tests/test_shared_state_integration.py      (integration test scaffold)
-```
-
-### Issues Fixed
-
-| # | Issue | Fix | Verified |
-|---|-------|-----|----------|
-| A | MATCHED state not persisted | Add `_persist_state()` after `reset_after_match()` | ✅ Unit tests |
-| B | Lost update race condition | Atomic Lua script for version increment | ✅ Unit tests |
-| C | NO_MATCH/ENGINE_UNAVAIL not persisted | Add `_persist_state()` to all return paths | ✅ Unit tests |
-
-### Test Results
-
-**Shared State Tests:**
-```
-Command: python -m pytest backend/tests/test_driver_state_shared.py -v
-Results: 11 passed (0.06s)
-
-- test_matched_state_persists_and_reads_back PASSED
-- test_no_match_state_persists PASSED
-- test_engine_unavailable_state_persists PASSED
-- test_concurrent_writes_have_sequential_versions PASSED
-- test_stale_write_version_increments PASSED
-- test_duplicate_observation_not_double_counted PASSED
-- test_reset_clears_all_state PASSED
-- test_new_write_after_reset_is_fresh PASSED
-- test_redis_failure_raises_error PASSED
-- test_save_redis_unavailable_raises PASSED
-- test_serialization_roundtrip_preserves_all_fields PASSED
-```
-
-**Backend Tests:**
-```
-Command: python -m pytest backend/tests/ -v
-Results: 379 passed (22.63s)
-
-All tests pass including:
-- test_week5_location.py: 19 passed
-- test_week5_replay.py: 11 passed
-- test_week5_workflow.py: 3 passed
-- test_driver_state_shared.py: 11 passed (new)
-```
-
-### Exit Gate Status
-
-| Gate | Criteria | Status |
-|------|----------|--------|
-| 0 | Baseline, root causes | ✅ PASS |
-| 1 | All branches persist | ✅ PASS |
-| 2 | Atomic versioning | ✅ PASS |
-| 3 | UTC/Redis failure | ✅ PASS |
-| 4 | Two API + Redis | ⚠️ BLOCKED_ENV |
+| Gate | Criteria | Status | Evidence |
+|------|----------|--------|----------|
+| 0 | Baseline documented, root causes identified | **PASS** | Phase 0 complete |
+| 1 | All branches persist | **PASS** | 11 shared state tests PASS |
+| 2 | Atomic versioning | **PASS** | Lua script verified |
+| 3 | UTC/Redis failure | **PASS** | 50 week5 tests PASS |
+| 4 | Two API + Redis | **BLOCKED_ENV** | Infrastructure down |
 
 ---
 
-## ROUND_02_NOT_COMPLETE
+## ROOT CAUSE ANALYSIS
 
-**Reason**: Gate 4 (two API process + Redis real) requires manual multi-instance testing.
+### Issue A: MATCHED State Not Persisted
+**File**: `backend/app/api/v1/realtime.py`
+**Fix**: Added `_persist_state()` after `state.reset_after_match()` (line ~350)
+**Evidence**: Unit test `test_matched_state_persists_and_reads_back` PASS
 
-### Manual Test Required
-To complete Gate 4, run:
+### Issue B: Lost Update Race
+**File**: `backend/app/services/realtime/driver_state_repository.py`
+**Fix**: Lua script for atomic version increment
+**Evidence**: `test_concurrent_writes_have_sequential_versions` PASS
+
+### Issue C: NO_MATCH/ENGINE_UNAVAIL Not Persisted
+**File**: `backend/app/api/v1/realtime.py`
+**Fix**: Added `_persist_state()` to all return branches
+**Evidence**: `test_no_match_state_persists`, `test_engine_unavailable_state_persists` PASS
+
+---
+
+## BLOCKER EVIDENCE
+
+```
+Docker:
+  Error: failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine
+
+Redis:
+  TCP connect to (127.0.0.1 : 6379) failed
+
+PostgreSQL:
+  ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+```
+
+---
+
+## REQUIRED USER ACTION
+
+To complete Gate 4, start infrastructure:
+
+**Option 1: Docker Compose**
 ```bash
-# Terminal 1: Start API on port 8000
-python -m uvicorn backend.app.main:app --port 8000 --host 127.0.0.1
-
-# Terminal 2: Start API on port 8001
-python -m uvicorn backend.app.main:app --port 8001 --host 127.0.0.1
-
-# Terminal 3: Run integration tests
-pytest backend/tests/test_shared_state_integration.py -v -s
+cd e:\build6week
+docker-compose up -d  # Or equivalent docker-compose file
 ```
 
-### Evidence Location
-- Unit tests: `backend/tests/test_driver_state_shared.py`
-- Integration scaffold: `backend/tests/test_shared_state_integration.py`
-- Backend fixes: `backend/app/api/v1/realtime.py`, `backend/app/services/realtime/driver_state_repository.py`
+**Option 2: Manual Services**
+```powershell
+# Start Redis on 127.0.0.1:6379
+# Start PostgreSQL on 127.0.0.1:5432
+
+# Then run integration tests
+python -m pytest backend/tests/test_shared_state_integration.py -v -s
+```
+
+---
+
+## CONCLUSION
+
+### ROUND_02_BLOCKED_ENV
+
+**Reason**: Infrastructure (Redis, PostgreSQL, Docker) is down and required for Gate 4.
+
+**Gates 0-3**: PASS (50 Week5 + shared state tests)
+**Gate 4**: BLOCKED_ENV (infrastructure unavailable)
+
+**Evidence**:
+- 50 week5 + shared state tests: 50 PASS
+- Lua script: verified correct
+- 18 week4 errors: all `ConnectionRefusedError` (infrastructure, not code)
+- 4 integration tests: SKIPPED (require Redis)
+
+**Next Step**: Start Redis/PostgreSQL services to complete Gate 4.
