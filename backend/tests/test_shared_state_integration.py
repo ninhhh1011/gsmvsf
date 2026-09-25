@@ -16,7 +16,7 @@ import time
 import sys
 import httpx
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 BASE_URL_A = "http://127.0.0.1:8000"
@@ -322,11 +322,12 @@ async def test_stale_observation_rejected(two_instances):
         count_after_valid = resp1.json()["total_observations"]
 
         # Try to send stale observation (1 minute earlier)
-        stale_ts = now.replace(minute=now.minute - 1)
+        # Use timedelta instead of replace(minute=minute-1) to handle minute=0 correctly
+        stale_ts = (now - timedelta(minutes=1)).isoformat()
         obs2 = {
             "latitude": 21.02,
             "longitude": 105.02,
-            "timestamp": stale_ts.isoformat(),
+            "timestamp": stale_ts,
             "speed_kmh": 30,
             "heading_deg": 90,
             "vehicle_category": "EV_CAR",

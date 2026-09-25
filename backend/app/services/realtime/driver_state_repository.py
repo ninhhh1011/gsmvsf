@@ -326,10 +326,11 @@ class RedisDriverStateRepository(DriverStateRepository):
             )
             return new_version is not None
         except Exception as e:
-            logger.warning(f"Redis Lua script failed, using fallback: {e}")
-            # Fallback to simple save if Lua fails
-            await client.set(key, snapshot.to_json(), ex=self._driver_state_ttl)
-            return True
+            # CRITICAL: Do NOT fallback to unchecked SET - this would bypass
+            # the atomic version increment and potentially cause lost updates.
+            # If Lua script fails, the save must fail so the caller can retry.
+            logger.error(f"Redis Lua script failed, save aborted: {e}")
+            raise
 
     async def delete(self, driver_id: str) -> bool:
         client = await self._get_client()
