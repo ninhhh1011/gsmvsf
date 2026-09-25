@@ -145,6 +145,7 @@ class DriverTraceStateSnapshot:
     current_status: str = "WARMING_UP"
     version: int = 1  # For optimistic concurrency control
     generation: int = 1  # Incremented on reset to invalidate old requests
+    seen_observation_ids: list = field(default_factory=list)  # For deduplication
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), default=str)
@@ -165,6 +166,10 @@ class DriverTraceStateSnapshot:
         if self.last_matched_state:
             return MatchedState.from_dict(self.last_matched_state)
         return None
+
+    def to_seen_ids_set(self) -> set:
+        """Reconstruct the seen observation IDs set."""
+        return set(self.seen_observation_ids)
 
 
 class DriverStateRepository(ABC):

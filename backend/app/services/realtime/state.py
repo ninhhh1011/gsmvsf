@@ -128,6 +128,7 @@ class DriverTraceState:
     last_match_latency_ms: Optional[float] = None
     current_status: str = "WARMING_UP"
     generation: int = 1  # Incremented on reset to invalidate old requests
+    seen_observation_ids: set = field(default_factory=set)  # For deduplication
 
     def add_observation(self, obs: GPSObservation) -> tuple[bool, str]:
         """
@@ -138,6 +139,11 @@ class DriverTraceState:
         """
         gap_reset = False
         gap_reason = ""
+
+        # Check for duplicate observation
+        if obs.observation_id and obs.observation_id in self.seen_observation_ids:
+            # Skip duplicate - do not increment counters
+            return gap_reset, gap_reason
 
         # Check for gap (session reset)
         if (self.last_observation_timestamp and
@@ -170,6 +176,8 @@ class DriverTraceState:
 
         # Add observation
         self.observations.append(obs)
+        if obs.observation_id:
+            self.seen_observation_ids.add(obs.observation_id)
         self.last_observation_timestamp = obs.timestamp
         self.observations_since_match += 1
         self.total_observations_received += 1
@@ -211,6 +219,7 @@ class DriverTraceState:
     def reset_state(self):
         """Reset state and increment generation to invalidate old requests."""
         self.observations.clear()
+        self.seen_observation_ids.clear()  # Clear dedup set
         self.last_match_time = None
         self.last_matched_state = None
         self.movement_since_match = 0.0
