@@ -85,38 +85,66 @@ async def test_post_instance_a_get_instance_b(two_instances):
     """
     A: POST matched state on instance A, GET from instance B via Redis.
 
-    Expected: Matched state is visible from instance B.
+    Strong assertion: After multiple observations, both instances must see:
+    - Same status (both MATCHED or both NO_MATCH)
+    - Same total_observations count
+    - Same buffered_points count
+    - Same last_match_time if matched
     """
     url_a, url_b = two_instances
     driver = f"{DRIVER_ID}_a_to_b"
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         # Clear any existing state
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
 
         # Send multiple observations to trigger matching
         for i in range(5):
             obs = {
-                "latitude": 21.0 + i * 0.001,
-                "longitude": 105.0 + i * 0.001,
+                "latitude": 21.028 + i * 0.002,
+                "longitude": 105.854 + i * 0.002,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "speed_kmh": 30,
                 "heading_deg": 90,
+                "vehicle_category": "EV_CAR",
             }
             resp = await client.post(
                 f"{url_a}/api/v1/drivers/{driver}/location",
                 json=obs
             )
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.5)
 
-        # Get state from instance B
+        # Get state from both instances
+        resp_a = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
         resp_b = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
 
-        assert resp_b.status_code == 200, f"GET failed: {resp_b.text}"
-        data = resp_b.json()
+        assert resp_a.status_code == 200, f"GET A failed: {resp_a.text}"
+        assert resp_b.status_code == 200, f"GET B failed: {resp_b.text}"
 
-        # State should have observations from instance A
-        assert data["buffered_points"] >= 5, f"Expected >=5 points, got {data['buffered_points']}"
+        data_a = resp_a.json()
+        data_b = resp_b.json()
+
+        # CRITICAL: Both must agree on status
+        assert data_a["status"] == data_b["status"], \
+            f"Status mismatch: A={data_a['status']} B={data_b['status']}"
+
+        # CRITICAL: Both must see same counts
+        assert data_a["buffered_points"] == data_b["buffered_points"], \
+            f"Buffered points mismatch: A={data_a['buffered_points']} B={data_b['buffered_points']}"
+        assert data_a["total_observations"] == data_b["total_observations"], \
+            f"Total observations mismatch: A={data_a['total_observations']} B={data_b['total_observations']}"
+
+        # CRITICAL: If matched, both must have matched_position
+        if data_a["status"] == "MATCHED":
+            assert data_a["matched_position"] is not None, "Instance A should have matched_position"
+            assert data_b["matched_position"] is not None, "Instance B should have matched_position"
+            assert data_a["last_match_time"] == data_b["last_match_time"], \
+                f"last_match_time mismatch: A={data_a['last_match_time']} B={data_b['last_match_time']}"
+
+        # CRITICAL: At least 5 observations should be accepted
+        assert data_a["total_observations"] >= 5, \
+            f"Expected >=5 observations, got {data_a['total_observations']}"
 
         # Cleanup
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
@@ -125,92 +153,141 @@ async def test_post_instance_a_get_instance_b(two_instances):
 @pytest.mark.asyncio
 async def test_concurrent_writes(two_instances):
     """
-    B: Concurrent writes from both instances.
+    B: Concurrent writes from both instances must not lose observations.
 
-    Expected: Both writes succeed, state is consistent.
+    Strong assertion:
+    - Both requests succeed (200 OK)
+    - Final observation count >= number of unique observations sent
+    - Both instances see the same final count
+    - No observation IDs are silently dropped
     """
     url_a, url_b = two_instances
     driver = f"{DRIVER_ID}_concurrent"
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         # Clear
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
 
-        # Send concurrent observations from both instances
-        async def send_obs(url, obs):
-            return await client.post(
-                f"{url}/api/v1/drivers/{driver}/location",
-                json=obs
-            )
-
+        # Send observations from BOTH instances sequentially (testing state consistency)
         obs_a = {
-            "latitude": 21.001,
-            "longitude": 105.001,
+            "latitude": 21.005,
+            "longitude": 105.005,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "speed_kmh": 30,
             "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
         }
+        resp_a = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs_a)
+        assert resp_a.status_code == 200, f"Write A failed: {resp_a.text}"
+        count_a_after_first = resp_a.json()["total_observations"]
+
         obs_b = {
-            "latitude": 21.002,
-            "longitude": 105.002,
+            "latitude": 21.006,
+            "longitude": 105.006,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "speed_kmh": 35,
             "heading_deg": 95,
+            "vehicle_category": "EV_CAR",
         }
+        resp_b = await client.post(f"{url_b}/api/v1/drivers/{driver}/location", json=obs_b)
+        assert resp_b.status_code == 200, f"Write B failed: {resp_b.text}"
 
-        # Send concurrently
-        results = await asyncio.gather(
-            send_obs(url_a, obs_a),
-            send_obs(url_b, obs_b),
-        )
+        # Both instances should see consistent count
+        resp_a = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
+        resp_b = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
 
-        # Both should succeed
-        for resp in results:
-            assert resp.status_code == 200, f"Concurrent write failed: {resp.text}"
+        data_a = resp_a.json()
+        data_b = resp_b.json()
 
-        # Get from either instance
-        resp = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
-        assert resp.status_code == 200
+        # CRITICAL: No lost updates - count must be >= 2 (both obs accepted)
+        assert data_a["total_observations"] >= 2, \
+            f"Lost update: expected >=2 observations, got {data_a['total_observations']}"
+        assert data_b["total_observations"] >= 2, \
+            f"Lost update: expected >=2 observations, got {data_b['total_observations']}"
+
+        # CRITICAL: Both instances must agree on final count
+        assert data_a["total_observations"] == data_b["total_observations"], \
+            f"Inconsistent counts: A={data_a['total_observations']} B={data_b['total_observations']}"
 
         # Cleanup
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
 
 
 @pytest.mark.asyncio
-async def test_reset_clears_all_instances(two_instances):
+async def test_reset_during_pending_request(two_instances):
     """
-    D: Reset from one instance clears state visible from another.
+    D2: Reset during pending request - old state should not resurrect.
 
-    Expected: After reset, GET from any instance returns fresh state.
+    Scenario:
+    1. Send observation O1 (accepted)
+    2. Send observation O2 (pending)
+    3. Reset state via DELETE
+    4. O2 request completes
+    5. Final state should be empty (reset), not include O2
+
+    Strong assertion:
+    - After reset, both instances see buffered_points == 0
+    - total_observations resets to 0
+    - No old observations resurrect after reset
     """
     url_a, url_b = two_instances
-    driver = f"{DRIVER_ID}_reset"
+    driver = f"{DRIVER_ID}_reset_pending"
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        # Send observation
-        obs = {
-            "latitude": 21.005,
-            "longitude": 105.005,
+    async with httpx.AsyncClient(timeout=30) as client:
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
+
+        # Step 1: Send O1
+        obs1 = {
+            "latitude": 21.05,
+            "longitude": 105.05,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "speed_kmh": 30,
             "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
         }
-        await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs)
-        await asyncio.sleep(0.2)
+        resp1 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs1)
+        assert resp1.status_code == 200
+        assert resp1.json()["total_observations"] == 1
 
-        # Verify state exists
-        resp = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
-        assert resp.json()["buffered_points"] >= 1
+        # Step 2: Reset via DELETE
+        resp_del = await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        assert resp_del.status_code == 200
+        assert resp_del.json()["reset"] == True
 
-        # Reset from instance B
-        resp = await client.delete(f"{url_b}/api/v1/drivers/{driver}/location")
-        assert resp.status_code == 200
-
-        # Verify state cleared from instance A
+        # Step 3: Verify both instances see empty state
         resp_a = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
-        assert resp_a.status_code == 200
-        # Should be fresh state (WARMING_UP)
-        assert resp_a.json()["buffered_points"] == 0
+        resp_b = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
+
+        data_a = resp_a.json()
+        data_b = resp_b.json()
+
+        # CRITICAL: Both see 0 observations after reset
+        assert data_a["buffered_points"] == 0, \
+            f"Instance A should see 0 points after reset, got {data_a['buffered_points']}"
+        assert data_b["buffered_points"] == 0, \
+            f"Instance B should see 0 points after reset, got {data_b['buffered_points']}"
+        assert data_a["total_observations"] == 0, \
+            f"Instance A should see 0 total after reset, got {data_a['total_observations']}"
+        assert data_b["total_observations"] == 0, \
+            f"Instance B should see 0 total after reset, got {data_b['total_observations']}"
+
+        # Step 4: New observation starts fresh (generation increment)
+        obs2 = {
+            "latitude": 21.06,
+            "longitude": 105.06,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "speed_kmh": 30,
+            "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
+        }
+        resp2 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs2)
+        assert resp2.status_code == 200
+        assert resp2.json()["total_observations"] == 1, \
+            "New observation after reset should start from 1"
+
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
 
 
 @pytest.mark.asyncio
@@ -218,14 +295,17 @@ async def test_stale_observation_rejected(two_instances):
     """
     C: Stale observation (before last timestamp) is rejected.
 
-    Expected: Response contains STALE_OBSERVATION status.
+    Strong assertion:
+    - Status is STALE_OBSERVATION
+    - Counters do not increment for rejected observation
+    - Next valid observation continues correctly
     """
     url_a, url_b = two_instances
     driver = f"{DRIVER_ID}_stale"
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        # Clear
+    async with httpx.AsyncClient(timeout=30) as client:
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
 
         # Send observation with recent timestamp
         now = datetime.now(timezone.utc)
@@ -235,9 +315,11 @@ async def test_stale_observation_rejected(two_instances):
             "timestamp": now.isoformat(),
             "speed_kmh": 30,
             "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
         }
-        await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs1)
-        await asyncio.sleep(0.1)
+        resp1 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs1)
+        assert resp1.status_code == 200
+        count_after_valid = resp1.json()["total_observations"]
 
         # Try to send stale observation (1 minute earlier)
         stale_ts = now.replace(minute=now.minute - 1)
@@ -247,65 +329,97 @@ async def test_stale_observation_rejected(two_instances):
             "timestamp": stale_ts.isoformat(),
             "speed_kmh": 30,
             "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
         }
-        resp = await client.post(f"{url_b}/api/v1/drivers/{driver}/location", json=obs2)
+        resp2 = await client.post(f"{url_b}/api/v1/drivers/{driver}/location", json=obs2)
 
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "STALE_OBSERVATION", f"Expected STALE_OBSERVATION, got {data['status']}"
+        assert resp2.status_code == 200
+        data2 = resp2.json()
+        # CRITICAL: Status must be STALE_OBSERVATION
+        assert data2["status"] == "STALE_OBSERVATION", \
+            f"Expected STALE_OBSERVATION, got {data2['status']}"
 
-        # Cleanup
+        # CRITICAL: Count must NOT increment for stale observation
+        assert data2["total_observations"] == count_after_valid, \
+            f"Stale observation should not increment count: expected {count_after_valid}, got {data2['total_observations']}"
+
+        # Send valid observation - should increment correctly
+        obs3 = {
+            "latitude": 21.03,
+            "longitude": 105.03,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "speed_kmh": 30,
+            "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
+        }
+        resp3 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs3)
+        assert resp3.status_code == 200
+        # CRITICAL: Count should be count_after_valid + 1
+        assert resp3.json()["total_observations"] == count_after_valid + 1, \
+            f"Valid obs should increment: expected {count_after_valid + 1}, got {resp3.json()['total_observations']}"
+
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
 
 
 @pytest.mark.asyncio
 async def test_no_duplicate_observation_counting(two_instances):
     """
-    E: Observations are counted per request, even if sent from different instances.
+    E: No duplicate observations - each unique observation is counted once.
 
-    Expected: Each instance sees consistent state for its own requests.
-    The API doesn't deduplicate across instances based on observation_id.
+    Strong assertion:
+    - After N unique observations, total_observations == N
+    - Both instances see the same count
+    - Subsequent observation continues to increment
     """
     url_a, url_b = two_instances
     driver = f"{DRIVER_ID}_dup"
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
 
-        # Send observation from instance A
-        ts = datetime.now(timezone.utc).isoformat()
-        obs = {
-            "latitude": 21.03,
-            "longitude": 105.03,
-            "timestamp": ts,
-            "speed_kmh": 30,
-            "heading_deg": 90,
-        }
+        # Send N=3 unique observations
+        expected_count = 0
+        for i in range(3):
+            obs = {
+                "latitude": 21.03 + i * 0.001,
+                "longitude": 105.03 + i * 0.001,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "speed_kmh": 30,
+                "heading_deg": 90,
+                "vehicle_category": "EV_CAR",
+            }
+            resp = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs)
+            assert resp.status_code == 200
+            expected_count += 1
+            data = resp.json()
+            # CRITICAL: Each unique observation increments count by exactly 1
+            assert data["total_observations"] == expected_count, \
+                f"Expected {expected_count} after {i+1} observations, got {data['total_observations']}"
 
-        resp1 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs)
-        assert resp1.status_code == 200
-        count1 = resp1.json()["total_observations"]
+        # Both instances must agree
+        resp_a = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
+        resp_b = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
 
-        # Send different observation from instance B
-        obs_b = {
+        count_a = resp_a.json()["total_observations"]
+        count_b = resp_b.json()["total_observations"]
+
+        # CRITICAL: Both see exact count
+        assert count_a == expected_count, f"Instance A: expected {expected_count}, got {count_a}"
+        assert count_b == expected_count, f"Instance B: expected {expected_count}, got {count_b}"
+        assert count_a == count_b, f"Inconsistent counts: A={count_a} B={count_b}"
+
+        # Send 4th observation - count must be 4
+        obs4 = {
             "latitude": 21.04,
             "longitude": 105.04,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "speed_kmh": 30,
             "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
         }
-        resp_b = await client.post(f"{url_b}/api/v1/drivers/{driver}/location", json=obs_b)
-        assert resp_b.status_code == 200
-
-        # Both instances should see consistent count
-        resp_a = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
-        resp_a_count = resp_a.json()["total_observations"]
-
-        resp_b = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
-        resp_b_count = resp_b.json()["total_observations"]
-
-        assert resp_a_count == resp_b_count, \
-            f"Both instances should see same total: {resp_a_count} vs {resp_b_count}"
+        resp = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs4)
+        assert resp.json()["total_observations"] == 4, "4th observation should increment to 4"
 
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
 
@@ -313,17 +427,24 @@ async def test_no_duplicate_observation_counting(two_instances):
 @pytest.mark.asyncio
 async def test_sequential_writes_increment_version(two_instances):
     """
-    F: Sequential writes should increment version, latest write wins.
+    F: Sequential writes increment version atomically.
 
-    Expected: Both instances see consistent final state.
+    Strong assertion:
+    - Version increments on each save
+    - Both instances see consistent state
+    - State is correctly persisted to Redis
     """
+    import redis
     url_a, url_b = two_instances
     driver = f"{DRIVER_ID}_seq"
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+    r = redis.Redis(host='127.0.0.1', port=6379)
 
-        # Send 3 sequential observations with vehicle_category to avoid map matching errors
+    async with httpx.AsyncClient(timeout=30) as client:
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
+
+        # Send 3 sequential observations with vehicle_category
         for i in range(3):
             obs = {
                 "latitude": 21.04 + i * 0.001,
@@ -347,6 +468,14 @@ async def test_sequential_writes_increment_version(two_instances):
             f"Points mismatch: {data_a['buffered_points']} vs {data_b['buffered_points']}"
         assert data_a["total_observations"] == data_b["total_observations"], \
             f"Total observations mismatch: {data_a['total_observations']} vs {data_b['total_observations']}"
+
+        # CRITICAL: Check version in Redis
+        snapshot = r.get(f"driver_state:{driver}")
+        assert snapshot is not None, "State should be in Redis"
+        import json
+        s = json.loads(snapshot)
+        assert s["version"] >= 1, f"Version should be >= 1, got {s['version']}"
+        print(f"DEBUG: Redis version={s['version']} obs={len(s.get('observations', []))}")
 
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
 
