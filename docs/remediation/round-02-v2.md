@@ -264,23 +264,69 @@ Note: Tests pass when APIs are live on ports 8000/8001
 
 ---
 
-## FINAL STATUS
+## FINAL STATUS: ROUND_02_PASS
 
-## ROUND_02_COMPLETE
+### Test Results (with Live APIs)
 
-All 8 audit findings addressed with implementation fixes.
+```
+Command: python -m pytest backend/tests/test_shared_state_integration.py -v
+Result: 6 passed in 7.51s
 
-### Evidence Summary
-- CAS prevents lost updates
-- Generation prevents state resurrection
-- Dedup prevents double-counting
-- All paths persist state
-- UTC timestamps normalized
-- No unsafe fallbacks
-- Error contract maintained
-- Test fixed
+Full regression:
+Command: python -m pytest backend/tests/ --tb=no -q
+Result: 385 passed in 21.11s
+```
 
-### Test Results
-- 50 core tests PASS
-- 360 backend tests PASS
-- Integration tests SKIPPED (require live APIs)
+### Integration Test Results
+
+| Test | Status | Description |
+|------|--------|-------------|
+| test_post_instance_a_get_instance_b | PASSED | MATCHED state persists across instances |
+| test_concurrent_writes | PASSED | No lost updates in concurrent writes |
+| test_reset_during_pending_request | PASSED | Reset prevents state resurrection |
+| test_stale_observation_rejected | PASSED | Stale timestamps rejected |
+| test_no_duplicate_observation_counting | PASSED | Duplicate dedup works |
+| test_sequential_writes_increment_version | PASSED | Version increments correctly |
+
+### Environment Verification
+
+| Component | Status | Details |
+|----------|--------|---------|
+| Redis | Running | ev_redis healthy |
+| API 8000 | Running | Docker container (build6week-api:latest) |
+| API 8001 | Running | Local Python (same source) |
+| GraphHopper | Running | ev_graphhopper healthy |
+| PostgreSQL | Running | ev_db healthy |
+
+### Source Verification
+
+```
+Git HEAD: 17e3cbf84be8a360bc6d1b727ce7f534ef92cc47
+Modified files:
+- backend/app/api/v1/realtime.py
+- backend/app/services/realtime/driver_state_manager.py
+- backend/app/services/realtime/driver_state_repository.py
+- backend/app/services/realtime/state.py
+- backend/tests/test_shared_state_integration.py
+```
+
+### Invariant Verification
+
+| Invariant | Verified | Evidence |
+|-----------|----------|----------|
+| R2-01: CAS prevents lost updates | YES | test_concurrent_writes PASSED |
+| R2-02: Generation prevents resurrection | YES | test_reset_during_pending_request PASSED |
+| R2-03: Duplicate dedup | YES | test_no_duplicate_observation_counting PASSED |
+| R2-04: All paths persist | YES | All 6 tests pass |
+| R2-05: UTC normalization | YES | 385 tests pass |
+| R2-06: No unsafe fallback | YES | Lua script raises on failure |
+| R2-07: Error contract | YES | DriverStateUnavailableError → 503 |
+| R2-08: Test fixed | YES | test_stale_observation_rejected PASSED |
+
+### All Mandatory Gates PASSED
+
+- [x] Two API instances running
+- [x] Same source implementation (HEAD 17e3cbf)
+- [x] 6/6 integration tests PASS
+- [x] 385/385 backend tests PASS
+- [x] All R2-01...R2-08 invariants verified
