@@ -6,7 +6,7 @@ Maintains bounded GPS observation history and match state per driver.
 
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 
@@ -35,6 +35,21 @@ def make_naive(dt: datetime) -> datetime:
         return None
     if dt.tzinfo is not None:
         dt = dt.replace(tzinfo=None)
+    return dt
+
+
+def ensure_utc(dt: datetime) -> datetime:
+    """
+    Ensure datetime is in UTC and naive format for consistent storage.
+
+    - Naive datetimes are assumed to be UTC (legacy behavior)
+    - Aware datetimes are converted to UTC then made naive
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    # Naive datetimes are kept as-is (assumed UTC)
     return dt
 
 
@@ -140,24 +155,30 @@ class DriverTraceState:
         gap_reset = False
         gap_reason = ""
 
+        # Normalize timestamp to UTC for consistent storage
+        normalized_ts = ensure_utc(obs.timestamp)
+        obs.timestamp = normalized_ts
+
         # Check for duplicate observation
         if obs.observation_id and obs.observation_id in self.seen_observation_ids:
             # Skip duplicate - do not increment counters
             return gap_reset, gap_reason
 
         # Check for gap (session reset)
-        if (self.last_observation_timestamp and
-            (obs.timestamp - self.last_observation_timestamp).total_seconds() >
-                DEFAULT_GAP_THRESHOLD_SECONDS):
-            # Reset state
-            self.observations.clear()
-            self.last_match_time = None
-            self.last_matched_state = None
-            self.movement_since_match = 0.0
-            self.observations_since_match = 0
-            self.consecutive_stationary = 0
-            gap_reset = True
-            gap_reason = f"gap({(obs.timestamp - self.last_observation_timestamp).total_seconds():.0f}s)"
+        last_ts = self.last_observation_timestamp
+        if last_ts:
+            last_ts_normalized = ensure_utc(last_ts)
+            gap_seconds = (normalized_ts - last_ts_normalized).total_seconds()
+            if gap_seconds > DEFAULT_GAP_THRESHOLD_SECONDS:
+                # Reset state
+                self.observations.clear()
+                self.last_match_time = None
+                self.last_matched_state = None
+                self.movement_since_match = 0.0
+                self.observations_since_match = 0
+                self.consecutive_stationary = 0
+                gap_reset = True
+                gap_reason = f"gap({gap_seconds:.0f}s)"
 
         # Calculate movement from last observation
         if self.observations:
