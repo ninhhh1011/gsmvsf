@@ -1,0 +1,28 @@
+{
+  "name": "build6week",
+  "version": "1.0.0",
+  "description": "Python/FastAPI, PostgreSQL/PostGIS, Redis KV, GraphHopper 11.0 and Docker.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ninhhh1011/gsmvsf.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ninhhh1011/gsmvsf/issues"
+  },
+  "homepage": "https://github.com/ninhhh1011/gsmvsf#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

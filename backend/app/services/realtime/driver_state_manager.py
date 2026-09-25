@@ -463,12 +463,25 @@ class DriverStateManager:
             new_state.generation = current_gen
             snapshot = trace_state_to_snapshot(new_state, version=1)
 
-            # Save with CAS (use version=0 to always succeed for new state)
-            await repo.save(snapshot)
+            # Save with CAS - use version=0 to allow fresh start
+            # If current version is 0 or None, this succeeds
+            current_version = current.version if current else 0
+            success, actual_version = await repo.save_with_expected_version(snapshot, current_version)
+
+            if not success:
+                raise DriverStateError(
+                    f"Reset failed: CAS conflict during reset (expected version {current_version})"
+                )
+        except DriverStateUnavailableError:
+            # State store unavailable - cannot perform reset safely
+            raise
+        except DriverStateError:
+            raise
         except Exception as e:
-            # If save fails, try to delete anyway
-            await repo.delete(driver_id)
-            logger.warning(f"Failed to reset driver state, fell back to delete: {e}")
+            # Any other failure during reset must be reported, not silently deleted
+            raise DriverStateUnavailableError(
+                f"Failed to reset driver state: {e}"
+            ) from e
 
     async def health_check(self) -> bool:
         """

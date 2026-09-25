@@ -1,0 +1,83 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: ev_redis
+    # No persistence configured:
+    # - Snapshot cache: rebuildable from PostgreSQL
+    # - Driver state: non-critical, lost on restart (drivers reconnect with fresh state)
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: on-failure
+
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: ev_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ev_recommendation
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  graphhopper:
+    image: build6week-graphhopper:11.0
+    build: ./runtime/graphhopper
+    container_name: ev_graphhopper
+    ports:
+      - "8989:8989"
+    volumes:
+      - ./runtime/graphhopper:/data
+      - ./dataset_v1/map/raw/hanoi-patched.osm.pbf:/osm/hanoi-patched.osm.pbf:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8989/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 600s
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ev_api
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/ev_recommendation
+      - GRAPHHOPPER_BASE_URL=http://graphhopper:8989
+      - DATASET_PATH=/app/dataset_v1
+      - PRIMARY_PBF_PATH=/app/dataset_v1/map/raw/hanoi-patched.osm.pbf
+      - GRAPHHOPPER_DATA_PATH=/app/runtime/graphhopper
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
+      - SNAPSHOT_INGESTION_TOKEN=${SNAPSHOT_INGESTION_TOKEN:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./dataset_v1:/app/dataset_v1:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/readiness"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      graphhopper:
+        condition: service_healthy
+
+volumes:
+  pgdata:

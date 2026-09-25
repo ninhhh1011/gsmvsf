@@ -1,0 +1,36 @@
+MISSING FILES & CONFIGURATION AUDIT LOG
+========================================
+
+Repository: E:\build6week
+Git HEAD: cfbe350eea862cca734fc28b334b3da63ec732bc (cfbe350)
+Branch: week5-realtime-api-evaluation
+Timestamp: 2026-09-25T08:03:38.351550+00:00
+
+1. MANDATORY SOURCE FILES (Section 2):
+   [OK] backend/app/api/v1/realtime.py (PRESENT)
+   [OK] backend/app/services/realtime/driver_state_manager.py (PRESENT)
+   [OK] backend/app/services/realtime/driver_state_repository.py (PRESENT)
+   [OK] backend/app/services/realtime/state.py (PRESENT)
+   [OK] backend/app/services/realtime/trigger.py (PRESENT)
+   [OK] backend/tests/test_shared_state_integration.py (PRESENT)
+   [OK] backend/tests/test_driver_state_shared.py (PRESENT)
+   [OK] docs/remediation/round-02.md (PRESENT)
+   [OK] docs/remediation/round-02-v2.md (PRESENT - created in commits 17e3cbf & cfbe350 with full R2-01..R2-08 responses)
+
+2. SUPPORTING CONFTEST FILES:
+   [ABSENT] conftest.py (root): Checked, not present in repository.
+   [ABSENT] backend/conftest.py: Checked, not present in repository.
+   [OK] backend/tests/conftest.py: PRESENT, included in snapshot.
+
+3. DOCKER & RUNNER CONFIGURATION:
+   [OK] docker-compose.yml: PRESENT, included in snapshot.
+   [OK] backend/Dockerfile: PRESENT, included in snapshot.
+   [ABSENT] docker-compose.override.yml: Checked, not present in repository.
+   [INFO] Two API instance runner: Embedded within pytest fixture `two_instances` in `backend/tests/test_shared_state_integration.py` (connecting to ports 8000 and 8001).
+
+4. RAW TEST EVIDENCE AUDIT (Section 3):
+   [MISSING_EVIDENCE] Latest run of 6 integration tests: No standalone pytest output log/report file exists on disk. Test execution output is only recorded textually inside `docs/remediation/round-02.md` and `docs/remediation/round-02-v2.md`.
+   [MISSING_EVIDENCE] Latest run of 385 backend tests: No standalone pytest output log/report file exists on disk.
+   [MISSING_EVIDENCE] Core/regression tests R2-01..R2-08: No standalone pytest output log/report file exists on disk.
+   [MISSING_EVIDENCE] Live source verification of 2 APIs: No standalone curl/process log file exists on disk.
+   * Note: In strict adherence to read-only audit rules, no test commands or API processes were executed to generate synthetic logs.

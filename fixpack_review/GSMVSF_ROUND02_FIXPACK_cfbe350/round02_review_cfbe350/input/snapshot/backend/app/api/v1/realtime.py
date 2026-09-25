@@ -23,11 +23,6 @@ from backend.app.services.realtime.state import (
     MatchedState,
     get_state_store,
     reset_state_store,
-    ensure_utc,
-)
-from backend.app.services.realtime.driver_state_manager import (
-    get_driver_state_manager,
-    trace_state_to_snapshot,
 )
 from backend.app.services.realtime.trigger import HybridTrigger, get_default_policy
 from backend.app.services.map_matching.models import MapMatchRequest, MapMatchResponse, GPSObservation as ServiceGPSObservation
@@ -99,9 +94,12 @@ def _validate_observation(req: LocationIngestionRequest) -> tuple[bool, Optional
     if not (-180 <= req.longitude <= 180):
         return False, "Invalid longitude"
 
-    # Check timestamp is not in the future (UTC normalized for consistent comparison)
+    # Check timestamp is not in the future
+    # Handle both naive and aware datetimes
     now = datetime.utcnow()
-    ts = ensure_utc(req.timestamp)
+    ts = req.timestamp
+    if ts.tzinfo is not None:
+        ts = ts.replace(tzinfo=None)
     if ts > now:
         return False, "Timestamp in the future"
 
@@ -148,14 +146,13 @@ async def _add_observation_with_cas(
     """
     Add observation to driver state using CAS to prevent lost updates.
 
-    This function implements proper CAS:
+    This function:
     1. Reads current state from Redis
-    2. Normalizes timestamp to UTC
-    3. Checks for stale observation
-    4. Checks generation for reset detection
-    5. Adds observation to state
-    6. Attempts CAS save with version from step 1
-    7. On conflict, re-reads state and re-adds observation (mutation replay)
+    2. Checks for stale observation
+    3. Checks generation for reset detection
+    4. Adds observation to state
+    5. Attempts CAS save
+    6. On conflict, re-reads and retries
 
     Returns:
         (state, stale, gap_reset, gap_reason): The final state and flags
@@ -165,81 +162,52 @@ async def _add_observation_with_cas(
     """
     state_manager = get_driver_state_manager()
 
-    # Normalize timestamp to UTC BEFORE any business logic
-    normalized_ts = ensure_utc(obs.timestamp)
-    obs.timestamp = normalized_ts
+    # Normalize observation timestamp for comparison
+    obs_ts = obs.timestamp
+    if obs_ts.tzinfo is not None:
+        obs_ts = obs_ts.replace(tzinfo=None)
+
+    expected_generation = None  # Track generation to detect resets
 
     for attempt in range(max_retries):
-        # Step 1: Read current state
-        current = await state_manager.get_or_create(driver_id)
+        # Read current state
+        state = await state_manager.get_or_create(driver_id)
 
-        # Step 2: Check generation - if reset occurred, start fresh with current generation
-        if attempt == 0:
-            base_generation = current.generation
-        elif current.generation != base_generation:
-            # Reset occurred during processing - start with fresh state but keep new generation
+        # Check generation - if reset occurred, start fresh
+        if expected_generation is not None and state.generation != expected_generation:
+            # Reset occurred during processing - start with fresh state
             logger.debug(
-                f"Driver {driver_id}: generation changed from {base_generation} to {current.generation}, "
+                f"Driver {driver_id}: generation changed from {expected_generation} to {state.generation}, "
                 f"reset detected, starting fresh"
             )
-            # Read the new generation BEFORE creating fresh state
-            new_generation = current.generation
-            current = DriverTraceState(driver_id=driver_id)
-            current.generation = new_generation  # Preserve generation from reset
-            base_generation = new_generation
+            state = DriverTraceState(driver_id=driver_id)
+            state.generation = state.generation  # Keep current generation
 
-        # Step 3: Normalize last timestamp for comparison
-        last_ts = current.last_observation_timestamp
-        if last_ts:
-            last_ts_normalized = ensure_utc(last_ts)
-        else:
-            last_ts_normalized = None
+        expected_generation = state.generation
 
-        # Step 4: Check stale observation (strictly less than, not equal)
-        if last_ts_normalized and normalized_ts < last_ts_normalized:
+        # Check stale
+        last_ts = state.last_observation_timestamp
+        if last_ts and last_ts.tzinfo is not None:
+            last_ts = last_ts.replace(tzinfo=None)
+
+        if last_ts and obs_ts < last_ts:
             # Stale observation - return current state without modification
-            return current, True, False, ""
+            return state, True, False, ""
 
-        # Step 5: Apply mutation - add observation
-        gap_reset, gap_reason = current.add_observation(obs)
+        # Add observation
+        gap_reset, gap_reason = state.add_observation(obs)
 
-        # Step 6: Get base version for CAS from repository
-        # Note: state objects don't have version; it's stored in the snapshot
-        repo = state_manager._get_repo()
-        current_snapshot = await repo.get(driver_id)
-        base_version = current_snapshot.version if current_snapshot else 0
-
-        # Step 7: Prepare snapshot for CAS
-        snapshot = trace_state_to_snapshot(current, version=base_version)
-
-        # Step 8: Attempt CAS save
+        # Try to persist with CAS
         try:
-            if hasattr(repo, 'save_with_expected_version'):
-                success, actual_version = await repo.save_with_expected_version(snapshot, base_version)
-                if success:
-                    logger.debug(
-                        f"Driver {driver_id} observation added at version {actual_version}"
-                    )
-                    return current, False, gap_reset, gap_reason
-                else:
-                    logger.debug(
-                        f"Driver {driver_id} CAS conflict: expected {base_version}, "
-                        f"actual {actual_version}, retry {attempt + 1}/{max_retries}"
-                    )
-                    # Conflict - continue to next iteration to re-read and replay mutation
-                    continue
-            else:
-                # Fallback for InMemory
-                await repo.save(snapshot)
-                return current, False, gap_reset, gap_reason
-
+            await state_manager.save_with_retry(state)
+            return state, False, gap_reset, gap_reason
         except DriverStateUnavailableError:
             raise
-        except Exception as e:
-            logger.error(f"Failed to persist driver state: {e}")
+        except Exception:
             if attempt < max_retries - 1:
+                # Retry - state may have changed
                 continue
-            raise DriverStateUnavailableError(f"Failed to add observation: {e}")
+            raise
 
     raise DriverStateUnavailableError(
         f"Failed to add observation after {max_retries} retries"
@@ -469,16 +437,10 @@ async def ingest_location(
     state.reset_after_match(matched_state)
 
     # Persist the matched state to shared store
-    # This MUST succeed - we cannot ACK MATCHED if final state wasn't committed
     try:
         await _persist_state_with_retry(driver_id, state)
-    except DriverStateUnavailableError as e:
-        # Match was successful but state couldn't be persisted
-        # Return error - cannot ACK final state that wasn't committed
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Match succeeded but driver state unavailable: {str(e)}. Retry required.",
-        )
+    except DriverStateUnavailableError:
+        pass  # Best effort - return response anyway
 
     return LocationResponse(
         driver_id=driver_id,

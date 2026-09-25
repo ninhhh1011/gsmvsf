@@ -1,0 +1,6 @@
+REDACTIONS REPORT
+=================
+
+No secrets detected in exported files.
+Zero redactions applied.
+All exported files are 100% byte-identical with the working tree source.
