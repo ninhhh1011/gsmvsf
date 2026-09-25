@@ -259,6 +259,175 @@ class DriverStateManager:
                 f"Failed to persist driver state to Redis: {e}"
             ) from e
 
+    async def save_with_retry(self, state: DriverTraceState, max_retries: int = 3) -> None:
+        """
+        Persist driver state with CAS retry.
+
+        Uses Compare-And-Swap to prevent lost updates:
+        1. Read current state and version
+        2. Attempt conditional save with expected version
+        3. If conflict, retry from step 1
+
+        In production (Redis configured):
+        - Uses CAS to prevent lost updates
+        - Retries on conflict (max_retries times)
+        - Raises after max_retries if still conflicting
+
+        In local mode (InMemory):
+        - Simple save without retry
+
+        Raises:
+            DriverStateUnavailableError: When Redis is required but unavailable or after max retries
+        """
+        repo = self._get_repo()
+
+        if repo is None:
+            return
+
+        if isinstance(repo, InMemoryDriverStateRepository):
+            await repo.save_local(state)
+            return
+
+        # Redis mode - require Redis to be available
+        try:
+            if not await repo.health_check():
+                raise DriverStateUnavailableError(
+                    f"Redis driver state store is not available. "
+                    f"Cannot persist driver state without shared state store."
+                )
+        except DriverStateUnavailableError:
+            raise
+        except Exception as e:
+            raise DriverStateUnavailableError(
+                f"Failed to check Redis driver state store: {e}"
+            ) from e
+
+        # CAS with retry
+        for attempt in range(max_retries):
+            try:
+                current = await repo.get(state.driver_id)
+                expected_version = current.version if current else 0
+                snapshot = trace_state_to_snapshot(state, version=expected_version + 1)
+
+                success, actual_version = await repo.save_with_expected_version(
+                    snapshot, expected_version
+                )
+
+                if success:
+                    logger.debug(
+                        f"Driver {state.driver_id} state persisted at version {actual_version}"
+                    )
+                    return
+                else:
+                    logger.debug(
+                        f"Driver {state.driver_id} CAS conflict: expected {expected_version}, "
+                        f"actual {actual_version}, retrying (attempt {attempt + 1}/{max_retries})"
+                    )
+                    # Conflict - reload state and retry
+                    # Note: The caller's state may be stale; they need to re-read
+
+            except DriverStateUnavailableError:
+                raise
+            except Exception as e:
+                raise DriverStateUnavailableError(
+                    f"Failed to persist driver state to Redis: {e}"
+                ) from e
+
+        # All retries exhausted
+        raise DriverStateUnavailableError(
+            f"Failed to persist driver state after {max_retries} retries due to conflicts"
+        )
+
+    async def update_with_cas(
+        self,
+        driver_id: str,
+        update_fn,  # async def(state: DriverTraceState) -> DriverTraceState
+        max_retries: int = 3,
+    ) -> tuple[DriverTraceState, bool]:
+        """
+        Atomic read-modify-write using CAS.
+
+        This method:
+        1. Reads current state from Redis
+        2. Applies update_fn to the state
+        3. Attempts CAS save
+        4. On conflict, re-reads and retries
+
+        This prevents lost updates in concurrent scenarios.
+
+        Args:
+            driver_id: Driver ID to update
+            update_fn: Async function that takes state and returns modified state
+            max_retries: Maximum retry attempts on conflict
+
+        Returns:
+            (final_state, was_successful): The final state and whether save succeeded
+
+        Raises:
+            DriverStateUnavailableError: When Redis is unavailable or retries exhausted
+        """
+        repo = self._get_repo()
+
+        if repo is None:
+            local = get_state_store()
+            state = local.get_or_create(driver_id)
+            state = await update_fn(state)
+            local._states[driver_id] = state
+            return state, True
+
+        if isinstance(repo, InMemoryDriverStateRepository):
+            state = await repo.get_or_create_local(driver_id)
+            state = await update_fn(state)
+            await repo.save_local(state)
+            return state, True
+
+        # Redis mode
+        for attempt in range(max_retries):
+            # Read current state
+            current = await repo.get(driver_id)
+            if current is not None:
+                state = snapshot_to_trace_state(current)
+                expected_version = current.version
+            else:
+                state = DriverTraceState(driver_id=driver_id)
+                expected_version = 0
+
+            # Apply update
+            state = await update_fn(state)
+
+            # Prepare snapshot with version
+            snapshot = trace_state_to_snapshot(state, version=expected_version + 1)
+
+            # Attempt CAS
+            try:
+                success, actual_version = await repo.save_with_expected_version(
+                    snapshot, expected_version
+                )
+
+                if success:
+                    logger.debug(
+                        f"Driver {driver_id} updated at version {actual_version}"
+                    )
+                    return state, True
+                else:
+                    logger.debug(
+                        f"Driver {driver_id} CAS conflict: expected {expected_version}, "
+                        f"actual {actual_version}, retry {attempt + 1}/{max_retries}"
+                    )
+                    # Conflict - loop will retry
+
+            except DriverStateUnavailableError:
+                raise
+            except Exception as e:
+                raise DriverStateUnavailableError(
+                    f"Failed to update driver state: {e}"
+                ) from e
+
+        # All retries exhausted
+        raise DriverStateUnavailableError(
+            f"Failed to update driver {driver_id} after {max_retries} retries due to conflicts"
+        )
+
     async def delete(self, driver_id: str) -> None:
         """Delete driver state."""
         repo = self._get_repo()

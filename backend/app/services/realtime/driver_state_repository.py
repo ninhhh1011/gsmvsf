@@ -180,6 +180,20 @@ class DriverStateRepository(ABC):
         pass
 
     @abstractmethod
+    async def save_with_expected_version(
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+    ) -> tuple[bool, int]:
+        """
+        Conditional save: only save if current version matches expected_version.
+
+        Returns:
+            (success, actual_version): success=True if saved, actual_version is current version in store
+
+        Use this for CAS (Compare-And-Swap) pattern to prevent lost updates.
+        """
+        pass
+
+    @abstractmethod
     async def delete(self, driver_id: str) -> bool:
         """Delete driver state."""
         pass
@@ -213,6 +227,21 @@ class InMemoryDriverStateRepository(DriverStateRepository):
             snapshot.version = 1
         self._states[snapshot.driver_id] = snapshot
         return True
+
+    async def save_with_expected_version(
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+    ) -> tuple[bool, int]:
+        current = self._states.get(snapshot.driver_id)
+        actual_version = current.version if current else 0
+
+        if actual_version != expected_version:
+            # Conflict - state changed since we read it
+            return False, actual_version
+
+        # Save with incremented version
+        snapshot.version = expected_version + 1
+        self._states[snapshot.driver_id] = snapshot
+        return True, snapshot.version
 
     async def delete(self, driver_id: str) -> bool:
         if driver_id in self._states:
@@ -330,6 +359,75 @@ class RedisDriverStateRepository(DriverStateRepository):
             # the atomic version increment and potentially cause lost updates.
             # If Lua script fails, the save must fail so the caller can retry.
             logger.error(f"Redis Lua script failed, save aborted: {e}")
+            raise
+
+    async def save_with_expected_version(
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+    ) -> tuple[bool, int]:
+        """
+        Conditional save using CAS (Compare-And-Swap).
+
+        Only saves if the current version in Redis matches expected_version.
+        This prevents lost updates when two requests try to update simultaneously.
+
+        Returns:
+            (success, actual_version): success=True if saved, actual_version is current version
+        """
+        client = await self._get_client()
+        key = self._key(snapshot.driver_id)
+
+        # Lua script for atomic CAS
+        lua_script = """
+        local key = KEYS[1]
+        local new_value = ARGV[1]
+        local ttl = tonumber(ARGV[2])
+        local expected_version = tonumber(ARGV[3])
+
+        local current = redis.call('GET', key)
+
+        if current then
+            local current_snapshot = cjson.decode(current)
+            local current_version = current_snapshot.version or 0
+
+            -- Check if version matches
+            if current_version ~= expected_version then
+                -- Conflict: return current version
+                return {0, current_version}
+            end
+
+            -- Version matches, save with incremented version
+            local updated = cjson.decode(new_value)
+            updated.version = current_version + 1
+            redis.call('SET', key, cjson.encode(updated), 'EX', ttl)
+            return {1, current_version + 1}
+        else
+            -- No existing state, this is a new driver
+            -- Only save if expected_version is 0 (meaning no state existed)
+            if expected_version ~= 0 then
+                return {0, 0}
+            end
+
+            local updated = cjson.decode(new_value)
+            updated.version = 1
+            redis.call('SET', key, cjson.encode(updated), 'EX', ttl)
+            return {1, 1}
+        end
+        """
+
+        try:
+            result = await client.eval(
+                lua_script,
+                1,
+                key,
+                snapshot.to_json(),
+                self._driver_state_ttl,
+                expected_version,
+            )
+            success = bool(result[0])
+            actual_version = int(result[1])
+            return success, actual_version
+        except Exception as e:
+            logger.error(f"Redis CAS failed: {e}")
             raise
 
     async def delete(self, driver_id: str) -> bool:
