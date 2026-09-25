@@ -33,6 +33,7 @@ export class SimModeController {
         // Simulation output cache
         this.lastRecommendation = null;
         this.lastCandidateResult = null;
+        this.generation = 1;
     }
 
     setCatalogs(scenarios, vehicles, stations) {
@@ -181,6 +182,7 @@ export class SimModeController {
     }
 
     loadScenario(scenarioId) {
+        this.generation++;
         const sc = this.scenarios.find(s => s.id === scenarioId);
         if (!sc) return;
 
@@ -251,6 +253,9 @@ export class SimModeController {
     }
 
     async runSimulation() {
+        this.generation++;
+        const currentGen = this.generation;
+
         const btn = document.getElementById('btn-run-sim');
         if (btn) {
             btn.disabled = true;
@@ -310,6 +315,8 @@ export class SimModeController {
                 }).catch(() => null)
             ]);
 
+            if (this.generation !== currentGen) return;
+
             this.lastCandidateResult = candResult;
             this.lastRecommendation = recResult;
 
@@ -360,6 +367,7 @@ export class SimModeController {
                         leg2Result = await this.api.computeRoute(stPos, this.destination, {
                             vehicle_category: vehicle.vehicle_type
                         });
+                        if (this.generation !== currentGen) return;
                         this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry);
                     } catch (routeErr) {
                         console.warn('Diversion route error:', routeErr);
@@ -375,15 +383,13 @@ export class SimModeController {
                     destination: this.destination,
                     driverLocation: {
                         driver_id: 'SIM_DRIVER',
-                        status: 'MATCHED',
+                        status: 'INPUT_COORDINATES',
                         trigger_reason: 'SIMULATION_ORIGIN',
                         raw_position: this.origin,
-                        matched_position: {
-                            latitude: this.origin.latitude,
-                            longitude: this.origin.longitude,
-                            direction: 'FORWARD',
-                            confidence: 1.0
-                        }
+                        matched_position: null,
+                        direction: 'UNKNOWN',
+                        confidence: null,
+                        location_source: recResult?.location_source || 'EXPLICIT_COORDINATES'
                     },
                     recommendRequest: recommendPayload,
                     recommendResult: recResult,
@@ -396,10 +402,13 @@ export class SimModeController {
             this.map.fitBoundsToActive();
 
         } catch (err) {
+            if (this.generation !== currentGen) return;
             console.error('Simulation execution failed:', err);
+            this.map.clearRoutes();
+            this.lastRecommendation = null;
             this.renderErrorState(err);
         } finally {
-            if (btn) {
+            if (btn && this.generation === currentGen) {
                 btn.disabled = false;
                 btn.textContent = 'FIND BEST STATION';
             }

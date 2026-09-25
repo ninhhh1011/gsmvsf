@@ -1,0 +1,31 @@
+✔ ApiError sets flags correctly (2.0138ms)
+✔ decodePolyline decodes standard encoded polylines (1.9259ms)
+✔ classifyEnergyWarning maps backend reason codes to UX warning levels (0.5097ms)
+✔ DriverState constants are defined correctly (0.2353ms)
+✔ ReplayState enum constants are defined correctly (3.1755ms)
+✔ TrajectoryReplayController enforces max 1 step in flight and confirmed progress (8.9007ms)
+✔ Reset invalidates generation and drops stale in-flight responses (0.8309ms)
+✔ Pause stops playback loop without losing progress (171.9517ms)
+✔ straightLineDistanceKm computes accurate Haversine and is isolated from road distance (0.6332ms)
+✔ classifySystemHealth handles healthy, degraded, unavailable, and unknown (5.6076ms)
+✔ formatLocationInspector truthfully displays raw GPS vs matched road point and ambiguous states (1.0296ms)
+✔ formatDemandInspector extracts backend demand parameters without recalculation (3.9237ms)
+✔ filterCandidates preserves (station_id, service_type) composite identity and supports filters (0.4381ms)
+✔ formatRoutingInspector accurately exposes route legs, detour, and GraphHopper metadata (0.4781ms)
+✔ formatRankingInspector exposes true policy semantics without fake AI confidence (0.4677ms)
+✔ formatRecommendationInspector exposes final outcome and workflow metadata (0.3276ms)
+✔ formatPipelineTiming and sanitizeJsonPayload format cleanly (0.5409ms)
+✔ Scenario 1: Technical View opens, closes, and syncs state without reset (6.0528ms)
+✔ Scenario 2: Candidate composite identity preserves (station_id, service_type) and multiple service alternatives (1.9809ms)
+✔ Scenario 3: Null, Ambiguous, and No-Match map matching states displayed honestly (0.461ms)
+✔ Scenario 4: No recommendation when vehicle has sufficient range (Scenario 1 truth) (0.6622ms)
+✔ Scenario 5: Backend outage and dependency failure isolation (0.4171ms)
+✔ Scenario 6: Raw JSON payload inspection and credential redaction (0.4944ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 400.7952

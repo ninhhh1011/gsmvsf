@@ -28,9 +28,10 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Claude Code skills
+# Frontend test runner
 node_modules/
 skills-lock.json
+test-results/
 
 # Project
 runtime/osrm/*.osrm

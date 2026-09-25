@@ -9,7 +9,7 @@ import { ApiError } from './api.js';
 
 export function classifyEnergyWarning(energyContext) {
     if (!energyContext) {
-        return { level: 'SAFE', title: 'Energy Status: SAFE', message: 'Battery telemetry nominal.', reasonCode: 'NOMINAL' };
+        return { level: 'SAFE', title: 'Trạng thái năng lượng: AN TOÀN', message: 'Dữ liệu pin bình thường.', reasonCode: 'NOMINAL' };
     }
 
     const { need_service, reason_code, estimated_remaining_range_km, remaining_trip_distance_km, energy_margin_km } = energyContext;
@@ -17,8 +17,8 @@ export function classifyEnergyWarning(energyContext) {
     if (!need_service || reason_code === 'SUFFICIENT_SOC_RANGE') {
         return {
             level: 'SAFE',
-            title: 'Energy Status: SAFE',
-            message: 'Estimated battery range is sufficient for the current trip and reserve buffer.',
+            title: 'Trạng thái năng lượng: AN TOÀN',
+            message: 'Tầm xa ước tính đủ cho chuyến đi hiện tại và dự phòng.',
             reasonCode: reason_code || 'SUFFICIENT_SOC_RANGE'
         };
     }
@@ -30,8 +30,8 @@ export function classifyEnergyWarning(energyContext) {
     ) {
         return {
             level: 'CRITICAL',
-            title: 'ENERGY CRITICAL',
-            message: 'Estimated range may not be sufficient to complete the current trip. Energy service recommendation available.',
+            title: 'NĂNG LƯỢNG NGHIÊM TRỌNG',
+            message: 'Tầm xa có thể không đủ để hoàn thành chuyến đi. Có đề xuất trạm sạc.',
             reasonCode: reason_code || 'DESTINATION_NOT_REACHABLE'
         };
     }
@@ -39,8 +39,8 @@ export function classifyEnergyWarning(energyContext) {
     // Advisory: Destination reachable, but insufficient post-destination reserve
     return {
         level: 'ADVISORY',
-        title: 'Energy Reserve Low',
-        message: 'You can complete the current trip. Energy service is recommended after drop-off.',
+        title: 'Năng lượng thấp',
+        message: 'Bạn có thể hoàn thành chuyến đi. Dịch vụ năng lượng được khuyến nghị sau khi trả khách.',
         reasonCode: reason_code || 'INSUFFICIENT_POST_DESTINATION_RESERVE'
     };
 }
@@ -86,11 +86,11 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
         return `
             <div class="recommendation-card empty-card">
                 <div class="card-header">
-                    <h4>No Service Needed / No Eligible Stations</h4>
+                    <h4>Không cần dịch vụ / Không có trạm phù hợp</h4>
                 </div>
                 <div class="card-body">
                     <p class="muted-text">
-                        ${recResult?.reason || 'Current battery state does not require immediate diversion, or no stations match criteria.'}
+                        ${recResult?.reason || 'Tình trạng pin hiện tại không cần chuyển hướng ngay, hoặc không có trạm nào phù hợp.'}
                     </p>
                 </div>
             </div>
@@ -120,44 +120,44 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
         <div class="recommendation-card ${isSwap ? 'card-swap' : 'card-charging'}">
             <div class="card-header">
                 <div class="rec-title-wrap">
-                    <span class="rec-badge-label">RECOMMENDED STOP</span>
+                    <span class="rec-badge-label">TRẠM ĐỀ XUẤT</span>
                     <h3 class="station-id">${stId}</h3>
                 </div>
                 <span class="service-type-pill ${isSwap ? 'pill-swap' : 'pill-charging'}">
-                    ${isSwap ? '⚡ BATTERY SWAP' : '🔌 EV CHARGING'}
+                    ${isSwap ? '⚡ ĐỔI PIN' : '🔌 SẠC PIN'}
                 </span>
             </div>
 
             <div class="card-grid">
                 <div class="metric-item">
-                    <span class="metric-label">Travel to Station</span>
-                    <span class="metric-val highlight">${etaStationMin} <small>min</small></span>
+                    <span class="metric-label">Đến trạm</span>
+                    <span class="metric-val highlight">${etaStationMin} <small>phút</small></span>
                 </div>
                 <div class="metric-item">
-                    <span class="metric-label">Queue Wait</span>
-                    <span class="metric-val">${queueWaitMin} <small>min</small></span>
+                    <span class="metric-label">Chờ hàng đợi</span>
+                    <span class="metric-val">${queueWaitMin} <small>phút</small></span>
                 </div>
                 <div class="metric-item">
-                    <span class="metric-label">Service Time</span>
-                    <span class="metric-val">${serviceMin} <small>min</small></span>
+                    <span class="metric-label">Thời gian dịch vụ</span>
+                    <span class="metric-val">${serviceMin} <small>phút</small></span>
                 </div>
                 <div class="metric-item">
-                    <span class="metric-label">Total Completion</span>
-                    <span class="metric-val highlight-green">${etaCompleteMin} <small>min</small></span>
+                    <span class="metric-label">Tổng hoàn thành</span>
+                    <span class="metric-val highlight-green">${etaCompleteMin} <small>phút</small></span>
                 </div>
             </div>
 
             <div class="detour-bar">
-                <span>Detour: <strong>+${detourDistKm} km</strong> (+${detourMin} min)</span>
-                <span>Available: <strong>${topCandidate.features.available_capacity} slots</strong></span>
+                <span>Chênh lệch: <strong>+${detourDistKm} km</strong> (+${detourMin} phút)</span>
+                <span>Còn trống: <strong>${topCandidate.features.available_capacity} vị trí</strong></span>
             </div>
 
-            ${isDegraded ? `<div class="degraded-notice">⚠️ Degraded Context: ${degradedBadges}</div>` : ''}
+            ${isDegraded ? `<div class="degraded-notice">⚠️ Dữ liệu suy giảm: ${degradedBadges}</div>` : ''}
 
             <div class="card-explanation">
-                <div class="exp-title">Why this recommendation?</div>
+                <div class="exp-title">Tại sao đề xuất này?</div>
                 <div class="exp-body">
-                    Selected to minimize total time: travel to station (${etaStationMin}m) + wait in queue (${queueWaitMin}m) + service (${serviceMin}m) = <strong>${etaCompleteMin} min to complete</strong>.
+                    Được chọn để giảm thiểu tổng thời gian: đến trạm (${etaStationMin} ph) + chờ hàng đợi (${queueWaitMin} ph) + dịch vụ (${serviceMin} ph) = <strong>${etaCompleteMin} phút để hoàn thành</strong>.
                 </div>
             </div>
         </div>
@@ -178,22 +178,22 @@ export function renderPipelineLatency(timingsMs) {
     return `
         <div class="pipeline-card">
             <div class="pipeline-header">
-                <h4>Recommendation Breakdown</h4>
+                <h4>Chi tiết đề xuất</h4>
                 <span class="total-latency">${total.toFixed(1)} ms</span>
             </div>
-            
+
             <div class="pipeline-progress-bar">
-                <div class="bar-seg seg-w1" style="width: ${pct(loc)}%;" title="Location: ${loc.toFixed(2)} ms"></div>
-                <div class="bar-seg seg-w2" style="width: ${pct(dem)}%;" title="Demand Detection: ${dem.toFixed(2)} ms"></div>
-                <div class="bar-seg seg-w3" style="width: ${pct(cand)}%;" title="Candidate Search: ${cand.toFixed(1)} ms"></div>
-                <div class="bar-seg seg-w4" style="width: ${pct(rank)}%;" title="Ranking: ${rank.toFixed(1)} ms"></div>
+                <div class="bar-seg seg-w1" style="width: ${pct(loc)}%;" title="Vị trí: ${loc.toFixed(2)} ms"></div>
+                <div class="bar-seg seg-w2" style="width: ${pct(dem)}%;" title="Nhu cầu: ${dem.toFixed(2)} ms"></div>
+                <div class="bar-seg seg-w3" style="width: ${pct(cand)}%;" title="Tìm trạm: ${cand.toFixed(1)} ms"></div>
+                <div class="bar-seg seg-w4" style="width: ${pct(rank)}%;" title="Xếp hạng: ${rank.toFixed(1)} ms"></div>
             </div>
 
             <div class="pipeline-legend">
-                <div class="legend-item"><span class="dot dot-w1"></span> Location: <b>${loc.toFixed(2)} ms</b></div>
-                <div class="legend-item"><span class="dot dot-w2"></span> Demand: <b>${dem.toFixed(2)} ms</b></div>
-                <div class="legend-item"><span class="dot dot-w3"></span> Candidate Search: <b>${cand.toFixed(1)} ms</b></div>
-                <div class="legend-item"><span class="dot dot-w4"></span> Ranking: <b>${rank.toFixed(1)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w1"></span> Vị trí: <b>${loc.toFixed(2)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w2"></span> Nhu cầu: <b>${dem.toFixed(2)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w3"></span> Tìm trạm: <b>${cand.toFixed(1)} ms</b></div>
+                <div class="legend-item"><span class="dot dot-w4"></span> Xếp hạng: <b>${rank.toFixed(1)} ms</b></div>
             </div>
         </div>
     `;
@@ -201,7 +201,7 @@ export function renderPipelineLatency(timingsMs) {
 
 export function renderCandidateTable(candidates, rankedCandidates = []) {
     if (!candidates || candidates.length === 0) {
-        return '<p class="muted-text">No candidate stations evaluated.</p>';
+        return '<p class="muted-text">Không có trạm nào được đánh giá.</p>';
     }
 
     const rankMap = new Map();
@@ -230,13 +230,13 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
             <tr class="${isTop ? 'row-top-rec' : ''} ${!isEligible ? 'row-ineligible' : ''}">
                 <td><span class="rank-badge ${isTop ? 'rank-1' : ''}">${rankNum}</span></td>
                 <td><strong>${c.station_id}</strong></td>
-                <td><span class="badge ${c.service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${c.service_type === 'BATTERY_SWAP' ? 'SWAP' : 'CHARGE'}</span></td>
-                <td>${isEligible ? `<span class="badge badge-success">ELIGIBLE</span>` : `<span class="badge badge-danger">${c.reason || 'INELIGIBLE'}</span>`}</td>
-                <td>${travelMin} m</td>
-                <td>${queueMin} m</td>
-                <td>${detourMin} m</td>
+                <td><span class="badge ${c.service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${c.service_type === 'BATTERY_SWAP' ? 'ĐỔI PIN' : 'SẠC PIN'}</span></td>
+                <td>${isEligible ? `<span class="badge badge-success">PHÙ HỢP</span>` : `<span class="badge badge-danger">${c.reason || 'KHÔNG PHÙ HỢP'}</span>`}</td>
+                <td>${travelMin} phút</td>
+                <td>${queueMin} phút</td>
+                <td>${detourMin} phút</td>
                 <td>${c.operational?.available_capacity ?? '-'}</td>
-                <td><strong>${costMin} m</strong></td>
+                <td><strong>${costMin} phút</strong></td>
             </tr>
         `;
     };
@@ -244,19 +244,19 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
     return `
         <div class="candidate-tables-wrapper">
             <div class="table-section">
-                <div class="section-title">Eligible Candidates (${eligible.length})</div>
+                <div class="section-title">Trạm phù hợp (${eligible.length})</div>
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Rank</th>
-                            <th>Station</th>
-                            <th>Service</th>
-                            <th>Status</th>
-                            <th>Travel</th>
-                            <th>Queue</th>
-                            <th>Detour</th>
-                            <th>Cap.</th>
-                            <th>Total Cost</th>
+                            <th>Hạng</th>
+                            <th>Trạm</th>
+                            <th>Dịch vụ</th>
+                            <th>Trạng thái</th>
+                            <th>Di chuyển</th>
+                            <th>Hàng đợi</th>
+                            <th>Chênh lệch</th>
+                            <th>SLot</th>
+                            <th>Tổng chi phí</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -266,18 +266,18 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
             </div>
 
             <div class="table-section mt-4">
-                <div class="section-title">Ineligible Candidates (${ineligible.length})</div>
+                <div class="section-title">Trạm không phù hợp (${ineligible.length})</div>
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>-</th>
-                            <th>Station</th>
-                            <th>Service</th>
-                            <th>Ineligibility Reason</th>
-                            <th>Distance</th>
-                            <th>Queue</th>
+                            <th>Trạm</th>
+                            <th>Dịch vụ</th>
+                            <th>Lý do</th>
+                            <th>Khoảng cách</th>
+                            <th>Hàng đợi</th>
                             <th>-</th>
-                            <th>Cap.</th>
+                            <th>Slot</th>
                             <th>-</th>
                         </tr>
                     </thead>
@@ -294,15 +294,15 @@ export function renderConflictAlert(conflictDetail, onRefresh) {
     return `
         <div class="conflict-alert-card" role="alert">
             <div class="conflict-header">
-                <span class="conflict-badge">409 CANDIDATE_STATE_CHANGED</span>
-                <h4>Station Availability Changed</h4>
+                <span class="conflict-badge">409 TRẠNG THÁI THAY ĐỔI</span>
+                <h4>Trạm không còn khả dụng</h4>
             </div>
             <p>
-                One or more candidate stations changed operational eligibility during recommendation processing.
-                The ranking model strictly rejected the stale candidate snapshot.
+                Một hoặc nhiều trạm thay đổi trạng thái hoạt động trong quá trình xử lý đề xuất.
+                Hệ thống xếp hạng đã từ chối dữ liệu cũ.
             </p>
             <div class="conflict-actions">
-                <button id="btn-refresh-conflict" class="btn btn-primary btn-sm">Refresh Recommendation</button>
+                <button id="btn-refresh-conflict" class="btn btn-primary btn-sm">Làm mới đề xuất</button>
             </div>
         </div>
     `;
@@ -327,36 +327,36 @@ export function renderErrorState(error, onRetry = null) {
 
     if (status === 409) {
         errorClass = 'error-409';
-        errorTitle = 'Station Availability Changed';
-        errorCode = '409 Conflict';
-        errorMessage = 'Candidate stations changed during processing. The ranking model rejected stale data.';
+        errorTitle = 'Trạm không còn khả dụng';
+        errorCode = '409 Xung đột';
+        errorMessage = 'Trạm thay đổi trong quá trình xử lý. Dữ liệu cũ đã bị từ chối.';
     } else if (status === 422) {
         errorClass = 'error-422';
-        errorTitle = 'Invalid Request';
-        errorCode = '422 Unprocessable';
+        errorTitle = 'Yêu cầu không hợp lệ';
+        errorCode = '422 Không xử lý được';
         errorMessage = code === 'LOCATION_UNAVAILABLE'
-            ? 'Location could not be determined from GPS or map matching.'
-            : (message || 'The request contained invalid or missing parameters.');
+            ? 'Không thể xác định vị trí từ GPS hoặc map matching.'
+            : (message || 'Yêu cầu chứa tham số không hợp lệ hoặc thiếu.');
     } else if (status === 503) {
         errorClass = 'error-503';
-        errorTitle = 'Service Unavailable';
-        errorCode = '503 Unavailable';
+        errorTitle = 'Dịch vụ không khả dụng';
+        errorCode = '503 Không khả dụng';
         errorMessage = code === 'DRIVER_STATE_UNAVAILABLE'
-            ? 'Driver state service is temporarily unavailable. Please retry.'
-            : 'A required dependency (GraphHopper, PostgreSQL, or Redis) is unavailable.';
+            ? 'Dịch vụ trạng thái tài xế tạm thời không khả dụng. Vui lòng thử lại.'
+            : 'Phụ thuộc cần thiết (GraphHopper, PostgreSQL, hoặc Redis) không khả dụng.';
     } else if (status === 504) {
         errorClass = 'error-503';
-        errorTitle = 'Gateway Timeout';
+        errorTitle = 'Hết thời gian chờ';
         errorCode = '504 Timeout';
-        errorMessage = 'The routing engine did not respond in time. Please retry.';
+        errorMessage = 'Định tuyến không phản hồi kịp thời. Vui lòng thử lại.';
     } else if (status === 0 || !isApiError) {
         errorClass = 'error-503';
-        errorTitle = 'Connection Error';
+        errorTitle = 'Lỗi kết nối';
         errorCode = 'NETWORK';
-        errorMessage = 'Could not connect to the backend server.';
+        errorMessage = 'Không thể kết nối đến máy chủ backend.';
     } else {
         errorClass = 'error-503';
-        errorTitle = `Error ${status}`;
+        errorTitle = `Lỗi ${status}`;
         errorCode = `${status}`;
         errorMessage = message;
     }
@@ -370,7 +370,7 @@ export function renderErrorState(error, onRetry = null) {
             <div class="error-state-message">${errorMessage}</div>
             ${onRetry ? `
                 <div class="error-state-actions">
-                    <button class="btn btn-primary btn-sm" data-action="retry">Retry</button>
+                    <button class="btn btn-primary btn-sm" data-action="retry">Thử lại</button>
                 </div>
             ` : ''}
         </div>
@@ -380,7 +380,7 @@ export function renderErrorState(error, onRetry = null) {
 /**
  * Render loading state
  */
-export function renderLoadingState(message = 'Loading...') {
+export function renderLoadingState(message = 'Đang tải...') {
     return `
         <div class="loading-state">
             <div class="loading-spinner"></div>

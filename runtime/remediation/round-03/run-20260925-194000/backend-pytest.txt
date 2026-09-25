@@ -1,0 +1,20 @@
+TARGETED BACKEND CONTRACT REGRESSION
+Command: python -m pytest backend/tests/test_shared_state_integration.py backend/tests/test_demo_ui.py backend/tests/test_week5_workflow.py backend/tests/test_week4_api.py
+Collected: 22 items across 4 targeted contract test files
+Scope: Regression suites directly testing shared state, demo UI contracts, realtime workflow, and week 4/5 API endpoints consumed by demo UI. (Full backend/tests/ suite contains 388 tests across weeks 1-5).
+
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: E:\build6week\backend
+configfile: pyproject.toml
+plugins: anyio-4.14.2, langsmith-0.10.18, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 22 items
+
+backend\tests\test_shared_state_integration.py .........                 [ 40%]
+backend\tests\test_demo_ui.py ...                                        [ 54%]
+backend\tests\test_week5_workflow.py ...                                 [ 68%]
+backend\tests\test_week4_api.py .......                                  [100%]
+
+============================= 22 passed in 14.54s =============================
+Exit Code: 0

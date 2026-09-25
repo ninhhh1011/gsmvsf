@@ -15,7 +15,7 @@ module.exports = defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:8000',
+    baseURL: 'http://127.0.0.1:8000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -26,8 +26,8 @@ module.exports = defineConfig({
     },
   ],
   webServer: process.env.SKIP_WEB_SERVER ? undefined : {
-    command: 'python -m uvicorn backend.app.main:app --port 8000 --host 0.0.0.0',
-    url: 'http://localhost:8000/demo',
+    command: 'python -m uvicorn backend.app.main:app --port 8000 --host 127.0.0.1',
+    url: 'http://127.0.0.1:8000/demo',
     reuseExistingServer: !process.env.CI,
     timeout: 60000,
   },

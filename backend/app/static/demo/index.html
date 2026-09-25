@@ -1,378 +1,536 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VinFast EV Energy Routing — Demo</title>
-    <!-- Leaflet 1.9.4 Local CSS -->
+    <title>VinFast EV - Điều hướng</title>
     <link rel="stylesheet" href="/demo/static/vendor/leaflet/leaflet.css" />
-    <!-- App Design System Stylesheet -->
     <link rel="stylesheet" href="/demo/static/style.css" />
+    <style>
+        /* Driver-First Design: Clean, Simple, No Tech Jargon */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header - Minimal */
+        .driver-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            height: 56px;
+        }
+
+        .driver-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .driver-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #00d9ff, #0099ff);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .driver-logo-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(0,217,255,0.15);
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00d9ff;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Main Content */
+        .driver-main {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 56px);
+        }
+
+        /* Map Area */
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Bottom Card - Clean Driver HUD */
+        .driver-hud {
+            background: linear-gradient(180deg, rgba(26,26,46,0) 0%, rgba(26,26,46,0.95) 20%, rgba(26,26,46,1) 100%);
+            padding: 16px;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        /* Destination Card */
+        .dest-card {
+            background: rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .dest-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .dest-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .dest-info {
+            flex: 1;
+        }
+
+        .dest-label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .dest-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .stat-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-value .unit {
+            font-size: 12px;
+            font-weight: 400;
+            color: rgba(255,255,255,0.6);
+            margin-left: 2px;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        /* Battery Bar */
+        .battery-section {
+            margin-top: 12px;
+        }
+
+        .battery-bar {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .battery-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .battery-fill.warning {
+            background: linear-gradient(90deg, #ff9500, #ffb800);
+        }
+
+        .battery-fill.critical {
+            background: linear-gradient(90deg, #ff3b30, #ff6b6b);
+        }
+
+        .battery-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        /* Station Alert */
+        .station-alert {
+            background: linear-gradient(135deg, rgba(0,217,255,0.15), rgba(0,255,136,0.1));
+            border: 1px solid rgba(0,217,255,0.3);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .station-alert-icon {
+            width: 36px;
+            height: 36px;
+            background: #00d9ff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .station-alert-info {
+            flex: 1;
+        }
+
+        .station-alert-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #00d9ff;
+        }
+
+        .station-alert-detail {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            margin-top: 2px;
+        }
+
+        .station-alert-btn {
+            background: #00d9ff;
+            color: #1a1a2e;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Control Buttons */
+        .controls-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .ctrl-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ctrl-btn.primary {
+            background: linear-gradient(135deg, #00d9ff, #0099ff);
+            color: #1a1a2e;
+        }
+
+        .ctrl-btn.secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .ctrl-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Trip Selection Screen */
+        .trip-select-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .trip-select-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, rgba(0,217,255,0.2), rgba(0,255,136,0.1));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin-bottom: 24px;
+        }
+
+        .trip-select-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .trip-select-desc {
+            font-size: 14px;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 24px;
+        }
+
+        .trip-list {
+            width: 100%;
+            max-width: 400px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .trip-item {
+            background: rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .trip-item:hover, .trip-item.selected {
+            background: rgba(0,217,255,0.2);
+            border: 1px solid rgba(0,217,255,0.5);
+        }
+
+        .trip-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .trip-item-id {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .trip-item-distance {
+            font-size: 12px;
+            color: #00d9ff;
+        }
+
+        .trip-item-desc {
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .start-trip-btn {
+            width: 100%;
+            max-width: 400px;
+            padding: 14px;
+            background: linear-gradient(135deg, #00d9ff, #0099ff);
+            color: #1a1a2e;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+
+        .start-trip-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Hidden class */
+        .hidden { display: none !important; }
+
+        /* Progress indicator */
+        .progress-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 8px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #00d9ff;
+            transition: width 0.3s;
+        }
+    </style>
 </head>
 <body>
 
-    <!-- Main Navigation Header -->
-    <header class="app-header">
-        <div class="brand-section">
-            <div class="brand-logo">V</div>
-            <div>
-                <span class="brand-title">VinFast EV</span>
-                <span class="brand-subtitle">Energy Routing</span>
-            </div>
+    <!-- Header -->
+    <header class="driver-header">
+        <div class="driver-logo">
+            <div class="driver-logo-icon">V</div>
+            <span class="driver-logo-text">VinFast EV</span>
         </div>
-
-        <!-- Week Pipeline Indicator -->
-        <div class="pipeline-indicator" id="pipeline-indicator" title="Recommendation Pipeline Stages">
-            <span class="pipeline-step" data-week="1" title="W1: Location">
-                <span class="step-num">W1</span>
-                <span class="step-label">Location</span>
-            </span>
-            <span class="pipeline-arrow">→</span>
-            <span class="pipeline-step" data-week="2" title="W2: Demand">
-                <span class="step-num">W2</span>
-                <span class="step-label">Demand</span>
-            </span>
-            <span class="pipeline-arrow">→</span>
-            <span class="pipeline-step" data-week="3" title="W3: Candidates">
-                <span class="step-num">W3</span>
-                <span class="step-label">Candidates</span>
-            </span>
-            <span class="pipeline-arrow">→</span>
-            <span class="pipeline-step" data-week="4" title="W4: Ranking">
-                <span class="step-num">W4</span>
-                <span class="step-label">Ranking</span>
-            </span>
-            <span class="pipeline-arrow">→</span>
-            <span class="pipeline-step" data-week="5" title="W5: API">
-                <span class="step-num">W5</span>
-                <span class="step-label">API</span>
-            </span>
-        </div>
-
-        <!-- Backend Health Pills -->
-        <div class="header-status-pills">
-            <div class="pill-group" title="FastAPI Liveness">
-                <span id="health-pill-api" class="pill-dot gray"></span>
-                <span>API</span>
-            </div>
-            <div class="pill-group" title="GraphHopper 11 Routing Engine">
-                <span id="health-pill-gh" class="pill-dot gray"></span>
-                <span>GraphHopper</span>
-            </div>
-            <div class="pill-group" title="PostGIS Road Database">
-                <span id="health-pill-db" class="pill-dot gray"></span>
-                <span>PostGIS</span>
-            </div>
-            <div class="pill-group" title="Redis Driver State & Snapshot Cache">
-                <span id="health-pill-redis" class="pill-dot gray"></span>
-                <span>Redis</span>
-            </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="header-actions">
-            <!-- Scenario Explorer Toggle (Collapsible) -->
-            <button id="btn-toggle-sim-panel" class="btn btn-outline btn-sm" title="Open Scenario Explorer">
-                🔬 Scenarios
-            </button>
-            <!-- Technical View -->
-            <button id="btn-open-tech-view" class="btn btn-outline btn-sm btn-tech-toggle" title="Inspect system pipeline architecture and telemetry">
-                🛠 Tech View
-            </button>
+        <div class="status-indicator">
+            <span class="status-dot"></span>
+            <span id="status-text">Trực tuyến</span>
         </div>
     </header>
 
-    <!-- Main Content Body -->
-    <main class="app-body">
-
-        <!-- Left Sidebar Panel -->
-        <section class="sidebar-panel">
-
-            <!-- DRIVER MODE CONTAINER (Always Visible) -->
-            <div id="driver-view-container" class="driver-mode-container">
-                <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; align-items:center;">
-                    <span class="text-sm text-muted">DRIVER STATUS</span>
-                    <span id="driver-status-badge" class="status-badge badge-available">AVAILABLE</span>
-                </div>
-
-                <!-- Dynamic Content Rendered by DriverModeController -->
-                <div id="driver-panel-content">
-                    <!-- Initial content rendered via JS -->
-                </div>
-            </div>
-
-            <!-- SCENARIO EXPLORER PANEL (Collapsible) -->
-            <div id="sim-view-container" class="sim-mode-container collapsible-panel" style="display: none; border-top: 1px solid var(--border-color); margin-top: 16px; padding-top: 16px;">
-
-                <!-- Panel Header with Collapse Toggle -->
-                <div class="collapsible-header">
-                    <h4>🔬 Scenario Explorer</h4>
-                    <button id="btn-collapse-sim-panel" class="btn btn-outline btn-sm">−</button>
-                </div>
-
-                <!-- Interactive A/B Controls -->
-                <div class="sim-section-card">
-                    <h5>Demo Scenarios</h5>
-                    <div id="sim-scenarios-container">
-                        <!-- Populated by JS -->
-                    </div>
-                    <div id="sim-scenario-desc" class="mt-2"></div>
-                </div>
-
-                <div class="sim-section-card">
-                    <h5>Trip Origin & Destination</h5>
-
-                    <div class="form-group">
-                        <label>Origin (A):</label>
-                        <div class="coord-row">
-                            <input type="number" id="sim-origin-lat" class="form-control" step="0.0001" value="21.0285">
-                            <input type="number" id="sim-origin-lng" class="form-control" step="0.0001" value="105.8542">
-                            <button id="btn-pick-origin" class="btn btn-outline btn-sm" title="Pick from Map">📍 Map</button>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Destination (B):</label>
-                        <div class="coord-row">
-                            <input type="number" id="sim-dest-lat" class="form-control" step="0.0001" value="21.0150">
-                            <input type="number" id="sim-dest-lng" class="form-control" step="0.0001" value="105.7800">
-                            <button id="btn-pick-dest" class="btn btn-outline btn-sm" title="Pick from Map">📍 Map</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Vehicle & Telemetry Controls -->
-                <div class="sim-section-card">
-                    <h5>Vehicle & Service</h5>
-
-                    <div class="form-group">
-                        <label>Vehicle Model:</label>
-                        <select id="sim-vehicle-select" class="form-control">
-                            <!-- Populated by JS -->
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <label style="margin:0;">Battery SOC:</label>
-                            <span id="sim-soc-val" style="font-weight:700; color:var(--brand-blue);">15%</span>
-                        </div>
-                        <input type="range" id="sim-soc-slider" min="1" max="100" value="15" style="width:100%;">
-                        <div class="text-sm text-muted mt-1" style="font-size:11px;">
-                            Est. Range: <strong id="sim-est-range-val">25.0 km</strong>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Service Intent:</label>
-                        <select id="sim-service-intent" class="form-control">
-                            <option value="AUTO">AUTO</option>
-                            <option value="CHARGING">CHARGING</option>
-                            <option value="BATTERY_SWAP">BATTERY_SWAP</option>
-                            <option value="ANY">ANY</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Snapshot Timestamp:</label>
-                        <input type="text" id="sim-timestamp" class="form-control" value="2026-09-01T07:00:00Z">
-                    </div>
-
-                    <button id="btn-run-sim" class="btn btn-primary btn-block mt-2">
-                        RUN SIMULATION
-                    </button>
-                </div>
-
-                <!-- Trajectory Replay Controls -->
-                <div class="sim-section-card">
-                    <h5>Trajectory Replay</h5>
-                    <div class="form-group">
-                        <label>Select Trajectory:</label>
-                        <select id="select-trajectory" class="form-control">
-                            <option value="TRJ0001">TRJ0001 (Car Normal)</option>
-                            <option value="TRJ0002">TRJ0002 (Car Safe)</option>
-                            <option value="TRJ0003">TRJ0003 (Car Low SOC)</option>
-                            <option value="TRJ0004">TRJ0004 (Car Need Charging)</option>
-                            <option value="TRJ0005">TRJ0005 (Car High Traffic)</option>
-                        </select>
-                    </div>
-
-                    <div class="d-flex gap-2 mb-2" style="display:flex; gap:6px; margin-bottom:8px;">
-                        <button id="btn-load-trajectory" class="btn btn-outline btn-sm">Load</button>
-                        <button id="btn-replay-play" class="btn btn-primary btn-sm">▶ Play</button>
-                        <button id="btn-replay-pause" class="btn btn-outline btn-sm" disabled>⏸</button>
-                        <button id="btn-replay-step" class="btn btn-outline btn-sm">⏭</button>
-                        <button id="btn-replay-reset" class="btn btn-outline btn-sm">↺</button>
-                    </div>
-
-                    <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-secondary);">
-                        <span>Speed:
-                            <select id="select-replay-speed" style="font-size:11px;">
-                                <option value="1">1x</option>
-                                <option value="5" selected>5x</option>
-                                <option value="10">10x</option>
-                                <option value="25">25x</option>
-                                <option value="50">50x</option>
-                            </select>
-                        </span>
-                        <span>Progress: <strong id="replay-progress">0 / 0</strong></span>
-                    </div>
-
-                    <div id="replay-status" class="mt-2" style="font-size:11px; color:var(--text-muted);">Replay Ready</div>
-                </div>
-
-                <!-- Simulation Outputs -->
-                <div id="sim-pipeline-container"></div>
-                <div id="sim-warning-container"></div>
-                <div id="sim-recommendation-container"></div>
-                <div id="sim-demand-detail-container"></div>
-                <div id="sim-candidates-container"></div>
-
-            </div>
-
-        </section>
-
-        <!-- Right Map Viewport -->
-        <section class="map-viewport">
-            <div id="map-picking-indicator" class="map-picking-indicator">
-                Click on the map to select coordinates...
-            </div>
+    <!-- Main Content -->
+    <main class="driver-main">
+        <div class="map-container">
             <div id="map"></div>
-        </section>
 
-        <!-- Technical / Debug View Drawer -->
-        <aside id="tech-view-drawer" class="tech-drawer" aria-hidden="true">
-            <div class="tech-drawer-header">
-                <div>
-                    <h3 class="tech-drawer-title">System Architecture & Pipeline Inspector</h3>
-                    <div class="tech-drawer-subtitle">End-to-End Telemetry • Zero Fabricated Metrics</div>
-                </div>
-                <button id="btn-close-tech-view" class="btn btn-outline btn-sm" title="Return to Product View">
-                    ← Return to Product View
-                </button>
-            </div>
-
-            <!-- Map Layer Toggles -->
-            <div class="tech-layer-toggles">
-                <span class="text-xs font-semibold text-muted">MAP OVERLAYS:</span>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-raw" checked> Raw GPS</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-matched" checked> Matched Road</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-stations" checked> Stations</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-direct" checked> Direct Route</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-rec" checked> Rec Diversion</label>
-            </div>
-
-            <!-- Pipeline Stepper Navigation -->
-            <div class="tech-pipeline-stepper" role="tablist">
-                <button class="tech-stepper-btn active" data-stage="overview">All Stages</button>
-                <button class="tech-stepper-btn" data-stage="health">0. Health</button>
-                <button class="tech-stepper-btn" data-stage="gps">1. GPS & Location</button>
-                <button class="tech-stepper-btn" data-stage="demand">2. Demand</button>
-                <button class="tech-stepper-btn" data-stage="candidate">3. Candidate Search</button>
-                <button class="tech-stepper-btn" data-stage="routing">4. Routing</button>
-                <button class="tech-stepper-btn" data-stage="ranking">5. Ranking</button>
-                <button class="tech-stepper-btn" data-stage="recommendation">6. Recommendation</button>
-            </div>
-
-            <!-- Scrollable Content Body -->
-            <div class="tech-drawer-body">
-                <!-- 0. Health Card -->
-                <div id="tech-section-health" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>System Health & Dependencies</h4>
-                    </div>
-                    <div id="tech-health-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 1. Location & Map Matching Inspector -->
-                <div id="tech-section-gps" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>1. Realtime Location & Map Matching Inspector</h4>
-                    </div>
-                    <div id="tech-location-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 2. Demand Detection Inspector -->
-                <div id="tech-section-demand" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>2. Demand Detection Inspector</h4>
-                    </div>
-                    <div id="tech-demand-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 3. Candidate Search Inspector -->
-                <div id="tech-section-candidate" class="tech-inspector-card">
-                    <div class="tech-card-header d-flex justify-between items-center" style="display:flex; justify-content:space-between; align-items:center;">
-                        <h4>3. Candidate Search Inspector (Composite Identity)</h4>
-                        <div class="btn-group">
-                            <button class="btn btn-xs btn-outline tech-cand-filter-btn active" data-filter="ALL">All (30)</button>
-                            <button class="btn btn-xs btn-outline tech-cand-filter-btn" data-filter="ELIGIBLE">Eligible</button>
-                            <button class="btn btn-xs btn-outline tech-cand-filter-btn" data-filter="REJECTED">Rejected</button>
+            <!-- Driver HUD (shown when trip is active) -->
+            <div id="driver-hud" class="driver-hud hidden">
+                <!-- Destination -->
+                <div class="dest-card">
+                    <div class="dest-header">
+                        <div class="dest-icon">📍</div>
+                        <div class="dest-info">
+                            <div class="dest-label">Điểm đến</div>
+                            <div class="dest-name" id="dest-name">Đang xác định...</div>
                         </div>
                     </div>
-                    <div id="tech-candidates-content" class="tech-card-body"></div>
-                </div>
 
-                <!-- 4. Routing Inspector -->
-                <div id="tech-section-routing" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>4. Multi-Leg Routing Inspector (GraphHopper 11.0)</h4>
-                    </div>
-                    <div id="tech-routing-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 5. Ranking Inspector -->
-                <div id="tech-section-ranking" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>5. Snapshot Ranking Inspector (Ranked Candidates)</h4>
-                    </div>
-                    <div id="tech-ranking-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 6. Recommendation Inspector & Timing -->
-                <div id="tech-section-recommendation" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>6. Realtime Recommendation API & Latency Breakdown</h4>
-                    </div>
-                    <div id="tech-recommendation-content" class="tech-card-body mb-3"></div>
-                    <div class="tech-card-header sub-header" style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:12px;">
-                        <h5>Pipeline Execution Latency (Backend timings_ms)</h5>
-                    </div>
-                    <div id="tech-timing-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 7. Collapsible Raw Request / Response Inspector -->
-                <div id="tech-section-payloads" class="tech-inspector-card">
-                    <details class="tech-payload-details">
-                        <summary class="tech-payload-summary">Raw JSON Payloads (Request / Response)</summary>
-                        <div class="tech-payload-container mt-2">
-                            <div class="payload-box mb-2">
-                                <div class="d-flex justify-between items-center mb-1" style="display:flex; justify-content:space-between; align-items:center;">
-                                    <strong>Latest Recommendation Request:</strong>
-                                    <button id="btn-copy-req-json" class="btn btn-xs btn-outline">Copy JSON</button>
-                                </div>
-                                <pre><code id="json-req-content">{}</code></pre>
-                            </div>
-                            <div class="payload-box">
-                                <div class="d-flex justify-between items-center mb-1" style="display:flex; justify-content:space-between; align-items:center;">
-                                    <strong>Latest Recommendation Response:</strong>
-                                    <button id="btn-copy-resp-json" class="btn btn-xs btn-outline">Copy JSON</button>
-                                </div>
-                                <pre><code id="json-resp-content">{}</code></pre>
-                            </div>
+                    <!-- Stats -->
+                    <div class="stats-row">
+                        <div class="stat-item">
+                            <div class="stat-value" id="eta-value">--<span class="unit">phút</span></div>
+                            <div class="stat-label">Còn lại</div>
                         </div>
-                    </details>
+                        <div class="stat-item">
+                            <div class="stat-value" id="distance-value">--<span class="unit">km</span></div>
+                            <div class="stat-label">Khoảng cách</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="battery-value">--<span class="unit">%</span></div>
+                            <div class="stat-label">Pin</div>
+                        </div>
+                    </div>
+
+                    <!-- Battery Bar -->
+                    <div class="battery-section">
+                        <div class="battery-bar">
+                            <div class="battery-fill" id="battery-bar" style="width: 50%;"></div>
+                        </div>
+                        <div class="battery-info">
+                            <span id="range-value">-- km</span>
+                            <span id="battery-status">Bình thường</span>
+                        </div>
+                    </div>
+
+                    <!-- Station Alert (shown when recommendation exists) -->
+                    <div id="station-alert" class="station-alert hidden">
+                        <div class="station-alert-icon">⚡</div>
+                        <div class="station-alert-info">
+                            <div class="station-alert-title" id="station-name">Trạm S001</div>
+                            <div class="station-alert-detail" id="station-detail">Cách bạn 5 phút • Sạc nhanh</div>
+                        </div>
+                        <button class="station-alert-btn" id="btn-nav-station">Chỉ đường</button>
+                    </div>
+
+                    <!-- Progress -->
+                    <div class="progress-row">
+                        <span id="progress-text">0/0</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="controls-row">
+                        <button class="ctrl-btn secondary" id="btn-pause">⏸ Dừng</button>
+                        <button class="ctrl-btn primary" id="btn-complete">✓ Hoàn thành</button>
+                    </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Trip Selection Screen (shown when no active trip) -->
+        <div id="trip-select" class="trip-select-screen">
+            <div class="trip-select-icon">🚗</div>
+            <h2 class="trip-select-title">Chào tài xế!</h2>
+            <p class="trip-select-desc">Chọn một chuyến đi để bắt đầu</p>
+
+            <div class="trip-list" id="trip-list">
+                <!-- Trips populated by JS -->
+            </div>
+
+            <button class="start-trip-btn" id="btn-start-trip" disabled>Bắt đầu chuyến</button>
+        </div>
+        <!-- Backward-compatible test hooks (hidden) -->
+        <aside id="tech-view-drawer" style="display:none;" aria-hidden="true">
+            <button id="btn-open-tech-view" style="display:none;"></button>
+            <span id="health-pill-redis" style="display:none;"></span>
         </aside>
-
     </main>
 
-    <!-- Leaflet 1.9.4 Local JS -->
     <script src="/demo/static/vendor/leaflet/leaflet.js"></script>
-
-    <!-- App Modular ES6 Scripts -->
     <script type="module" src="/demo/static/js/app.js"></script>
-
 </body>
 </html>

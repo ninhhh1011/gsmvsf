@@ -289,6 +289,17 @@ export class DemoMap {
      * Differentiates Recommended station, Eligible stations, and Ineligible stations.
      */
     renderStations(stations, recommendedId = null, recommendedService = null, onSelect = null) {
+        console.log('[Map] renderStations called:', {
+            stationCount: stations?.length || 0,
+            recommendedId,
+            recommendedService
+        });
+
+        if (!stations || stations.length === 0) {
+            console.warn('[Map] No stations to render');
+            return;
+        }
+
         this.layers.stations.clearLayers();
         this.stationMarkers.clear();
 
@@ -362,13 +373,19 @@ export class DemoMap {
                 marker.on('click', () => onSelect(st));
             }
 
-            marker.addTo(this.layers.stations);
-            this.stationMarkers.set(st.station_id, marker);
+            try {
+                marker.addTo(this.layers.stations);
+                this.stationMarkers.set(st.station_id, marker);
+            } catch (err) {
+                console.error('[Map] Error adding station marker:', st.station_id, err);
+            }
 
             if (isRecommended) {
                 this.recommendedStationMarker = marker;
             }
         });
+
+        console.log('[Map] renderStations complete, markers created:', this.stationMarkers.size);
     }
 
     /**

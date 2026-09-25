@@ -1,0 +1,45 @@
+{
+  "passed": 152,
+  "failed": 0,
+  "overall": "PASS",
+  "scenario_passed": 22,
+  "scenario_failed": 0,
+  "scenario_overall": "PASS",
+  "rank_stats": {
+    "rows": 3439,
+    "event_groups": 553,
+    "group_size_distribution": {
+      "1": 75,
+      "2": 31,
+      "3": 14,
+      "4": 34,
+      "5": 16,
+      "6": 7,
+      "7": 6,
+      "8": 370
+    },
+    "ltr_event_groups": 478,
+    "single_candidate_groups": 75,
+    "split_groups": {
+      "train": 390,
+      "validation": 90,
+      "test": 73
+    },
+    "service_event_count": 3472,
+    "events_with_eligible_station": 553,
+    "events_with_no_eligible_station": 2919,
+    "has_recommendation_true": 553,
+    "has_recommendation_false": 295
+  },
+  "need_service_training": {
+    "samples": 1200,
+    "positive": 848,
+    "negative": 352,
+    "positive_ratio": "70.7%",
+    "split": {
+      "train": 840,
+      "test": 184,
+      "validation": 176
+    }
+  }
+}

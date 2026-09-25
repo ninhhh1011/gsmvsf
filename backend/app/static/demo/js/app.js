@@ -67,43 +67,15 @@ class DemoApp {
                 onStateUpdate,
                 session: this.session
             });
-            this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations);
+            this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios);
             await this.driverMode.init();
 
             this.simMode = new SimModeController(this.api, this.map, { onStateUpdate });
             this.simMode.setCatalogs(this.scenarios, this.vehicles, this.stations);
             this.simMode.init();
 
-            this.replay = new TrajectoryReplayController(this.api, this.map, {
-                onStep: (stepData) => {
-                    if (stepData?.observation) {
-                        this.techView.syncState({
-                            driverLocation: {
-                                driver_id: this.session.driver_id || 'REPLAY_DRIVER',
-                                status: stepData.status || 'MATCHED',
-                                trigger_reason: 'REPLAY_STEP',
-                                raw_position: {
-                                    latitude: stepData.observation.latitude,
-                                    longitude: stepData.observation.longitude,
-                                    speed_kmh: stepData.observation.speed_kmh,
-                                    heading_deg: stepData.observation.heading_deg,
-                                    accuracy_m: stepData.observation.accuracy_m
-                                },
-                                matched_position: stepData.matched ? {
-                                    latitude: stepData.matched.latitude,
-                                    longitude: stepData.matched.longitude,
-                                    road_segment_id: stepData.matched.road_segment_id,
-                                    osm_way_id: stepData.matched.osm_way_id,
-                                    direction: stepData.matched.direction,
-                                    confidence: stepData.matched.confidence
-                                } : null,
-                                last_match_latency_ms: stepData.latency_ms
-                            }
-                        });
-                    }
-                },
-                session: this.session
-            });
+            // Link app.replay to driverMode.replay to maintain single replay instance
+            this.replay = this.driverMode.replay;
             this.replay.init();
 
             // Bind Scenario Panel Toggle
@@ -146,6 +118,7 @@ class DemoApp {
         const errors = [];
         if (stResult.status === 'fulfilled') {
             this.stations = stResult.value || [];
+            console.log('[App] Loaded stations:', this.stations.length, 'stations');
         } else {
             errors.push(`Stations: ${stResult.reason?.message || 'load failed'}`);
             this.stations = [];
@@ -239,10 +212,7 @@ class DemoApp {
             // Reset classes
             step.classList.remove('active', 'completed');
 
-            if (week === 5) {
-                // W5 is always "current" when there's timing data
-                step.classList.add('active');
-            } else if (time > 0 && time === maxTime) {
+            if (time > 0 && time === maxTime) {
                 step.classList.add('active');
             } else if (time > 0) {
                 step.classList.add('completed');

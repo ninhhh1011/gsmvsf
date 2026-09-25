@@ -1,19 +1,12 @@
 /**
- * Driver Mode Controller for VinFast EV Recommendation Demo.
- *
- * State model: OFFLINE -> AVAILABLE -> TRIP_ACTIVE -> TRIP_COMPLETE
- *
- * STRICT RULES:
- * - No fake movement. Driver advances through real GPS observations via the backend realtime pipeline.
- * - No hardcoded SOC decrement. SOC is fixed per scenario.
- * - No straight-line interpolation. Positions come from matched road segments.
- * - No frontend ETA calculation. ETA comes from backend routing result.
- * - Backend owns all demand evaluation, candidate eligibility, routing, ranking.
+ * Driver Mode Controller - Clean Driver-First UI
+ * Minimal, distraction-free interface for in-car use
  */
 
-import { renderEnergyWarningBanner, renderRecommendationCard, renderErrorState, renderLoadingState } from './components.js';
+import { renderEnergyWarningBanner, renderRecommendationCard } from './components.js';
 import { TrajectoryReplayController } from './replay.js';
 
+// State machine
 export const DriverState = {
     OFFLINE: 'OFFLINE',
     AVAILABLE: 'AVAILABLE',
@@ -24,25 +17,19 @@ export const DriverState = {
     TRIP_COMPLETE: 'TRIP_COMPLETE'
 };
 
-/** Approximate Earth radius in km for Haversine distance. */
-const EARTH_RADIUS_KM = 6371.0;
-
 function toRad(deg) {
     return deg * Math.PI / 180;
 }
 
-/**
- * Compute Haversine distance (km) between two lat/lng points.
- * Used only for remaining-trip-distance estimation; NOT for routing.
- */
-function haversineKm(lat1, lng1, lat2, lng2) {
+export function straightLineDistanceKm(lat1, lng1, lat2, lng2) {
+    const R = 6371;
     const dLat = toRad(lat2 - lat1);
     const dLng = toRad(lng2 - lng1);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-        + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2))
-        * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return EARTH_RADIUS_KM * c;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
 export class DriverModeController {
@@ -58,244 +45,310 @@ export class DriverModeController {
             trip_id: null,
             trajectory_id: null
         };
+
+        this.generation = 1;
         this.trips = [];
         this.vehicles = [];
         this.stations = [];
-
-        // Active trip state
+        this.scenarios = [];
         this.state = DriverState.AVAILABLE;
         this.currentTrip = null;
         this.currentVehicle = null;
+        this.mode = 'REPLAY';
 
-        // Energy state — owned by scenario data, NOT self-computed
+        // Energy state
         this.currentSocPct = 85.0;
         this.estimatedRangeKm = 100.0;
         this.safetyReserveKm = 2.0;
 
-        // Position — updated from matched road segment, NOT interpolated
-        this.currentPos = null;       // { latitude, longitude }
-        this.matchedPos = null;       // { latitude, longitude, road_segment_id, direction, confidence }
+        // Position
+        this.currentPos = null;
+        this.matchedPos = null;
+        this.currentObservation = null;
 
-        // Trip progress — from real trajectory observations
+        // Trip progress
         this.remainingTripDistanceKm = 0.0;
-
-        // Routing geometry cache
-        this.directRouteGeometry = null;
+        this.lastKnownRoadDistanceKm = 0.0;
 
         // Recommendation cache
         this.lastRecommendation = null;
 
-        // Trajectory replay — real GPS observations via backend realtime pipeline
-        // Session is passed for consistent driver_id across Driver Mode + Replay
+        // Trajectory replay
         this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
-            onStep: (stepData) => this._onReplayStep(stepData),
+            onStep: async (stepData) => await this._onReplayStep(stepData),
             session: this.session
         });
 
-        // Callbacks
         this.onStateChange = options.onStateChange || (() => {});
+        this.selectedTripId = null;
     }
 
-    setCatalogs(trips, vehicles, stations) {
+    setCatalogs(trips, vehicles, stations, scenarios = []) {
         this.trips = trips || [];
         this.vehicles = vehicles || [];
         this.stations = stations || [];
+        this.scenarios = scenarios || [];
     }
 
     async init() {
-        this.setState(DriverState.AVAILABLE);
-        this.renderAvailableUI();
+        this.renderTripSelect();
     }
 
     setState(newState) {
         this.state = newState;
         this.onStateChange(this.state);
-        this.updateHeaderBadge();
+        this.updateHeaderStatus();
     }
 
-    updateHeaderBadge() {
-        try {
-            const badge = document.getElementById('driver-status-badge');
-            if (badge) {
-                badge.textContent = this.state;
-                badge.className = `status-badge badge-${this.state.toLowerCase()}`;
-            }
-        } catch (err) {
-            // Guard: ignore DOM errors during SSR/testing
+    updateHeaderStatus() {
+        const statusText = document.getElementById('status-text');
+        if (!statusText) return;
+
+        const statusMap = {
+            [DriverState.OFFLINE]: 'Ngoại tuyến',
+            [DriverState.AVAILABLE]: 'Trực tuyến',
+            [DriverState.TRIP_ASSIGNED]: 'Chuyến đi',
+            [DriverState.TRIP_ACTIVE]: 'Đang lái',
+            [DriverState.TRIP_COMPLETE]: 'Hoàn thành'
+        };
+        statusText.textContent = statusMap[this.state] || 'Trực tuyến';
+    }
+
+    // ─── Trip Selection ────────────────────────────────────────────────
+
+    renderTripSelect() {
+        const hud = document.getElementById('driver-hud');
+        const select = document.getElementById('trip-select');
+        const tripList = document.getElementById('trip-list');
+        const startBtn = document.getElementById('btn-start-trip');
+
+        if (hud) hud.classList.add('hidden');
+        if (select) select.classList.remove('hidden');
+
+        // Populate trip list
+        if (tripList && this.trips.length > 0) {
+            tripList.innerHTML = this.trips.map(trip => {
+                const desc = this._getScenarioDescription(trip.scenario_id);
+                const distance = (trip.planned_distance_m / 1000).toFixed(1);
+                return `
+                    <div class="trip-item ${this.selectedTripId === trip.trip_id ? 'selected' : ''}"
+                         data-trip-id="${trip.trip_id}">
+                        <div class="trip-item-header">
+                            <span class="trip-item-id">${trip.trip_id}</span>
+                            <span class="trip-item-distance">${distance} km</span>
+                        </div>
+                        <div class="trip-item-desc">${desc}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Click handlers
+            tripList.querySelectorAll('.trip-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    this.selectedTripId = item.dataset.tripId;
+                    tripList.querySelectorAll('.trip-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                    startBtn.disabled = false;
+                });
+            });
+        }
+
+        // Start button handler
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                if (this.selectedTripId) {
+                    this.assignTrip(this.selectedTripId);
+                }
+            });
+            startBtn.disabled = !this.selectedTripId;
         }
     }
 
-    /**
-     * Assign a trip from the curated dataset and compute direct route.
-     */
+    _getScenarioDescription(scenarioId) {
+        const descriptions = {
+            'NORMAL_TRIP': 'Chuyến đi thường',
+            'NO_SERVICE_NEEDED': 'Không cần dịch vụ',
+            'LOW_SOC': 'Pin thấp',
+            'NEED_CHARGING': 'Cần sạc pin',
+            'QUEUE_REALTIME_CHANGE': 'Hàng đợi thay đổi',
+            'TRAFFIC_REALTIME_CHANGE': 'Kẹt xe',
+            'STATION_STATUS_CHANGE': 'Trạm thay đổi',
+            'FARTHER_BUT_FASTER': 'Xa hơn nhưng nhanh hơn',
+            'NEED_SWAP': 'Cần đổi pin'
+        };
+        return descriptions[scenarioId] || scenarioId;
+    }
+
+    // ─── Trip Assignment ────────────────────────────────────────────────
+
     async assignTrip(tripId) {
-        const trip = this.trips.find(t => t.trip_id === tripId) || this.trips[0];
+        this.generation++;
+        const currentGen = this.generation;
+
+        const trip = this.trips.find(t => t.trip_id === tripId);
         if (!trip) return;
 
         this.currentTrip = trip;
         this.currentVehicle = this.vehicles.find(v => v.vehicle_id === trip.vehicle_id)
-            || this.vehicles.find(v => v.vehicle_id === 'V0001')
             || this.vehicles[0];
 
-        // Energy state comes from scenario data, NOT hardcoded per trip_id
-        // Use vehicle defaults; scenario SOC/range overrides via loadScenario
-        this.currentSocPct = 85.0;
-        this.estimatedRangeKm = 100.0;
-        this.safetyReserveKm = 2.0;
-        this.remainingTripDistanceKm = trip.planned_distance_m / 1000;
+        // Source energy from scenario
+        const matchingScenario = this.scenarios.find(s => s.trip_id === trip.trip_id || s.id === trip.scenario_id);
+        if (matchingScenario) {
+            this.currentSocPct = matchingScenario.soc_pct ?? 85.0;
+            this.estimatedRangeKm = matchingScenario.estimated_range_km ?? 100.0;
+            this.safetyReserveKm = matchingScenario.safety_reserve_km ?? 2.0;
+        }
 
-        // Clear previous state BEFORE rendering new trip
+        const plannedKm = trip.planned_distance_m ? (trip.planned_distance_m / 1000) : 0.0;
+        this.remainingTripDistanceKm = plannedKm;
+        this.lastKnownRoadDistanceKm = plannedKm;
+
+        // Clear map and show route
         this.map.clearAll();
         this.map.renderTripEndpoints(trip.origin, trip.destination);
 
-        // Compute direct route via GraphHopper
+        // Compute direct route
         try {
             const routeResult = await this.api.computeRoute(
                 trip.origin,
                 trip.destination,
                 { vehicle_category: this.currentVehicle?.vehicle_type || 'EV_CAR' }
             );
+            if (this.generation !== currentGen) return;
             if (routeResult.geometry) {
-                this.directRouteGeometry = routeResult.geometry;
                 this.map.renderDirectRoute(routeResult.geometry);
             }
+            if (routeResult.distance_m) {
+                this.remainingTripDistanceKm = parseFloat((routeResult.distance_m / 1000).toFixed(2));
+            }
         } catch (err) {
-            console.warn('Direct route computation error:', err);
+            console.warn('Route error:', err);
         }
 
         this.map.fitBoundsToActive();
         this.setState(DriverState.TRIP_ASSIGNED);
-        this.renderTripAssignedUI();
+        this.renderTripActiveUI();
     }
 
-    /**
-     * Start the trip: enter TRIP_ACTIVE state, load trajectory, begin replay.
-     */
+    // ─── Trip Active ────────────────────────────────────────────────────
+
     async startTrip() {
         if (!this.currentTrip) return;
 
-        // Assign driver ID in shared session context (consistent across Driver Mode + Replay)
+        this.generation++;
+        const currentGen = this.generation;
+
         this.session.driver_id = `driver_${Date.now().toString(36)}`;
         this.session.vehicle_id = this.currentVehicle?.vehicle_id;
         this.session.vehicle_category = this.currentVehicle?.vehicle_type;
         this.session.trip_id = this.currentTrip.trip_id;
+        this.mode = 'REPLAY';
 
         this.setState(DriverState.TRIP_ACTIVE);
 
-        // Load trajectory observations for this trip
         const trajId = this._tripToTrajectory(this.currentTrip.trip_id);
         this.session.trajectory_id = trajId;
         await this.replay.loadTrajectory(trajId);
 
-        // Initial recommendation at trip start
-        await this._evaluateAtCurrentPosition();
+        if (this.generation !== currentGen) return;
 
-        // Render HUD (SOC stays at scenario values throughout)
         this.renderTripActiveUI();
-
-        // Auto-step first observation
         await this.replay.step();
     }
 
-    /**
-     * Map trajectory trip_id to a trajectory replay ID.
-     * Throws if trip is not mapped to a known trajectory.
-     * Only trips T0001-T0005 have trajectory data in the demo.
-     */
     _tripToTrajectory(tripId) {
         const mapping = {
-            'T0001': 'TRJ0001',
-            'T0002': 'TRJ0002',
-            'T0003': 'TRJ0003',
-            'T0004': 'TRJ0004',
-            'T0005': 'TRJ0005',
-            // T0017, T0018, T0019, T0073, T0110, T0129 use TRJ0001 as demo baseline
-            'T0017': 'TRJ0001',
-            'T0018': 'TRJ0001',
-            'T0019': 'TRJ0001',
-            'T0073': 'TRJ0001',
-            'T0110': 'TRJ0001',
-            'T0129': 'TRJ0001',
+            'T0001': 'TRJ0001', 'T0002': 'TRJ0002', 'T0003': 'TRJ0003',
+            'T0004': 'TRJ0004', 'T0005': 'TRJ0005', 'T0017': 'TRJ0001',
+            'T0018': 'TRJ0001', 'T0019': 'TRJ0001', 'T0073': 'TRJ0001',
+            'T0110': 'TRJ0001', 'T0129': 'TRJ0001',
         };
         const trajId = mapping[tripId];
         if (!trajId) {
-            console.error(`Trip '${tripId}' has no mapped trajectory. Available mappings: ${Object.keys(mapping).join(', ')}`);
-            throw new Error(`UNMAPPED_TRIP: Trip '${tripId}' not mapped to any trajectory`);
+            throw new Error(`UNMAPPED_TRIP: Trip '${tripId}' not mapped`);
         }
         return trajId;
     }
 
-    /**
-     * Called after each replay step completes.
-     * Updates position from matched state and re-evaluates recommendation.
-     */
-    async _onReplayStep(stepData) {
-        const { locResp } = stepData;
+    // ─── Replay Step Handler ───────────────────────────────────────────
 
-        // Update position from backend-matched road segment
+    async _onReplayStep(stepData) {
+        const { locResp, observation } = stepData;
+        if (this.state !== DriverState.TRIP_ACTIVE) return;
+
+        this.currentObservation = observation;
+
+        // Update position
         if (locResp.matched_position) {
             this.matchedPos = {
                 latitude: locResp.matched_position.latitude,
                 longitude: locResp.matched_position.longitude,
-                road_segment_id: locResp.matched_position.road_segment_id,
-                direction: locResp.matched_position.direction,
-                confidence: locResp.matched_position.confidence
+                road_segment_id: locResp.matched_position.road_segment_id
             };
-            this.currentPos = { ...this.matchedPos };
+            this.currentPos = {
+                latitude: locResp.matched_position.latitude,
+                longitude: locResp.matched_position.longitude
+            };
         } else if (locResp.raw_position) {
             this.currentPos = {
                 latitude: locResp.raw_position.latitude,
                 longitude: locResp.raw_position.longitude
             };
             this.matchedPos = null;
+        } else if (observation) {
+            this.currentPos = {
+                latitude: observation.latitude,
+                longitude: observation.longitude
+            };
+            this.matchedPos = null;
         }
 
-        // Update remaining distance from actual position to destination
+        // Update remaining distance
         if (this.currentPos && this.currentTrip?.destination) {
-            this.remainingTripDistanceKm = haversineKm(
-                this.currentPos.latitude,
-                this.currentPos.longitude,
-                this.currentTrip.destination.latitude,
-                this.currentTrip.destination.longitude
-            );
+            try {
+                const legRoute = await this.api.computeRoute(
+                    this.currentPos,
+                    this.currentTrip.destination,
+                    { vehicle_category: this.currentVehicle?.vehicle_type || 'EV_CAR' }
+                );
+                if (legRoute?.distance_m != null) {
+                    this.remainingTripDistanceKm = parseFloat((legRoute.distance_m / 1000).toFixed(2));
+                }
+            } catch {
+                // Keep last known
+            }
         }
 
-        // Check if replay is complete
-        if (this.replay.isReplayComplete()) {
-            this.setState(DriverState.TRIP_COMPLETE);
-            await this._evaluateAtCurrentPosition();
-            this.renderTripCompleteUI();
-            return;
-        }
-
-        // Re-evaluate recommendation at new position
+        // Re-evaluate recommendation
         await this._evaluateAtCurrentPosition();
-        this.renderTripActiveUI();
+        this.updateHUDDisplay();
     }
 
-    /**
-     * Call backend recommendation endpoint with current position.
-     * Backend owns all demand evaluation, routing, eligibility, ranking.
-     * SOC/range/remaining_distance come from this controller's state.
-     */
     async _evaluateAtCurrentPosition() {
         if (!this.currentVehicle || !this.currentPos) return;
 
+        const currentGen = this.generation;
         const driverId = this.session.driver_id || 'UNASSIGNED';
+        const timestamp = (this.mode === 'REPLAY' && this.currentObservation?.timestamp)
+            ? this.currentObservation.timestamp
+            : (this.currentTrip?.start_time || new Date().toISOString());
+
+        const rawLat = this.currentObservation ? this.currentObservation.latitude : this.currentPos.latitude;
+        const rawLng = this.currentObservation ? this.currentObservation.longitude : this.currentPos.longitude;
 
         const payload = {
             context: {
                 vehicle_id: this.currentVehicle.vehicle_id,
                 driver_id: driverId,
                 trip_id: this.currentTrip?.trip_id,
-                timestamp: new Date().toISOString(),
-                // Fixed per scenario — NOT decremented by frontend
+                timestamp: timestamp,
                 current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
                 estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
                 remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
                 safety_reserve_km: this.safetyReserveKm,
-                raw_latitude: this.currentPos.latitude,
-                raw_longitude: this.currentPos.longitude
+                raw_latitude: rawLat,
+                raw_longitude: rawLng
             },
             destination_latitude: this.currentTrip?.destination?.latitude,
             destination_longitude: this.currentTrip?.destination?.longitude,
@@ -304,373 +357,237 @@ export class DriverModeController {
 
         try {
             const rec = await this.api.getRecommendation(payload);
+            if (this.generation !== currentGen) return;
+
             this.lastRecommendation = rec;
 
-            let leg1Result = null;
-            let leg2Result = null;
-
+            // Render station on map if recommendation exists
             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
                 const top = rec.ranked_candidates[0];
                 const st = this.stations.find(s => s.station_id === top.station_id);
                 if (st) {
-                    const stPos = { latitude: st.latitude, longitude: st.longitude };
-                    try {
-                        leg1Result = await this.api.computeRoute(this.currentPos, stPos, {
-                            vehicle_category: this.currentVehicle.vehicle_type
-                        });
-                        if (this.currentTrip?.destination) {
-                            leg2Result = await this.api.computeRoute(stPos, this.currentTrip.destination, {
-                                vehicle_category: this.currentVehicle.vehicle_type
-                            });
-                        }
-                        this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry);
-                        this.map.renderStations(this.stations, top.station_id, top.service_type);
-                    } catch (routeErr) {
-                        console.warn('Recommendation route fetch error:', routeErr);
-                    }
+                    this.map.renderStations(this.stations, top.station_id, top.service_type);
                 }
             } else {
-                this.map.clearRoutes();
-                if (this.directRouteGeometry) {
-                    this.map.renderDirectRoute(this.directRouteGeometry);
-                }
                 this.map.renderStations(this.stations);
             }
-
-            if (this.options?.onStateUpdate) {
-                this.options.onStateUpdate({
-                    scenario: this.currentTrip,
-                    vehicle: this.currentVehicle,
-                    driverId: driverId,
-                    origin: this.currentTrip?.origin,
-                    destination: this.currentTrip?.destination,
-                    driverLocation: {
-                        driver_id: driverId,
-                        status: 'MATCHED',
-                        raw_position: this.currentPos,
-                        matched_position: {
-                            latitude: this.currentPos?.latitude,
-                            longitude: this.currentPos?.longitude,
-                            direction: 'FORWARD',
-                            confidence: 1.0
-                        }
-                    },
-                    recommendRequest: payload,
-                    recommendResult: rec,
-                    stationRoutes: { leg1: leg1Result, leg2: leg2Result }
-                });
-            }
         } catch (err) {
-            console.error('Driver mode recommendation error:', err);
+            if (this.generation !== currentGen) return;
+            console.warn('Recommendation error:', err);
             this.lastRecommendation = null;
-
-            // Sync error to Tech View
-            if (this.options?.onStateUpdate) {
-                this.options.onStateUpdate({
-                    error: err,
-                    recommendRequest: payload,
-                    recommendResult: null
-                });
-            }
         }
     }
 
-    /**
-     * Advance to next GPS observation (called from UI button).
-     */
-    async stepTrip() {
-        if (this.state !== DriverState.TRIP_ACTIVE) return;
-        await this.replay.step();
+    // ─── HUD Rendering ─────────────────────────────────────────────────
+
+    renderTripActiveUI() {
+        const hud = document.getElementById('driver-hud');
+        const select = document.getElementById('trip-select');
+
+        if (hud) hud.classList.remove('hidden');
+        if (select) select.classList.add('hidden');
+
+        // Bind controls
+        document.getElementById('btn-pause')?.addEventListener('click', () => this.pauseTrip());
+        document.getElementById('btn-complete')?.addEventListener('click', () => this.completeTrip());
+
+        this.updateHUDDisplay();
     }
 
-    /**
-     * Play trajectory at configured speed.
-     */
+    updateHUDDisplay() {
+        // Destination
+        const destName = document.getElementById('dest-name');
+        if (destName) {
+            destName.textContent = 'Trả khách';
+        }
+
+        // ETA
+        const etaValue = document.getElementById('eta-value');
+        if (etaValue) {
+            let etaMin = '--';
+            if (this.lastRecommendation?.ranked_candidates?.length > 0) {
+                const top = this.lastRecommendation.ranked_candidates[0];
+                etaMin = Math.round(top.eta_to_station_s / 60).toString();
+            }
+            etaValue.innerHTML = `${etaMin}<span class="unit">phút</span>`;
+        }
+
+        // Distance
+        const distanceValue = document.getElementById('distance-value');
+        if (distanceValue) {
+            distanceValue.innerHTML = `${this.remainingTripDistanceKm.toFixed(1)}<span class="unit">km</span>`;
+        }
+
+        // Battery
+        const batteryValue = document.getElementById('battery-value');
+        if (batteryValue) {
+            batteryValue.innerHTML = `${this.currentSocPct.toFixed(0)}<span class="unit">%</span>`;
+        }
+
+        // Battery bar
+        const batteryBar = document.getElementById('battery-bar');
+        if (batteryBar) {
+            batteryBar.style.width = `${Math.max(5, this.currentSocPct)}%`;
+            batteryBar.className = 'battery-fill';
+            if (this.currentSocPct < 15) {
+                batteryBar.classList.add('critical');
+            } else if (this.currentSocPct < 30) {
+                batteryBar.classList.add('warning');
+            }
+        }
+
+        // Range
+        const rangeValue = document.getElementById('range-value');
+        if (rangeValue) {
+            rangeValue.textContent = `${this.estimatedRangeKm.toFixed(0)} km`;
+        }
+
+        // Battery status
+        const batteryStatus = document.getElementById('battery-status');
+        if (batteryStatus && this.lastRecommendation?.energy_context) {
+            const { need_service, reason_code } = this.lastRecommendation.energy_context;
+            if (need_service && reason_code === 'DESTINATION_NOT_REACHABLE') {
+                batteryStatus.textContent = '⚠️ Không đủ pin!';
+                batteryStatus.style.color = '#ff3b30';
+            } else if (need_service) {
+                batteryStatus.textContent = '⚠️ Pin thấp';
+                batteryStatus.style.color = '#ff9500';
+            } else {
+                batteryStatus.textContent = 'Bình thường';
+                batteryStatus.style.color = 'rgba(255,255,255,0.5)';
+            }
+        } else if (batteryStatus) {
+            batteryStatus.textContent = 'Bình thường';
+            batteryStatus.style.color = 'rgba(255,255,255,0.5)';
+        }
+
+        // Station alert
+        const stationAlert = document.getElementById('station-alert');
+        if (stationAlert) {
+            if (this.lastRecommendation?.has_recommendation && this.lastRecommendation.ranked_candidates?.length > 0) {
+                stationAlert.classList.remove('hidden');
+                const top = this.lastRecommendation.ranked_candidates[0];
+                const isSwap = top.service_type === 'BATTERY_SWAP';
+                document.getElementById('station-name').textContent = `Trạm ${top.station_id}`;
+                document.getElementById('station-detail').textContent =
+                    `Cách bạn ${Math.round(top.eta_to_station_s / 60)} phút • ${isSwap ? 'Đổi pin' : 'Sạc pin'}`;
+            } else {
+                stationAlert.classList.add('hidden');
+            }
+        }
+
+        // Progress
+        const progressText = document.getElementById('progress-text');
+        const progressFill = document.getElementById('progress-fill');
+        if (progressText && progressFill) {
+            const total = this.replay.observations?.length || 0;
+            const current = this.replay.currentIndex || 0;
+            progressText.textContent = `${current}/${total}`;
+            progressFill.style.width = total > 0 ? `${(current / total) * 100}%` : '0%';
+        }
+    }
+
+    // ─── Controls ──────────────────────────────────────────────────────
+
+    pauseTrip() {
+        this.replay.pause();
+        const btn = document.getElementById('btn-pause');
+        if (btn) {
+            btn.textContent = '▶ Tiếp tục';
+            btn.onclick = () => this.resumeTrip();
+        }
+    }
+
+    resumeTrip() {
+        this.replay.play();
+        const btn = document.getElementById('btn-pause');
+        if (btn) {
+            btn.textContent = '⏸ Dừng';
+            btn.onclick = () => this.pauseTrip();
+        }
+    }
+
+    completeTrip() {
+        this.setState(DriverState.TRIP_COMPLETE);
+        this.showTripComplete();
+    }
+
+    showTripComplete() {
+        const hud = document.getElementById('driver-hud');
+        if (hud) hud.classList.add('hidden');
+
+        // Show completion message
+        const select = document.getElementById('trip-select');
+        if (select) {
+            select.classList.remove('hidden');
+            select.innerHTML = `
+                <div class="trip-select-icon" style="background: linear-gradient(135deg, rgba(0,255,136,0.2), rgba(0,217,255,0.1));">✓</div>
+                <h2 class="trip-select-title">Hoàn thành chuyến!</h2>
+                <p class="trip-select-desc">Đã trả khách an toàn.</p>
+                ${this.lastRecommendation?.has_recommendation ? `
+                    <div class="station-alert" style="margin-top: 20px;">
+                        <div class="station-alert-icon">⚡</div>
+                        <div class="station-alert-info">
+                            <div class="station-alert-title">Khuyến nghị sạc pin</div>
+                            <div class="station-alert-detail">Trạm ${this.lastRecommendation.ranked_candidates[0].station_id} - ${Math.round(this.lastRecommendation.ranked_candidates[0].eta_to_station_s / 60)} phút</div>
+                        </div>
+                    </div>
+                ` : ''}
+                <button class="start-trip-btn" onclick="window.app.driverMode.returnToAvailable()">
+                    Chuyến tiếp theo
+                </button>
+            `;
+        }
+    }
+
+    returnToAvailable() {
+        this.generation++;
+        this.replay.clearSession();
+        this.replay.reset();
+        this.map.clearAll();
+        this.currentTrip = null;
+        this.currentPos = null;
+        this.matchedPos = null;
+        this.currentObservation = null;
+        this.lastRecommendation = null;
+        this.remainingTripDistanceKm = 0.0;
+        this.selectedTripId = null;
+
+        this.session.driver_id = null;
+        this.session.vehicle_id = null;
+        this.session.vehicle_category = null;
+        this.session.trip_id = null;
+        this.session.trajectory_id = null;
+
+        this.setState(DriverState.AVAILABLE);
+        this.renderTripSelect();
+    }
+
+    // ─── Legacy methods for compatibility ──────────────────────────────
+
+    stepTrip() {
+        if (this.state !== DriverState.TRIP_ACTIVE) return;
+        this.replay.step();
+    }
+
     playTrip() {
         if (this.state !== DriverState.TRIP_ACTIVE) return;
         this.replay.play();
     }
 
-    /**
-     * Pause trajectory replay.
-     */
-    pauseTrip() {
+    pauseTripLegacy() {
         this.replay.pause();
-    }
-
-    /**
-     * Return to available state.
-     */
-    returnToAvailable() {
-        this.replay.clearSession();
-        this.replay.reset();
-        this.map.clearAll();
-        this.currentTrip = null;
-        this.currentPos = null;
-        this.matchedPos = null;
-        this.lastRecommendation = null;
-        this.directRouteGeometry = null;
-        this.remainingTripDistanceKm = 0.0;
-        // Clear session context
-        this.session.driver_id = null;
-        this.session.vehicle_id = null;
-        this.session.vehicle_category = null;
-        this.session.trip_id = null;
-        this.session.trajectory_id = null;
-        this.setState(DriverState.AVAILABLE);
-        this.renderAvailableUI();
     }
 
     goOffline() {
         this.setState(DriverState.OFFLINE);
-        this.renderOfflineUI();
     }
 
     goOnline() {
         this.setState(DriverState.AVAILABLE);
-        this.renderAvailableUI();
     }
 
     cancelTrip() {
-        this.replay.clearSession();
-        this.replay.reset();
-        this.map.clearAll();
-        this.currentTrip = null;
-        this.currentPos = null;
-        this.matchedPos = null;
-        this.lastRecommendation = null;
-        this.directRouteGeometry = null;
-        // Clear session context
-        this.session.driver_id = null;
-        this.session.vehicle_id = null;
-        this.session.vehicle_category = null;
-        this.session.trip_id = null;
-        this.session.trajectory_id = null;
-        this.setState(DriverState.AVAILABLE);
-        this.renderAvailableUI();
-    }
-
-    // ─── UI Renderers ───────────────────────────────────────────────────────
-
-    renderAvailableUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        const tripOptions = this.trips.map(t => `
-            <option value="${t.trip_id}">
-                ${t.trip_id} — ${t.scenario_id} (${(t.planned_distance_m / 1000).toFixed(1)} km)
-            </option>
-        `).join('');
-
-        container.innerHTML = `
-            <div class="driver-available-card">
-                <div class="card-status-indicator">
-                    <span class="pulse-dot green"></span>
-                    <h3>Driver Online</h3>
-                </div>
-                <p class="text-muted">Select a trip to begin navigation.</p>
-
-                <div class="form-group mt-3">
-                    <label>Select Trip:</label>
-                    <select id="select-driver-trip" class="form-control">
-                        ${tripOptions}
-                    </select>
-                </div>
-
-                <div class="driver-actions mt-4">
-                    <button id="btn-accept-trip" class="btn btn-primary btn-lg btn-block">Start Trip</button>
-                    <button id="btn-go-offline" class="btn btn-outline btn-sm mt-2">Go Offline</button>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('btn-accept-trip')?.addEventListener('click', () => {
-            const tripId = document.getElementById('select-driver-trip')?.value;
-            this.assignTrip(tripId);
-        });
-
-        document.getElementById('btn-go-offline')?.addEventListener('click', () => this.goOffline());
-    }
-
-    renderOfflineUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="driver-available-card text-center">
-                <span class="pulse-dot gray"></span>
-                <h3>Driver is Offline</h3>
-                <p class="text-muted">Turn online to receive trip dispatches.</p>
-                <button id="btn-go-online" class="btn btn-primary btn-lg mt-3">Go Online</button>
-            </div>
-        `;
-
-        document.getElementById('btn-go-online')?.addEventListener('click', () => this.goOnline());
-    }
-
-    renderTripAssignedUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="driver-nav-hud">
-                <div class="hud-header">
-                    <span class="badge badge-info">TRIP ASSIGNED</span>
-                    <h3>${this.currentTrip?.trip_id}</h3>
-                </div>
-
-                <div class="hud-details">
-                    <div>Vehicle: <strong>${this.currentVehicle?.vehicle_model || 'VF 3'}</strong></div>
-                    <div>Distance: <strong>${(this.currentTrip?.planned_distance_m / 1000).toFixed(1)} km</strong></div>
-                    <div>Battery: <strong>${this.currentSocPct.toFixed(0)}%</strong></div>
-                </div>
-
-                <div class="driver-actions mt-4">
-                    <button id="btn-start-driving" class="btn btn-success btn-lg btn-block">Start Driving</button>
-                    <button id="btn-cancel-trip" class="btn btn-outline btn-sm mt-2">Cancel</button>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('btn-start-driving')?.addEventListener('click', () => this.startTrip());
-        document.getElementById('btn-cancel-trip')?.addEventListener('click', () => this.cancelTrip());
-    }
-
-    renderTripActiveUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        // Get ETA from backend recommendation or direct route
-        let etaMin = '—';
-        if (this.lastRecommendation?.ranked_candidates?.length > 0) {
-            const top = this.lastRecommendation.ranked_candidates[0];
-            etaMin = (top.eta_to_station_s / 60).toFixed(0);
-        } else if (this.directRouteGeometry) {
-            // Fallback: use direct route ETA (requires re-fetch or stored value)
-            // For now show remaining distance context
-            etaMin = '—';
-        }
-
-        const warningBanner = renderEnergyWarningBanner(this.lastRecommendation?.energy_context);
-
-        let recSnippet = '';
-        if (this.lastRecommendation?.has_recommendation) {
-            const top = this.lastRecommendation.ranked_candidates[0];
-            const isSwap = top.service_type === 'BATTERY_SWAP';
-            const detourKm = top.features.detour_distance_m
-                ? (top.features.detour_distance_m / 1000).toFixed(1)
-                : '?';
-            const completionMin = top.eta_to_service_complete_s
-                ? (top.eta_to_service_complete_s / 60).toFixed(0)
-                : '?';
-            recSnippet = `
-                <div class="on-trip-rec-alert ${isSwap ? 'border-swap' : 'border-charge'}">
-                    <div>
-                        <strong>${top.station_id}</strong> — ${isSwap ? 'Battery Swap' : 'Charging'}
-                        <div class="text-sm text-muted">
-                            +${detourKm} km detour · Ready in ${completionMin} min
-                        </div>
-                    </div>
-                    <span class="badge ${isSwap ? 'badge-purple' : 'badge-teal'}">Recommended</span>
-                </div>
-            `;
-        }
-
-        // Show position status
-        const posStatus = this.matchedPos
-            ? `<span class="text-success">Road: ${this.matchedPos.road_segment_id || 'matched'}</span>`
-            : '<span class="text-muted">Acquiring position...</span>';
-
-        const progress = this.replay.getProgressText?.() || '';
-
-        container.innerHTML = `
-            <div class="driver-nav-hud">
-                ${warningBanner}
-
-                <div class="nav-metrics-card">
-                    <div class="nav-destination">
-                        <span class="text-sm text-muted">Destination</span>
-                        <div class="dest-name">Passenger Drop-off</div>
-                    </div>
-
-                    <div class="nav-stats-grid">
-                        <div class="stat-box">
-                            <span class="stat-label">Remaining</span>
-                            <span class="stat-value">${this.remainingTripDistanceKm.toFixed(1)} <small>km</small></span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">ETA</span>
-                            <span class="stat-value">${etaMin} <small>min</small></span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">SOC</span>
-                            <span class="stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}">${this.currentSocPct.toFixed(0)}%</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">Range</span>
-                            <span class="stat-value">${this.estimatedRangeKm.toFixed(0)} <small>km</small></span>
-                        </div>
-                    </div>
-
-                    <div class="battery-bar-container">
-                        <div class="battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}" style="width: ${Math.max(5, this.currentSocPct)}%;"></div>
-                    </div>
-
-                    <div class="text-xs text-muted mt-2">
-                        ${posStatus} · ${progress}
-                    </div>
-                </div>
-
-                ${recSnippet}
-
-                <div class="driver-controls mt-4">
-                    <div class="replay-controls d-flex gap-2 mb-2">
-                        <button id="btn-replay-play" class="btn btn-primary btn-sm">▶ Play</button>
-                        <button id="btn-replay-pause" class="btn btn-outline btn-sm" disabled>⏸ Pause</button>
-                        <button id="btn-replay-step" class="btn btn-outline btn-sm">⏭ Step</button>
-                    </div>
-                    <button id="btn-complete-trip" class="btn btn-outline btn-sm btn-block">Complete Trip Now</button>
-                </div>
-            </div>
-        `;
-
-        // Bind replay controls
-        document.getElementById('btn-replay-play')?.addEventListener('click', () => this.playTrip());
-        document.getElementById('btn-replay-pause')?.addEventListener('click', () => this.pauseTrip());
-        document.getElementById('btn-replay-step')?.addEventListener('click', () => this.stepTrip());
-        document.getElementById('btn-complete-trip')?.addEventListener('click', () => {
-            this.setState(DriverState.TRIP_COMPLETE);
-            this.renderTripCompleteUI();
-        });
-    }
-
-    renderTripCompleteUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        const warningBanner = renderEnergyWarningBanner(this.lastRecommendation?.energy_context);
-        const recCard = renderRecommendationCard(this.lastRecommendation);
-
-        container.innerHTML = `
-            <div class="driver-nav-hud">
-                <div class="completion-header text-center">
-                    <span class="check-icon">✓</span>
-                    <h3>Trip Completed</h3>
-                    <p class="text-muted">Passenger dropped off safely.</p>
-                </div>
-
-                ${warningBanner}
-
-                <div class="mt-3">
-                    ${recCard}
-                </div>
-
-                <div class="driver-actions mt-4">
-                    <button id="btn-back-available" class="btn btn-primary btn-lg btn-block">Return to Available</button>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('btn-back-available')?.addEventListener('click', () => this.returnToAvailable());
+        this.returnToAvailable();
     }
 }
