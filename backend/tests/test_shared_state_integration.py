@@ -20,7 +20,7 @@ from datetime import datetime, timezone, timedelta
 
 
 BASE_URL_A = "http://127.0.0.1:8000"
-BASE_URL_B = "http://127.0.0.1:8001"
+BASE_URL_B = "http://127.0.0.1:8002"
 DRIVER_ID = "test_integration_driver"
 
 
