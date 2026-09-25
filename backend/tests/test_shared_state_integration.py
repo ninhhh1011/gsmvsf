@@ -44,57 +44,43 @@ def skip_if_no_redis(redis_available):
 
 
 @pytest.fixture(scope="module")
-async def two_instances(skip_if_no_redis):
-    """Start two API instances and yield their URLs."""
-    # Check if backend server is already running
-    proc_a = None
-    proc_b = None
-
+def api_available():
+    """Check if API instance is running."""
     try:
-        # Check if port 8000 is already listening
+        import requests
+        # Use /api/v1/drivers endpoint instead of /ready (which checks PBF path)
+        r = requests.get("http://127.0.0.1:8000/api/v1/drivers", timeout=5)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+@pytest.fixture(scope="module")
+def skip_if_no_api(api_available):
+    """Skip tests if API not available."""
+    if not api_available:
+        pytest.skip("API instance not available")
+
+
+@pytest.fixture(scope="module")
+async def two_instances(skip_if_no_redis, skip_if_no_api):
+    """Use existing API instances from docker-compose."""
+    import requests
+
+    # Verify both instances are reachable
+    for port in [8000, 8001]:
+        url = f"http://127.0.0.1:{port}/api/v1/drivers"
         try:
-            async with httpx.AsyncClient() as client:
-                await client.get(f"{BASE_URL_A}/ready", timeout=2)
-            port_8000_active = True
-        except:
-            port_8000_active = False
+            resp = requests.get(url, timeout=5)
+            if resp.status_code != 200:
+                pytest.skip(f"API on port {port} not ready: {resp.status_code}")
+        except Exception as e:
+            pytest.skip(f"API on port {port} not reachable: {e}")
 
-        # Start second instance on port 8001
-        proc_b = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn",
-             "backend.app.main:app",
-             "--port", "8001",
-             "--host", "127.0.0.1"],
-            cwd="e:/build6week",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        # Wait for second instance to start
-        max_wait = 30
-        started = False
-        for _ in range(max_wait):
-            try:
-                async with httpx.AsyncClient() as client:
-                    await client.get(f"{BASE_URL_B}/ready", timeout=1)
-                    started = True
-                    break
-            except:
-                await asyncio.sleep(1)
-
-        if not started:
-            raise RuntimeError("Could not start second API instance")
-
-        yield BASE_URL_A, BASE_URL_B
-
-    finally:
-        if proc_b:
-            proc_b.terminate()
-            proc_b.wait(timeout=5)
+    yield BASE_URL_A, BASE_URL_B
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(True, reason="Requires two running API instances - manual test")
 async def test_post_instance_a_get_instance_b(two_instances):
     """
     A: POST matched state on instance A, GET from instance B via Redis.
@@ -137,7 +123,6 @@ async def test_post_instance_a_get_instance_b(two_instances):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(True, reason="Requires two running API instances - manual test")
 async def test_concurrent_writes(two_instances):
     """
     B: Concurrent writes from both instances.
@@ -192,7 +177,6 @@ async def test_concurrent_writes(two_instances):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(True, reason="Requires two running API instances - manual test")
 async def test_reset_clears_all_instances(two_instances):
     """
     D: Reset from one instance clears state visible from another.
@@ -230,7 +214,6 @@ async def test_reset_clears_all_instances(two_instances):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(True, reason="Requires two running API instances - manual test")
 async def test_stale_observation_rejected(two_instances):
     """
     C: Stale observation (before last timestamp) is rejected.
@@ -272,6 +255,99 @@ async def test_stale_observation_rejected(two_instances):
         assert data["status"] == "STALE_OBSERVATION", f"Expected STALE_OBSERVATION, got {data['status']}"
 
         # Cleanup
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+
+
+@pytest.mark.asyncio
+async def test_no_duplicate_observation_counting(two_instances):
+    """
+    E: Observations are counted per request, even if sent from different instances.
+
+    Expected: Each instance sees consistent state for its own requests.
+    The API doesn't deduplicate across instances based on observation_id.
+    """
+    url_a, url_b = two_instances
+    driver = f"{DRIVER_ID}_dup"
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+
+        # Send observation from instance A
+        ts = datetime.now(timezone.utc).isoformat()
+        obs = {
+            "latitude": 21.03,
+            "longitude": 105.03,
+            "timestamp": ts,
+            "speed_kmh": 30,
+            "heading_deg": 90,
+        }
+
+        resp1 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs)
+        assert resp1.status_code == 200
+        count1 = resp1.json()["total_observations"]
+
+        # Send different observation from instance B
+        obs_b = {
+            "latitude": 21.04,
+            "longitude": 105.04,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "speed_kmh": 30,
+            "heading_deg": 90,
+        }
+        resp_b = await client.post(f"{url_b}/api/v1/drivers/{driver}/location", json=obs_b)
+        assert resp_b.status_code == 200
+
+        # Both instances should see consistent count
+        resp_a = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
+        resp_a_count = resp_a.json()["total_observations"]
+
+        resp_b = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
+        resp_b_count = resp_b.json()["total_observations"]
+
+        assert resp_a_count == resp_b_count, \
+            f"Both instances should see same total: {resp_a_count} vs {resp_b_count}"
+
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+
+
+@pytest.mark.asyncio
+async def test_sequential_writes_increment_version(two_instances):
+    """
+    F: Sequential writes should increment version, latest write wins.
+
+    Expected: Both instances see consistent final state.
+    """
+    url_a, url_b = two_instances
+    driver = f"{DRIVER_ID}_seq"
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+
+        # Send 3 sequential observations with vehicle_category to avoid map matching errors
+        for i in range(3):
+            obs = {
+                "latitude": 21.04 + i * 0.001,
+                "longitude": 105.04 + i * 0.001,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "speed_kmh": 30 + i * 5,
+                "heading_deg": 90,
+                "vehicle_category": "EV_CAR",
+            }
+            resp = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs)
+            assert resp.status_code == 200
+
+        # Both instances should see same final state
+        resp_a = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
+        resp_b = await client.get(f"{url_b}/api/v1/drivers/{driver}/location")
+
+        data_a = resp_a.json()
+        data_b = resp_b.json()
+
+        assert data_a["buffered_points"] == data_b["buffered_points"], \
+            f"Points mismatch: {data_a['buffered_points']} vs {data_b['buffered_points']}"
+        assert data_a["total_observations"] == data_b["total_observations"], \
+            f"Total observations mismatch: {data_a['total_observations']} vs {data_b['total_observations']}"
+
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
 
 
