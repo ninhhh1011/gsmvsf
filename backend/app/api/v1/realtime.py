@@ -201,7 +201,15 @@ async def _add_observation_with_cas(
             return current, True, False, ""
 
         # Step 5: Apply mutation - add observation
-        gap_reset, gap_reason = current.add_observation(obs)
+        # This may raise ValueError if same-ID/different-payload (conflict)
+        try:
+            gap_reset, gap_reason = current.add_observation(obs)
+        except ValueError as e:
+            # Same observation ID but different payload - conflict
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Observation conflict: {str(e)}",
+            )
 
         # Step 6: Get base version for CAS from repository
         # Note: state objects don't have version; it's stored in the snapshot

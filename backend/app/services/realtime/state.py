@@ -8,6 +8,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import hashlib
 
 
 # Constants from benchmark policy
@@ -16,6 +17,39 @@ DEFAULT_MAX_CONTEXT_POINTS = 50
 DEFAULT_GAP_THRESHOLD_SECONDS = 60.0
 DEFAULT_STATIONARY_THRESHOLD = 3  # consecutive observations
 DEFAULT_STATIONARY_DISTANCE_M = 5.0  # movement below this = stationary
+
+# Dedup retention limits
+MAX_SEEN_IDS = 10000  # Maximum dedup entries before cleanup
+
+
+def canonical_payload_hash(obs: "GPSObservation") -> str:
+    """
+    Generate canonical payload hash for deduplication.
+
+    Uses meaningful fields only (not server-generated or redundant fields):
+    - latitude, longitude, timestamp (canonical)
+    - speed_kmh, heading_deg (if present)
+    - NOT: observation_id, driver_id, accuracy_m (not part of identity)
+    """
+    # Normalize timestamp for comparison
+    ts = ensure_utc(obs.timestamp)
+    ts_str = ts.isoformat() if ts else ""
+
+    # Build canonical representation
+    canonical_parts = [
+        f"{obs.latitude:.8f}",
+        f"{obs.longitude:.8f}",
+        ts_str,
+    ]
+
+    # Add optional fields if present
+    if obs.speed_kmh is not None:
+        canonical_parts.append(f"{obs.speed_kmh:.2f}")
+    if obs.heading_deg is not None:
+        canonical_parts.append(f"{obs.heading_deg:.1f}")
+
+    canonical_str = "|".join(canonical_parts)
+    return hashlib.sha256(canonical_str.encode()).hexdigest()[:16]
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -144,6 +178,21 @@ class DriverTraceState:
     current_status: str = "WARMING_UP"
     generation: int = 1  # Incremented on reset to invalidate old requests
     seen_observation_ids: set = field(default_factory=set)  # For deduplication
+    seen_payloads: dict = field(default_factory=dict)  # ID -> payload hash for conflict detection
+
+    def _cleanup_dedup(self):
+        """Cleanup old dedup entries if over limit."""
+        if len(self.seen_observation_ids) > MAX_SEEN_IDS:
+            # Keep only most recent half
+            ids_to_remove = len(self.seen_observation_ids) - (MAX_SEEN_IDS // 2)
+            # Remove oldest entries (set order not guaranteed, so just remove arbitrary)
+            for _ in range(ids_to_remove):
+                if self.seen_observation_ids:
+                    self.seen_observation_ids.pop()
+            # Also cleanup payloads dict
+            for key in list(self.seen_payloads.keys()):
+                if key not in self.seen_observation_ids:
+                    del self.seen_payloads[key]
 
     def add_observation(self, obs: GPSObservation) -> tuple[bool, str]:
         """
@@ -151,6 +200,9 @@ class DriverTraceState:
 
         Returns:
             (was_gap_reset, gap_reason)
+
+        Raises:
+            ValueError: If same observation_id has different payload (conflict)
         """
         gap_reset = False
         gap_reason = ""
@@ -159,10 +211,21 @@ class DriverTraceState:
         normalized_ts = ensure_utc(obs.timestamp)
         obs.timestamp = normalized_ts
 
-        # Check for duplicate observation
-        if obs.observation_id and obs.observation_id in self.seen_observation_ids:
-            # Skip duplicate - do not increment counters
-            return gap_reset, gap_reason
+        # Check for duplicate observation (same ID)
+        if obs.observation_id:
+            if obs.observation_id in self.seen_observation_ids:
+                # Check if payload matches
+                current_hash = self.seen_payloads.get(obs.observation_id)
+                if current_hash is not None:
+                    new_hash = canonical_payload_hash(obs)
+                    if current_hash != new_hash:
+                        # Same ID but different payload - conflict
+                        raise ValueError(
+                            f"Observation ID conflict: ID '{obs.observation_id}' exists with different payload. "
+                            f"Previous payload hash: {current_hash}, new: {new_hash}"
+                        )
+                # Same ID, same payload (or no hash stored) - skip duplicate
+                return gap_reset, gap_reason
 
         # Check for gap (session reset)
         last_ts = self.last_observation_timestamp
@@ -199,9 +262,14 @@ class DriverTraceState:
         self.observations.append(obs)
         if obs.observation_id:
             self.seen_observation_ids.add(obs.observation_id)
+            # Store payload hash for conflict detection
+            self.seen_payloads[obs.observation_id] = canonical_payload_hash(obs)
         self.last_observation_timestamp = obs.timestamp
         self.observations_since_match += 1
         self.total_observations_received += 1
+
+        # Cleanup dedup if over limit
+        self._cleanup_dedup()
 
         return gap_reset, gap_reason
 
@@ -241,6 +309,7 @@ class DriverTraceState:
         """Reset state and increment generation to invalidate old requests."""
         self.observations.clear()
         self.seen_observation_ids.clear()  # Clear dedup set
+        self.seen_payloads.clear()  # Clear payload hashes
         self.last_match_time = None
         self.last_matched_state = None
         self.movement_since_match = 0.0

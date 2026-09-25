@@ -146,6 +146,7 @@ class DriverTraceStateSnapshot:
     version: int = 1  # For optimistic concurrency control
     generation: int = 1  # Incremented on reset to invalidate old requests
     seen_observation_ids: list = field(default_factory=list)  # For deduplication
+    seen_payloads: dict = field(default_factory=dict)  # ID -> payload hash for conflict detection
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), default=str)
@@ -153,6 +154,9 @@ class DriverTraceStateSnapshot:
     @classmethod
     def from_json(cls, raw: str) -> "DriverTraceStateSnapshot":
         data = json.loads(raw)
+        # Handle missing seen_payloads for old snapshots
+        if 'seen_payloads' not in data:
+            data['seen_payloads'] = {}
         return cls(**data)
 
     def to_observations_deque(self) -> deque[GPSObservation]:
@@ -170,6 +174,10 @@ class DriverTraceStateSnapshot:
     def to_seen_ids_set(self) -> set:
         """Reconstruct the seen observation IDs set."""
         return set(self.seen_observation_ids)
+
+    def to_seen_payloads_dict(self) -> dict:
+        """Reconstruct the seen payloads dict."""
+        return dict(self.seen_payloads)
 
 
 class DriverStateRepository(ABC):

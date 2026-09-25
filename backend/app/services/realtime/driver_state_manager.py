@@ -42,6 +42,7 @@ def snapshot_to_trace_state(snapshot: DriverTraceStateSnapshot) -> DriverTraceSt
     state = DriverTraceState(driver_id=snapshot.driver_id)
     state.observations = snapshot.to_observations_deque()
     state.seen_observation_ids = snapshot.to_seen_ids_set()
+    state.seen_payloads = snapshot.to_seen_payloads_dict()
     state.movement_since_match = snapshot.movement_since_match
     state.observations_since_match = snapshot.observations_since_match
     state.consecutive_stationary = snapshot.consecutive_stationary

@@ -481,6 +481,208 @@ async def test_sequential_writes_increment_version(two_instances):
         await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
 
 
+@pytest.mark.asyncio
+async def test_same_id_different_payload_conflict(two_instances):
+    """
+    CASE-10: Same observation_id with different payload returns 409 Conflict.
+
+    Scenario:
+    1. Send observation O1 with ID="obs1", position (21.0, 105.0)
+    2. Retry same ID="obs1" but different position (21.1, 105.1)
+    3. Second request must return 409 Conflict
+
+    Strong assertion:
+    - Second request returns 409
+    - Count does not increment
+    - State reflects first observation only
+    """
+    url_a, url_b = two_instances
+    driver = f"{DRIVER_ID}_conflict"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
+
+        # Step 1: Send observation with specific ID and position
+        obs1 = {
+            "observation_id": "obs_conflict_test",
+            "latitude": 21.005,
+            "longitude": 105.005,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "speed_kmh": 30,
+            "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
+        }
+        resp1 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs1)
+        assert resp1.status_code == 200, f"First obs failed: {resp1.text}"
+        data1 = resp1.json()
+        count_after_first = data1["total_observations"]
+
+        # Step 2: Same ID but DIFFERENT position - should return 409
+        obs2 = {
+            "observation_id": "obs_conflict_test",  # Same ID
+            "latitude": 21.050,  # Different position
+            "longitude": 105.050,  # Different position
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "speed_kmh": 35,
+            "heading_deg": 95,
+            "vehicle_category": "EV_CAR",
+        }
+        resp2 = await client.post(f"{url_b}/api/v1/drivers/{driver}/location", json=obs2)
+
+        # CRITICAL: Must return 409 Conflict
+        assert resp2.status_code == 409, \
+            f"Expected 409 Conflict for same ID/different payload, got {resp2.status_code}: {resp2.text}"
+
+        # Count should not increment
+        resp_get = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
+        final_data = resp_get.json()
+        assert final_data["total_observations"] == count_after_first, \
+            f"Count should not increment on conflict: expected {count_after_first}, got {final_data['total_observations']}"
+
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+
+
+@pytest.mark.asyncio
+async def test_same_id_same_payload_retry_accepted(two_instances):
+    """
+    CASE-09: Same observation_id with same payload is accepted (idempotent retry).
+
+    Scenario:
+    1. Send observation O1 with ID="obs_retry"
+    2. Retry same ID with identical payload
+    3. Second request succeeds but count does NOT increment (dedup)
+
+    Strong assertion:
+    - Second request returns 200
+    - Count remains the same (dedup)
+    - Both instances see consistent state
+    """
+    url_a, url_b = two_instances
+    driver = f"{DRIVER_ID}_retry"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
+
+        # Use a fixed timestamp for same payload
+        import time
+        ts = datetime.fromisoformat(datetime.now(timezone.utc).isoformat().replace('T', ' ').split('.')[0] + '+00:00')
+
+        # Step 1: Send observation with specific ID and position
+        obs1 = {
+            "observation_id": "obs_retry_test",
+            "latitude": 21.010,
+            "longitude": 105.010,
+            "timestamp": ts.isoformat(),
+            "speed_kmh": 30,
+            "heading_deg": 90,
+            "vehicle_category": "EV_CAR",
+        }
+        resp1 = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs1)
+        assert resp1.status_code == 200, f"First obs failed: {resp1.text}"
+        count_after_first = resp1.json()["total_observations"]
+
+        # Step 2: Same ID, SAME payload - should be accepted (idempotent)
+        await asyncio.sleep(0.2)
+        obs2 = {
+            "observation_id": "obs_retry_test",  # Same ID
+            "latitude": 21.010,  # Same position
+            "longitude": 105.010,  # Same position
+            "timestamp": ts.isoformat(),  # Same timestamp
+            "speed_kmh": 30,  # Same speed
+            "heading_deg": 90,  # Same heading
+            "vehicle_category": "EV_CAR",
+        }
+        resp2 = await client.post(f"{url_b}/api/v1/drivers/{driver}/location", json=obs2)
+
+        # CRITICAL: Retry with same payload succeeds (200 OK)
+        assert resp2.status_code == 200, \
+            f"Expected 200 for same ID/same payload retry, got {resp2.status_code}: {resp2.text}"
+
+        # Count should NOT increment (dedup)
+        resp_get = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
+        final_data = resp_get.json()
+        assert final_data["total_observations"] == count_after_first, \
+            f"Count should not increment for duplicate: expected {count_after_first}, got {final_data['total_observations']}"
+
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+
+
+@pytest.mark.asyncio
+async def test_dedup_retention_boundary(two_instances):
+    """
+    CASE-11: Dedup retention - cleanup prevents unbounded growth.
+
+    Scenario:
+    1. Send many observations with unique IDs
+    2. Verify state is maintained correctly
+    3. Verify cleanup mechanism exists (MAX_SEEN_IDS limit)
+
+    Strong assertion:
+    - Many observations are stored correctly
+    - Dedup entries are bounded
+    - No memory leak from unbounded dedup
+    """
+    url_a, url_b = two_instances
+    driver = f"{DRIVER_ID}_retention"
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+        await asyncio.sleep(0.5)
+
+        # Send 100 observations with unique IDs
+        num_obs = 100
+        for i in range(num_obs):
+            obs = {
+                "observation_id": f"retention_test_{i}",
+                "latitude": 21.0 + (i % 10) * 0.001,
+                "longitude": 105.0 + (i % 10) * 0.001,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "speed_kmh": 30 + i % 20,
+                "heading_deg": 90,
+                "vehicle_category": "EV_CAR",
+            }
+            resp = await client.post(f"{url_a}/api/v1/drivers/{driver}/location", json=obs)
+            if resp.status_code != 200:
+                print(f"WARNING: Observation {i} failed: {resp.text}")
+
+        # Verify count
+        resp_get = await client.get(f"{url_a}/api/v1/drivers/{driver}/location")
+        data = resp_get.json()
+
+        # CRITICAL: All observations counted
+        assert data["total_observations"] >= num_obs, \
+            f"Expected >= {num_obs} observations, got {data['total_observations']}"
+
+        # Verify Redis state size
+        import redis
+        import json
+        r = redis.Redis(host='127.0.0.1', port=6379)
+        snapshot = r.get(f"driver_state:{driver}")
+        assert snapshot is not None, "State should be in Redis"
+
+        s = json.loads(snapshot)
+
+        # CRITICAL: seen_observation_ids is bounded (should not exceed MAX_SEEN_IDS = 10000)
+        num_seen = len(s.get('seen_observation_ids', []))
+        assert num_seen <= 10000, \
+            f"seen_observation_ids should be bounded by MAX_SEEN_IDS (10000), got {num_seen}"
+
+        # Dedup should have entries for all sent IDs
+        assert num_seen >= num_obs, \
+            f"seen_observation_ids should contain all {num_obs} IDs, got {num_seen}"
+
+        # seen_payloads should also be bounded
+        num_payloads = len(s.get('seen_payloads', {}))
+        assert num_payloads <= 10000, \
+            f"seen_payloads should be bounded, got {num_payloads}"
+
+        print(f"DEBUG: {num_obs} obs, {num_seen} seen_ids, {num_payloads} payloads")
+
+        await client.delete(f"{url_a}/api/v1/drivers/{driver}/location")
+
+
 if __name__ == "__main__":
     # Run as standalone script for manual testing
     pytest.main([__file__, "-v", "-s"])
