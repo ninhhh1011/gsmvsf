@@ -276,6 +276,11 @@ async def ingest_location(
     # Check warm-up
     if state.is_warming_up():
         state.current_status = MatchingStatus.WARMING_UP.value
+        # Persist state (in case it was modified by gap reset)
+        try:
+            await _persist_state_with_retry(driver_id, state)
+        except DriverStateUnavailableError:
+            pass
         return LocationResponse(
             driver_id=driver_id,
             status=MatchingStatus.WARMING_UP,
@@ -290,6 +295,11 @@ async def ingest_location(
     if state.is_stationary() and state.last_matched_state is not None:
         state.current_status = MatchingStatus.GPS_ACCEPTED.value
         state.last_trigger_reason = "STATIONARY_SUPPRESSED"
+        # Persist state
+        try:
+            await _persist_state_with_retry(driver_id, state)
+        except DriverStateUnavailableError:
+            pass
         return LocationResponse(
             driver_id=driver_id,
             status=MatchingStatus.GPS_ACCEPTED,
@@ -325,6 +335,11 @@ async def ingest_location(
 
     if not should_trigger:
         state.current_status = MatchingStatus.GPS_ACCEPTED.value
+        # Persist state
+        try:
+            await _persist_state_with_retry(driver_id, state)
+        except DriverStateUnavailableError:
+            pass
         return LocationResponse(
             driver_id=driver_id,
             status=MatchingStatus.GPS_ACCEPTED,
