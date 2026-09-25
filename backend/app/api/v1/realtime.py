@@ -149,9 +149,10 @@ async def _add_observation_with_cas(
     This function:
     1. Reads current state from Redis
     2. Checks for stale observation
-    3. Adds observation to state
-    4. Attempts CAS save
-    5. On conflict, re-reads and retries
+    3. Checks generation for reset detection
+    4. Adds observation to state
+    5. Attempts CAS save
+    6. On conflict, re-reads and retries
 
     Returns:
         (state, stale, gap_reset, gap_reason): The final state and flags
@@ -166,9 +167,23 @@ async def _add_observation_with_cas(
     if obs_ts.tzinfo is not None:
         obs_ts = obs_ts.replace(tzinfo=None)
 
+    expected_generation = None  # Track generation to detect resets
+
     for attempt in range(max_retries):
         # Read current state
         state = await state_manager.get_or_create(driver_id)
+
+        # Check generation - if reset occurred, start fresh
+        if expected_generation is not None and state.generation != expected_generation:
+            # Reset occurred during processing - start with fresh state
+            logger.debug(
+                f"Driver {driver_id}: generation changed from {expected_generation} to {state.generation}, "
+                f"reset detected, starting fresh"
+            )
+            state = DriverTraceState(driver_id=driver_id)
+            state.generation = state.generation  # Keep current generation
+
+        expected_generation = state.generation
 
         # Check stale
         last_ts = state.last_observation_timestamp

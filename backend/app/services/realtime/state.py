@@ -127,6 +127,7 @@ class DriverTraceState:
     last_trigger_reason: Optional[str] = None
     last_match_latency_ms: Optional[float] = None
     current_status: str = "WARMING_UP"
+    generation: int = 1  # Incremented on reset to invalidate old requests
 
     def add_observation(self, obs: GPSObservation) -> tuple[bool, str]:
         """
@@ -206,6 +207,17 @@ class DriverTraceState:
         self.observations_since_match = 0
         self.last_matched_state = matched_state
         self.total_match_calls += 1
+
+    def reset_state(self):
+        """Reset state and increment generation to invalidate old requests."""
+        self.observations.clear()
+        self.last_match_time = None
+        self.last_matched_state = None
+        self.movement_since_match = 0.0
+        self.observations_since_match = 0
+        self.consecutive_stationary = 0
+        self.total_match_calls = 0
+        self.generation += 1  # Invalidate requests from previous generation
 
     def get_current_raw_position(self) -> Optional[tuple[float, float]]:
         """Get most recent raw GPS position."""

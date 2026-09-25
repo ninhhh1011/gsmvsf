@@ -49,6 +49,7 @@ def snapshot_to_trace_state(snapshot: DriverTraceStateSnapshot) -> DriverTraceSt
     state.last_trigger_reason = snapshot.last_trigger_reason
     state.last_match_latency_ms = snapshot.last_match_latency_ms
     state.current_status = snapshot.current_status
+    state.generation = getattr(snapshot, 'generation', 1)  # Default to 1 for old snapshots
 
     if snapshot.last_match_time:
         state.last_match_time = datetime.fromisoformat(snapshot.last_match_time)
@@ -78,6 +79,7 @@ def trace_state_to_snapshot(state: DriverTraceState, version: int = 1) -> Driver
         last_match_latency_ms=state.last_match_latency_ms,
         current_status=state.current_status,
         version=version,
+        generation=state.generation,
     )
 
 
@@ -429,7 +431,13 @@ class DriverStateManager:
         )
 
     async def delete(self, driver_id: str) -> None:
-        """Delete driver state."""
+        """
+        Delete driver state.
+
+        In Redis mode, we create a fresh state with incremented generation
+        instead of deleting. This prevents old requests (that started before
+        reset) from resurrecting state if they complete after reset.
+        """
         repo = self._get_repo()
 
         if repo is None:
@@ -441,8 +449,24 @@ class DriverStateManager:
             await repo.delete(driver_id)
             return
 
-        # Redis mode
-        await repo.delete(driver_id)
+        # Redis mode - create fresh state with incremented generation
+        # This prevents old pending requests from resurrecting state
+        try:
+            # Read current state to get generation
+            current = await repo.get(driver_id)
+            current_gen = current.generation + 1 if current else 1
+
+            # Create fresh state
+            new_state = DriverTraceState(driver_id=driver_id)
+            new_state.generation = current_gen
+            snapshot = trace_state_to_snapshot(new_state, version=1)
+
+            # Save with CAS (use version=0 to always succeed for new state)
+            await repo.save(snapshot)
+        except Exception as e:
+            # If save fails, try to delete anyway
+            await repo.delete(driver_id)
+            logger.warning(f"Failed to reset driver state, fell back to delete: {e}")
 
     async def health_check(self) -> bool:
         """

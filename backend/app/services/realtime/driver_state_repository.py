@@ -144,6 +144,7 @@ class DriverTraceStateSnapshot:
     last_match_latency_ms: Optional[float] = None
     current_status: str = "WARMING_UP"
     version: int = 1  # For optimistic concurrency control
+    generation: int = 1  # Incremented on reset to invalidate old requests
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), default=str)
