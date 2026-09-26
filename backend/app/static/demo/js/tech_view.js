@@ -721,14 +721,14 @@ export class TechViewController {
                 <td><span class="rank-badge ${c.rank === 1 ? 'rank-1' : ''}">${c.rank}</span></td>
                 <td><strong>${c.station_id}</strong></td>
                 <td><span class="badge ${c.service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${c.service_type}</span></td>
-                <td>${c.eta_to_station_min} m</td>
-                <td>${c.queue_wait_min} m</td>
-                <td>${c.service_duration_min} m</td>
-                <td><strong>${c.eta_complete_min} m</strong></td>
-                <td>${c.detour_min} m</td>
+                <td>${c.eta_to_station_min} phút</td>
+                <td>${c.queue_wait_min} phút</td>
+                <td>${c.service_duration_min} phút</td>
+                <td><strong>${c.eta_complete_min} phút</strong></td>
+                <td>${c.detour_min} phút</td>
                 <td>${c.available_capacity}</td>
                 <td>${c.station_fresh ? '✓ Fresh' : '⚠️ Stale'}</td>
-                <td><strong>${c.final_cost_min} m</strong></td>
+                <td><strong>${c.final_cost_min} phút</strong></td>
             </tr>
         `).join('');
 
@@ -750,7 +750,7 @@ export class TechViewController {
                             <th>Detour</th>
                             <th>Cap.</th>
                             <th>Freshness</th>
-                            <th>Final Cost</th>
+                            <th>Tổng thời gian</th>
                         </tr>
                     </thead>
                     <tbody>

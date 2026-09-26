@@ -191,22 +191,15 @@ class StationCatalog:
                 svc_time = float(sr.get("swap_service_time_min", SWAP_SERVICE_TIME_MIN))
                 qlen = int(qr.get("swap_queue_length", 0)) if qr is not None else 0
         else:
-            # Default nominal state when point-in-time status is not available (e.g., live runtime)
-            op = "OPEN"
-            if service_type == ServiceType.CHARGING:
-                slots_avail = station.charging_slots
-                swap_batt = 0
-                capacity = slots_avail
-                wait = 0.0
-                svc_time = CHARGING_SERVICE_TIME_MIN if station.charging_slots > 0 else 0.0
-                qlen = 0
-            else:
-                slots_avail = station.swap_slots
-                swap_batt = station.swap_slots * 2 if op == "OPEN" else 0
-                capacity = slots_avail
-                wait = 0.0
-                svc_time = SWAP_SERVICE_TIME_MIN if station.swap_slots > 0 else 0.0
-                qlen = 0
+            # Fallback when point-in-time snapshot is not available:
+            # Strictly NEVER fabricate nominal OPEN status or static slot capacity as live available.
+            op = "UNKNOWN"
+            slots_avail = 0
+            swap_batt = 0
+            capacity = 0
+            wait = None
+            svc_time = 0.0
+            qlen = 0
 
         return StationOperationalSnapshot(
             operating_status=op,

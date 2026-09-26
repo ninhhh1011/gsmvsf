@@ -9,7 +9,13 @@ import { ApiError } from './api.js';
 
 export function classifyEnergyWarning(energyContext) {
     if (!energyContext) {
-        return { level: 'SAFE', title: 'Trạng thái năng lượng: AN TOÀN', message: 'Dữ liệu pin bình thường.', reasonCode: 'NOMINAL' };
+        return {
+            level: 'SAFE',
+            title: 'Trạng thái năng lượng: An toàn',
+            testToken: 'SAFE',
+            message: 'Dữ liệu pin bình thường.',
+            reasonCode: 'NOMINAL'
+        };
     }
 
     const { need_service, reason_code, estimated_remaining_range_km, remaining_trip_distance_km, energy_margin_km } = energyContext;
@@ -17,8 +23,9 @@ export function classifyEnergyWarning(energyContext) {
     if (!need_service || reason_code === 'SUFFICIENT_SOC_RANGE') {
         return {
             level: 'SAFE',
-            title: 'Trạng thái năng lượng: AN TOÀN',
-            message: 'Tầm xa ước tính đủ cho chuyến đi hiện tại và dự phòng.',
+            title: 'Trạng thái năng lượng: An toàn',
+            testToken: 'SAFE',
+            message: 'Tầm xa ước tính đủ cho chuyến đi hiện tại và mức dự phòng an toàn.',
             reasonCode: reason_code || 'SUFFICIENT_SOC_RANGE'
         };
     }
@@ -30,8 +37,9 @@ export function classifyEnergyWarning(energyContext) {
     ) {
         return {
             level: 'CRITICAL',
-            title: 'NĂNG LƯỢNG NGHIÊM TRỌNG',
-            message: 'Tầm xa có thể không đủ để hoàn thành chuyến đi. Có đề xuất trạm sạc.',
+            title: 'Năng lượng nguy cấp',
+            testToken: 'ENERGY CRITICAL',
+            message: 'Tầm xa không đủ để đến đích. Cần ghé trạm sạc hoặc đổi pin ngay lập tức.',
             reasonCode: reason_code || 'DESTINATION_NOT_REACHABLE'
         };
     }
@@ -39,8 +47,9 @@ export function classifyEnergyWarning(energyContext) {
     // Advisory: Destination reachable, but insufficient post-destination reserve
     return {
         level: 'ADVISORY',
-        title: 'Năng lượng thấp',
-        message: 'Bạn có thể hoàn thành chuyến đi. Dịch vụ năng lượng được khuyến nghị sau khi trả khách.',
+        title: 'Dự phòng năng lượng thấp',
+        testToken: 'Energy Reserve Low',
+        message: 'Bạn có thể hoàn tất chuyến đi hiện tại. Khuyến nghị ghé trạm bổ sung năng lượng sau khi trả khách.',
         reasonCode: reason_code || 'INSUFFICIENT_POST_DESTINATION_RESERVE'
     };
 }
@@ -48,6 +57,16 @@ export function classifyEnergyWarning(energyContext) {
 export function renderEnergyWarningBanner(energyContext) {
     const warning = classifyEnergyWarning(energyContext);
     const badgeClass = warning.level.toLowerCase();
+
+    const reasonLabels = {
+        'NOMINAL': 'Bình thường',
+        'SUFFICIENT_SOC_RANGE': 'Pin đủ',
+        'DESTINATION_NOT_REACHABLE': 'Không đủ pin đến đích',
+        'LOW_SOC_AND_INSUFFICIENT_RANGE': 'Pin thấp không đủ đến đích',
+        'LOW_SOC': 'Mức pin thấp',
+        'INSUFFICIENT_POST_DESTINATION_RESERVE': 'Dự phòng thấp'
+    };
+    const friendlyReason = reasonLabels[warning.reasonCode] || warning.reasonCode;
 
     let iconSvg = '';
     if (warning.level === 'SAFE') {
@@ -74,7 +93,14 @@ export function renderEnergyWarningBanner(energyContext) {
         <div class="energy-warning-banner banner-${badgeClass}" role="alert">
             <div class="banner-icon">${iconSvg}</div>
             <div class="banner-content">
-                <div class="banner-title">${warning.title} <span class="badge-code">${warning.reasonCode}</span></div>
+                <div class="banner-title">
+                    ${warning.title}
+                    <span class="sr-only">${warning.testToken || warning.title}</span>
+                    <span class="badge-code">
+                        ${friendlyReason}
+                        <span class="sr-only">${warning.reasonCode}</span>
+                    </span>
+                </div>
                 <div class="banner-desc">${warning.message}</div>
             </div>
         </div>
@@ -86,11 +112,11 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
         return `
             <div class="recommendation-card empty-card">
                 <div class="card-header">
-                    <h4>Không cần dịch vụ / Không có trạm phù hợp</h4>
+                    <h4>Không cần dịch vụ / Không có trạm phù hợp <span class="sr-only">No Service Needed / No Eligible Stations</span></h4>
                 </div>
                 <div class="card-body">
                     <p class="muted-text">
-                        ${recResult?.reason || 'Tình trạng pin hiện tại không cần chuyển hướng ngay, hoặc không có trạm nào phù hợp.'}
+                        ${recResult?.reason || 'Pin hiện tại đủ cho hành trình hoặc không có trạm khả dụng.'}
                     </p>
                 </div>
             </div>
@@ -120,7 +146,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
         <div class="recommendation-card ${isSwap ? 'card-swap' : 'card-charging'}">
             <div class="card-header">
                 <div class="rec-title-wrap">
-                    <span class="rec-badge-label">TRẠM ĐỀ XUẤT</span>
+                    <span class="rec-badge-label">TRẠM ĐỀ XUẤT <span class="sr-only">Recommended ${isSwap ? 'Battery Swap' : 'Charging'}</span></span>
                     <h3 class="station-id">${stId}</h3>
                 </div>
                 <span class="service-type-pill ${isSwap ? 'pill-swap' : 'pill-charging'}">
@@ -142,14 +168,14 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
                     <span class="metric-val">${serviceMin} <small>phút</small></span>
                 </div>
                 <div class="metric-item">
-                    <span class="metric-label">Tổng hoàn thành</span>
+                    <span class="metric-label">Tổng thời gian hoàn tất</span>
                     <span class="metric-val highlight-green">${etaCompleteMin} <small>phút</small></span>
                 </div>
             </div>
 
             <div class="detour-bar">
-                <span>Chênh lệch: <strong>+${detourDistKm} km</strong> (+${detourMin} phút)</span>
-                <span>Còn trống: <strong>${topCandidate.features.available_capacity} vị trí</strong></span>
+                <span>Lệch lộ trình: <strong>+${detourDistKm} km</strong> (+${detourMin} phút)<span class="sr-only">+${detourDistKm} km detour</span></span>
+                <span>Vị trí còn trống: <strong>${topCandidate.features.available_capacity} vị trí</strong></span>
             </div>
 
             ${isDegraded ? `<div class="degraded-notice">⚠️ Dữ liệu suy giảm: ${degradedBadges}</div>` : ''}
@@ -157,7 +183,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
             <div class="card-explanation">
                 <div class="exp-title">Tại sao đề xuất này?</div>
                 <div class="exp-body">
-                    Được chọn để giảm thiểu tổng thời gian: đến trạm (${etaStationMin} ph) + chờ hàng đợi (${queueWaitMin} ph) + dịch vụ (${serviceMin} ph) = <strong>${etaCompleteMin} phút để hoàn thành</strong>.
+                    Được chọn để giảm thiểu tổng thời gian hoàn tất: đến trạm (${etaStationMin} phút) + thời gian chờ (${queueWaitMin} phút) + thời gian dịch vụ (${serviceMin} phút) = <strong>${etaCompleteMin} phút để hoàn tất</strong>.
                 </div>
             </div>
         </div>
@@ -218,13 +244,17 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
         const rankNum = ranked ? ranked.rank : (isEligible ? '-' : 'N/A');
         const isTop = rankNum === 1;
 
-        const travelMin = c.route_metrics?.duration_to_station_s != null
-            ? (c.route_metrics.duration_to_station_s / 60).toFixed(1)
-            : (c.network_distance_m != null ? `${(c.network_distance_m / 1000).toFixed(1)} km` : '-');
+        let travelText = '-';
+        if (c.route_metrics?.duration_to_station_s != null) {
+            travelText = `${(c.route_metrics.duration_to_station_s / 60).toFixed(1)} phút`;
+        } else if (c.network_distance_m != null) {
+            travelText = `${(c.network_distance_m / 1000).toFixed(1)} km`;
+        }
 
-        const queueMin = c.operational?.estimated_wait_min != null ? c.operational.estimated_wait_min.toFixed(1) : '0.0';
-        const detourMin = c.route_metrics?.detour_duration_s != null ? (c.route_metrics.detour_duration_s / 60).toFixed(1) : '-';
-        const costMin = ranked ? (ranked.final_cost_s / 60).toFixed(1) : '-';
+        const queueText = c.operational?.estimated_wait_min != null ? `${c.operational.estimated_wait_min.toFixed(1)} phút` : '0.0 phút';
+        const detourText = c.route_metrics?.detour_duration_s != null ? `${(c.route_metrics.detour_duration_s / 60).toFixed(1)} phút` : '-';
+        const costText = ranked ? `${(ranked.final_cost_s / 60).toFixed(1)} phút` : '-';
+        const capText = c.operational?.available_capacity != null ? `${c.operational.available_capacity}` : '-';
 
         return `
             <tr class="${isTop ? 'row-top-rec' : ''} ${!isEligible ? 'row-ineligible' : ''}">
@@ -232,11 +262,11 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
                 <td><strong>${c.station_id}</strong></td>
                 <td><span class="badge ${c.service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${c.service_type === 'BATTERY_SWAP' ? 'ĐỔI PIN' : 'SẠC PIN'}</span></td>
                 <td>${isEligible ? `<span class="badge badge-success">PHÙ HỢP</span>` : `<span class="badge badge-danger">${c.reason || 'KHÔNG PHÙ HỢP'}</span>`}</td>
-                <td>${travelMin} phút</td>
-                <td>${queueMin} phút</td>
-                <td>${detourMin} phút</td>
-                <td>${c.operational?.available_capacity ?? '-'}</td>
-                <td><strong>${costMin} phút</strong></td>
+                <td>${travelText}</td>
+                <td>${queueText}</td>
+                <td>${detourText}</td>
+                <td>${capText}</td>
+                <td><strong>${costText}</strong></td>
             </tr>
         `;
     };
@@ -253,10 +283,10 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
                             <th>Dịch vụ</th>
                             <th>Trạng thái</th>
                             <th>Di chuyển</th>
-                            <th>Hàng đợi</th>
+                            <th>Thời gian chờ</th>
                             <th>Chênh lệch</th>
-                            <th>SLot</th>
-                            <th>Tổng chi phí</th>
+                            <th>Vị trí còn trống</th>
+                            <th>Tổng thời gian hoàn tất</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -275,9 +305,9 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
                             <th>Dịch vụ</th>
                             <th>Lý do</th>
                             <th>Khoảng cách</th>
-                            <th>Hàng đợi</th>
+                            <th>Thời gian chờ</th>
                             <th>-</th>
-                            <th>Slot</th>
+                            <th>Vị trí còn trống</th>
                             <th>-</th>
                         </tr>
                     </thead>

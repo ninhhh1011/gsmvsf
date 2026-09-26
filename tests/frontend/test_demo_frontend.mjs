@@ -6,7 +6,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ApiError } from '../../backend/app/static/demo/js/api.js';
-import { decodePolyline } from '../../backend/app/static/demo/js/map.js';
+import {
+    decodePolyline,
+    haversineDistanceMeters,
+    computePolylineDistanceMeters,
+    projectPointOnSegment,
+    projectPointOnRoute,
+    sliceRouteFromProgress,
+    simplifyTrajectoryRDP
+} from '../../backend/app/static/demo/js/map.js';
 import { classifyEnergyWarning } from '../../backend/app/static/demo/js/components.js';
 import { DriverState } from '../../backend/app/static/demo/js/driver_mode.js';
 
@@ -87,4 +95,71 @@ test('DriverState constants are defined correctly', () => {
     assert.equal(DriverState.TO_PICKUP, 'TO_PICKUP');
     assert.equal(DriverState.ON_TRIP, 'ON_TRIP');
     assert.equal(DriverState.TRIP_COMPLETE, 'TRIP_COMPLETE');
+});
+
+test('haversineDistanceMeters and computePolylineDistanceMeters calculate accurate distance', () => {
+    // Distance between (21.0, 105.0) and (21.0, 105.01) is approx 1039 meters
+    const dist = haversineDistanceMeters(21.0, 105.0, 21.0, 105.01);
+    assert.ok(dist > 1000 && dist < 1100);
+    assert.equal(haversineDistanceMeters(21.0, 105.0, 21.0, 105.0), 0);
+
+    const polyDist = computePolylineDistanceMeters([
+        [21.0, 105.0],
+        [21.0, 105.01],
+        [21.0, 105.02]
+    ]);
+    assert.ok(polyDist > 2000 && polyDist < 2200);
+});
+
+test('projectPointOnRoute and sliceRouteFromProgress slice route along vehicle progress', () => {
+    const route = [
+        [21.0, 105.0],
+        [21.0, 105.01],
+        [21.0, 105.02],
+        [21.0, 105.03]
+    ];
+
+    // Car is near the midpoint of segment 1: (21.0001, 105.015)
+    const carPos = { latitude: 21.0001, longitude: 105.015 };
+    const progress = projectPointOnRoute(carPos, route, 0);
+
+    assert.equal(progress.segmentIndex, 1);
+    assert.ok(progress.distanceMeters < 25); // Close to segment
+    assert.ok(Math.abs(progress.projPoint[0] - 21.0) < 0.001);
+    assert.ok(Math.abs(progress.projPoint[1] - 105.015) < 0.001);
+
+    // Slice route from progress
+    const remaining = sliceRouteFromProgress(route, progress);
+    assert.equal(remaining.length, 3); // projPoint, point 2, point 3
+    assert.deepEqual(remaining[1], [21.0, 105.02]);
+    assert.deepEqual(remaining[2], [21.0, 105.03]);
+
+    // When progress reaches the end
+    const endProgress = { segmentIndex: 3, projPoint: [21.0, 105.03], distanceMeters: 0 };
+    const atEnd = sliceRouteFromProgress(route, endProgress);
+    assert.equal(atEnd.length, 1);
+    assert.deepEqual(atEnd[0], [21.0, 105.03]);
+});
+
+test('simplifyTrajectoryRDP reduces jitter and preserves key corridor inflection waypoints', () => {
+    // 10 collinear points along a road, with 1 major turnaround point at index 5
+    const pts = [
+        { latitude: 21.000, longitude: 105.000 },
+        { latitude: 21.001, longitude: 105.001 },
+        { latitude: 21.002, longitude: 105.002 },
+        { latitude: 21.003, longitude: 105.003 },
+        { latitude: 21.004, longitude: 105.004 },
+        { latitude: 21.010, longitude: 105.020 }, // Turnaround detour > 1km away
+        { latitude: 21.004, longitude: 105.004 },
+        { latitude: 21.003, longitude: 105.003 },
+        { latitude: 21.002, longitude: 105.002 },
+        { latitude: 21.000, longitude: 105.000 }
+    ];
+
+    const simplified = simplifyTrajectoryRDP(pts, 200);
+    // Should preserve start, peak, and end
+    assert.equal(simplified.length, 3);
+    assert.equal(simplified[0].latitude, 21.000);
+    assert.equal(simplified[1].latitude, 21.010);
+    assert.equal(simplified[2].latitude, 21.000);
 });

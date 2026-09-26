@@ -2,6 +2,7 @@
 Tests for MultiLegRouteCalculator and Detour metrics.
 """
 
+import asyncio
 import pytest
 
 from backend.tests.mock_routing_adapter import MockRoutingAdapter
@@ -219,4 +220,54 @@ async def test_concurrent_with_semaphore_limits():
     assert len(call_times) == 9
 
 
-import asyncio
+@pytest.mark.asyncio
+async def test_multi_leg_exact_formulas_and_driver_repositioning():
+    """
+    Verify exact contracts required for production driver routing:
+    - eta_to_station_s == duration_to_station_s
+    - distance_station_to_dest_m is leg 2 (station -> destination)
+    - via_total_distance_m == distance_to_station_m + distance_station_to_dest_m
+    - via_total_duration_s == duration_to_station_s + duration_station_to_dest_s
+    - detour_* is via_total - direct_route from current driver position (NOT initial origin)
+    """
+    origin_pos = Position(latitude=21.00, longitude=105.80)
+    current_driver_pos = Position(latitude=21.01, longitude=105.82)
+    station_pos = Position(latitude=21.03, longitude=105.84)
+    dest_pos = Position(latitude=21.05, longitude=105.80)
+
+    adapter = MockRoutingAdapter(winding_factor=1.0, average_speed_mps=10.0)
+    calc = MultiLegRouteCalculator(adapter)
+
+    # 1. Compute from current driver position
+    is_reach, metrics, res_leg1 = await calc.compute_station_metrics(
+        driver_pos=current_driver_pos,
+        station_pos=station_pos,
+        destination_pos=dest_pos,
+    )
+
+    assert is_reach is True
+    assert metrics is not None
+
+    # eta_to_station_s matches duration_to_station_s
+    assert metrics.eta_to_station_s == metrics.duration_to_station_s
+
+    # via_total equals the exact sum of leg 1 and leg 2
+    assert metrics.via_total_distance_m == round(metrics.distance_to_station_m + metrics.distance_station_to_dest_m, 1)
+    assert metrics.via_total_duration_s == round(metrics.duration_to_station_s + metrics.duration_station_to_dest_s, 1)
+
+    # detour equals via_total minus direct route from CURRENT driver position
+    assert metrics.direct_distance_m is not None
+    assert metrics.detour_distance_m == round(max(0.0, metrics.via_total_distance_m - metrics.direct_distance_m), 1)
+    assert metrics.detour_duration_s == round(max(0.0, metrics.via_total_duration_s - metrics.direct_duration_s), 1)
+
+    # 2. Verify that computing from initial origin yields DIFFERENT leg 1 and direct route
+    _, origin_metrics, _ = await calc.compute_station_metrics(
+        driver_pos=origin_pos,
+        station_pos=station_pos,
+        destination_pos=dest_pos,
+    )
+    # Origin route must not match current position route
+    assert origin_metrics.distance_to_station_m != metrics.distance_to_station_m
+    assert origin_metrics.direct_distance_m != metrics.direct_distance_m
+    # But leg 2 (station -> destination) is identical regardless of driver position
+    assert origin_metrics.distance_station_to_dest_m == metrics.distance_station_to_dest_m

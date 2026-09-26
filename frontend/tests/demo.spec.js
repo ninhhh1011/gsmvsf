@@ -603,7 +603,7 @@ test.describe('G. API Error', () => {
 // ============================================================
 test.describe('H. Tech View', () => {
   test('opens from button', async ({ page }) => {
-    await page.goto('/demo');
+    await page.goto('/demo?debug=true');
     await page.waitForTimeout(2000);
 
     // Tech view drawer should be hidden initially
@@ -648,7 +648,7 @@ test.describe('H. Tech View', () => {
       });
     });
 
-    await page.goto('/demo');
+    await page.goto('/demo?debug=true');
     await page.waitForTimeout(2000);
 
     await page.locator('#btn-accept-trip').click();
@@ -1126,7 +1126,7 @@ test.describe('L. Concurrency & State Invalidation', () => {
       }
     });
 
-    await page.goto('/demo');
+    await page.goto('/demo?debug=true');
     await page.waitForTimeout(2000);
 
     // Open Simulation / Scenario panel
@@ -1214,7 +1214,7 @@ test.describe('M. Mobile Viewport', () => {
   test.use({ viewport: { width: 390, height: 844 } }); // iPhone 12 / 13 / 14 size
 
   test('mobile viewport renders controls and permits navigation', async ({ page }) => {
-    await page.goto('/demo');
+    await page.goto('/demo?debug=true');
     await page.waitForTimeout(2000);
 
     // Map and driver view should be visible

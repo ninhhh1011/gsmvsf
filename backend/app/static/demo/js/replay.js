@@ -333,8 +333,8 @@ export class TrajectoryReplayController {
     }
 
     getProgressText() {
-        if (this.observations.length === 0) return 'No trajectory loaded';
-        return `${this.currentIndex} / ${this.observations.length} obs`;
+        if (this.observations.length === 0) return 'Chưa tải lộ trình';
+        return `${this.currentIndex} / ${this.observations.length} điểm GPS`;
     }
 
     getCurrentRawPosition() {

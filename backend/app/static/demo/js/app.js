@@ -69,6 +69,7 @@ class DemoApp {
             });
             this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios);
             await this.driverMode.init();
+            window.driverMode = this.driverMode;
 
             this.simMode = new SimModeController(this.api, this.map, { onStateUpdate });
             this.simMode.setCatalogs(this.scenarios, this.vehicles, this.stations);
@@ -81,13 +82,37 @@ class DemoApp {
             // Bind Scenario Panel Toggle
             this.bindScenarioPanel();
 
-            // Check if URL specifies Technical View
-            if (window.location.hash === '#technical' || window.location.pathname.includes('/demo/technical')) {
+            // Check if URL specifies Technical View or debug mode
+            const isDebug = window.location.search.includes('debug=true');
+            const isTechRoute = window.location.hash === '#technical' || window.location.pathname.includes('/demo/technical');
+
+            const techBtn = document.getElementById('btn-open-tech-view');
+            const simToggleBtn = document.getElementById('btn-toggle-sim-panel');
+            const statusPills = document.getElementById('header-status-pills');
+            const pipeline = document.getElementById('pipeline-indicator');
+
+            if (isDebug || isTechRoute) {
+                if (techBtn) techBtn.style.display = 'inline-flex';
+                if (simToggleBtn) simToggleBtn.style.display = 'inline-flex';
+                if (statusPills) statusPills.style.display = 'flex';
+                if (pipeline) pipeline.style.display = 'flex';
+            } else {
+                if (techBtn) techBtn.style.display = 'none';
+                if (simToggleBtn) simToggleBtn.style.display = 'none';
+                if (statusPills) statusPills.style.display = 'none';
+                if (pipeline) pipeline.style.display = 'none';
+            }
+
+            if (isTechRoute) {
                 this.techView.open();
             }
 
             window.addEventListener('hashchange', () => {
                 if (window.location.hash === '#technical') {
+                    if (techBtn) techBtn.style.display = 'inline-flex';
+                    if (simToggleBtn) simToggleBtn.style.display = 'inline-flex';
+                    if (statusPills) statusPills.style.display = 'flex';
+                    if (pipeline) pipeline.style.display = 'flex';
                     this.techView.open();
                 } else if (this.techView.isOpen) {
                     this.techView.close();

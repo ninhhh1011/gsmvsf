@@ -192,3 +192,44 @@ async def test_missing_destination_handling(service):
             assert c.route_metrics.distance_to_station_m > 0
             assert c.route_metrics.detour_distance_m is None
             assert c.route_metrics.distance_station_to_dest_m is None
+
+
+@pytest.mark.asyncio
+async def test_missing_snapshot_never_returns_fake_availability(service):
+    """
+    Verify that when operational snapshot data is missing (e.g. timestamp outside dataset),
+    stations are evaluated as OFFLINE (operating_status UNKNOWN) and NEVER treated as fake OPEN or ELIGIBLE.
+    """
+    esr = EnergyServiceRequest(
+        service_request_id="REQ-NO-SNAPSHOT",
+        vehicle_id="V001",
+        vehicle_model="VF_8",
+        vehicle_type="EV_CAR",
+        timestamp=datetime.fromisoformat("2099-01-01T00:00:00+07:00"),  # No snapshot exists
+        request_source=RequestSource.AUTO_DETECTED,
+        need_service=True,
+        allowed_service_types=[ServiceType.CHARGING],
+        resolved_service_type=ServiceType.CHARGING,
+        request_valid=True,
+        reason_code=ReasonCode.LOW_SOC,
+        current_soc_pct=15.0,
+        estimated_remaining_range_km=30.0,
+        latitude=21.015,
+        longitude=105.780,
+        swap_supported=False,
+    )
+    req = CandidateSearchRequest(
+        energy_request=esr,
+        destination_latitude=21.050,
+        destination_longitude=105.800,
+    )
+    res = await service.search_candidates(req)
+
+    assert res.search_status == "SUCCESS"
+    assert res.eligible_count == 0
+    # Every evaluated candidate must NOT be eligible, and have operational status UNKNOWN / reason OFFLINE
+    for c in res.candidates:
+        assert c.eligible is False
+        assert c.operational.operating_status == "UNKNOWN"
+        assert c.operational.available_capacity == 0
+        assert c.reason in (CandidateEligibilityReason.INCOMPATIBLE, CandidateEligibilityReason.OFFLINE)

@@ -48,7 +48,10 @@ def test_get_operational_snapshot():
     assert snap.operating_status in ("OPEN", "OFFLINE")
     assert snap.service_time_min == 18.0
 
-    # Test default fallback without timestamp
+    # Test fallback when snapshot is missing (no timestamp or unindexed timestamp):
+    # Must return UNKNOWN operating status and 0 available capacity to prevent fake availability
     snap_default = catalog.get_operational_snapshot("S005", ServiceType.BATTERY_SWAP)
-    assert snap_default.operating_status == "OPEN"
-    assert snap_default.available_service_slots == 3
+    assert snap_default.operating_status == "UNKNOWN"
+    assert snap_default.available_service_slots == 0
+    assert snap_default.available_capacity == 0
+    assert snap_default.estimated_wait_min is None
