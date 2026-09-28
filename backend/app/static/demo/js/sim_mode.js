@@ -61,16 +61,20 @@ export class SimModeController {
 
     setPickingMode(mode) {
         this.pickingMode = mode;
-        const infoBar = document.getElementById('map-picking-indicator');
+        const infoBar = document.getElementById('map-picker-banner');
+        const infoSpan = infoBar?.querySelector('span');
         const mapElem = document.getElementById('map');
 
         if (mode) {
-            infoBar.style.display = 'block';
-            infoBar.textContent = `Click on the map to choose ${mode.toUpperCase()} position...`;
-            mapElem.style.cursor = 'crosshair';
+            if (infoBar) infoBar.style.display = 'flex';
+            if (infoSpan) {
+                const label = mode === 'origin' ? 'điểm bắt đầu' : 'điểm đến';
+                infoSpan.textContent = `📍 Chạm vào bản đồ để chọn ${label}`;
+            }
+            if (mapElem) mapElem.style.cursor = 'crosshair';
         } else {
-            infoBar.style.display = 'none';
-            mapElem.style.cursor = '';
+            if (infoBar) infoBar.style.display = 'none';
+            if (mapElem) mapElem.style.cursor = '';
         }
     }
 

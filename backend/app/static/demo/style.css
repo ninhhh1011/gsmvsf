@@ -514,6 +514,89 @@ body {
     line-height: 1.4;
 }
 
+/* Cost Breakdown Details */
+.cost-details {
+    margin-top: 8px;
+}
+
+.cost-details summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 4px 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cost-details summary::before {
+    content: '▶';
+    font-size: 8px;
+    transition: transform 0.2s;
+}
+
+.cost-details[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.cost-breakdown-card {
+    background: #f8fafc;
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-top: 8px;
+    font-size: 11px;
+}
+
+.cost-section {
+    margin-bottom: 12px;
+}
+
+.cost-section:last-child {
+    margin-bottom: 0;
+}
+
+.cost-section-title {
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.cost-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    color: var(--text-secondary);
+}
+
+.cost-row .cost-row {
+    padding-left: 8px;
+}
+
+.cost-row.highlight {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.cost-row.total {
+    font-weight: 700;
+    color: var(--brand-teal);
+    font-size: 12px;
+    padding-top: 6px;
+    margin-top: 4px;
+    border-top: 1px solid var(--brand-teal);
+}
+
+.cost-row.muted {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Simulation Mode Controls */
 .sim-mode-container {
     padding: 20px;

@@ -80,9 +80,9 @@ export function projectPointOnRoute(point, routeCoords, startIndex = 0) {
     let bestSegment = startIndex;
     let bestProj = routeCoords[startIndex];
 
-    // Search window from startIndex forward to avoid O(N) over entire route on each step
+    // Search window: 100 points forward for robust projection as car moves along route
     const searchStart = Math.max(0, startIndex);
-    const searchEnd = Math.min(routeCoords.length - 1, searchStart + 40);
+    const searchEnd = Math.min(routeCoords.length - 1, searchStart + 100);
     for (let i = searchStart; i < searchEnd; i++) {
         const a = routeCoords[i];
         const b = routeCoords[i + 1];
