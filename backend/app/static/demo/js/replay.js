@@ -144,6 +144,101 @@ export class TrajectoryReplayController {
     }
 
     /**
+     * Generate synthetic trajectory observations along route polyline coordinates.
+     * Allows simulated driving on ANY route (custom origin/destination, detour routes, etc.)
+     * @param {Array<Array<number>>|Array<{latitude: number, longitude: number}>} coordinates
+     * @param {number} speedKmh - average vehicle speed (default 35 km/h)
+     */
+    async loadFromPolyline(coordinates, speedKmh = 35) {
+        if (!coordinates || coordinates.length < 2) {
+            console.warn('[Replay] Invalid coordinates for polyline simulation');
+            return;
+        }
+
+        if (this.stepTimer) {
+            clearTimeout(this.stepTimer);
+            this.stepTimer = null;
+        }
+        this.generation++;
+        const currentGen = this.generation;
+
+        this.setState(ReplayState.LOADING);
+        this.currentIndex = 0;
+        this.observations = [];
+
+        // Normalize coordinates to [{lat, lng}, ...]
+        const points = coordinates.map(c => {
+            if (Array.isArray(c)) return { lat: c[0], lng: c[1] };
+            return { lat: c.latitude ?? c.lat, lng: c.longitude ?? c.lng };
+        });
+
+        // Step distance along route: vehicle travels at speedKmh
+        const speedMs = speedKmh / 3.6;
+        const intervalSec = 1.5;
+        const stepDistMeters = Math.max(12, speedMs * intervalSec);
+
+        const syntheticObs = [];
+        const baseTime = Date.now();
+        let obsIndex = 0;
+
+        for (let i = 0; i < points.length - 1; i++) {
+            const p1 = points[i];
+            const p2 = points[i + 1];
+
+            const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+            const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+            const midLat = ((p1.lat + p2.lat) / 2) * Math.PI / 180;
+            const x = dLng * Math.cos(midLat) * 6371000;
+            const y = dLat * 6371000;
+            const segDist = Math.sqrt(x * x + y * y);
+
+            const yH = Math.sin(dLng) * Math.cos(p2.lat * Math.PI / 180);
+            const xH = Math.cos(p1.lat * Math.PI / 180) * Math.sin(p2.lat * Math.PI / 180) -
+                       Math.sin(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.cos(dLng);
+            let headingDeg = (Math.atan2(yH, xH) * 180 / Math.PI + 360) % 360;
+
+            const numSubSteps = Math.max(1, Math.round(segDist / stepDistMeters));
+            for (let s = 0; s < numSubSteps; s++) {
+                const fraction = s / numSubSteps;
+                const curLat = p1.lat + (p2.lat - p1.lat) * fraction;
+                const curLng = p1.lng + (p2.lng - p1.lng) * fraction;
+                const timestamp = new Date(baseTime + obsIndex * intervalSec * 1000).toISOString();
+
+                syntheticObs.push({
+                    observation_id: `SIM_${obsIndex}`,
+                    latitude: curLat,
+                    longitude: curLng,
+                    timestamp,
+                    speed_kmh: speedKmh,
+                    heading_deg: headingDeg
+                });
+                obsIndex++;
+            }
+        }
+
+        const lastP = points[points.length - 1];
+        syntheticObs.push({
+            observation_id: `SIM_${obsIndex}`,
+            latitude: lastP.lat,
+            longitude: lastP.lng,
+            timestamp: new Date(baseTime + obsIndex * intervalSec * 1000).toISOString(),
+            speed_kmh: 0,
+            heading_deg: syntheticObs[syntheticObs.length - 1]?.heading_deg || 0
+        });
+
+        if (this.generation !== currentGen) return;
+
+        this.observations = syntheticObs;
+        this.setState(ReplayState.READY);
+        this.updateProgressUI();
+
+        const statusElem = getElem('replay-status');
+        if (statusElem) {
+            statusElem.textContent = `Lộ trình mô phỏng: ${this.observations.length} điểm quan sát`;
+        }
+    }
+
+    /**
      * Executes a single sequential replay step.
      * Guarantees max 1 in-flight step.
      * Progress index advances strictly after ingestion and onStep evaluation complete.

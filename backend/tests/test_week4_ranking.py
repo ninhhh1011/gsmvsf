@@ -301,3 +301,33 @@ async def test_stale_traffic_and_queue_remain_observed_with_missing_last_detour(
     assert f.observed_queue_wait_s == 120 and f.queue_assumption is None
     assert f.adjusted_travel_duration_s == 200
     assert result.degraded_reasons == ['QUEUE_STALE', 'STATION_STALE', 'TRAFFIC_STALE']
+
+
+@pytest.mark.asyncio
+async def test_eta_to_destination_via_station_calculated_correctly():
+    from backend.app.services.ranking.service import RankingService
+    c = candidate(route_metrics=CandidateRouteMetrics(
+        distance_to_station_m=1000,
+        duration_to_station_s=120,
+        distance_station_to_dest_m=2000,
+        duration_station_to_dest_s=240,
+        via_total_distance_m=3000,
+        via_total_duration_s=360,
+        detour_distance_m=500,
+        detour_duration_s=60,
+    ))
+    result = await RankingService(HistoryResolver(station(), queue(), traffic())).recommend(evidence([c]), NOW)
+    rc = result.ranked_candidates[0]
+    assert rc.features.duration_station_to_dest_s == 240
+    assert rc.features.distance_station_to_dest_m == 2000
+    assert rc.features.via_total_duration_s == 360
+    assert rc.features.via_total_distance_m == 3000
+    # eta_to_station = 120 * traffic.delay_factor (2.0) = 240.0
+    # queue_wait = 120.0
+    # service = 1080.0
+    # complete = 240.0 + 120.0 + 1080.0 = 1440.0
+    # eta_to_destination_via_station_s = complete + 240 = 1680.0
+    assert rc.eta_to_station_s == 240.0
+    assert rc.eta_to_service_complete_s == 1440.0
+    assert rc.eta_to_destination_via_station_s == 1680.0
+

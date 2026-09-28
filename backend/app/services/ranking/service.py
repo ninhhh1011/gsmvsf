@@ -24,9 +24,18 @@ def rank_features(features) -> list[RankedCandidate]:
     for rank, f in enumerate(sorted(features, key=order), 1):
         start = f.adjusted_travel_duration_s + f.effective_queue_wait_s
         complete = start + f.service_duration_s
-        ranked.append(RankedCandidate(rank=rank, station_id=f.station_id, service_type=f.service_type,
-            features=f, eta_to_station_s=f.adjusted_travel_duration_s, eta_to_service_start_s=start,
-            eta_to_service_complete_s=complete, final_cost_s=complete))
+        eta_to_dest = round(complete + f.duration_station_to_dest_s, 3) if f.duration_station_to_dest_s is not None else None
+        ranked.append(RankedCandidate(
+            rank=rank,
+            station_id=f.station_id,
+            service_type=f.service_type,
+            features=f,
+            eta_to_station_s=f.adjusted_travel_duration_s,
+            eta_to_service_start_s=start,
+            eta_to_service_complete_s=complete,
+            final_cost_s=complete,
+            eta_to_destination_via_station_s=eta_to_dest,
+        ))
     return ranked
 
 

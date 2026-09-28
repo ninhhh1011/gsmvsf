@@ -13,7 +13,8 @@
 import {
     classifyEnergyWarning,
     renderEnergyWarningBanner,
-    renderRecommendationCard
+    renderRecommendationCard,
+    renderCostBreakdown
 } from './components.js';
 import { TrajectoryReplayController, ReplayState } from './replay.js';
 import {
@@ -102,6 +103,9 @@ export class DriverModeController {
         // Proactive Station Search & Destination Picking
         this.isPickingDestination = false;
         this.currentStationsFilter = 'ALL';
+        this.chargingIntent = 'EN_ROUTE'; // 'EN_ROUTE' (A -> Station -> B) | 'AT_DESTINATION' (B -> Station)
+        this.postTripStation = null;
+        this.postTripRoute = null;
         this._onMapPickClick = null;
 
         // Trajectory Replay Controller
@@ -203,7 +207,7 @@ export class DriverModeController {
 
         // Clear map and render direct endpoints
         this.map.clearAll();
-        this.map.renderTripEndpoints(trip.origin, trip.destination);
+        this._renderEndpointsWithDrag(trip.origin, trip.destination);
 
         // Sample corridor inflection waypoints via Ramer-Douglas-Peucker (250m tolerance)
         // This preserves key turnarounds while eliminating GPS sensor jitter and side-alley detours
@@ -290,8 +294,20 @@ export class DriverModeController {
         this.setState(DriverState.TRIP_ACTIVE);
 
         const trajId = this._tripToTrajectory(this.currentTrip.trip_id);
-        this.session.trajectory_id = trajId;
-        await this.replay.loadTrajectory(trajId);
+        this.session.trajectory_id = trajId || 'SIMULATED';
+
+        if (trajId) {
+            try {
+                await this.replay.loadTrajectory(trajId);
+            } catch (err) {
+                console.warn(`Dataset trajectory ${trajId} load failed, falling back to polyline simulation:`, err);
+                if (this.fullRouteCoords && this.fullRouteCoords.length > 1) {
+                    await this.replay.loadFromPolyline(this.fullRouteCoords);
+                }
+            }
+        } else if (this.fullRouteCoords && this.fullRouteCoords.length > 1) {
+            await this.replay.loadFromPolyline(this.fullRouteCoords);
+        }
 
         if (this.generation !== currentGen) return;
 
@@ -304,24 +320,13 @@ export class DriverModeController {
     }
 
     _tripToTrajectory(tripId) {
-        const mapping = {
-            'T0001': 'TRJ0001',
-            'T0002': 'TRJ0002',
-            'T0003': 'TRJ0003',
-            'T0004': 'TRJ0004',
-            'T0005': 'TRJ0005',
-            'T0017': 'TRJ0001',
-            'T0018': 'TRJ0001',
-            'T0019': 'TRJ0001',
-            'T0073': 'TRJ0001',
-            'T0110': 'TRJ0001',
-            'T0129': 'TRJ0001'
-        };
-        const trajId = mapping[tripId];
-        if (!trajId) {
-            throw new Error(`UNMAPPED_TRIP: Trip '${tripId}' not mapped to any trajectory`);
+        if (!tripId) return null;
+        if (tripId.startsWith('TRJ')) return tripId;
+        const match = tripId.match(/^T(\d+)$/);
+        if (match) {
+            return `TRJ${match[1]}`;
         }
-        return trajId;
+        return null;
     }
 
     // ─── Step Handling ──────────────────────────────────────────────────
@@ -454,6 +459,16 @@ export class DriverModeController {
         const rawLat = this.currentObservation ? this.currentObservation.latitude : this.currentPos.latitude;
         const rawLng = this.currentObservation ? this.currentObservation.longitude : this.currentPos.longitude;
 
+        // Debug: Log ETA calculation inputs
+        console.group('[DRIVER MODE] ETA Debug');
+        console.log('Current Position (A):', { lat: rawLat, lng: rawLng });
+        console.log('Trip Destination (B):', this.currentTrip?.destination);
+        console.log('Trip Origin (trip origin):', this.currentTrip?.origin);
+        console.log('Vehicle:', this.currentVehicle?.vehicle_id, this.currentVehicle?.vehicle_type);
+        console.log('SOC:', this.currentSocPct + '%', 'Range:', this.estimatedRangeKm + 'km');
+        console.log('Remaining Trip Distance:', this.remainingTripDistanceKm + 'km');
+        console.log('Observation timestamp:', timestamp);
+
         const payload = {
             context: {
                 vehicle_id: this.currentVehicle.vehicle_id,
@@ -471,9 +486,23 @@ export class DriverModeController {
             destination_longitude: this.currentTrip?.destination?.longitude,
             top_n: 5
         };
+        console.log('Request payload:', JSON.stringify(payload, null, 2));
 
         try {
             const rec = await this.api.getRecommendation(payload);
+
+            console.log('Recommendation Response:', {
+                has_recommendation: rec?.has_recommendation,
+                recommended_station: rec?.recommended_station_id,
+                eta_to_station_s: rec?.ranked_candidates?.[0]?.eta_to_station_s,
+                eta_to_station_min: rec?.ranked_candidates?.[0]
+                    ? (rec.ranked_candidates[0].eta_to_station_s / 60).toFixed(1)
+                    : null,
+                eta_to_complete_min: rec?.ranked_candidates?.[0]
+                    ? (rec.ranked_candidates[0].eta_to_service_complete_s / 60).toFixed(1)
+                    : null
+            });
+            console.groupEnd();
             if (this.generation !== currentGen) return;
 
             this.lastRecommendation = rec;
@@ -661,6 +690,22 @@ export class DriverModeController {
                     this.lastDiversionLeg2 = leg2;
                     this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry);
                     this.map.fitBoundsToActive();
+
+                    // Combine Leg 1 and Leg 2 for full diversion driving
+                    const coords1 = decodePolyline(leg1.geometry);
+                    const coords2 = leg2?.geometry ? decodePolyline(leg2.geometry) : [];
+                    const combined = [...coords1, ...coords2];
+                    this.fullRouteCoords = combined;
+                    this.directRouteGeometry = combined;
+                    this.lastPassedSegmentIndex = 0;
+
+                    const totalDistM = (leg1.distance_m || 0) + (leg2?.distance_m || 0);
+                    this.remainingTripDistanceKm = parseFloat((totalDistM / 1000).toFixed(2));
+
+                    // Load combined diversion into replay so vehicle drives via station!
+                    if (this.state === DriverState.TRIP_ACTIVE) {
+                        await this.replay.loadFromPolyline(combined);
+                    }
                 }
             } else {
                 // Direct route to station (free drive)
@@ -705,6 +750,55 @@ export class DriverModeController {
         }
     }
 
+    async setPostTripStation(stId) {
+        const st = this.stations.find(s => s.station_id === stId);
+        if (!st) return;
+
+        this.postTripStation = st;
+        this.closeStationsDrawer();
+
+        const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
+        const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
+        const stationPos = { latitude: st.latitude, longitude: st.longitude };
+
+        try {
+            // Compute onward route from Destination B to Station
+            const routeBToSt = await this.api.computeRoute(dest, stationPos, { vehicle_category: vCat });
+            this.postTripRoute = routeBToSt;
+
+            // Render direct route A -> B, plus onward connection B -> Station
+            if (this.fullRouteCoords) {
+                this.map.renderDirectRoute(this.fullRouteCoords);
+            }
+            if (routeBToSt?.geometry) {
+                this.map.renderPostTripRoute(routeBToSt.geometry);
+            }
+
+            // Highlight chosen station marker
+            this.map.highlightStation(st.station_id);
+
+            // Re-render UI to show post-trip charging badge/notification
+            if (this.state === DriverState.TRIP_ACTIVE) {
+                this.renderTripActiveUI();
+            } else if (this.state === DriverState.TRIP_ASSIGNED) {
+                this.renderTripAssignedUI();
+            }
+        } catch (err) {
+            console.warn('Failed to compute route from B to station:', err);
+        }
+    }
+
+    cancelPostTripStation() {
+        this.postTripStation = null;
+        this.postTripRoute = null;
+        this.map.layers.recommendRoute.clearLayers();
+        if (this.state === DriverState.TRIP_ACTIVE) {
+            this.renderTripActiveUI();
+        } else if (this.state === DriverState.TRIP_ASSIGNED) {
+            this.renderTripAssignedUI();
+        }
+    }
+
     // ─── Proactive Station Drawer & Map Destination Picking ─────────────
 
     bindGlobalControls() {
@@ -716,12 +810,38 @@ export class DriverModeController {
             this.closeStationsDrawer();
         });
 
-        document.getElementById('btn-pick-custom-dest')?.addEventListener('click', () => {
+        document.getElementById('btn-pick-custom-origin')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            this.startPickCustomOrigin();
+        });
+
+        document.getElementById('btn-pick-custom-dest')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
             this.startPickCustomDestination();
         });
 
-        document.getElementById('btn-cancel-pick-dest')?.addEventListener('click', () => {
-            this.cancelPickCustomDestination();
+        document.getElementById('btn-cancel-pick')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.cancelAllPicking();
+        });
+
+        document.getElementById('btn-cancel-pick-dest')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.cancelAllPicking();
+        });
+
+        // Charging intent selector (En-route vs Post-Trip)
+        const intentTabs = document.querySelectorAll('.charging-intent-selector .intent-tab');
+        intentTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const btn = e.currentTarget;
+                intentTabs.forEach(t => t.classList.remove('active'));
+                btn.classList.add('active');
+                this.chargingIntent = btn.dataset.intent || 'EN_ROUTE';
+                this.renderStationsDrawer(this.currentStationsFilter);
+            });
         });
 
         // Filter tabs in stations drawer
@@ -737,17 +857,73 @@ export class DriverModeController {
         });
     }
 
-    openStationsDrawer(filter = null) {
+    async openStationsDrawer(filter = null) {
         const drawer = document.getElementById('stations-drawer');
         if (!drawer) return;
         if (filter) this.currentStationsFilter = filter;
         drawer.style.display = 'flex';
         this.renderStationsDrawer(this.currentStationsFilter);
+        await this.refreshDrawerEvaluations();
     }
 
     closeStationsDrawer() {
         const drawer = document.getElementById('stations-drawer');
         if (drawer) drawer.style.display = 'none';
+    }
+
+    async refreshDrawerEvaluations() {
+        const currentPos = this.currentPos || (this.currentTrip?.origin ? {
+            latitude: this.currentTrip.origin.latitude,
+            longitude: this.currentTrip.origin.longitude
+        } : { latitude: 21.0285, longitude: 105.8542 });
+
+        const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
+        const vId = this.currentVehicle?.vehicle_id || 'V0001';
+
+        try {
+            const [candRes, recRes] = await Promise.all([
+                this.api.evaluateAndSearchCandidates({
+                    vehicle_id: vId,
+                    current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
+                    estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
+                    remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
+                    safety_reserve_km: this.safetyReserveKm,
+                    raw_latitude: currentPos.latitude,
+                    raw_longitude: currentPos.longitude,
+                    destination_latitude: dest.latitude,
+                    destination_longitude: dest.longitude,
+                    requested_service: 'ANY',
+                    eligible_only: false
+                }).catch(() => null),
+                this.api.getRecommendation({
+                    context: {
+                        vehicle_id: vId,
+                        current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
+                        estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
+                        remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
+                        safety_reserve_km: this.safetyReserveKm,
+                        raw_latitude: currentPos.latitude,
+                        raw_longitude: currentPos.longitude,
+                        timestamp: new Date().toISOString()
+                    },
+                    requested_service: 'ANY',
+                    destination_latitude: dest.latitude,
+                    destination_longitude: dest.longitude,
+                    top_n: 30
+                }).catch(() => null)
+            ]);
+
+            if (recRes && recRes.ranked_candidates) {
+                this.lastRecommendation = recRes;
+            }
+            if (candRes && candRes.candidates) {
+                this.stationCandidateDetails = candRes.candidates;
+            }
+
+            this.renderStationsDrawer(this.currentStationsFilter);
+        } catch (e) {
+            console.warn('Failed to refresh drawer evaluations:', e);
+        }
     }
 
     renderStationsDrawer(filter = 'ALL') {
@@ -760,7 +936,10 @@ export class DriverModeController {
             longitude: this.currentTrip.origin.longitude
         } : { latitude: 21.1038023, longitude: 106.0023809 });
 
-        // Calculate distance from vehicle to each station
+        const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
+        const directDistKm = straightLineDistanceKm(currentPos.latitude, currentPos.longitude, dest.latitude, dest.longitude);
+
+        // Calculate straight line distance for fallback
         const stationsWithDist = this.stations.map(st => {
             const distMeters = straightLineDistanceKm(
                 currentPos.latitude, currentPos.longitude,
@@ -782,12 +961,27 @@ export class DriverModeController {
             ? this.lastRecommendation.ranked_candidates[0].station_id
             : null;
 
-        // Sort: Top recommendation first, then by distance ascending
-        filtered.sort((a, b) => {
-            if (a.station_id === topRecId) return -1;
-            if (b.station_id === topRecId) return 1;
-            return a.distMeters - b.distMeters;
-        });
+        // Sort stations based on active intent
+        if (this.chargingIntent === 'AT_DESTINATION') {
+            // Sort by distance from destination B ascending (closest to B first!)
+            filtered.sort((a, b) => {
+                const distA = straightLineDistanceKm(dest.latitude, dest.longitude, a.latitude, a.longitude);
+                const distB = straightLineDistanceKm(dest.latitude, dest.longitude, b.latitude, b.longitude);
+                return distA - distB;
+            });
+        } else {
+            // EN_ROUTE: Top recommendation first, then by rank if available, then by distance from vehicle
+            filtered.sort((a, b) => {
+                if (a.station_id === topRecId) return -1;
+                if (b.station_id === topRecId) return 1;
+
+                const rankA = this.lastRecommendation?.ranked_candidates?.find(c => c.station_id === a.station_id)?.rank || 999;
+                const rankB = this.lastRecommendation?.ranked_candidates?.find(c => c.station_id === b.station_id)?.rank || 999;
+                if (rankA !== rankB) return rankA - rankB;
+
+                return a.distMeters - b.distMeters;
+            });
+        }
 
         if (countSpan) {
             countSpan.textContent = `${filtered.length} trạm khả dụng`;
@@ -807,13 +1001,183 @@ export class DriverModeController {
 
             const totalSlots = st.total_slots || (st.charging_slots + st.swap_slots) || 'Đang mở';
 
+            const ranked = this.lastRecommendation?.ranked_candidates?.find(c => c.station_id === st.station_id);
+            const cand = this.stationCandidateDetails?.find(c => c.station_id === st.station_id);
+
+            const fallbackLeg2Dist = straightLineDistanceKm(st.latitude, st.longitude, dest.latitude, dest.longitude);
+            const fallbackLeg2Min = Math.max(1, Math.round(fallbackLeg2Dist * 2.2));
+            const fallbackDetourKm = Math.max(0, parseFloat(st.distKm) + fallbackLeg2Dist - directDistKm).toFixed(1);
+            const fallbackDetourMin = Math.max(0, Math.round(fallbackDetourKm * 2.2));
+
+            let leg1Dist = st.distKm;
+            let leg1Min = Math.round(parseFloat(st.distKm) * 2.2);
+            let leg2Dist = '—';
+            let leg2Min = '—';
+            let detourKm = '—';
+            let detourMin = '—';
+            let waitMin = 0;
+            let serviceMin = isSwap ? 5 : 20;
+            let totalEtaMin = '—';
+            let slots = totalSlots;
+            let statusBadge = '';
+
+            if (ranked) {
+                const d1 = ranked.features?.distance_to_station_m || ranked.distance_vehicle_to_station_m;
+                if (d1) {
+                    leg1Dist = (d1 / 1000).toFixed(1);
+                }
+                if (ranked.eta_to_station_s) {
+                    leg1Min = Math.round(ranked.eta_to_station_s / 60);
+                }
+                const d2 = ranked.features?.distance_station_to_dest_m || ranked.distance_station_to_dest_m;
+                if (d2) {
+                    leg2Dist = (d2 / 1000).toFixed(1);
+                }
+                const t2 = ranked.features?.duration_station_to_dest_s || ranked.duration_station_to_dest_s;
+                if (t2) {
+                    leg2Min = Math.round(t2 / 60);
+                }
+                const detD = ranked.features?.detour_distance_m !== undefined ? ranked.features.detour_distance_m : ranked.detour_distance_m;
+                if (detD !== undefined) {
+                    detourKm = (detD / 1000).toFixed(1);
+                }
+                const detT = ranked.features?.detour_duration_s !== undefined ? ranked.features.detour_duration_s : ranked.detour_duration_s;
+                if (detT !== undefined) {
+                    detourMin = Math.round(detT / 60);
+                }
+                if (ranked.features?.observed_queue_wait_s !== undefined) {
+                    waitMin = Math.round(ranked.features.observed_queue_wait_s / 60);
+                } else if (ranked.queue_wait_s !== undefined) {
+                    waitMin = Math.round(ranked.queue_wait_s / 60);
+                }
+                if (ranked.features?.service_duration_s !== undefined) {
+                    serviceMin = Math.round(ranked.features.service_duration_s / 60);
+                } else if (ranked.service_duration_s !== undefined) {
+                    serviceMin = Math.round(ranked.service_duration_s / 60);
+                }
+                if (ranked.eta_to_destination_via_station_s !== undefined) {
+                    totalEtaMin = Math.round(ranked.eta_to_destination_via_station_s / 60);
+                } else if (leg2Min !== '—') {
+                    totalEtaMin = leg1Min + waitMin + serviceMin + parseInt(leg2Min);
+                }
+                slots = ranked.available_slots ?? (cand?.operational?.available_service_slots ?? totalSlots);
+                statusBadge = isRec 
+                    ? `<span class="badge-rec-hero">⭐ ĐỀ XUẤT TỐI ƯU</span>`
+                    : `<span class="badge badge-teal">Hạng #${ranked.rank}</span>`;
+            } else if (cand) {
+                const rm = cand.route_metrics;
+                if (rm?.distance_to_station_m) leg1Dist = (rm.distance_to_station_m / 1000).toFixed(1);
+                if (rm?.duration_to_station_s) leg1Min = Math.round(rm.duration_to_station_s / 60);
+                if (rm?.distance_station_to_dest_m) leg2Dist = (rm.distance_station_to_dest_m / 1000).toFixed(1);
+                if (rm?.duration_station_to_dest_s) leg2Min = Math.round(rm.duration_station_to_dest_s / 60);
+                if (rm?.detour_distance_m !== undefined) detourKm = (rm.detour_distance_m / 1000).toFixed(1);
+                if (rm?.detour_duration_s !== undefined) detourMin = Math.round(rm.detour_duration_s / 60);
+                waitMin = Math.round(cand.operational?.estimated_wait_min || 0);
+                serviceMin = Math.round(cand.operational?.service_time_min || (isSwap ? 5 : 20));
+                if (rm?.via_total_duration_s) {
+                    totalEtaMin = Math.round((rm.via_total_duration_s + (waitMin + serviceMin) * 60) / 60);
+                } else if (leg2Dist !== '—') {
+                    totalEtaMin = leg1Min + waitMin + serviceMin + parseInt(leg2Min);
+                }
+                slots = cand.operational?.available_service_slots ?? totalSlots;
+                if (!cand.eligible && cand.reason) {
+                    statusBadge = `<span class="badge badge-danger" style="font-size:10px;">${cand.reason}</span>`;
+                }
+            }
+
+            // Fallback for Leg 2 and Detour if still missing
+            if (leg2Dist === '—') {
+                leg2Dist = fallbackLeg2Dist.toFixed(1);
+                leg2Min = fallbackLeg2Min;
+                detourKm = fallbackDetourKm;
+                detourMin = fallbackDetourMin;
+                totalEtaMin = leg1Min + waitMin + serviceMin + fallbackLeg2Min;
+            }
+
+            const isAtDest = this.chargingIntent === 'AT_DESTINATION';
+            const isSelectedPostTrip = this.postTripStation?.station_id === st.station_id;
+
+            let cardContent = '';
+            if (isAtDest) {
+                const directDriveMin = Math.round((this.remainingTripDistanceKm || 5) * 2);
+                const totalPostTripMin = directDriveMin + (parseInt(leg2Min) || 3) + waitMin + serviceMin;
+
+                cardContent = `
+                    <div class="station-cost-grid">
+                        <div class="cost-grid-item" style="grid-column: span 2; background: rgba(13, 148, 136, 0.08); border: 1px solid #0d9488;">
+                            <span class="cost-grid-label" style="color: #0d9488; font-weight:700;">🏁 Cự ly từ Điểm đến (B) ➔ Trạm</span>
+                            <span class="cost-grid-val" style="color: #0f172a; font-size:15px; font-weight:800;">
+                                ${leg2Dist} km <small style="color:#0d9488;">(${leg2Min} phút di chuyển sau khi tới B)</small>
+                            </span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label">🚗 Chuyến chính (A ➔ B thẳng)</span>
+                            <span class="cost-grid-val">${(this.remainingTripDistanceKm || 5).toFixed(1)} km <small>(${directDriveMin} phút)</small></span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label">⚡ Tại trạm (Chờ + Sạc)</span>
+                            <span class="cost-grid-val">${waitMin}p chờ · ${serviceMin}p sạc <small>(${slots} cổng)</small></span>
+                        </div>
+                    </div>
+
+                    <div class="station-cost-summary">
+                        <span class="total-eta">⏱ Tổng thời gian (Tới B + Đến trạm + Sạc): <strong>${totalPostTripMin} phút</strong></span>
+                        <span class="cost-score" style="color:#0d9488; font-weight:700;">✓ Đi thẳng trả khách trước</span>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                        <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
+                            Xem vị trí
+                        </button>
+                        <button class="btn btn-primary btn-sm btn-nav-post-trip-station" data-station-id="${st.station_id}" style="background:${isSelectedPostTrip ? '#059669' : '#0f172a'}; border-color:${isSelectedPostTrip ? '#059669' : '#0f172a'};">
+                            ${isSelectedPostTrip ? '✓ Đang chọn sạc sau khi tới B' : '🏁 Đến B rồi sạc tại đây'}
+                        </button>
+                    </div>
+                `;
+            } else {
+                cardContent = `
+                    <div class="station-cost-grid">
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label">🚗 Chặng 1 (Xe ➔ Trạm)</span>
+                            <span class="cost-grid-val">${leg1Dist} km <small>(${leg1Min} phút)</small></span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label">⚡ Tại trạm (Chờ + Sạc)</span>
+                            <span class="cost-grid-val">${waitMin}p chờ · ${serviceMin}p sạc <small>(${slots} cổng trống)</small></span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label">🏁 Chặng 2 (Trạm ➔ B)</span>
+                            <span class="cost-grid-val">${leg2Dist} km <small>(${leg2Min} phút)</small></span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label">🔄 Lệch lộ trình (Detour)</span>
+                            <span class="cost-grid-val" style="color:#d97706;">+${detourKm} km <small>(+${detourMin} phút)</small></span>
+                        </div>
+                    </div>
+
+                    <div class="station-cost-summary">
+                        <span class="total-eta">⏱ Tổng chuyến đi: <strong>${totalEtaMin} phút</strong></span>
+                        ${ranked?.score ? `<span class="cost-score">Cost Score: <strong>${ranked.score.toFixed(3)}</strong></span>` : ''}
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                        <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
+                            Xem vị trí
+                        </button>
+                        <button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${st.station_id}">
+                            🔀 Dẫn đường ghé trạm
+                        </button>
+                    </div>
+                `;
+            }
+
             return `
                 <div class="station-drawer-card ${isRec ? 'is-recommended' : ''}" data-station-id="${st.station_id}">
                     <div class="station-card-top">
                         <div>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 <span class="station-card-name">Trạm ${st.station_id}</span>
-                                ${isRec ? `<span class="badge-rec-hero">⭐ ĐỀ XUẤT TỐI ƯU</span>` : ''}
+                                ${statusBadge}
                             </div>
                             <div style="font-size:12px; color:#64748b; margin-top:2px;">
                                 ${st.name || `Trạm năng lượng ${st.station_id}`}
@@ -822,19 +1186,7 @@ export class DriverModeController {
                         ${typeBadge}
                     </div>
 
-                    <div class="station-card-meta">
-                        <span>📍 Cách <strong>${st.distKm} km</strong></span>
-                        <span>⚡ ${totalSlots} cổng</span>
-                    </div>
-
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                        <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
-                            Xem vị trí
-                        </button>
-                        <button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${st.station_id}">
-                            Dẫn đường tới đây
-                        </button>
-                    </div>
+                    ${cardContent}
                 </div>
             `;
         }).join('');
@@ -848,6 +1200,14 @@ export class DriverModeController {
             });
         });
 
+        listContainer.querySelectorAll('.btn-nav-post-trip-station').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const stId = btn.dataset.stationId;
+                await this.setPostTripStation(stId);
+            });
+        });
+
         listContainer.querySelectorAll('.btn-zoom-station').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -858,13 +1218,83 @@ export class DriverModeController {
         });
     }
 
+    _renderEndpointsWithDrag(origin, dest) {
+        this.map.renderTripEndpoints(origin, dest, {
+            draggable: true,
+            onOriginDragEnd: async (newOrig) => {
+                await this.setCustomOrigin(newOrig);
+            },
+            onDestinationDragEnd: async (newDest) => {
+                await this.setCustomDestination(newDest);
+            }
+        });
+    }
+
+    startPickCustomOrigin() {
+        if (!this.map?.map) return;
+        this.cancelPickCustomDestination();
+        this.isPickingOrigin = true;
+
+        const banner = document.getElementById('map-picker-banner');
+        const textSpan = document.getElementById('map-picker-banner-text');
+        if (textSpan) textSpan.textContent = '📍 Chạm vào vị trí bất kỳ trên bản đồ để đặt ĐIỂM XUẤT PHÁT (A)';
+        if (banner) banner.style.display = 'flex';
+
+        const mapContainer = this.map.map.getContainer();
+        mapContainer.classList.add('map-picking-active');
+        document.getElementById('btn-pick-custom-origin')?.classList.add('active');
+        document.getElementById('btn-pick-origin-map')?.classList.add('active');
+        document.getElementById('btn-assigned-pick-origin')?.classList.add('active');
+
+        if (this._onMapPickClick) {
+            this.map.map.off('click', this._onMapPickClick);
+        }
+
+        this._onMapPickClick = async (e) => {
+            const { lat, lng } = e.latlng;
+            this.cancelPickCustomOrigin();
+            await this.setCustomOrigin({ latitude: lat, longitude: lng });
+        };
+
+        setTimeout(() => {
+            if (this.isPickingOrigin && this.map?.map) {
+                this.map.map.once('click', this._onMapPickClick);
+            }
+        }, 50);
+    }
+
+    cancelPickCustomOrigin() {
+        this.isPickingOrigin = false;
+        const banner = document.getElementById('map-picker-banner');
+        if (banner) banner.style.display = 'none';
+
+        const mapContainer = this.map?.map?.getContainer();
+        if (mapContainer) mapContainer.classList.remove('map-picking-active');
+        document.getElementById('btn-pick-custom-origin')?.classList.remove('active');
+        document.getElementById('btn-pick-origin-map')?.classList.remove('active');
+        document.getElementById('btn-assigned-pick-origin')?.classList.remove('active');
+
+        if (this._onMapPickClick && this.map?.map) {
+            this.map.map.off('click', this._onMapPickClick);
+            this._onMapPickClick = null;
+        }
+    }
+
     startPickCustomDestination() {
         if (!this.map?.map) return;
+        this.cancelPickCustomOrigin();
         this.isPickingDestination = true;
 
         const banner = document.getElementById('map-picker-banner');
+        const textSpan = document.getElementById('map-picker-banner-text');
+        if (textSpan) textSpan.textContent = '🏁 Chạm vào vị trí bất kỳ trên bản đồ để đặt ĐIỂM ĐẾN (B)';
         if (banner) banner.style.display = 'flex';
-        this.map.setMapCursor('crosshair');
+
+        const mapContainer = this.map.map.getContainer();
+        mapContainer.classList.add('map-picking-active');
+        document.getElementById('btn-pick-custom-dest')?.classList.add('active');
+        document.getElementById('btn-pick-dest-map')?.classList.add('active');
+        document.getElementById('btn-assigned-pick-dest')?.classList.add('active');
 
         if (this._onMapPickClick) {
             this.map.map.off('click', this._onMapPickClick);
@@ -876,27 +1306,68 @@ export class DriverModeController {
             await this.setCustomDestination({ latitude: lat, longitude: lng });
         };
 
-        this.map.map.once('click', this._onMapPickClick);
+        setTimeout(() => {
+            if (this.isPickingDestination && this.map?.map) {
+                this.map.map.once('click', this._onMapPickClick);
+            }
+        }, 50);
     }
 
     cancelPickCustomDestination() {
         this.isPickingDestination = false;
         const banner = document.getElementById('map-picker-banner');
         if (banner) banner.style.display = 'none';
-        this.map.setMapCursor('');
+
+        const mapContainer = this.map?.map?.getContainer();
+        if (mapContainer) mapContainer.classList.remove('map-picking-active');
+        document.getElementById('btn-pick-custom-dest')?.classList.remove('active');
+        document.getElementById('btn-pick-dest-map')?.classList.remove('active');
+        document.getElementById('btn-assigned-pick-dest')?.classList.remove('active');
+
         if (this._onMapPickClick && this.map?.map) {
             this.map.map.off('click', this._onMapPickClick);
             this._onMapPickClick = null;
         }
     }
 
+    cancelAllPicking() {
+        this.cancelPickCustomOrigin();
+        this.cancelPickCustomDestination();
+    }
+
+    async setCustomOrigin(orig) {
+        if (!orig) return;
+        this.customOrigin = orig;
+        this.currentPos = { latitude: orig.latitude, longitude: orig.longitude };
+        this.matchedPos = null;
+
+        const selectedTripId = document.getElementById('select-driver-trip')?.value;
+        const baseTrip = this.currentTrip || this.trips.find(t => t.trip_id === selectedTripId) || this.trips[0];
+        const dest = this.customDestination || baseTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
+
+        if (!this.currentVehicle && baseTrip?.vehicle_id) {
+            this.currentVehicle = this.vehicles.find(v => v.vehicle_id === baseTrip.vehicle_id) || this.vehicles[0];
+        }
+
+        await this._updateCustomRoute(orig, dest);
+    }
+
     async setCustomDestination(dest) {
         if (!dest) return;
-        const origin = this.currentPos || (this.currentTrip?.origin ? {
-            latitude: this.currentTrip.origin.latitude,
-            longitude: this.currentTrip.origin.longitude
-        } : { latitude: 21.1038023, longitude: 106.0023809 });
+        this.customDestination = dest;
 
+        const selectedTripId = document.getElementById('select-driver-trip')?.value;
+        const baseTrip = this.currentTrip || this.trips.find(t => t.trip_id === selectedTripId) || this.trips[0];
+        const origin = this.customOrigin || this.currentPos || baseTrip?.origin || { latitude: 21.1038023, longitude: 106.0023809 };
+
+        if (!this.currentVehicle && baseTrip?.vehicle_id) {
+            this.currentVehicle = this.vehicles.find(v => v.vehicle_id === baseTrip.vehicle_id) || this.vehicles[0];
+        }
+
+        await this._updateCustomRoute(origin, dest);
+    }
+
+    async _updateCustomRoute(origin, dest) {
         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
         try {
             const routeResult = await this.api.computeRoute(origin, dest, { vehicle_category: vCat });
@@ -905,7 +1376,7 @@ export class DriverModeController {
                 this.fullRouteCoords = coords;
                 this.directRouteGeometry = coords;
                 this.map.clearAll();
-                this.map.renderTripEndpoints(origin, dest);
+                this._renderEndpointsWithDrag(origin, dest);
                 this.map.renderDirectRoute(coords);
                 this.map.fitBoundsToActive(coords);
                 this.map.renderStations(this.stations);
@@ -914,13 +1385,13 @@ export class DriverModeController {
                 this.remainingTripDistanceKm = plannedKm;
 
                 this.currentTrip = {
-                    trip_id: 'CUSTOM_DEST',
+                    trip_id: 'CUSTOM_TRIP',
                     origin,
                     destination: dest,
                     planned_distance_m: routeResult.distance_m
                 };
 
-                if (this.state === DriverState.AVAILABLE) {
+                if (this.state === DriverState.AVAILABLE || this.state === DriverState.TRIP_ASSIGNED) {
                     this.setState(DriverState.TRIP_ASSIGNED);
                     this.renderTripAssignedUI();
                 } else if (this.state === DriverState.TRIP_ACTIVE) {
@@ -929,7 +1400,15 @@ export class DriverModeController {
                 }
             }
         } catch (err) {
-            console.warn('Failed to compute route to custom destination:', err);
+            console.warn('Failed to compute route for custom endpoints:', err);
+            this.map.clearAll();
+            this._renderEndpointsWithDrag(origin, dest);
+            this.map.renderStations(this.stations);
+            this.map.fitBoundsToActive([
+                [origin.latitude, origin.longitude],
+                [dest.latitude, dest.longitude]
+            ]);
+            alert('GraphHopper chưa tìm thấy đường xe chạy kết nối điểm này. Vui lòng chọn vị trí gần đường giao thông hơn.');
         }
     }
 
@@ -968,9 +1447,14 @@ export class DriverModeController {
                     <button id="btn-accept-trip" class="btn btn-primary btn-lg btn-block">
                         Nhận chuyến đi
                     </button>
-                    <button id="btn-pick-dest-map" class="btn btn-outline btn-block mt-2">
-                        📍 Chọn điểm đến trên bản đồ
-                    </button>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button id="btn-pick-origin-map" class="btn btn-outline flex-1" style="font-size: 13px;">
+                            📍 Đổi điểm xuất phát (A)
+                        </button>
+                        <button id="btn-pick-dest-map" class="btn btn-outline flex-1" style="font-size: 13px;">
+                            🏁 Đổi điểm đến (B)
+                        </button>
+                    </div>
                     <button id="btn-go-offline" class="btn btn-outline btn-sm mt-2">
                         Chuyển ngoại tuyến
                     </button>
@@ -983,7 +1467,13 @@ export class DriverModeController {
             this.assignTrip(tripId);
         });
 
-        document.getElementById('btn-pick-dest-map')?.addEventListener('click', () => {
+        document.getElementById('btn-pick-origin-map')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.startPickCustomOrigin();
+        });
+
+        document.getElementById('btn-pick-dest-map')?.addEventListener('click', (e) => {
+            e.stopPropagation();
             this.startPickCustomDestination();
         });
 
@@ -1041,6 +1531,14 @@ export class DriverModeController {
                     <button id="btn-start-driving" class="btn btn-success btn-lg btn-block">
                         ▶ Bắt đầu lái xe
                     </button>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button id="btn-assigned-pick-origin" class="btn btn-outline flex-1" style="font-size: 13px;">
+                            📍 Đổi điểm xuất phát (A)
+                        </button>
+                        <button id="btn-assigned-pick-dest" class="btn btn-outline flex-1" style="font-size: 13px;">
+                            🏁 Đổi điểm đến (B)
+                        </button>
+                    </div>
                     <button id="btn-cancel-trip" class="btn btn-outline btn-sm mt-2">
                         Hủy nhận chuyến
                     </button>
@@ -1049,6 +1547,14 @@ export class DriverModeController {
         `;
 
         document.getElementById('btn-start-driving')?.addEventListener('click', () => this.startTrip());
+        document.getElementById('btn-assigned-pick-origin')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.startPickCustomOrigin();
+        });
+        document.getElementById('btn-assigned-pick-dest')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.startPickCustomDestination();
+        });
         document.getElementById('btn-cancel-trip')?.addEventListener('click', () => this.cancelTrip());
     }
 
@@ -1073,11 +1579,31 @@ export class DriverModeController {
             const detourKm = top.features?.detour_distance_m != null
                 ? (top.features.detour_distance_m / 1000).toFixed(1)
                 : '0.5';
+            const detourMin = top.features?.detour_duration_s != null
+                ? (top.features.detour_duration_s / 60).toFixed(0)
+                : '2';
+            const etaStationMin = (top.eta_to_station_s / 60).toFixed(0);
+            const serviceMin = (top.features.service_duration_s / 60).toFixed(0);
             const completionMin = top.eta_to_service_complete_s != null
                 ? (top.eta_to_service_complete_s / 60).toFixed(0)
                 : Math.round(top.final_cost_s / 60).toString();
+            const etaTotalMin = top.eta_to_destination_via_station_s != null
+                ? (top.eta_to_destination_via_station_s / 60).toFixed(0)
+                : (top.features?.duration_station_to_dest_s != null
+                    ? Math.round((top.eta_to_service_complete_s + top.features.duration_station_to_dest_s) / 60).toString()
+                    : completionMin);
             const cap = top.features?.available_capacity;
             const capText = cap != null ? ` · ${cap} vị trí còn trống` : '';
+
+            const leg1D = top.distance_vehicle_to_station_m ? (top.distance_vehicle_to_station_m / 1000).toFixed(1) : '1.9';
+            const leg2D = top.features?.distance_station_to_dest_m != null
+                ? (top.features.distance_station_to_dest_m / 1000).toFixed(1)
+                : (top.distance_station_to_dest_m ? (top.distance_station_to_dest_m / 1000).toFixed(1) : '—');
+            const leg2T = top.features?.duration_station_to_dest_s != null
+                ? Math.round(top.features.duration_station_to_dest_s / 60)
+                : (top.duration_station_to_dest_s ? Math.round(top.duration_station_to_dest_s / 60) : '—');
+            const waitT = top.queue_wait_s != null ? Math.round(top.queue_wait_s / 60) : 0;
+            const costVal = top.score != null ? top.score.toFixed(3) : (top.final_cost_s ? (top.final_cost_s / 60).toFixed(1) : '—');
 
             recSnippet = `
                 <div class="on-trip-rec-alert ${isSwap ? 'border-swap' : 'border-charge'}" style="margin-top: 12px; padding: 12px; background: rgba(13, 148, 136, 0.1); border: 1px solid rgba(13, 148, 136, 0.3); border-radius: 12px;">
@@ -1085,20 +1611,53 @@ export class DriverModeController {
                         <div>
                             <strong>Trạm ${top.station_id}</strong> — ${isSwap ? 'Đổi pin nhanh' : 'Sạc pin'}
                             <span class="sr-only">${top.station_id} ${isSwap ? 'Battery Swap' : 'Charging'}</span>
-                            <div class="text-sm text-muted" style="margin-top: 2px;">
-                                +${detourKm} km lệch lộ trình · Sẵn sàng sau ${completionMin} phút${capText}
-                                <span class="sr-only">+${detourKm} km detour Ready in ${completionMin} min</span>
+                            <div class="text-sm" style="margin-top: 4px; color: #cbd5e1; font-size: 12px; line-height: 1.5;">
+                                🚗 Đến trạm: <strong>${etaStationMin}p</strong> · Sạc/đổi: <strong>${serviceMin}p</strong> · Về đích: <strong>${etaTotalMin}p</strong>
                             </div>
                         </div>
                         <span class="badge ${isSwap ? 'badge-purple' : 'badge-teal'}">
-                            Khuyến nghị
+                            Đề xuất tối ưu
                             <span class="sr-only">Recommended</span>
                         </span>
                     </div>
-                    <button id="btn-nav-station" class="btn btn-accent btn-sm mt-2" style="width: 100%;">
-                        Chỉ đường ghé trạm
-                        <span class="sr-only">Navigate Via Station</span>
-                    </button>
+
+                    <!-- Bảng thông số tính toán Cost trực quan -->
+                    <div class="station-cost-grid mt-2" style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(51, 65, 85, 0.7);">
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label" style="color: #94a3b8;">🚗 Chặng 1 (Xe ➔ Trạm)</span>
+                            <span class="cost-grid-val" style="color: #f8fafc;">${leg1D} km <small style="color:#cbd5e1;">(${etaStationMin} phút)</small></span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label" style="color: #94a3b8;">⚡ Tại trạm (Chờ + Sạc)</span>
+                            <span class="cost-grid-val" style="color: #f8fafc;">${waitT}p chờ · ${serviceMin}p sạc${capText}</span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label" style="color: #94a3b8;">🏁 Chặng 2 (Trạm ➔ B)</span>
+                            <span class="cost-grid-val" style="color: #f8fafc;">${leg2D} km <small style="color:#cbd5e1;">(${leg2T} phút)</small></span>
+                        </div>
+                        <div class="cost-grid-item">
+                            <span class="cost-grid-label" style="color: #94a3b8;">🔄 Lệch lộ trình (Detour)</span>
+                            <span class="cost-grid-val" style="color: #f59e0b;">+${detourKm} km <small style="color:#fcd34d;">(+${detourMin} phút)</small></span>
+                        </div>
+                    </div>
+
+                    <div class="station-cost-summary mt-2" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(51, 65, 85, 0.5);">
+                        <span class="total-eta" style="color: #38bdf8;">⏱ Tổng thời gian chuyến đi: <strong>${etaTotalMin} phút</strong></span>
+                        <span class="cost-score" style="color: #e2e8f0;">Điểm Cost: <strong>${costVal}</strong></span>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-2" style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button id="btn-nav-station" class="btn btn-accent btn-sm flex-1" style="flex: 1.1;">
+                            🔀 Ghé sạc ngay
+                            <span class="sr-only">Navigate Via Station</span>
+                        </button>
+                        <button id="btn-switch-post-trip-modal" class="btn btn-primary btn-sm flex-1" style="flex: 1.1; background: #0f172a; border-color: #334155;">
+                            🏁 Đến B rồi sạc
+                        </button>
+                        <button id="btn-view-cost-breakdown" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 12px;">
+                            📊
+                        </button>
+                    </div>
                 </div>
             `;
         }
@@ -1159,6 +1718,20 @@ export class DriverModeController {
 
                 ${recSnippet}
 
+                ${this.postTripStation ? `
+                    <div class="post-trip-banner" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #0d9488; border-radius: 10px; padding: 12px 14px; margin-top: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 700; color: #2dd4bf; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                <span>🏁</span> ĐÃ ĐẶT SẠC SAU KHI TỚI B
+                            </span>
+                            <button id="btn-cancel-post-trip" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 6px;">✕ Hủy</button>
+                        </div>
+                        <div style="font-size: 12px; color: #e2e8f0; margin-top: 6px;">
+                            Xe đang chạy thẳng đến điểm B. Sau khi trả khách sẽ tiếp tục di chuyển đến <strong>Trạm ${this.postTripStation.station_id}</strong> (${this.postTripRoute?.distance_m ? (this.postTripRoute.distance_m / 1000).toFixed(1) : '1.5'} km).
+                        </div>
+                    </div>
+                ` : ''}
+
                 <div class="driver-controls mt-3">
                     <div class="replay-controls d-flex gap-2 mb-2" style="display: flex; gap: 8px;">
                         <button id="btn-driver-replay-play" class="btn btn-primary btn-sm flex-1">▶ Bắt đầu</button>
@@ -1176,10 +1749,45 @@ export class DriverModeController {
         document.getElementById('btn-driver-replay-pause')?.addEventListener('click', () => this.pauseTrip());
         document.getElementById('btn-driver-replay-step')?.addEventListener('click', () => this.stepTrip());
         document.getElementById('btn-nav-station')?.addEventListener('click', () => this.navigateViaStation());
+        document.getElementById('btn-switch-post-trip-modal')?.addEventListener('click', () => {
+            this.chargingIntent = 'AT_DESTINATION';
+            document.querySelectorAll('.charging-intent-selector .intent-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.intent === 'AT_DESTINATION');
+            });
+            this.openStationsDrawer();
+        });
+        document.getElementById('btn-cancel-post-trip')?.addEventListener('click', () => {
+            this.cancelPostTripStation();
+        });
+        document.getElementById('btn-view-cost-breakdown')?.addEventListener('click', () => {
+            if (this.lastRecommendation?.ranked_candidates?.length > 0) {
+                this.openCostBreakdownModal(this.lastRecommendation.ranked_candidates[0]);
+            }
+        });
         document.getElementById('btn-complete-trip')?.addEventListener('click', () => {
             this.setState(DriverState.TRIP_COMPLETE);
             this.renderTripCompleteUI();
         });
+    }
+
+    openCostBreakdownModal(candidate) {
+        const modal = document.getElementById('cost-breakdown-modal');
+        const body = document.getElementById('cost-modal-body');
+        if (!modal || !body || !candidate) return;
+
+        body.innerHTML = renderCostBreakdown(candidate);
+        modal.style.display = 'flex';
+
+        const closeModal = () => {
+            modal.style.display = 'none';
+        };
+        document.getElementById('btn-close-cost-modal')?.addEventListener('click', closeModal, { once: true });
+        document.getElementById('cost-modal-backdrop')?.addEventListener('click', closeModal, { once: true });
+    }
+
+    closeCostBreakdownModal() {
+        const modal = document.getElementById('cost-breakdown-modal');
+        if (modal) modal.style.display = 'none';
     }
 
     renderTripCompleteUI() {
@@ -1199,6 +1807,18 @@ export class DriverModeController {
 
                 ${warningBanner}
 
+                ${this.postTripStation ? `
+                    <div style="background: rgba(13, 148, 136, 0.12); border: 1px solid #0d9488; border-radius: 10px; padding: 14px; margin-top: 12px; margin-bottom: 12px;">
+                        <div style="font-weight: 700; color: #0d9488; font-size: 14px;">⚡ BƯỚC TIẾP THEO: ĐI SẠC PIN</div>
+                        <p style="font-size: 13px; color: #cbd5e1; margin: 4px 0 10px 0;">
+                            Bạn đã chọn sạc tại <strong>Trạm ${this.postTripStation.station_id}</strong> (${this.postTripStation.name || ''}) sau khi trả khách.
+                        </p>
+                        <button id="btn-start-post-trip-nav" class="btn btn-success btn-lg btn-block">
+                            ⚡ Dẫn đường tới Trạm ${this.postTripStation.station_id} ngay
+                        </button>
+                    </div>
+                ` : ''}
+
                 <div class="mt-3">
                     ${recCard}
                 </div>
@@ -1211,6 +1831,12 @@ export class DriverModeController {
             </div>
         `;
 
+        document.getElementById('btn-start-post-trip-nav')?.addEventListener('click', async () => {
+            const st = this.postTripStation;
+            this.postTripStation = null;
+            this.postTripRoute = null;
+            await this.navigateViaStationId(st.station_id);
+        });
         document.getElementById('btn-back-available')?.addEventListener('click', () => this.returnToAvailable());
     }
 }

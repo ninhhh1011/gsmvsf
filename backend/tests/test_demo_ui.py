@@ -19,12 +19,12 @@ async def test_demo_page_serving():
         resp_slash = await client.get("/demo/")
         assert resp_slash.status_code == 200
 
-        # Technical View entry
+        # Unified Driver Cockpit entry
         resp_tech = await client.get("/demo/technical")
         assert resp_tech.status_code == 200
         assert "text/html" in resp_tech.headers["content-type"]
-        assert 'id="tech-view-drawer"' in resp_tech.text
-        assert 'btn-open-tech-view' in resp.text
+        assert 'id="stations-drawer"' in resp_tech.text
+        assert 'driver-status-badge' in resp.text
         assert 'health-pill-redis' in resp.text
 
         resp_tech_slash = await client.get("/demo/technical/")

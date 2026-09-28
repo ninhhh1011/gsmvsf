@@ -17,7 +17,7 @@ from backend.app.services.candidate.models import (
     CandidateSearchResult,
 )
 from backend.app.services.candidate.service import CandidateSearchService
-from backend.app.services.demand.models import DemandContext, EnergyServiceRequest
+from backend.app.services.demand.models import DemandContext, EnergyServiceRequest, RequestedServiceType
 from backend.app.services.demand.service import get_demand_service
 from backend.app.services.realtime.location import resolve_current_location
 from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
@@ -95,6 +95,7 @@ class EvaluateAndSearchApiRequest(BaseModel):
     destination_longitude: Optional[float] = None
     destination_node_id: Optional[str] = None
 
+    requested_service: Optional[RequestedServiceType] = None
     max_candidates: Optional[int] = None
     eligible_only: bool = False
 
@@ -156,7 +157,12 @@ async def evaluate_and_search(
     )
 
     demand_svc = get_demand_service()
-    energy_req: EnergyServiceRequest = demand_svc.evaluate_auto_demand(demand_ctx)
+    if request.requested_service is not None:
+        energy_req: EnergyServiceRequest = demand_svc.process_driver_request(
+            demand_ctx, request.requested_service
+        )
+    else:
+        energy_req: EnergyServiceRequest = demand_svc.evaluate_auto_demand(demand_ctx)
 
     search_req = CandidateSearchRequest(
         energy_request=energy_req,

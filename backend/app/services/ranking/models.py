@@ -46,6 +46,10 @@ class CandidateRankingFeatures(FrozenModel):
     detour_duration_s: Nonnegative | None
     detour_distance_m: Nonnegative | None
     distance_to_station_m: Nonnegative
+    duration_station_to_dest_s: Nonnegative | None = None
+    distance_station_to_dest_m: Nonnegative | None = None
+    via_total_duration_s: Nonnegative | None = None
+    via_total_distance_m: Nonnegative | None = None
     available_capacity: int = Field(ge=0)
     station_state: ResolvedSnapshot
     queue_state: ResolvedSnapshot
@@ -61,6 +65,7 @@ class RankedCandidate(FrozenModel):
     eta_to_service_start_s: Nonnegative
     eta_to_service_complete_s: Nonnegative
     final_cost_s: Nonnegative
+    eta_to_destination_via_station_s: Nonnegative | None = None
     penalty_components_s: dict[str, float] = Field(default_factory=dict)
 
 

@@ -360,6 +360,24 @@ export class DemoMap {
     }
 
     /**
+     * Render onward post-trip route from Destination B to Station.
+     */
+    renderPostTripRoute(postTripGeometry) {
+        this.layers.recommendRoute.clearLayers();
+        if (!postTripGeometry) return [];
+        const coords = decodePolyline(postTripGeometry);
+        if (coords.length > 0) {
+            L.polyline(coords, {
+                color: '#8b5cf6',
+                weight: 5,
+                opacity: 0.9,
+                dashArray: '6, 6'
+            }).addTo(this.layers.recommendRoute);
+        }
+        return coords;
+    }
+
+    /**
      * Render driver location: raw GPS point and matched road position.
      */
     renderDriver(rawPos, matchedPos = null, heading = null) {
@@ -419,9 +437,11 @@ export class DemoMap {
     /**
      * Render Trip endpoints (Origin and Destination).
      */
-    renderTripEndpoints(origin, destination) {
+    renderTripEndpoints(origin, destination, options = {}) {
         if (this.originMarker) this.layers.markers.removeLayer(this.originMarker);
         if (this.destinationMarker) this.layers.markers.removeLayer(this.destinationMarker);
+
+        const isDraggable = options.draggable !== false; // draggable by default
 
         if (origin && origin.latitude && origin.longitude) {
             const originIcon = L.divIcon({
@@ -430,9 +450,19 @@ export class DemoMap {
                 iconSize: [26, 26],
                 iconAnchor: [13, 13]
             });
-            this.originMarker = L.marker([origin.latitude, origin.longitude], { icon: originIcon })
-                .bindPopup(`<strong>Trip Origin</strong><br>${origin.latitude.toFixed(5)}, ${origin.longitude.toFixed(5)}`)
+            this.originMarker = L.marker([origin.latitude, origin.longitude], { 
+                icon: originIcon,
+                draggable: isDraggable
+            })
+                .bindPopup(`<strong>Điểm xuất phát (A)</strong><br>${origin.latitude.toFixed(5)}, ${origin.longitude.toFixed(5)}<br><small style="color:#64748b;">(Có thể kéo thả để đổi vị trí)</small>`)
                 .addTo(this.layers.markers);
+
+            if (isDraggable && typeof options.onOriginDragEnd === 'function') {
+                this.originMarker.on('dragend', (e) => {
+                    const latlng = e.target.getLatLng();
+                    options.onOriginDragEnd({ latitude: latlng.lat, longitude: latlng.lng });
+                });
+            }
         }
 
         if (destination && destination.latitude && destination.longitude) {
@@ -442,9 +472,19 @@ export class DemoMap {
                 iconSize: [26, 26],
                 iconAnchor: [13, 13]
             });
-            this.destinationMarker = L.marker([destination.latitude, destination.longitude], { icon: destIcon })
-                .bindPopup(`<strong>Trip Destination</strong><br>${destination.latitude.toFixed(5)}, ${destination.longitude.toFixed(5)}`)
+            this.destinationMarker = L.marker([destination.latitude, destination.longitude], { 
+                icon: destIcon,
+                draggable: isDraggable
+            })
+                .bindPopup(`<strong>Điểm đến (B)</strong><br>${destination.latitude.toFixed(5)}, ${destination.longitude.toFixed(5)}<br><small style="color:#64748b;">(Có thể kéo thả để đổi vị trí)</small>`)
                 .addTo(this.layers.markers);
+
+            if (isDraggable && typeof options.onDestinationDragEnd === 'function') {
+                this.destinationMarker.on('dragend', (e) => {
+                    const latlng = e.target.getLatLng();
+                    options.onDestinationDragEnd({ latitude: latlng.lat, longitude: latlng.lng });
+                });
+            }
         }
     }
 

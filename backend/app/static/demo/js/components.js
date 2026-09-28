@@ -207,74 +207,120 @@ export function renderCostBreakdown(topCandidate) {
     const queueWait = f.effective_queue_wait_s != null ? (f.effective_queue_wait_s / 60).toFixed(1) : '0.0';
     const serviceDur = f.service_duration_s != null ? (f.service_duration_s / 60).toFixed(1) : 'N/A';
     const distToStation = f.distance_to_station_m != null ? (f.distance_to_station_m / 1000).toFixed(1) : 'N/A';
+    
+    // Leg 2 and Via Total
+    const leg2Dist = f.distance_station_to_dest_m != null ? (f.distance_station_to_dest_m / 1000).toFixed(1) : '-';
+    const leg2Dur = f.duration_station_to_dest_s != null ? (f.duration_station_to_dest_s / 60).toFixed(1) : '-';
+    const viaDist = f.via_total_distance_m != null ? (f.via_total_distance_m / 1000).toFixed(1) : '-';
+    const viaDur = f.via_total_duration_s != null ? (f.via_total_duration_s / 60).toFixed(1) : '-';
+
     const detourDist = f.detour_distance_m != null ? (f.detour_distance_m / 1000).toFixed(1) : '0.0';
     const detourDur = f.detour_duration_s != null ? (f.detour_duration_s / 60).toFixed(1) : '0.0';
     const cap = f.available_capacity ?? 'N/A';
     const trafficMethod = f.traffic_method || 'N/A';
     const queueAssumption = f.queue_assumption || '';
 
+    const etaComplete = topCandidate.eta_to_service_complete_s != null ? (topCandidate.eta_to_service_complete_s / 60).toFixed(1) : 'N/A';
+    const etaDest = topCandidate.eta_to_destination_via_station_s != null 
+        ? (topCandidate.eta_to_destination_via_station_s / 60).toFixed(1)
+        : (f.duration_station_to_dest_s != null ? ((topCandidate.eta_to_service_complete_s + f.duration_station_to_dest_s) / 60).toFixed(1) : etaComplete);
+
     return `
         <div class="cost-breakdown-card">
+            <!-- Chặng 1: A -> Trạm -->
             <div class="cost-section">
-                <div class="cost-section-title">Thời gian di chuyển</div>
+                <div class="cost-section-title">🚗 Chặng 1: Xe (A) ➔ Trạm sạc</div>
                 <div class="cost-row">
-                    <span>Cơ bản:</span>
+                    <span>Khoảng cách đến trạm:</span>
+                    <span><strong>${distToStation} km</strong></span>
+                </div>
+                <div class="cost-row">
+                    <span>Thời gian lái xe cơ bản:</span>
                     <span>${baseTravel} phút</span>
                 </div>
                 <div class="cost-row">
-                    <span>Điều chỉnh giao thông:</span>
-                    <span>+${trafficAdj} phút</span>
+                    <span>Độ trễ kẹt xe:</span>
+                    <span style="color: #f59e0b;">+${trafficAdj} phút</span>
                 </div>
                 <div class="cost-row highlight">
-                    <span>Điều chỉnh:</span>
-                    <span>${adjTravel} phút</span>
+                    <span>Thời gian đến trạm (ETA Trạm):</span>
+                    <span style="color: #38bdf8;">${adjTravel} phút</span>
                 </div>
             </div>
+
+            <!-- Tại trạm: Chờ + Dịch vụ -->
             <div class="cost-section">
-                <div class="cost-section-title">Chờ đợi & Dịch vụ</div>
+                <div class="cost-section-title">⚡ Tại trạm: Hàng đợi & Dịch vụ</div>
                 <div class="cost-row">
-                    <span>Thời gian chờ thực tế:</span>
+                    <span>Thời gian chờ hàng đợi:</span>
                     <span>${queueWait} phút${queueAssumption ? ` (${queueAssumption})` : ''}</span>
                 </div>
                 <div class="cost-row">
-                    <span>Thời gian dịch vụ:</span>
+                    <span>Thời gian sạc / đổi pin:</span>
                     <span>${serviceDur} phút</span>
                 </div>
+                <div class="cost-row">
+                    <span>Cổng / Vị trí còn trống:</span>
+                    <span style="color: #10b981;"><strong>${cap} vị trí</strong></span>
+                </div>
+                <div class="cost-row highlight">
+                    <span>Tổng thời gian nạp xong tại trạm:</span>
+                    <span style="color: #38bdf8;">${etaComplete} phút</span>
+                </div>
             </div>
+
+            <!-- Chặng 2: Trạm -> Đích B -->
             <div class="cost-section">
-                <div class="cost-section-title">Tổng hợp</div>
+                <div class="cost-section-title">🏁 Chặng 2: Trạm sạc ➔ Điểm đến (B)</div>
+                <div class="cost-row">
+                    <span>Khoảng cách trạm về đích:</span>
+                    <span>${leg2Dist} km</span>
+                </div>
+                <div class="cost-row highlight">
+                    <span>Thời gian chạy tiếp về đích:</span>
+                    <span>${leg2Dur} phút</span>
+                </div>
+            </div>
+
+            <!-- Tổng hợp lộ trình & Độ lệch -->
+            <div class="cost-section">
+                <div class="cost-section-title">📐 So sánh lộ trình & Độ lệch (Detour)</div>
+                <div class="cost-row">
+                    <span>Tổng quãng đường qua trạm:</span>
+                    <span>${viaDist} km (lái xe ~${viaDur} phút)</span>
+                </div>
+                <div class="cost-row">
+                    <span>Lệch lộ trình (Detour overhead):</span>
+                    <span style="color: #f59e0b;"><strong>+${detourDist} km (+${detourDur} phút)</strong></span>
+                </div>
+            </div>
+
+            <!-- Tổng kết Final Cost -->
+            <div class="cost-section" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3);">
+                <div class="cost-section-title" style="color: #10b981;">⏱ Tổng thời gian chuyến đi (A ➔ Trạm ➔ B)</div>
                 <div class="cost-row total">
-                    <span>Tổng thời gian hoàn tất:</span>
-                    <span>${(topCandidate.eta_to_service_complete_s / 60).toFixed(1)} phút</span>
+                    <span>Dự kiến đến đích (bao gồm sạc):</span>
+                    <span style="font-size: 16px;"><strong>${etaDest} phút</strong></span>
+                </div>
+                <div class="cost-row muted" style="margin-top: 4px;">
+                    <span>Công thức xếp hạng:</span>
+                    <span><code>final_cost_s = travel + queue + service</code> (${(topCandidate.final_cost_s / 60).toFixed(1)}p)</span>
                 </div>
             </div>
+
+            <!-- Trạng thái nguồn dữ liệu -->
             <div class="cost-section">
-                <div class="cost-section-title">Khoảng cách</div>
-                <div class="cost-row">
-                    <span>Đến trạm:</span>
-                    <span>${distToStation} km</span>
-                </div>
-                <div class="cost-row">
-                    <span>Lệch lộ trình:</span>
-                    <span>+${detourDist} km (+${detourDur} phút)</span>
-                </div>
-                <div class="cost-row">
-                    <span>Vị trí còn trống:</span>
-                    <span>${cap}</span>
-                </div>
-            </div>
-            <div class="cost-section">
-                <div class="cost-section-title">Nguồn dữ liệu</div>
+                <div class="cost-section-title">📡 Trạng thái dữ liệu thời gian thực</div>
                 <div class="cost-row muted">
-                    <span>Phương pháp traffic:</span>
+                    <span>Phương pháp tính traffic:</span>
                     <span>${trafficMethod}</span>
                 </div>
                 <div class="cost-row muted">
-                    <span>Trạng thái trạm:</span>
+                    <span>Độ tươi trạng thái trạm:</span>
                     <span>${f.station_state?.freshness || 'N/A'}</span>
                 </div>
                 <div class="cost-row muted">
-                    <span>Trạng thái hàng đợi:</span>
+                    <span>Độ tươi trạng thái hàng đợi:</span>
                     <span>${f.queue_state?.freshness || 'N/A'}</span>
                 </div>
             </div>

@@ -73,15 +73,6 @@
         <div class="header-actions">
             <!-- Driver status badge in header for clear status reading -->
             <span id="driver-status-badge" class="status-badge badge-available">SẴN SÀNG <span class="sr-only">AVAILABLE</span></span>
-
-            <!-- Scenario Explorer Toggle: hidden in pure Driver Mode, enabled on /demo/technical or ?debug=true -->
-            <button id="btn-toggle-sim-panel" class="btn btn-outline btn-sm" style="display: none;" title="Open Scenario Explorer">
-                🔬 Tình huống
-            </button>
-            <!-- Technical View Toggle: hidden in pure Driver Mode, enabled on /demo/technical or ?debug=true -->
-            <button id="btn-open-tech-view" class="btn btn-outline btn-sm btn-tech-toggle" style="display: none;" title="Inspect system pipeline architecture and telemetry">
-                🛠 Chế độ kỹ thuật
-            </button>
         </div>
     </header>
 
@@ -92,20 +83,23 @@
         <section class="map-viewport">
             <div id="map"></div>
 
-            <!-- Floating Map Actions: Find Station & Custom Destination -->
+            <!-- Floating Map Actions: Find Station & Custom Origin / Destination -->
             <div class="map-floating-controls">
                 <button id="btn-open-stations-drawer" class="btn btn-fab-station" title="Tìm trạm sạc xung quanh">
                     ⚡ Tìm trạm sạc
                 </button>
-                <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến trên bản đồ">
-                    📍 Đổi điểm đến
+                <button id="btn-pick-custom-origin" class="btn btn-fab-origin" title="Chọn điểm xuất phát (A) trên bản đồ">
+                    📍 Đổi xuất phát (A)
+                </button>
+                <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
+                    🏁 Đổi điểm đến (B)
                 </button>
             </div>
 
             <!-- Map Picker Instruction Toast Banner (hidden by default) -->
             <div id="map-picker-banner" class="map-picker-banner" style="display: none;">
-                <span>📍 Chạm vào vị trí bất kỳ trên bản đồ để đặt điểm đến</span>
-                <button id="btn-cancel-pick-dest" class="btn btn-xs btn-outline" style="color: white; border-color: #64748b;">Hủy</button>
+                <span id="map-picker-banner-text">📍 Chạm vào vị trí bất kỳ trên bản đồ</span>
+                <button id="btn-cancel-pick" class="btn btn-xs btn-outline" style="color: white; border-color: #64748b;">Hủy</button>
             </div>
 
             <!-- Proactive Charging Stations Drawer -->
@@ -117,6 +111,18 @@
                     </div>
                     <button id="btn-close-stations-drawer" class="btn btn-sm btn-outline">✕</button>
                 </div>
+                <!-- Charging Intent Selector: En-route vs Post-trip -->
+                <div class="charging-intent-selector">
+                    <button class="intent-tab active" data-intent="EN_ROUTE" id="tab-intent-enroute">
+                        <span>🔀 Ghé sạc giữa đường</span>
+                        <small>A ➔ Trạm ➔ B (Sạc ngay)</small>
+                    </button>
+                    <button class="intent-tab" data-intent="AT_DESTINATION" id="tab-intent-dest">
+                        <span>🏁 Đến B xong mới sạc</span>
+                        <small>A ➔ B thẳng, sau đó B ➔ Trạm</small>
+                    </button>
+                </div>
+
                 <div class="drawer-filters">
                     <button class="filter-tab active" data-filter="ALL">Tất cả</button>
                     <button class="filter-tab" data-filter="FAST_DC">⚡ Sạc nhanh DC</button>
@@ -141,232 +147,22 @@
             </div>
         </div>
 
-        <!-- SCENARIO EXPLORER PANEL (Collapsible, hidden in pure Driver Mode) -->
-        <div id="sim-view-container" class="sim-mode-container collapsible-panel floating-sim-panel" style="display: none;">
-            <div class="collapsible-header">
-                <h4>🔬 Scenario Explorer</h4>
-                <button id="btn-collapse-sim-panel" class="btn btn-outline btn-sm">−</button>
-            </div>
 
-            <div class="sim-section-card">
-                <h5>Demo Scenarios</h5>
-                <div id="sim-scenarios-container"></div>
-                <div id="sim-scenario-desc" class="mt-2"></div>
-            </div>
-
-            <div class="sim-section-card">
-                <h5>Trip Origin & Destination</h5>
-                <div class="form-group">
-                    <label>Origin (A):</label>
-                    <div class="coord-row">
-                        <input type="number" id="sim-origin-lat" class="form-control" step="0.0001" value="21.0285">
-                        <input type="number" id="sim-origin-lng" class="form-control" step="0.0001" value="105.8542">
-                        <button id="btn-pick-origin" class="btn btn-outline btn-sm" title="Pick from Map">📍 Map</button>
-                    </div>
+        <!-- Cost Breakdown Modal (Driver Cockpit) -->
+        <div id="cost-breakdown-modal" class="cost-breakdown-modal" style="display: none;">
+            <div class="cost-modal-backdrop" id="cost-modal-backdrop"></div>
+            <div class="cost-modal-content">
+                <div class="cost-modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #334155; background: #0f172a;">
+                    <h4 style="margin: 0; font-size: 15px; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+                        <span>📊</span> Phân tích chi tiết chi phí đề xuất
+                    </h4>
+                    <button id="btn-close-cost-modal" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 8px;">✕</button>
                 </div>
-                <div class="form-group">
-                    <label>Destination (B):</label>
-                    <div class="coord-row">
-                        <input type="number" id="sim-dest-lat" class="form-control" step="0.0001" value="21.0150">
-                        <input type="number" id="sim-dest-lng" class="form-control" step="0.0001" value="105.7800">
-                        <button id="btn-pick-dest" class="btn btn-outline btn-sm" title="Pick from Map">📍 Map</button>
-                    </div>
+                <div class="cost-modal-body" id="cost-modal-body" style="padding: 16px; max-height: 70vh; overflow-y: auto;">
+                    <!-- Populated dynamically -->
                 </div>
-            </div>
-
-            <div class="sim-section-card">
-                <h5>Vehicle & Service</h5>
-                <div class="form-group">
-                    <label>Vehicle Model:</label>
-                    <select id="sim-vehicle-select" class="form-control"></select>
-                </div>
-                <div class="form-group">
-                    <div class="d-flex justify-between items-center" style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <label style="margin:0;">Battery SOC:</label>
-                        <span id="sim-soc-val" style="font-weight:700; color:var(--brand-blue);">15%</span>
-                    </div>
-                    <input type="range" id="sim-soc-slider" min="1" max="100" value="15" style="width:100%;">
-                    <div class="text-sm text-muted mt-1" style="font-size:11px;">
-                        Est. Range: <strong id="sim-est-range-val">25.0 km</strong>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Service Intent:</label>
-                    <select id="sim-service-intent" class="form-control">
-                        <option value="AUTO">AUTO</option>
-                        <option value="CHARGING">CHARGING</option>
-                        <option value="BATTERY_SWAP">BATTERY_SWAP</option>
-                        <option value="ANY">ANY</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Snapshot Timestamp:</label>
-                    <input type="text" id="sim-timestamp" class="form-control" value="2026-09-01T07:00:00Z">
-                </div>
-                <button id="btn-run-sim" class="btn btn-primary btn-block mt-2">RUN SIMULATION</button>
-            </div>
-
-            <div class="sim-section-card">
-                <h5>Trajectory Replay</h5>
-                <div class="form-group">
-                    <label>Select Trajectory:</label>
-                    <select id="select-trajectory" class="form-control">
-                        <option value="TRJ0001">TRJ0001 (Car Normal)</option>
-                        <option value="TRJ0002">TRJ0002 (Car Safe)</option>
-                        <option value="TRJ0003">TRJ0003 (Car Low SOC)</option>
-                        <option value="TRJ0004">TRJ0004 (Car Need Charging)</option>
-                        <option value="TRJ0005">TRJ0005 (Car High Traffic)</option>
-                    </select>
-                </div>
-                <div class="d-flex gap-2 mb-2" style="display:flex; gap:6px; margin-bottom:8px;">
-                    <button id="btn-sim-play" class="btn btn-primary btn-sm flex-1">▶ Play</button>
-                    <button id="btn-sim-pause" class="btn btn-outline btn-sm flex-1" disabled>⏸ Pause</button>
-                    <button id="btn-sim-step" class="btn btn-outline btn-sm flex-1">⏭ Step</button>
-                    <button id="btn-sim-reset" class="btn btn-outline btn-sm">↺</button>
-                </div>
-                <div class="text-xs text-muted" id="sim-replay-progress" style="font-size:11px;">0 / 0 points</div>
-            </div>
-
-            <div class="sim-section-card">
-                <h5>Candidates & Ranking</h5>
-                <div id="sim-candidates-container"></div>
             </div>
         </div>
-
-        <!-- Technical / Debug View Drawer (Slide-over panel, closed by default) -->
-        <aside id="tech-view-drawer" class="tech-drawer" aria-hidden="true">
-            <div class="tech-drawer-header">
-                <div>
-                    <h3 class="tech-drawer-title">System Architecture & Pipeline Inspector</h3>
-                    <div class="tech-drawer-subtitle">End-to-End Telemetry • Zero Fabricated Metrics</div>
-                </div>
-                <button id="btn-close-tech-view" class="btn btn-outline btn-sm" title="Quay lại giao diện tài xế">
-                    ✕ Đóng
-                </button>
-            </div>
-
-            <!-- Health Badges -->
-            <div class="tech-health-bar" style="display:flex; gap:12px; padding:8px 16px; background:#1e293b; font-size:12px; border-bottom:1px solid #334155; align-items:center;">
-                <span class="text-xs font-semibold text-muted">DỊCH VỤ:</span>
-                <span id="health-pill-api-drawer" class="pill-dot green" title="FastAPI: Online">API</span>
-                <span id="health-pill-gh-drawer" class="pill-dot green" title="GraphHopper: Healthy">GraphHopper</span>
-                <span id="health-pill-db-drawer" class="pill-dot green" title="PostGIS: Populated">PostGIS</span>
-                <span id="health-pill-redis-drawer" class="pill-dot green" title="Redis: Connected">Redis</span>
-            </div>
-
-            <!-- Map Layer Toggles -->
-            <div class="tech-layer-toggles" style="display:flex; gap:12px; padding:8px 16px; background:#0f172a; font-size:12px; border-bottom:1px solid #334155;">
-                <span class="text-xs font-semibold text-muted">LỚP BẢN ĐỒ:</span>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-raw" checked> Raw GPS</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-matched" checked> Matched Road</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-stations" checked> Stations</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-direct" checked> Direct Route</label>
-                <label class="layer-toggle-label"><input type="checkbox" id="toggle-layer-rec" checked> Rec Diversion</label>
-            </div>
-
-            <!-- Pipeline Stepper Navigation -->
-            <div class="tech-pipeline-stepper" role="tablist">
-                <button class="tech-stepper-btn active" data-stage="overview">Tất cả</button>
-                <button class="tech-stepper-btn" data-stage="health">0. Sức khỏe</button>
-                <button class="tech-stepper-btn" data-stage="gps">1. GPS & Vị trí</button>
-                <button class="tech-stepper-btn" data-stage="demand">2. Nhu cầu</button>
-                <button class="tech-stepper-btn" data-stage="candidate">3. Tìm trạm</button>
-                <button class="tech-stepper-btn" data-stage="routing">4. Định tuyến</button>
-                <button class="tech-stepper-btn" data-stage="ranking">5. Xếp hạng</button>
-                <button class="tech-stepper-btn" data-stage="recommendation">6. Đề xuất</button>
-            </div>
-
-            <!-- Scrollable Content Body -->
-            <div class="tech-drawer-body">
-                <!-- 0. Health Card -->
-                <div id="tech-section-health" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>Trạng thái dịch vụ & Phụ thuộc</h4>
-                    </div>
-                    <div id="tech-health-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 1. Location & Map Matching Inspector -->
-                <div id="tech-section-gps" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>1. Định vị & Khớp bản đồ thời gian thực</h4>
-                    </div>
-                    <div id="tech-location-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 2. Demand Detection Inspector -->
-                <div id="tech-section-demand" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>2. Phát hiện nhu cầu năng lượng</h4>
-                    </div>
-                    <div id="tech-demand-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 3. Candidate Search Inspector -->
-                <div id="tech-section-candidate" class="tech-inspector-card">
-                    <div class="tech-card-header d-flex justify-between items-center" style="display:flex; justify-content:space-between; align-items:center;">
-                        <h4>3. Tìm kiếm ứng viên (Danh tính trạm + dịch vụ)</h4>
-                        <div class="btn-group">
-                            <button class="btn btn-xs btn-outline tech-cand-filter-btn active" data-filter="ALL">Tất cả (30)</button>
-                            <button class="btn btn-xs btn-outline tech-cand-filter-btn" data-filter="ELIGIBLE">Phù hợp</button>
-                            <button class="btn btn-xs btn-outline tech-cand-filter-btn" data-filter="REJECTED">Không phù hợp</button>
-                        </div>
-                    </div>
-                    <div id="tech-candidates-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 4. Routing Inspector -->
-                <div id="tech-section-routing" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>4. Định tuyến đa chặng (GraphHopper 11.0)</h4>
-                    </div>
-                    <div id="tech-routing-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 5. Ranking Inspector -->
-                <div id="tech-section-ranking" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>5. Xếp hạng trạm (Snapshot thời gian thực)</h4>
-                    </div>
-                    <div id="tech-ranking-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 6. Recommendation Inspector & Timing -->
-                <div id="tech-section-recommendation" class="tech-inspector-card">
-                    <div class="tech-card-header">
-                        <h4>6. Kết quả đề xuất & Thời gian phản hồi</h4>
-                    </div>
-                    <div id="tech-recommendation-content" class="tech-card-body mb-3"></div>
-                    <div class="tech-card-header sub-header" style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:12px;">
-                        <h5>Thời gian thực thi pipeline (Backend timings_ms)</h5>
-                    </div>
-                    <div id="tech-timing-content" class="tech-card-body"></div>
-                </div>
-
-                <!-- 7. Collapsible Raw Request / Response Inspector -->
-                <div id="tech-section-payloads" class="tech-inspector-card">
-                    <details class="tech-payload-details">
-                        <summary class="tech-payload-summary">Dữ liệu thô JSON (Request / Response)</summary>
-                        <div class="tech-payload-container mt-2">
-                            <div class="payload-box mb-2">
-                                <div class="d-flex justify-between items-center mb-1" style="display:flex; justify-content:space-between; align-items:center;">
-                                    <strong>Request gần nhất:</strong>
-                                    <button id="btn-copy-req-json" class="btn btn-xs btn-outline">Sao chép</button>
-                                </div>
-                                <pre><code id="json-req-content">{}</code></pre>
-                            </div>
-                            <div class="payload-box">
-                                <div class="d-flex justify-between items-center mb-1" style="display:flex; justify-content:space-between; align-items:center;">
-                                    <strong>Response gần nhất:</strong>
-                                    <button id="btn-copy-resp-json" class="btn btn-xs btn-outline">Sao chép</button>
-                                </div>
-                                <pre><code id="json-resp-content">{}</code></pre>
-                            </div>
-                        </div>
-                    </details>
-                </div>
-            </div>
-        </aside>
     </main>
 
     <script src="/demo/static/vendor/leaflet/leaflet.js"></script>

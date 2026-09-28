@@ -65,3 +65,7 @@ runtime/week5/
 
 # Local agent memory, preserved outside the product source
 .claude/memory/
+tools/
+*.exe
+docs/superpowers/
+docs/DAILY_REPORT_*.md

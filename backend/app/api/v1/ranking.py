@@ -1,9 +1,12 @@
 """Synchronous Week 4 APIs; operational writes use a separate internal token."""
 import hmac
+import logging
 from datetime import datetime
 from time import perf_counter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+
+logger = logging.getLogger(__name__)
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from backend.app.config import settings
@@ -105,8 +108,10 @@ async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
     started = perf_counter()
     try:
         context = request.context
+
         location = resolve_current_location(context.driver_id, context.raw_latitude,
             context.raw_longitude, context.road_segment_id, context.timestamp)
+
         context = context.model_copy(update={'raw_latitude': location.latitude,
             'raw_longitude': location.longitude, 'road_segment_id': location.road_segment_id})
         location_ms = (perf_counter() - started) * 1000

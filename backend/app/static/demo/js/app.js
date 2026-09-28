@@ -5,20 +5,14 @@
 import { ApiClient } from './api.js';
 import { DemoMap } from './map.js';
 import { DriverModeController } from './driver_mode.js';
-import { SimModeController } from './sim_mode.js';
 import { TrajectoryReplayController } from './replay.js';
-import { TechViewController, classifySystemHealth } from './tech_view.js';
 
 class DemoApp {
     constructor() {
         this.api = new ApiClient();
         this.map = null;
         this.driverMode = null;
-        this.simMode = null;
         this.replay = null;
-        this.techView = null;
-
-        this.currentMode = 'driver'; // 'driver' | 'sim'
 
         // Shared session context across all controllers
         this.session = {
@@ -48,76 +42,17 @@ class DemoApp {
             // Initial station plot
             this.map.renderStations(this.stations);
 
-            // Technical View Controller (Phase 4)
-            this.techView = new TechViewController(this.api, this.map);
-            this.techView.init();
-            window.techView = this.techView;
-
-            // Initialize Controllers with state sync callback to Technical View
-            // Debounce rapid updates from fast replay steps to prevent UI jank
-            let syncDebounceTimer = null;
-            const onStateUpdate = (data) => {
-                clearTimeout(syncDebounceTimer);
-                syncDebounceTimer = setTimeout(() => {
-                    this.techView.syncState(data);
-                }, 50); // 50ms debounce for rapid replay steps
-            };
-
+            // Initialize Driver Mode Controller
             this.driverMode = new DriverModeController(this.api, this.map, {
-                onStateUpdate,
                 session: this.session
             });
             this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios);
             await this.driverMode.init();
             window.driverMode = this.driverMode;
 
-            this.simMode = new SimModeController(this.api, this.map, { onStateUpdate });
-            this.simMode.setCatalogs(this.scenarios, this.vehicles, this.stations);
-            this.simMode.init();
-
             // Link app.replay to driverMode.replay to maintain single replay instance
             this.replay = this.driverMode.replay;
             this.replay.init();
-
-            // Bind Scenario Panel Toggle
-            this.bindScenarioPanel();
-
-            // Check if URL specifies Technical View or debug mode
-            const isDebug = window.location.search.includes('debug=true');
-            const isTechRoute = window.location.hash === '#technical' || window.location.pathname.includes('/demo/technical');
-
-            const techBtn = document.getElementById('btn-open-tech-view');
-            const simToggleBtn = document.getElementById('btn-toggle-sim-panel');
-            const statusPills = document.getElementById('header-status-pills');
-            const pipeline = document.getElementById('pipeline-indicator');
-
-            if (isDebug || isTechRoute) {
-                if (techBtn) techBtn.style.display = 'inline-flex';
-                if (simToggleBtn) simToggleBtn.style.display = 'inline-flex';
-                if (statusPills) statusPills.style.display = 'flex';
-                if (pipeline) pipeline.style.display = 'flex';
-            } else {
-                if (techBtn) techBtn.style.display = 'none';
-                if (simToggleBtn) simToggleBtn.style.display = 'none';
-                if (statusPills) statusPills.style.display = 'none';
-                if (pipeline) pipeline.style.display = 'none';
-            }
-
-            if (isTechRoute) {
-                this.techView.open();
-            }
-
-            window.addEventListener('hashchange', () => {
-                if (window.location.hash === '#technical') {
-                    if (techBtn) techBtn.style.display = 'inline-flex';
-                    if (simToggleBtn) simToggleBtn.style.display = 'inline-flex';
-                    if (statusPills) statusPills.style.display = 'flex';
-                    if (pipeline) pipeline.style.display = 'flex';
-                    this.techView.open();
-                } else if (this.techView.isOpen) {
-                    this.techView.close();
-                }
-            });
 
             // Start Health Monitor
             await this.checkBackendHealth();
@@ -185,31 +120,7 @@ class DemoApp {
         document.body.prepend(errDiv);
     }
 
-    /**
-     * Toggle collapsible Scenario Explorer panel.
-     * Driver Mode is always visible; Scenario Explorer is a collapsible panel below.
-     */
-    bindScenarioPanel() {
-        const btnToggle = document.getElementById('btn-toggle-sim-panel');
-        const btnCollapse = document.getElementById('btn-collapse-sim-panel');
-        const simPanel = document.getElementById('sim-view-container');
 
-        if (!btnToggle || !simPanel) return;
-
-        // Open panel
-        btnToggle?.addEventListener('click', () => {
-            simPanel.style.display = 'block';
-            btnToggle.style.display = 'none';
-            this.map?.invalidateSize();
-        });
-
-        // Collapse panel
-        btnCollapse?.addEventListener('click', () => {
-            simPanel.style.display = 'none';
-            btnToggle.style.display = 'inline-block';
-            this.map?.invalidateSize();
-        });
-    }
 
     /**
      * Update the Week Pipeline indicator based on recommendation timings.
@@ -287,9 +198,6 @@ class DemoApp {
                 if (redisPill) redisPill.className = 'pill-dot gray';
             }
         }
-
-        const classified = classifySystemHealth(readiness, apiHealthy);
-        this.techView?.syncState({ health: classified });
     }
 }
 

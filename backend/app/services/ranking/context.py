@@ -116,7 +116,12 @@ def build_features(evidence, view, request_time, policy, catalog) -> list[Candid
             queue_assumption='PROJECT_POLICY_MISSING_QUEUE' if observed_wait is None else None,
             service_duration_s=op.service_time_min * 60,
             detour_duration_s=metrics.detour_duration_s, detour_distance_m=metrics.detour_distance_m,
-            distance_to_station_m=metrics.distance_to_station_m, available_capacity=op.available_capacity,
+            distance_to_station_m=metrics.distance_to_station_m,
+            duration_station_to_dest_s=metrics.duration_station_to_dest_s,
+            distance_station_to_dest_m=metrics.distance_station_to_dest_m,
+            via_total_duration_s=metrics.via_total_duration_s,
+            via_total_distance_m=metrics.via_total_distance_m,
+            available_capacity=op.available_capacity,
             station_state=view[f'station:{sid}'], queue_state=view.get(f'queue:{sid}', missing),
             traffic_state=traffic))
     return features

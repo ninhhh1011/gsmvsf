@@ -68,28 +68,34 @@ export class SimModeController {
         if (mode) {
             if (infoBar) infoBar.style.display = 'flex';
             if (infoSpan) {
-                const label = mode === 'origin' ? 'điểm bắt đầu' : 'điểm đến';
+                const label = mode === 'origin' ? 'điểm bắt đầu (A)' : 'điểm đến (B)';
                 infoSpan.textContent = `📍 Chạm vào bản đồ để chọn ${label}`;
             }
-            if (mapElem) mapElem.style.cursor = 'crosshair';
+            if (mapElem) mapElem.classList.add('map-picking-active');
         } else {
             if (infoBar) infoBar.style.display = 'none';
-            if (mapElem) mapElem.style.cursor = '';
+            if (mapElem) mapElem.classList.remove('map-picking-active');
         }
     }
 
     setOrigin(coords) {
         this.origin = coords;
-        document.getElementById('sim-origin-lat').value = coords.latitude.toFixed(6);
-        document.getElementById('sim-origin-lng').value = coords.longitude.toFixed(6);
+        const latInput = document.getElementById('sim-origin-lat');
+        const lngInput = document.getElementById('sim-origin-lng');
+        if (latInput) latInput.value = coords.latitude.toFixed(6);
+        if (lngInput) lngInput.value = coords.longitude.toFixed(6);
         this.map.renderTripEndpoints(this.origin, this.destination);
+        this.runSimulation();
     }
 
     setDestination(coords) {
         this.destination = coords;
-        document.getElementById('sim-dest-lat').value = coords.latitude.toFixed(6);
-        document.getElementById('sim-dest-lng').value = coords.longitude.toFixed(6);
+        const latInput = document.getElementById('sim-dest-lat');
+        const lngInput = document.getElementById('sim-dest-lng');
+        if (latInput) latInput.value = coords.latitude.toFixed(6);
+        if (lngInput) lngInput.value = coords.longitude.toFixed(6);
         this.map.renderTripEndpoints(this.origin, this.destination);
+        this.runSimulation();
     }
 
     bindEvents() {
@@ -97,8 +103,14 @@ export class SimModeController {
         document.getElementById('btn-run-sim')?.addEventListener('click', () => this.runSimulation());
 
         // Coordinate picker buttons
-        document.getElementById('btn-pick-origin')?.addEventListener('click', () => this.setPickingMode('origin'));
-        document.getElementById('btn-pick-dest')?.addEventListener('click', () => this.setPickingMode('destination'));
+        document.getElementById('btn-pick-origin')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setPickingMode('origin');
+        });
+        document.getElementById('btn-pick-dest')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setPickingMode('destination');
+        });
 
         // Input change listeners
         document.getElementById('sim-origin-lat')?.addEventListener('change', (e) => {
