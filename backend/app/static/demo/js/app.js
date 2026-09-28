@@ -198,6 +198,11 @@ class DemoApp {
                 if (redisPill) redisPill.className = 'pill-dot gray';
             }
         }
+
+        const banner = document.getElementById('backend-offline-banner');
+        if (banner) {
+            banner.style.display = apiHealthy ? 'none' : 'block';
+        }
     }
 }
 

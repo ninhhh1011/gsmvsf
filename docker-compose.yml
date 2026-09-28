@@ -63,6 +63,8 @@ services:
       - LOG_LEVEL=INFO
       - REDIS_URL=redis://redis:6379/0
       - SNAPSHOT_INGESTION_TOKEN=${SNAPSHOT_INGESTION_TOKEN:-}
+      - ENABLE_REALTIME_SIMULATOR=${ENABLE_REALTIME_SIMULATOR:-true}
+      - REALTIME_SIMULATOR_INTERVAL_S=${REALTIME_SIMULATOR_INTERVAL_S:-30}
     ports:
       - "8000:8000"
     volumes:
@@ -78,6 +80,22 @@ services:
         condition: service_healthy
       graphhopper:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: ev_frontend
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: on-failure
+    depends_on:
+      - api
 
 volumes:
   pgdata:

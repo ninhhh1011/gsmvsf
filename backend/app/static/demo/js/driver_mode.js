@@ -35,6 +35,28 @@ export const DriverState = {
     TRIP_COMPLETE: 'TRIP_COMPLETE'
 };
 
+export const VINFAST_MODEL_SPECS = {
+    'VF_3': { vehicle_model: 'VF_3', display_name: 'VF 3', vehicle_type: 'EV_CAR', usable_kwh: 17.15, consumption_wh_km: 95.0, charging_supported: true, swap_supported: false },
+    'VF_5': { vehicle_model: 'VF_5', display_name: 'VF 5', vehicle_type: 'EV_CAR', usable_kwh: 34.25, consumption_wh_km: 125.0, charging_supported: true, swap_supported: false },
+    'HERIO_GREEN': { vehicle_model: 'HERIO_GREEN', display_name: 'Herio Green', vehicle_type: 'EV_CAR', usable_kwh: 34.25, consumption_wh_km: 125.0, charging_supported: true, swap_supported: false },
+    'VF_6': { vehicle_model: 'VF_6', display_name: 'VF 6', vehicle_type: 'EV_CAR', usable_kwh: 54.83, consumption_wh_km: 145.0, charging_supported: true, swap_supported: false },
+    'VF_7_ECO': { vehicle_model: 'VF_7_ECO', display_name: 'VF 7 Eco', vehicle_type: 'EV_CAR', usable_kwh: 54.83, consumption_wh_km: 155.0, charging_supported: true, swap_supported: false },
+    'VF_7_PLUS': { vehicle_model: 'VF_7_PLUS', display_name: 'VF 7 Plus', vehicle_type: 'EV_CAR', usable_kwh: 69.28, consumption_wh_km: 170.0, charging_supported: true, swap_supported: false },
+    'VF_8': { vehicle_model: 'VF_8', display_name: 'VF 8', vehicle_type: 'EV_CAR', usable_kwh: 80.68, consumption_wh_km: 195.0, charging_supported: true, swap_supported: false },
+    'VF_9': { vehicle_model: 'VF_9', display_name: 'VF 9', vehicle_type: 'EV_CAR', usable_kwh: 113.16, consumption_wh_km: 235.0, charging_supported: true, swap_supported: false },
+    'VF_E34': { vehicle_model: 'VF_E34', display_name: 'VF e34', vehicle_type: 'EV_CAR', usable_kwh: 38.55, consumption_wh_km: 135.0, charging_supported: true, swap_supported: false },
+    'NERIO_GREEN': { vehicle_model: 'NERIO_GREEN', display_name: 'Nerio Green', vehicle_type: 'EV_CAR', usable_kwh: 38.55, consumption_wh_km: 135.0, charging_supported: true, swap_supported: false },
+    'EVO200': { vehicle_model: 'EVO200', display_name: 'Evo200 [Xe máy]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 3.22, consumption_wh_km: 40.0, charging_supported: true, swap_supported: false },
+    'EVO200_LITE': { vehicle_model: 'EVO200_LITE', display_name: 'Evo200 Lite [Xe máy]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 3.22, consumption_wh_km: 40.0, charging_supported: true, swap_supported: false },
+    'FELIZ_S': { vehicle_model: 'FELIZ_S', display_name: 'Feliz S [Xe máy]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 3.22, consumption_wh_km: 42.0, charging_supported: true, swap_supported: false },
+    'KLARA_S_2022': { vehicle_model: 'KLARA_S_2022', display_name: 'Klara S [Xe máy]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 3.22, consumption_wh_km: 45.0, charging_supported: true, swap_supported: false },
+    'VENTO_S': { vehicle_model: 'VENTO_S', display_name: 'Vento S [Xe máy]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 3.22, consumption_wh_km: 45.0, charging_supported: true, swap_supported: false },
+    'EVO': { vehicle_model: 'EVO', display_name: 'Evo [Xe máy đổi pin]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 2.76, consumption_wh_km: 38.0, charging_supported: true, swap_supported: true },
+    'EVO_LITE': { vehicle_model: 'EVO_LITE', display_name: 'Evo Lite [Xe máy đổi pin]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 1.38, consumption_wh_km: 38.0, charging_supported: true, swap_supported: true },
+    'FELIZ_II': { vehicle_model: 'FELIZ_II', display_name: 'Feliz II [Xe máy đổi pin]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 2.76, consumption_wh_km: 40.0, charging_supported: true, swap_supported: true },
+    'VIPER': { vehicle_model: 'VIPER', display_name: 'Viper [Xe máy đổi pin]', vehicle_type: 'EV_MOTORBIKE', usable_kwh: 1.38, consumption_wh_km: 38.0, charging_supported: true, swap_supported: true }
+};
+
 const EARTH_RADIUS_KM = 6371.0;
 
 function toRad(deg) {
@@ -75,11 +97,14 @@ export class DriverModeController {
         this.state = DriverState.AVAILABLE;
         this.currentTrip = null;
         this.currentVehicle = null;
+        this.userSelectedVehicleModel = null;
 
         // Energy state
         this.currentSocPct = 85.0;
-        this.estimatedRangeKm = 100.0;
+        this.estimatedRangeKm = 153.6;
         this.safetyReserveKm = 2.0;
+        this.totalDistanceTravelledKm = 0.0;
+        this.lastMovementPos = null;
 
         // Position state
         this.currentPos = null;
@@ -122,12 +147,86 @@ export class DriverModeController {
         this.vehicles = vehicles || [];
         this.stations = stations || [];
         this.scenarios = scenarios || [];
+        if (!this.currentVehicle) {
+            this.selectVehicleModel('VF_3');
+        }
     }
 
     async init() {
         this.setState(DriverState.AVAILABLE);
         this.renderAvailableUI();
         this.bindGlobalControls();
+        const select = document.getElementById('cockpit-vehicle-select');
+        if (select) {
+            select.value = this.currentVehicle?.vehicle_model || 'VF_3';
+        }
+    }
+
+    renderCurrentStateUI() {
+        if (this.state === DriverState.AVAILABLE) {
+            this.renderAvailableUI();
+        } else if (this.state === DriverState.TRIP_ASSIGNED) {
+            this.renderTripAssignedUI();
+        } else if (this.state === DriverState.TRIP_ACTIVE) {
+            this.renderTripActiveUI();
+        } else if (this.state === DriverState.TRIP_COMPLETE) {
+            this.renderTripCompleteUI();
+        } else if (this.state === DriverState.OFFLINE) {
+            this.renderOfflineUI();
+        }
+    }
+
+    selectVehicleModel(modelKey) {
+        const spec = VINFAST_MODEL_SPECS[modelKey] || VINFAST_MODEL_SPECS['VF_3'];
+        const matchedVehicle = this.vehicles.find(v => v.vehicle_model === spec.vehicle_model) || {
+            vehicle_id: 'V0001',
+            vehicle_model: spec.vehicle_model,
+            vehicle_type: spec.vehicle_type,
+            usable_capacity_kwh: spec.usable_kwh,
+            consumption_wh_per_km: spec.consumption_wh_km,
+            charging_supported: spec.charging_supported,
+            swap_supported: spec.swap_supported
+        };
+
+        this.userSelectedVehicleModel = spec.vehicle_model;
+        this.currentVehicle = {
+            ...matchedVehicle,
+            vehicle_model: spec.vehicle_model,
+            vehicle_type: spec.vehicle_type,
+            usable_capacity_kwh: spec.usable_kwh,
+            consumption_wh_per_km: spec.consumption_wh_km,
+            charging_supported: spec.charging_supported,
+            swap_supported: spec.swap_supported
+        };
+
+        this.session.vehicle_id = this.currentVehicle.vehicle_id;
+        this.session.vehicle_category = this.currentVehicle.vehicle_type;
+
+        // Recalculate range according to current SOC and new vehicle specifications
+        this.updateEstimatedRange();
+
+        // Sync dropdown UI
+        const select = document.getElementById('cockpit-vehicle-select');
+        if (select && select.value !== spec.vehicle_model) {
+            select.value = spec.vehicle_model;
+        }
+
+        console.log(`[VEHICLE SWITCHED] Model: ${spec.vehicle_model} (${spec.usable_kwh} kWh, ${spec.consumption_wh_km} Wh/km), Current Range: ${this.estimatedRangeKm} km`);
+
+        // Re-render HUD
+        this.renderCurrentStateUI();
+
+        // If stations drawer is open, refresh evaluations
+        const drawer = document.getElementById('stations-drawer');
+        if (drawer && drawer.style.display !== 'none') {
+            this.refreshDrawerEvaluations();
+        }
+    }
+
+    updateEstimatedRange() {
+        const usable = this.currentVehicle?.usable_capacity_kwh || 17.15;
+        const cons = this.currentVehicle?.consumption_wh_per_km || 95.0;
+        this.estimatedRangeKm = parseFloat(((usable * 1000.0 * (this.currentSocPct / 100.0)) / cons).toFixed(1));
     }
 
     setState(newState) {
@@ -178,20 +277,26 @@ export class DriverModeController {
         if (!trip) return;
 
         this.currentTrip = trip;
-        this.currentVehicle = this.vehicles.find(v => v.vehicle_id === trip.vehicle_id)
-            || this.vehicles[0];
+
+        if (!this.userSelectedVehicleModel) {
+            const tripVehicle = this.vehicles.find(v => v.vehicle_id === trip.vehicle_id);
+            if (tripVehicle) {
+                this.selectVehicleModel(tripVehicle.vehicle_model);
+            } else {
+                this.selectVehicleModel('VF_3');
+            }
+        }
 
         // Scenario energy context matching
         const matchingScenario = this.scenarios.find(s => s.trip_id === trip.trip_id || s.id === trip.scenario_id);
         if (matchingScenario) {
             this.currentSocPct = matchingScenario.soc_pct ?? 85.0;
-            this.estimatedRangeKm = matchingScenario.estimated_range_km ?? 100.0;
             this.safetyReserveKm = matchingScenario.safety_reserve_km ?? 2.0;
         } else {
             this.currentSocPct = 85.0;
-            this.estimatedRangeKm = 100.0;
             this.safetyReserveKm = 2.0;
         }
+        this.updateEstimatedRange();
 
         // Reset tracking state
         this.fullRouteCoords = null;
@@ -292,6 +397,8 @@ export class DriverModeController {
         this.session.trip_id = this.currentTrip.trip_id;
 
         this.setState(DriverState.TRIP_ACTIVE);
+        this.lastMovementPos = null;
+        this.totalDistanceTravelledKm = 0.0;
 
         const trajId = this._tripToTrajectory(this.currentTrip.trip_id);
         this.session.trajectory_id = trajId || 'SIMULATED';
@@ -361,6 +468,29 @@ export class DriverModeController {
                 longitude: observation.longitude
             };
             this.matchedPos = null;
+        }
+
+        // Dynamic Energy & SOC depletion during movement
+        if (this.lastMovementPos && this.currentPos) {
+            const stepDistKm = straightLineDistanceKm(
+                this.lastMovementPos.latitude,
+                this.lastMovementPos.longitude,
+                this.currentPos.latitude,
+                this.currentPos.longitude
+            );
+            if (stepDistKm > 0.005) { // At least 5m
+                const usable = this.currentVehicle?.usable_capacity_kwh || 17.15;
+                const cons = this.currentVehicle?.consumption_wh_per_km || 95.0;
+                const energyKwh = stepDistKm * (cons / 1000.0);
+                const socDropPct = (energyKwh / usable) * 100.0;
+
+                this.currentSocPct = Math.max(0.0, parseFloat((this.currentSocPct - socDropPct).toFixed(2)));
+                this.updateEstimatedRange();
+                this.totalDistanceTravelledKm = (this.totalDistanceTravelledKm || 0.0) + stepDistKm;
+                this.lastMovementPos = { ...this.currentPos };
+            }
+        } else if (this.currentPos) {
+            this.lastMovementPos = { ...this.currentPos };
         }
 
         // Update remaining route & distance
@@ -478,7 +608,9 @@ export class DriverModeController {
                 current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
                 estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
                 remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
+                distance_travelled_km: parseFloat((this.totalDistanceTravelledKm || 0.0).toFixed(2)),
                 safety_reserve_km: this.safetyReserveKm,
+                consumption_wh_per_km: this.currentVehicle?.consumption_wh_per_km,
                 raw_latitude: rawLat,
                 raw_longitude: rawLng
             },
@@ -802,6 +934,13 @@ export class DriverModeController {
     // ─── Proactive Station Drawer & Map Destination Picking ─────────────
 
     bindGlobalControls() {
+        const vehicleSelect = document.getElementById('cockpit-vehicle-select');
+        if (vehicleSelect) {
+            vehicleSelect.addEventListener('change', (e) => {
+                this.selectVehicleModel(e.target.value);
+            });
+        }
+
         document.getElementById('btn-open-stations-drawer')?.addEventListener('click', () => {
             this.openStationsDrawer();
         });
@@ -887,7 +1026,9 @@ export class DriverModeController {
                     current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
                     estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
                     remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
+                    distance_travelled_km: parseFloat((this.totalDistanceTravelledKm || 0.0).toFixed(2)),
                     safety_reserve_km: this.safetyReserveKm,
+                    consumption_wh_per_km: this.currentVehicle?.consumption_wh_per_km,
                     raw_latitude: currentPos.latitude,
                     raw_longitude: currentPos.longitude,
                     destination_latitude: dest.latitude,
@@ -901,7 +1042,9 @@ export class DriverModeController {
                         current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
                         estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
                         remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
+                        distance_travelled_km: parseFloat((this.totalDistanceTravelledKm || 0.0).toFixed(2)),
                         safety_reserve_km: this.safetyReserveKm,
+                        consumption_wh_per_km: this.currentVehicle?.consumption_wh_per_km,
                         raw_latitude: currentPos.latitude,
                         raw_longitude: currentPos.longitude,
                         timestamp: new Date().toISOString()

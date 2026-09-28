@@ -159,6 +159,68 @@ async def get_vehicle_capability(
 
 
 @router.get(
+    "/vehicles",
+    response_model=list[VehicleCapability],
+    summary="List all registered VinFast vehicle models with battery & consumption specs",
+)
+async def list_vehicle_models() -> list[VehicleCapability]:
+    """List all registered VinFast vehicle models."""
+    resolver = get_capability_resolver()
+    return [resolver.resolve_by_model(m) for m in resolver.list_all_models()]
+
+
+class EnergyStepRequest(BaseModel):
+    vehicle_model: str = Field(..., description="VinFast model name (e.g. VF_3, VF_8, EVO)")
+    distance_km: float = Field(..., ge=0, description="Distance traveled in km")
+    current_soc_pct: float = Field(..., ge=0, le=100, description="Current SOC percentage")
+    consumption_wh_per_km: Optional[float] = Field(None, gt=0, description="Optional override consumption")
+
+
+class EnergyStepResponse(BaseModel):
+    vehicle_model: str
+    distance_km: float
+    previous_soc_pct: float
+    current_soc_pct: float
+    soc_drop_pct: float
+    energy_consumed_kwh: float
+    estimated_remaining_range_km: float
+    usable_capacity_kwh: float
+    consumption_wh_per_km: float
+
+
+@router.post(
+    "/vehicles/energy-step",
+    response_model=EnergyStepResponse,
+    summary="Authoritative energy & SOC depletion calculation for vehicle movement",
+)
+async def calculate_energy_step(payload: EnergyStepRequest) -> EnergyStepResponse:
+    """Calculate battery depletion and new SOC when vehicle moves."""
+    resolver = get_capability_resolver()
+    try:
+        cap = resolver.resolve_by_model(payload.vehicle_model)
+    except UnknownVehicleModelError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    effective_cons = payload.consumption_wh_per_km or cap.get_effective_consumption_wh_per_km()
+    soc_drop = cap.calculate_soc_drop(payload.distance_km, effective_cons)
+    new_soc = max(0.0, payload.current_soc_pct - soc_drop)
+    new_range = cap.estimate_range_km(new_soc, effective_cons)
+    energy_kwh = payload.distance_km * (effective_cons / 1000.0)
+
+    return EnergyStepResponse(
+        vehicle_model=cap.vehicle_model,
+        distance_km=round(payload.distance_km, 3),
+        previous_soc_pct=round(payload.current_soc_pct, 2),
+        current_soc_pct=round(new_soc, 2),
+        soc_drop_pct=round(soc_drop, 2),
+        energy_consumed_kwh=round(energy_kwh, 4),
+        estimated_remaining_range_km=round(new_range, 2),
+        usable_capacity_kwh=cap.usable_capacity_kwh or cap.total_battery_capacity_kwh,
+        consumption_wh_per_km=round(effective_cons, 1),
+    )
+
+
+@router.get(
     "/vehicles/models/{model_name}/capability",
     response_model=VehicleCapability,
     summary="Get vehicle capability by model name",

@@ -328,3 +328,56 @@ median/P90/P95/max, successes/errors and workload/cache/environment as an INITIA
 LOCAL WEEK 5 PERFORMANCE BASELINE. Slow correct responses do not fail an invented SLA.
 Production optimization, lifecycle/retention, scale, monitoring and deployment
 hardening remain Week 6/future scope.
+
+
+## ADR-015: Domain-Driven Vehicle Energy Model and Dynamic Consumption
+
+**Date:** 2026-09-28. **Status:** Approved.
+
+**Context:** The existing demo statically assigned vehicle models to trips without an interactive driver selector. All cars were evaluated with a flat 150 Wh/km consumption rate, and vehicle battery SOC did not decrease as vehicles traveled, leading to static recommendation inputs.
+
+**Decision:**
+1. Maintain the canonical VinFast vehicle model catalog in domain backend (`CANONICAL_MODEL_CATALOG`), mapping all 19 official models with exact battery and usable capacities from `dataset_v1/vehicles/vehicle_model_catalog.csv`.
+2. Introduce model-specific `PROJECT_ESTIMATE` energy consumption rates based on official range and battery specifications (e.g. VF 3: 95 Wh/km, VF 5: 125 Wh/km, VF 6: 145 Wh/km, VF 7: 165 Wh/km, VF 8: 195 Wh/km, VF 9: 235 Wh/km, motorbikes: 45 Wh/km), maintaining transparent non-official provenance.
+3. Expose the vehicle catalog and specifications via an API endpoint (`/api/v1/vehicles`).
+4. As vehicles travel distance $\Delta d$, calculate energy depletion in the domain model:
+   $\Delta E = \Delta d \times C / 1000$ kWh, $\Delta \text{SOC}\% = (\Delta E / \text{usable\_kwh}) \times 100\%$, and update remaining range accordingly. Subsequent recommendation requests evaluate on the updated dynamic SOC state.
+
+
+## ADR-016: 3-Tier Container Separation (Nginx Presentation Tier)
+
+**Date:** 2026-09-28. **Status:** Approved.
+
+**Context:** The existing FastAPI container directly hosted and served static HTML/JS demo files under `/demo`. A failure or restart of the API container completely disconnected the frontend.
+
+**Decision:**
+1. Separate the presentation tier into an independent Nginx container (`ev_frontend`).
+2. Nginx serves all static frontend assets and reverse-proxies `/api/` traffic to the backend FastAPI container (`ev_api:8000`).
+3. If the backend is restarted or unavailable, Nginx remains operational and the frontend UI gracefully displays an "API Offline - Reconnecting..." state rather than dropping the connection.
+4. Stopping or restarting the frontend has zero impact on the backend API or data tier.
+
+
+## ADR-017: Core vs Realtime Schema Separation
+
+**Date:** 2026-09-28. **Status:** Approved.
+
+**Context:** Static reference data (`road_segments`, `road_nodes`) and volatile operational time-series data (`state_snapshots`, `candidate_searches`) resided in the same `public` schema in PostgreSQL.
+
+**Decision:**
+1. Establish a logical schema separation within PostgreSQL:
+   - `core` schema (or `public`): immutable spatial road network and station master records.
+   - `realtime` schema: dynamic operational state snapshots and candidate search evidence.
+2. Abstract database connectivity such that `REALTIME_DATABASE_URL` defaults to the main database with the `realtime` schema, but can point to an independent physical PostgreSQL instance in production with zero business logic refactoring.
+
+
+## ADR-018: Lightweight Realtime Operational State Simulator
+
+**Date:** 2026-09-28. **Status:** Approved.
+
+**Context:** Operational state snapshots were static. Demo evaluations did not reflect changing queue wait times, slot availability, or traffic congestion over time.
+
+**Decision:**
+1. Build an internal `RealtimeSimulator` executing bounded random-walk Markov transitions for key Hanoi stations and connecting road segments every 30 seconds.
+2. Enforce all snapshot validation rules through the existing `IngestionService` (available slots + occupied slots $\le$ canonical capacity, positive service times, speed-delay factor consistency).
+3. Demonstrate dynamic recommendation cost variance where station rankings evolve between timestamps $T_0$ and $T_1$ based on live operational changes.
+

@@ -83,6 +83,8 @@ class VehicleCapability(BaseModel):
     charging_interface_class: Optional[str] = None
     swap_battery_family: Optional[str] = None
     capability_source_class: str = "VINFAST_OFFICIAL_BATTERY_SPEC"
+    estimated_consumption_wh_per_km: Optional[float] = None
+    consumption_source: str = "PROJECT_ESTIMATE"
 
     @property
     def total_battery_capacity_kwh(self) -> float:
@@ -106,6 +108,39 @@ class VehicleCapability(BaseModel):
     def is_service_supported(self, service: ServiceType) -> bool:
         """Check if vehicle physically supports a specific service."""
         return service in self.allowed_service_types
+
+    def get_effective_consumption_wh_per_km(self) -> float:
+        """Return model-specific consumption or fallback based on category."""
+        if self.estimated_consumption_wh_per_km is not None and self.estimated_consumption_wh_per_km > 0:
+            return self.estimated_consumption_wh_per_km
+        return 150.0 if self.vehicle_category == VehicleCategory.EV_CAR else 45.0
+
+    def calculate_soc_drop(self, distance_km: float, consumption_wh_per_km: Optional[float] = None) -> float:
+        """
+        Calculate battery SOC percentage drop for a given distance travelled in km.
+        Formula: delta_soc_pct = (distance_km * consumption_kwh_per_km / usable_capacity_kwh) * 100.0
+        """
+        if distance_km <= 0:
+            return 0.0
+        usable = self.usable_capacity_kwh or self.total_battery_capacity_kwh
+        if not usable or usable <= 0:
+            return 0.0
+        cons = consumption_wh_per_km if (consumption_wh_per_km is not None and consumption_wh_per_km > 0) else self.get_effective_consumption_wh_per_km()
+        energy_kwh = distance_km * (cons / 1000.0)
+        return (energy_kwh / usable) * 100.0
+
+    def estimate_range_km(self, soc_pct: float, consumption_wh_per_km: Optional[float] = None) -> float:
+        """
+        Estimate remaining vehicle range in km for a given SOC percentage.
+        Formula: range_km = (usable_capacity_kwh * 1000.0 * (soc_pct / 100.0)) / consumption_wh_per_km
+        """
+        if soc_pct <= 0:
+            return 0.0
+        usable = self.usable_capacity_kwh or self.total_battery_capacity_kwh
+        if not usable or usable <= 0:
+            return 0.0
+        cons = consumption_wh_per_km if (consumption_wh_per_km is not None and consumption_wh_per_km > 0) else self.get_effective_consumption_wh_per_km()
+        return (usable * 1000.0 * (soc_pct / 100.0)) / cons
 
 
 class DemandContext(BaseModel):

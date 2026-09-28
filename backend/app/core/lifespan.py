@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         settings.database_url.replace('postgresql+asyncpg://', 'postgresql://'),
         min_size=0, max_size=10, timeout=settings.snapshot_db_timeout_s,
         command_timeout=settings.snapshot_db_timeout_s,
+        server_settings={'search_path': 'realtime,public'},
     ) as pool, Redis.from_url(settings.redis_url,
         socket_connect_timeout=settings.snapshot_cache_timeout_s,
         socket_timeout=settings.snapshot_cache_timeout_s,
@@ -48,9 +49,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.snapshot_ingestion = IngestionService(repository, cache=cache)
         app.state.recommendation_workflow = RecommendationWorkflow(repository, resolver,
             GraphHopperRoutingAdapter(client=client), policy=policy)
+        from backend.app.services.snapshots.simulator import RealtimeSimulator
+        simulator = RealtimeSimulator()
+        app.state.realtime_simulator = simulator
+        if settings.enable_realtime_simulator:
+            simulator.start_background(app.state.snapshot_ingestion, interval_s=settings.realtime_simulator_interval_s)
         try:
             yield
         finally:
+            if simulator is not None:
+                await simulator.stop()
+            app.state.realtime_simulator = None
             app.state.recommendation_workflow = None
             app.state.snapshot_ingestion = None
             graphhopper.http_client = None

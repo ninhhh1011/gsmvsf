@@ -45,6 +45,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=95.0,
     ),
     "VF_5": VehicleCapability(
         vehicle_model="VF_5",
@@ -56,6 +57,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=125.0,
     ),
     "HERIO_GREEN": VehicleCapability(
         vehicle_model="HERIO_GREEN",
@@ -67,6 +69,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=125.0,
     ),
     "VF_6": VehicleCapability(
         vehicle_model="VF_6",
@@ -78,6 +81,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=145.0,
     ),
     "VF_7_ECO": VehicleCapability(
         vehicle_model="VF_7_ECO",
@@ -89,6 +93,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=155.0,
     ),
     "VF_7_PLUS": VehicleCapability(
         vehicle_model="VF_7_PLUS",
@@ -100,6 +105,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=170.0,
     ),
     "VF_8": VehicleCapability(
         vehicle_model="VF_8",
@@ -111,6 +117,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=195.0,
     ),
     "VF_9": VehicleCapability(
         vehicle_model="VF_9",
@@ -122,6 +129,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=235.0,
     ),
     "VF_E34": VehicleCapability(
         vehicle_model="VF_E34",
@@ -133,6 +141,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=135.0,
     ),
     "NERIO_GREEN": VehicleCapability(
         vehicle_model="NERIO_GREEN",
@@ -144,6 +153,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="CCS2_TYPE2",
+        estimated_consumption_wh_per_km=135.0,
     ),
     # --- EV Motorbikes (Charge-only: 5 models: CHARGING only) ---
     "EVO200": VehicleCapability(
@@ -156,6 +166,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
+        estimated_consumption_wh_per_km=40.0,
     ),
     "EVO200_LITE": VehicleCapability(
         vehicle_model="EVO200_LITE",
@@ -167,6 +178,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
+        estimated_consumption_wh_per_km=40.0,
     ),
     "FELIZ_S": VehicleCapability(
         vehicle_model="FELIZ_S",
@@ -178,6 +190,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
+        estimated_consumption_wh_per_km=42.0,
     ),
     "KLARA_S_2022": VehicleCapability(
         vehicle_model="KLARA_S_2022",
@@ -189,6 +202,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
+        estimated_consumption_wh_per_km=45.0,
     ),
     "VENTO_S": VehicleCapability(
         vehicle_model="VENTO_S",
@@ -200,6 +214,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         swap_supported=False,
         public_swap_compatible=False,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
+        estimated_consumption_wh_per_km=45.0,
     ),
     # --- EV Motorbikes (Swap-capable: 4 models: CHARGING + BATTERY_SWAP) ---
     "EVO": VehicleCapability(
@@ -215,6 +230,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         public_swap_compatible=True,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
         swap_battery_family="VINFAST_SWAP_LFP_1_5_KWH",
+        estimated_consumption_wh_per_km=38.0,
     ),
     "EVO_LITE": VehicleCapability(
         vehicle_model="EVO_LITE",
@@ -229,6 +245,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         public_swap_compatible=True,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
         swap_battery_family="VINFAST_SWAP_LFP_1_5_KWH",
+        estimated_consumption_wh_per_km=38.0,
     ),
     "FELIZ_II": VehicleCapability(
         vehicle_model="FELIZ_II",
@@ -243,6 +260,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         public_swap_compatible=True,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
         swap_battery_family="VINFAST_SWAP_LFP_1_5_KWH",
+        estimated_consumption_wh_per_km=40.0,
     ),
     "VIPER": VehicleCapability(
         vehicle_model="VIPER",
@@ -257,6 +275,7 @@ CANONICAL_MODEL_CATALOG: dict[str, VehicleCapability] = {
         public_swap_compatible=True,
         charging_interface_class="VINFAST_MOTORCYCLE_CHARGING",
         swap_battery_family="VINFAST_SWAP_LFP_1_5_KWH",
+        estimated_consumption_wh_per_km=38.0,
     ),
 }
 

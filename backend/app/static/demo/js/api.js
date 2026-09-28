@@ -189,4 +189,27 @@ export class ApiClient {
     async getVehicleCapability(vehicleId) {
         return this._request(`/api/v1/vehicles/${vehicleId}/capability`);
     }
+
+    /**
+     * Fetch list of all registered VinFast vehicle models with battery & consumption specs.
+     */
+    async getVehicles() {
+        return this._request('/api/v1/vehicles');
+    }
+
+    /**
+     * Compute authoritative energy & SOC step when vehicle travels a distance.
+     */
+    async computeEnergyStep(vehicleModel, distanceKm, currentSocPct, consumptionWhPerKm = null) {
+        return this._request('/api/v1/vehicles/energy-step', {
+            method: 'POST',
+            body: JSON.stringify({
+                vehicle_model: vehicleModel,
+                distance_km: distanceKm,
+                current_soc_pct: currentSocPct,
+                consumption_wh_per_km: consumptionWhPerKm
+            })
+        });
+    }
 }
+

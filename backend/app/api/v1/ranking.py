@@ -130,8 +130,8 @@ async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
             destination_node_id=request.destination_node_id)
         metrics = {}
         result = await workflow.recommend(search, top_n=request.top_n, metrics=metrics)
-        metrics['timings_ms'].update(location_resolution=location_ms, demand=demand_ms,
-                                    total=(perf_counter() - started) * 1000)
+        metrics.setdefault('timings_ms', {}).update(location_resolution=location_ms, demand=demand_ms,
+                                                    total=(perf_counter() - started) * 1000)
         return result.model_copy(update=metrics | {'location_source': location.source,
                                                  'location_timestamp': location.timestamp})
     except ValueError as exc:
@@ -158,3 +158,24 @@ async def ingest_station(snapshot: StationStateSnapshot, response: Response, ser
 @router.post('/internal/snapshots/queue', dependencies=[Depends(authorize_ingestion)])
 async def ingest_queue(snapshot: QueueSnapshot, response: Response, service=Depends(get_ingestion)):
     return await ingest_snapshot(snapshot, response, service)
+
+
+@router.post('/snapshots/simulate-tick')
+async def trigger_simulation_tick(request: Request):
+    """Trigger an on-demand simulation tick (Problem D)."""
+    from datetime import timezone
+    simulator = getattr(request.app.state, 'realtime_simulator', None)
+    ingestion = getattr(request.app.state, 'snapshot_ingestion', None)
+    if simulator is None or ingestion is None:
+        raise HTTPException(503, 'Snapshot simulator or ingestion service not initialized')
+    try:
+        now = datetime.now(timezone.utc)
+        count = await simulator.tick(ingestion, timestamp=now)
+        return {
+            'status': 'ok',
+            'snapshots_ingested': count,
+            'timestamp': now.isoformat(),
+        }
+    except Exception as exc:
+        logger.warning('Simulation tick failed: %s', exc, exc_info=True)
+        raise HTTPException(500, f'Simulation tick failed: {exc}')

@@ -57,6 +57,16 @@ class Settings(BaseSettings):
         description="Maximum concurrent GraphHopper route calls per candidate search",
     )
 
+    # Realtime operational state simulator (Problem D)
+    enable_realtime_simulator: bool = Field(
+        default=False,
+        description="Enable periodic background simulation of station & traffic state",
+    )
+    realtime_simulator_interval_s: float = Field(
+        default=30.0, ge=1.0,
+        description="Interval in seconds between simulation ticks",
+    )
+
     def validate_paths(self) -> list[str]:
         """Validate critical paths exist. Returns list of errors."""
         errors = []
