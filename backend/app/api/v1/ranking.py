@@ -81,7 +81,7 @@ class RecommendRequest(FrozenModel):
     destination_longitude: float | None = Field(None, ge=-180, le=180)
     destination_node_id: str | None = None
     top_n: int | None = Field(None, ge=1, le=1000)
-    avoid_congestion: bool = False
+    avoid_congestion: bool = True
 
     @model_validator(mode='after')
     def destination_pair(self):
@@ -127,8 +127,9 @@ async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
             raise StateError('No current location available at request time', 'LOCATION_UNAVAILABLE', 422)
 
         constraints = None
-        if request.avoid_congestion:
-            avoid_areas = await workflow.repository.get_congested_polygons(min_delay=1.6)
+        repo = getattr(workflow, 'repository', None)
+        if request.avoid_congestion and repo is not None and hasattr(repo, 'get_congested_polygons'):
+            avoid_areas = await repo.get_congested_polygons(min_delay=1.6)
             if avoid_areas:
                 from backend.app.services.routing.models import RouteConstraints
                 constraints = RouteConstraints(custom={"avoid_areas": avoid_areas, "congestion_priority": 0.05})

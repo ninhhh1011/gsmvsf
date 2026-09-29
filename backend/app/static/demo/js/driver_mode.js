@@ -134,7 +134,7 @@ export class DriverModeController {
         this.postTripRecommendation = null;
         this.postTripCandidateDetails = null;
         this._onMapPickClick = null;
-        this.avoidCongestion = false;
+        this.avoidCongestion = true;
 
         // Trajectory Replay Controller
         this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
@@ -945,20 +945,7 @@ export class DriverModeController {
             });
         }
 
-        const avoidCongestionChk = document.getElementById('chk-avoid-congestion');
-        if (avoidCongestionChk) {
-            avoidCongestionChk.addEventListener('change', (e) => {
-                this.avoidCongestion = e.target.checked;
-                console.log(`[AVOID CONGESTION] Toggled to: ${this.avoidCongestion}`);
-                if (this.currentTrip) {
-                    this.pollRecommendation(
-                        this.currentTrip.trip_id,
-                        this.currentObservation?.timestamp || new Date().toISOString(),
-                        this.currentObservation
-                    );
-                }
-            });
-        }
+        // Traffic delay calculation is enabled by default in backend recommendation pipeline
 
         document.getElementById('btn-open-stations-drawer')?.addEventListener('click', () => {
             this.openStationsDrawer();
@@ -1320,6 +1307,8 @@ export class DriverModeController {
             }
 
             const isSelectedPostTrip = this.postTripStation?.station_id === st.station_id;
+            const trafficAdjSec = ranked?.features?.traffic_adjustment_s || 0;
+            const trafficAdjMin = trafficAdjSec > 30 ? Math.round(trafficAdjSec / 60) : 0;
 
             let cardContent = '';
             if (isAtDest) {
@@ -1331,7 +1320,7 @@ export class DriverModeController {
                         <div class="cost-grid-item" style="grid-column: span 2; background: rgba(13, 148, 136, 0.08); border: 1px solid #0d9488;">
                             <span class="cost-grid-label" style="color: #0d9488; font-weight:700;">🏁 Cự ly từ Điểm đến (B) ➔ Trạm</span>
                             <span class="cost-grid-val" style="color: #0f172a; font-size:15px; font-weight:800;">
-                                ${bToStationDist} km <small style="color:#0d9488;">(${bToStationMin} phút di chuyển sau khi tới B)</small>
+                                ${bToStationDist} km <small style="color:#0d9488;">(${bToStationMin} phút di chuyển sau khi tới B${trafficAdjMin > 0 ? ` · +${trafficAdjMin}p tắc` : ''})</small>
                             </span>
                         </div>
                         <div class="cost-grid-item">
@@ -1348,6 +1337,11 @@ export class DriverModeController {
                         <span class="total-eta">⏱ Tổng thời gian (Tới B + Đến trạm + Sạc): <strong>${totalPostTripMin} phút</strong></span>
                         <span class="cost-score" style="color:#0d9488; font-weight:700;">✓ Đi thẳng trả khách trước</span>
                     </div>
+                    ${trafficAdjMin > 0 ? `
+                        <div style="font-size:11px; color:#d97706; padding: 2px 6px; background: rgba(217, 119, 6, 0.08); border-radius: 4px; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                            🚦 Đã tự động cộng trễ do tắc đường: <strong>+${trafficAdjMin} phút</strong>
+                        </div>
+                    ` : ''}
 
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                         <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
@@ -1363,7 +1357,7 @@ export class DriverModeController {
                     <div class="station-cost-grid">
                         <div class="cost-grid-item">
                             <span class="cost-grid-label">🚗 Chặng 1 (Xe ➔ Trạm)</span>
-                            <span class="cost-grid-val">${leg1Dist} km <small>(${leg1Min} phút)</small></span>
+                            <span class="cost-grid-val">${leg1Dist} km <small>(${leg1Min} phút${trafficAdjMin > 0 ? ` · +${trafficAdjMin}p tắc` : ''})</small></span>
                         </div>
                         <div class="cost-grid-item">
                             <span class="cost-grid-label">⚡ Tại trạm (Chờ + Sạc)</span>
@@ -1383,6 +1377,11 @@ export class DriverModeController {
                         <span class="total-eta">⏱ Tổng chuyến đi: <strong>${totalEtaMin} phút</strong></span>
                         ${ranked?.score ? `<span class="cost-score">Cost Score: <strong>${ranked.score.toFixed(3)}</strong></span>` : ''}
                     </div>
+                    ${trafficAdjMin > 0 ? `
+                        <div style="font-size:11px; color:#d97706; padding: 2px 6px; background: rgba(217, 119, 6, 0.08); border-radius: 4px; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                            🚦 Đã tự động cộng trễ do tắc đường: <strong>+${trafficAdjMin} phút</strong>
+                        </div>
+                    ` : ''}
 
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                         <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">

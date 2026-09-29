@@ -177,6 +177,10 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
                 <span>Lệch lộ trình: <strong>+${detourDistKm} km</strong> (+${detourMin} phút)<span class="sr-only">+${detourDistKm} km detour</span></span>
                 <span>Vị trí còn trống: <strong>${topCandidate.features.available_capacity} vị trí</strong></span>
             </div>
+            ${topCandidate.features?.traffic_adjustment_s > 30 ? `
+            <div style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #b45309; margin-top: 6px; display: flex; align-items: center; gap: 6px;">
+                <span>🚦 Đã tự động tính trễ do tắc đường: <strong>+${(topCandidate.features.traffic_adjustment_s / 60).toFixed(1)} phút</strong> (đã cộng vào tổng chi phí)</span>
+            </div>` : ''}
 
             ${isDegraded ? `<div class="degraded-notice">⚠️ Dữ liệu suy giảm: ${degradedBadges}</div>` : ''}
 
