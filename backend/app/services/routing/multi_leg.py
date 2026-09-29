@@ -22,6 +22,7 @@ from backend.app.services.candidate.models import CandidateRouteMetrics
 from backend.app.services.routing.engine import RoutingEngine, raise_for_routing_failure
 from backend.app.services.routing.models import (
     Position,
+    RouteConstraints,
     RouteRequest,
     RouteResult,
     RouteStatus,
@@ -49,6 +50,7 @@ class MultiLegRouteCalculator:
         driver_pos: Position,
         destination_pos: Optional[Position],
         profile: Optional[VehicleRoutingProfile] = None,
+        constraints: Optional[RouteConstraints] = None,
     ) -> Optional[RouteResult]:
         """
         Compute direct driver -> destination route once for the candidate search request.
@@ -56,7 +58,7 @@ class MultiLegRouteCalculator:
         if destination_pos is None:
             return None
 
-        req = RouteRequest(origin=driver_pos, destination=destination_pos, profile=profile)
+        req = RouteRequest(origin=driver_pos, destination=destination_pos, profile=profile, constraints=constraints)
         res = await self.engine.route(req)
         raise_for_routing_failure(res)
         return res
@@ -68,6 +70,7 @@ class MultiLegRouteCalculator:
         destination_pos: Optional[Position] = None,
         cached_direct_route: Optional[RouteResult] = None,
         profile: Optional[VehicleRoutingProfile] = None,
+        constraints: Optional[RouteConstraints] = None,
     ) -> tuple[bool, Optional[CandidateRouteMetrics], Optional[RouteResult]]:
         """
         Compute complete route metrics for a station candidate.
@@ -75,7 +78,7 @@ class MultiLegRouteCalculator:
             (is_reachable, route_metrics, leg1_route_result)
         """
         # Leg 1: Driver -> Station
-        req_leg1 = RouteRequest(origin=driver_pos, destination=station_pos, profile=profile)
+        req_leg1 = RouteRequest(origin=driver_pos, destination=station_pos, profile=profile, constraints=constraints)
         res_leg1 = await self.engine.route(req_leg1)
         raise_for_routing_failure(res_leg1)
 
@@ -96,14 +99,14 @@ class MultiLegRouteCalculator:
             return (True, metrics, res_leg1)
 
         # Leg 2: Station -> Destination
-        req_leg2 = RouteRequest(origin=station_pos, destination=destination_pos, profile=profile)
+        req_leg2 = RouteRequest(origin=station_pos, destination=destination_pos, profile=profile, constraints=constraints)
         res_leg2 = await self.engine.route(req_leg2)
         raise_for_routing_failure(res_leg2)
 
         # Direct route (use cached if provided)
         res_direct = cached_direct_route
         if res_direct is None:
-            res_direct = await self.compute_direct_route(driver_pos, destination_pos, profile=profile)
+            res_direct = await self.compute_direct_route(driver_pos, destination_pos, profile=profile, constraints=constraints)
 
         if res_direct is not None:
             raise_for_routing_failure(res_direct)
@@ -151,6 +154,7 @@ class MultiLegRouteCalculator:
         destination_pos: Optional[Position],
         profile: Optional[VehicleRoutingProfile] = None,
         cached_direct_route: Optional[RouteResult] = None,
+        constraints: Optional[RouteConstraints] = None,
     ) -> dict[str, tuple[bool, Optional[CandidateRouteMetrics], Optional[RouteResult]]]:
         """
         Compute route metrics for all stations concurrently with bounded parallelism.
@@ -161,6 +165,7 @@ class MultiLegRouteCalculator:
             destination_pos: Trip destination position (optional)
             profile: Vehicle routing profile
             cached_direct_route: Pre-computed direct route (optional)
+            constraints: Route constraints (e.g. avoid_areas for congestion avoidance)
 
         Returns:
             Dict of station_id -> (is_reachable, route_metrics, leg1_route_result)
@@ -172,7 +177,7 @@ class MultiLegRouteCalculator:
         if cached_direct_route is None and destination_pos is not None:
             try:
                 cached_direct_route = await self.compute_direct_route(
-                    driver_pos, destination_pos, profile
+                    driver_pos, destination_pos, profile, constraints=constraints
                 )
             except Exception:
                 # If direct route fails, continue without it
@@ -191,6 +196,7 @@ class MultiLegRouteCalculator:
                     destination_pos=destination_pos,
                     cached_direct_route=cached_direct_route,
                     profile=profile,
+                    constraints=constraints,
                 )
                 return (station_id, *result)
 

@@ -181,6 +181,7 @@ class CandidateSearchService:
             destination_pos=dest_pos,
             profile=vehicle_profile,
             cached_direct_route=cached_direct,
+            constraints=request.constraints,
         )
 
         # 9. Evaluate all candidate pairs using pre-computed routes

@@ -48,11 +48,11 @@ services:
       retries: 30
       start_period: 600s
 
-  api:
+  api_1:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: ev_api
+    container_name: ev_api_1
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation
       - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/ev_recommendation
@@ -81,6 +81,39 @@ services:
       graphhopper:
         condition: service_healthy
 
+  api_2:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ev_api_2
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/ev_recommendation
+      - GRAPHHOPPER_BASE_URL=http://graphhopper:8989
+      - DATASET_PATH=/app/dataset_v1
+      - PRIMARY_PBF_PATH=/app/dataset_v1/map/raw/hanoi-patched.osm.pbf
+      - GRAPHHOPPER_DATA_PATH=/app/runtime/graphhopper
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
+      - SNAPSHOT_INGESTION_TOKEN=${SNAPSHOT_INGESTION_TOKEN:-}
+      - ENABLE_REALTIME_SIMULATOR=false
+      - REALTIME_SIMULATOR_INTERVAL_S=${REALTIME_SIMULATOR_INTERVAL_S:-30}
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./dataset_v1:/app/dataset_v1:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/readiness"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      graphhopper:
+        condition: service_healthy
+
   frontend:
     build:
       context: .
@@ -95,7 +128,8 @@ services:
       retries: 3
     restart: on-failure
     depends_on:
-      - api
+      - api_1
+      - api_2
 
 volumes:
   pgdata:

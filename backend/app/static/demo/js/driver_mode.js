@@ -132,6 +132,7 @@ export class DriverModeController {
         this.postTripStation = null;
         this.postTripRoute = null;
         this._onMapPickClick = null;
+        this.avoidCongestion = false;
 
         // Trajectory Replay Controller
         this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
@@ -616,6 +617,7 @@ export class DriverModeController {
             },
             destination_latitude: this.currentTrip?.destination?.latitude,
             destination_longitude: this.currentTrip?.destination?.longitude,
+            avoid_congestion: !!this.avoidCongestion,
             top_n: 5
         };
         console.log('Request payload:', JSON.stringify(payload, null, 2));
@@ -941,6 +943,21 @@ export class DriverModeController {
             });
         }
 
+        const avoidCongestionChk = document.getElementById('chk-avoid-congestion');
+        if (avoidCongestionChk) {
+            avoidCongestionChk.addEventListener('change', (e) => {
+                this.avoidCongestion = e.target.checked;
+                console.log(`[AVOID CONGESTION] Toggled to: ${this.avoidCongestion}`);
+                if (this.currentTrip) {
+                    this.pollRecommendation(
+                        this.currentTrip.trip_id,
+                        this.currentObservation?.timestamp || new Date().toISOString(),
+                        this.currentObservation
+                    );
+                }
+            });
+        }
+
         document.getElementById('btn-open-stations-drawer')?.addEventListener('click', () => {
             this.openStationsDrawer();
         });
@@ -1052,6 +1069,7 @@ export class DriverModeController {
                     requested_service: 'ANY',
                     destination_latitude: dest.latitude,
                     destination_longitude: dest.longitude,
+                    avoid_congestion: !!this.avoidCongestion,
                     top_n: 30
                 }).catch(() => null)
             ]);

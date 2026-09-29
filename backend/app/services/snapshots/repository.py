@@ -114,3 +114,19 @@ class SnapshotRepository:
         if payload is None:
             raise StateError('Candidate search not found', 'CANDIDATE_SEARCH_NOT_FOUND', 404)
         return CandidateSearchEvidence.model_validate_json(payload)
+
+    async def get_congested_polygons(self, min_delay: float = 1.6, limit: int = 5) -> list[dict]:
+        """Fetch GeoJSON polygon buffers for currently congested road segments (Block 3)."""
+        import json
+        async with self.connection() as connection:
+            rows = await connection.fetch('''
+                SELECT DISTINCT ON (s.entity_id)
+                    s.entity_id,
+                    ST_AsGeoJSON(ST_Buffer(r.geom, 0.001)) AS geojson
+                FROM state_snapshots s
+                JOIN road_segments r ON r.segment_id = s.entity_id
+                WHERE s.kind = 'traffic' AND (s.payload->>'delay_factor')::float >= $1
+                ORDER BY s.entity_id, s.timestamp DESC
+                LIMIT $2
+            ''', min_delay, limit)
+        return [json.loads(row['geojson']) for row in rows if row.get('geojson')]

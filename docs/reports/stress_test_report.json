@@ -1,0 +1,154 @@
+{
+  "timestamp": "2026-09-29T07:25:22.874372+00:00",
+  "mode": "compare",
+  "single_results": [
+    {
+      "concurrency": 10,
+      "requests_per_worker": 2,
+      "total_requests": 20,
+      "success_200": 20,
+      "conflict_409": 0,
+      "errors_5xx": 0,
+      "net_errors": 0,
+      "elapsed_seconds": 9.41,
+      "rps": 2.13,
+      "latency_min_ms": 40.4,
+      "latency_avg_ms": 2223.4,
+      "latency_p50_ms": 2318.3,
+      "latency_p90_ms": 6568.4,
+      "latency_p95_ms": 6685.1,
+      "latency_p99_ms": 6685.1,
+      "latency_max_ms": 6685.1,
+      "status_distribution": {
+        "200": 20
+      },
+      "sample_errors": []
+    },
+    {
+      "concurrency": 25,
+      "requests_per_worker": 2,
+      "total_requests": 50,
+      "success_200": 50,
+      "conflict_409": 0,
+      "errors_5xx": 0,
+      "net_errors": 0,
+      "elapsed_seconds": 22.09,
+      "rps": 2.26,
+      "latency_min_ms": 82.0,
+      "latency_avg_ms": 4921.7,
+      "latency_p50_ms": 4944.6,
+      "latency_p90_ms": 16491.4,
+      "latency_p95_ms": 16571.1,
+      "latency_p99_ms": 16765.8,
+      "latency_max_ms": 16765.8,
+      "status_distribution": {
+        "200": 50
+      },
+      "sample_errors": []
+    },
+    {
+      "concurrency": 50,
+      "requests_per_worker": 2,
+      "total_requests": 100,
+      "success_200": 83,
+      "conflict_409": 0,
+      "errors_5xx": 17,
+      "net_errors": 0,
+      "elapsed_seconds": 40.19,
+      "rps": 2.49,
+      "latency_min_ms": 23.4,
+      "latency_avg_ms": 7663.6,
+      "latency_p50_ms": 9560.8,
+      "latency_p90_ms": 20483.1,
+      "latency_p95_ms": 21206.9,
+      "latency_p99_ms": 28762.0,
+      "latency_max_ms": 28762.0,
+      "status_distribution": {
+        "200": 83,
+        "504": 17
+      },
+      "sample_errors": [
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}"
+      ]
+    }
+  ],
+  "cluster_results": [
+    {
+      "concurrency": 10,
+      "requests_per_worker": 2,
+      "total_requests": 20,
+      "success_200": 20,
+      "conflict_409": 0,
+      "errors_5xx": 0,
+      "net_errors": 0,
+      "elapsed_seconds": 15.45,
+      "rps": 1.29,
+      "latency_min_ms": 22.5,
+      "latency_avg_ms": 4153.3,
+      "latency_p50_ms": 3015.0,
+      "latency_p90_ms": 11322.5,
+      "latency_p95_ms": 11695.9,
+      "latency_p99_ms": 11695.9,
+      "latency_max_ms": 11695.9,
+      "status_distribution": {
+        "200": 20
+      },
+      "sample_errors": []
+    },
+    {
+      "concurrency": 25,
+      "requests_per_worker": 2,
+      "total_requests": 50,
+      "success_200": 50,
+      "conflict_409": 0,
+      "errors_5xx": 0,
+      "net_errors": 0,
+      "elapsed_seconds": 19.85,
+      "rps": 2.52,
+      "latency_min_ms": 25.8,
+      "latency_avg_ms": 4246.1,
+      "latency_p50_ms": 2883.4,
+      "latency_p90_ms": 16431.9,
+      "latency_p95_ms": 16543.9,
+      "latency_p99_ms": 16597.0,
+      "latency_max_ms": 16597.0,
+      "status_distribution": {
+        "200": 50
+      },
+      "sample_errors": []
+    },
+    {
+      "concurrency": 50,
+      "requests_per_worker": 2,
+      "total_requests": 100,
+      "success_200": 88,
+      "conflict_409": 0,
+      "errors_5xx": 12,
+      "net_errors": 0,
+      "elapsed_seconds": 37.76,
+      "rps": 2.65,
+      "latency_min_ms": 63.1,
+      "latency_avg_ms": 6407.0,
+      "latency_p50_ms": 4629.8,
+      "latency_p90_ms": 16547.7,
+      "latency_p95_ms": 19396.2,
+      "latency_p99_ms": 25554.9,
+      "latency_max_ms": 25554.9,
+      "status_distribution": {
+        "200": 88,
+        "504": 12
+      },
+      "sample_errors": [
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}",
+        "HTTP 504: {\"detail\":\"GraphHopper request timed out: \"}"
+      ]
+    }
+  ]
+}

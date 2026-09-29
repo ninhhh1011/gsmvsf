@@ -1,4 +1,4 @@
-﻿"""Translate domain routing requests to the GraphHopper 11 HTTP contract."""
+"""Translate domain routing requests to the GraphHopper 11 HTTP contract."""
 from __future__ import annotations
 
 import math
@@ -37,12 +37,20 @@ class GraphHopperRoutingAdapter(RoutingEngine):
         self._client = client or graphhopper.http_client
 
     async def route(self, request: RouteRequest) -> RouteResult:
+        custom = request.constraints.custom if request.constraints else {}
+        avoid_areas = custom.get("avoid_areas") or []
+        congestion_priority = custom.get("congestion_priority", 0.05)
+
         try:
             profile = profile_for_vehicle(request.profile.vehicle_category if request.profile else None)
-            if request.profile.routing_profile_hint:
+            if request.profile and request.profile.routing_profile_hint:
                 raise ValueError("Engine profile hints are unsupported; supply vehicle_category")
             if request.constraints and request.constraints != RouteConstraints():
-                raise ValueError("Route constraints are not supported by the current adapter")
+                allowed_custom = {"avoid_areas", "congestion_priority"}
+                if not (request.constraints.avoid_segments == []
+                        and request.constraints.max_distance_m is None
+                        and set(custom.keys()).issubset(allowed_custom)):
+                    raise ValueError("Route constraints are not supported by the current adapter")
             if request.objective != OptimizationObjective.MIN_TRAVEL_TIME:
                 raise ValueError("Only MIN_TRAVEL_TIME is supported")
             if request.dynamic_context and request.dynamic_context != DynamicRoutingContext():
@@ -51,14 +59,42 @@ class GraphHopperRoutingAdapter(RoutingEngine):
             return _failure(RouteStatus.INVALID_REQUEST, str(exc))
 
         points = [request.origin, *request.via, request.destination]
-        params = {
-            "point": [f"{p.latitude:.6f},{p.longitude:.6f}" for p in points],
-            "profile": profile, "points_encoded": "true", "instructions": "false",
-            "details": ["leg_distance", "leg_time"],
-        }
         client = self._client or httpx.AsyncClient(timeout=self.timeout_seconds)
         try:
-            response = await client.get(f"{self.base_url}/route", params=params, timeout=self.timeout_seconds)
+            if avoid_areas:
+                features = [
+                    {
+                        "type": "Feature",
+                        "id": f"congested_zone_{i}",
+                        "geometry": poly,
+                    }
+                    for i, poly in enumerate(avoid_areas)
+                ]
+                areas = {"type": "FeatureCollection", "features": features}
+                priority_rules = [
+                    {"if": f"in_congested_zone_{i}", "multiply_by": str(congestion_priority)}
+                    for i in range(len(avoid_areas))
+                ]
+                post_body = {
+                    "points": [[p.longitude, p.latitude] for p in points],
+                    "profile": profile,
+                    "points_encoded": True,
+                    "instructions": False,
+                    "ch.disable": True,
+                    "details": ["leg_distance", "leg_time"],
+                    "custom_model": {
+                        "areas": areas,
+                        "priority": priority_rules,
+                    },
+                }
+                response = await client.post(f"{self.base_url}/route", json=post_body, timeout=self.timeout_seconds)
+            else:
+                params = {
+                    "point": [f"{p.latitude:.6f},{p.longitude:.6f}" for p in points],
+                    "profile": profile, "points_encoded": "true", "instructions": "false",
+                    "details": ["leg_distance", "leg_time"],
+                }
+                response = await client.get(f"{self.base_url}/route", params=params, timeout=self.timeout_seconds)
             if response.status_code != 200:
                 status = RouteStatus.ENGINE_ERROR
                 if response.status_code == 400:

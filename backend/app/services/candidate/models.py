@@ -13,6 +13,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.services.demand.models import EnergyServiceRequest, ServiceType
+from backend.app.services.routing.models import RouteConstraints
 
 
 class CandidateEligibilityReason(str, Enum):
@@ -133,6 +134,7 @@ class CandidateSearchRequest(BaseModel):
     destination_longitude: Optional[float] = None
     destination_node_id: Optional[str] = None
     max_candidates: Optional[int] = None
+    constraints: Optional[RouteConstraints] = None
 
 
 class CandidateSearchResult(BaseModel):

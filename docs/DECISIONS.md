@@ -381,3 +381,16 @@ hardening remain Week 6/future scope.
 2. Enforce all snapshot validation rules through the existing `IngestionService` (available slots + occupied slots $\le$ canonical capacity, positive service times, speed-delay factor consistency).
 3. Demonstrate dynamic recommendation cost variance where station rankings evolve between timestamps $T_0$ and $T_1$ based on live operational changes.
 
+
+## ADR-019: Multi-Replica API & Nginx Upstream Load Balancing
+
+**Date:** 2026-09-29. **Status:** Approved.
+
+**Context:** A single API container was a single point of failure (SPOF) for the application tier. High concurrency could exhaust process worker threads, and an API restart interrupted incoming client traffic.
+
+**Decision:**
+1. Deploy dual stateless backend replicas (`ev_api_1` and `ev_api_2`) sharing database, Redis, and GraphHopper dependencies.
+2. Configure Nginx upstream `backend_cluster` with `least_conn` load distribution and automated failover (`proxy_next_upstream error timeout http_502 http_503 http_504; proxy_next_upstream_tries 2`).
+3. Ensure background singleton tasks (such as the `RealtimeSimulator`) execute on designated replica `api_1` while `api_2` operates purely on request serving to avoid duplicate snapshot generation.
+4. Verify zero-downtime resilience: terminating one API replica results in seamless request forwarding to the healthy replica without dropped client requests.
+

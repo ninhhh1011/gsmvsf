@@ -81,6 +81,7 @@ class RecommendRequest(FrozenModel):
     destination_longitude: float | None = Field(None, ge=-180, le=180)
     destination_node_id: str | None = None
     top_n: int | None = Field(None, ge=1, le=1000)
+    avoid_congestion: bool = False
 
     @model_validator(mode='after')
     def destination_pair(self):
@@ -124,10 +125,19 @@ async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
         if (energy.need_service and energy.request_valid and energy.reason_code not in
                 ('MISSING_DATA', 'INVALID_STATE', 'STALE_STATE') and location.latitude is None):
             raise StateError('No current location available at request time', 'LOCATION_UNAVAILABLE', 422)
+
+        constraints = None
+        if request.avoid_congestion:
+            avoid_areas = await workflow.repository.get_congested_polygons(min_delay=1.6)
+            if avoid_areas:
+                from backend.app.services.routing.models import RouteConstraints
+                constraints = RouteConstraints(custom={"avoid_areas": avoid_areas, "congestion_priority": 0.05})
+
         search = CandidateSearchRequest(energy_request=energy,
             destination_latitude=request.destination_latitude,
             destination_longitude=request.destination_longitude,
-            destination_node_id=request.destination_node_id)
+            destination_node_id=request.destination_node_id,
+            constraints=constraints)
         metrics = {}
         result = await workflow.recommend(search, top_n=request.top_n, metrics=metrics)
         metrics.setdefault('timings_ms', {}).update(location_resolution=location_ms, demand=demand_ms,
