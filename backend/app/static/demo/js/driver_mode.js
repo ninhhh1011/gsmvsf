@@ -131,6 +131,8 @@ export class DriverModeController {
         this.chargingIntent = 'EN_ROUTE'; // 'EN_ROUTE' (A -> Station -> B) | 'AT_DESTINATION' (B -> Station)
         this.postTripStation = null;
         this.postTripRoute = null;
+        this.postTripRecommendation = null;
+        this.postTripCandidateDetails = null;
         this._onMapPickClick = null;
         this.avoidCongestion = false;
 
@@ -991,12 +993,13 @@ export class DriverModeController {
         // Charging intent selector (En-route vs Post-Trip)
         const intentTabs = document.querySelectorAll('.charging-intent-selector .intent-tab');
         intentTabs.forEach(tab => {
-            tab.addEventListener('click', (e) => {
+            tab.addEventListener('click', async (e) => {
                 const btn = e.currentTarget;
                 intentTabs.forEach(t => t.classList.remove('active'));
                 btn.classList.add('active');
                 this.chargingIntent = btn.dataset.intent || 'EN_ROUTE';
                 this.renderStationsDrawer(this.currentStationsFilter);
+                await this.refreshDrawerEvaluations();
             });
         });
 
@@ -1028,26 +1031,46 @@ export class DriverModeController {
     }
 
     async refreshDrawerEvaluations() {
-        const currentPos = this.currentPos || (this.currentTrip?.origin ? {
-            latitude: this.currentTrip.origin.latitude,
-            longitude: this.currentTrip.origin.longitude
-        } : { latitude: 21.0285, longitude: 105.8542 });
-
         const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
         const vId = this.currentVehicle?.vehicle_id || 'V0001';
+        const isAtDest = this.chargingIntent === 'AT_DESTINATION';
+
+        let evalOrigin;
+        let evalSoc = parseFloat(this.currentSocPct.toFixed(1));
+        let evalRange = parseFloat(this.estimatedRangeKm.toFixed(1));
+        let evalRemainingTrip = parseFloat(this.remainingTripDistanceKm.toFixed(2));
+        let evalTravelled = parseFloat((this.totalDistanceTravelledKm || 0.0).toFixed(2));
+
+        if (isAtDest) {
+            evalOrigin = { latitude: dest.latitude, longitude: dest.longitude };
+            const remainingTrip = Math.max(0, this.remainingTripDistanceKm || 0.0);
+            const cons = this.currentVehicle?.consumption_wh_per_km || 95.0;
+            const usable = this.currentVehicle?.usable_capacity_kwh || 17.15;
+            const energyTripKwh = (remainingTrip * cons) / 1000.0;
+            const deltaSoc = (energyTripKwh / usable) * 100.0;
+            evalSoc = Math.max(1.0, parseFloat((this.currentSocPct - deltaSoc).toFixed(1)));
+            evalRange = Math.max(1.0, parseFloat(((evalSoc / 100.0) * usable * 1000.0 / cons).toFixed(1)));
+            evalRemainingTrip = 0.0;
+            evalTravelled = parseFloat((evalTravelled + remainingTrip).toFixed(2));
+        } else {
+            evalOrigin = this.currentPos || (this.currentTrip?.origin ? {
+                latitude: this.currentTrip.origin.latitude,
+                longitude: this.currentTrip.origin.longitude
+            } : { latitude: 21.0285, longitude: 105.8542 });
+        }
 
         try {
             const [candRes, recRes] = await Promise.all([
                 this.api.evaluateAndSearchCandidates({
                     vehicle_id: vId,
-                    current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
-                    estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
-                    remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
-                    distance_travelled_km: parseFloat((this.totalDistanceTravelledKm || 0.0).toFixed(2)),
+                    current_soc_pct: evalSoc,
+                    estimated_remaining_range_km: evalRange,
+                    remaining_trip_distance_km: evalRemainingTrip,
+                    distance_travelled_km: evalTravelled,
                     safety_reserve_km: this.safetyReserveKm,
                     consumption_wh_per_km: this.currentVehicle?.consumption_wh_per_km,
-                    raw_latitude: currentPos.latitude,
-                    raw_longitude: currentPos.longitude,
+                    raw_latitude: evalOrigin.latitude,
+                    raw_longitude: evalOrigin.longitude,
                     destination_latitude: dest.latitude,
                     destination_longitude: dest.longitude,
                     requested_service: 'ANY',
@@ -1056,14 +1079,14 @@ export class DriverModeController {
                 this.api.getRecommendation({
                     context: {
                         vehicle_id: vId,
-                        current_soc_pct: parseFloat(this.currentSocPct.toFixed(1)),
-                        estimated_remaining_range_km: parseFloat(this.estimatedRangeKm.toFixed(1)),
-                        remaining_trip_distance_km: parseFloat(this.remainingTripDistanceKm.toFixed(2)),
-                        distance_travelled_km: parseFloat((this.totalDistanceTravelledKm || 0.0).toFixed(2)),
+                        current_soc_pct: evalSoc,
+                        estimated_remaining_range_km: evalRange,
+                        remaining_trip_distance_km: evalRemainingTrip,
+                        distance_travelled_km: evalTravelled,
                         safety_reserve_km: this.safetyReserveKm,
                         consumption_wh_per_km: this.currentVehicle?.consumption_wh_per_km,
-                        raw_latitude: currentPos.latitude,
-                        raw_longitude: currentPos.longitude,
+                        raw_latitude: evalOrigin.latitude,
+                        raw_longitude: evalOrigin.longitude,
                         timestamp: new Date().toISOString()
                     },
                     requested_service: 'ANY',
@@ -1074,11 +1097,20 @@ export class DriverModeController {
                 }).catch(() => null)
             ]);
 
-            if (recRes && recRes.ranked_candidates) {
-                this.lastRecommendation = recRes;
-            }
-            if (candRes && candRes.candidates) {
-                this.stationCandidateDetails = candRes.candidates;
+            if (isAtDest) {
+                if (recRes && recRes.ranked_candidates) {
+                    this.postTripRecommendation = recRes;
+                }
+                if (candRes && candRes.candidates) {
+                    this.postTripCandidateDetails = candRes.candidates;
+                }
+            } else {
+                if (recRes && recRes.ranked_candidates) {
+                    this.lastRecommendation = recRes;
+                }
+                if (candRes && candRes.candidates) {
+                    this.stationCandidateDetails = candRes.candidates;
+                }
             }
 
             this.renderStationsDrawer(this.currentStationsFilter);
@@ -1117,15 +1149,30 @@ export class DriverModeController {
             filtered = stationsWithDist.filter(s => s.station_type === 'SWAP' || s.station_type === 'CHARGING_SWAP' || s.service_type === 'BATTERY_SWAP');
         }
 
-        // Top recommendation ID
-        const topRecId = this.lastRecommendation?.has_recommendation && this.lastRecommendation.ranked_candidates?.length > 0
-            ? this.lastRecommendation.ranked_candidates[0].station_id
+        const isAtDest = this.chargingIntent === 'AT_DESTINATION';
+        const activeRec = isAtDest 
+            ? (this.postTripRecommendation || this.lastRecommendation) 
+            : this.lastRecommendation;
+        const activeCand = isAtDest 
+            ? (this.postTripCandidateDetails || this.stationCandidateDetails) 
+            : this.stationCandidateDetails;
+
+        // Top recommendation ID for current active intent
+        const topRecId = activeRec?.has_recommendation && activeRec.ranked_candidates?.length > 0
+            ? activeRec.ranked_candidates[0].station_id
             : null;
 
         // Sort stations based on active intent
-        if (this.chargingIntent === 'AT_DESTINATION') {
-            // Sort by distance from destination B ascending (closest to B first!)
+        if (isAtDest) {
+            // AT_DESTINATION: Sort by backend post-trip rank if available, otherwise by distance to B
             filtered.sort((a, b) => {
+                if (a.station_id === topRecId) return -1;
+                if (b.station_id === topRecId) return 1;
+
+                const rankA = activeRec?.ranked_candidates?.find(c => c.station_id === a.station_id)?.rank ?? 999;
+                const rankB = activeRec?.ranked_candidates?.find(c => c.station_id === b.station_id)?.rank ?? 999;
+                if (rankA !== rankB) return rankA - rankB;
+
                 const distA = straightLineDistanceKm(dest.latitude, dest.longitude, a.latitude, a.longitude);
                 const distB = straightLineDistanceKm(dest.latitude, dest.longitude, b.latitude, b.longitude);
                 return distA - distB;
@@ -1136,8 +1183,8 @@ export class DriverModeController {
                 if (a.station_id === topRecId) return -1;
                 if (b.station_id === topRecId) return 1;
 
-                const rankA = this.lastRecommendation?.ranked_candidates?.find(c => c.station_id === a.station_id)?.rank || 999;
-                const rankB = this.lastRecommendation?.ranked_candidates?.find(c => c.station_id === b.station_id)?.rank || 999;
+                const rankA = activeRec?.ranked_candidates?.find(c => c.station_id === a.station_id)?.rank ?? 999;
+                const rankB = activeRec?.ranked_candidates?.find(c => c.station_id === b.station_id)?.rank ?? 999;
                 if (rankA !== rankB) return rankA - rankB;
 
                 return a.distMeters - b.distMeters;
@@ -1162,8 +1209,8 @@ export class DriverModeController {
 
             const totalSlots = st.total_slots || (st.charging_slots + st.swap_slots) || 'Đang mở';
 
-            const ranked = this.lastRecommendation?.ranked_candidates?.find(c => c.station_id === st.station_id);
-            const cand = this.stationCandidateDetails?.find(c => c.station_id === st.station_id);
+            const ranked = activeRec?.ranked_candidates?.find(c => c.station_id === st.station_id);
+            const cand = activeCand?.find(c => c.station_id === st.station_id);
 
             const fallbackLeg2Dist = straightLineDistanceKm(st.latitude, st.longitude, dest.latitude, dest.longitude);
             const fallbackLeg2Min = Math.max(1, Math.round(fallbackLeg2Dist * 2.2));
@@ -1181,6 +1228,23 @@ export class DriverModeController {
             let totalEtaMin = '—';
             let slots = totalSlots;
             let statusBadge = '';
+
+            let bToStationDist = fallbackLeg2Dist.toFixed(1);
+            let bToStationMin = fallbackLeg2Min;
+
+            if (isAtDest) {
+                // When evaluated from B, distance_to_station_m is the direct B -> Station leg!
+                if (ranked) {
+                    const d = ranked.features?.distance_to_station_m || ranked.distance_vehicle_to_station_m;
+                    if (d) bToStationDist = (d / 1000).toFixed(1);
+                    if (ranked.eta_to_station_s) bToStationMin = Math.round(ranked.eta_to_station_s / 60);
+                } else if (cand?.route_metrics?.distance_to_station_m) {
+                    bToStationDist = (cand.route_metrics.distance_to_station_m / 1000).toFixed(1);
+                    if (cand.route_metrics.duration_to_station_s) {
+                        bToStationMin = Math.round(cand.route_metrics.duration_to_station_s / 60);
+                    }
+                }
+            }
 
             if (ranked) {
                 const d1 = ranked.features?.distance_to_station_m || ranked.distance_vehicle_to_station_m;
@@ -1223,7 +1287,7 @@ export class DriverModeController {
                 }
                 slots = ranked.available_slots ?? (cand?.operational?.available_service_slots ?? totalSlots);
                 statusBadge = isRec 
-                    ? `<span class="badge-rec-hero">⭐ ĐỀ XUẤT TỐI ƯU</span>`
+                    ? `<span class="badge-rec-hero">⭐ ĐỀ XUẤT TỐI ƯU ${isAtDest ? 'TẠI ĐIỂM ĐẾN (B)' : ''}</span>`
                     : `<span class="badge badge-teal">Hạng #${ranked.rank}</span>`;
             } else if (cand) {
                 const rm = cand.route_metrics;
@@ -1255,20 +1319,19 @@ export class DriverModeController {
                 totalEtaMin = leg1Min + waitMin + serviceMin + fallbackLeg2Min;
             }
 
-            const isAtDest = this.chargingIntent === 'AT_DESTINATION';
             const isSelectedPostTrip = this.postTripStation?.station_id === st.station_id;
 
             let cardContent = '';
             if (isAtDest) {
                 const directDriveMin = Math.round((this.remainingTripDistanceKm || 5) * 2);
-                const totalPostTripMin = directDriveMin + (parseInt(leg2Min) || 3) + waitMin + serviceMin;
+                const totalPostTripMin = directDriveMin + bToStationMin + waitMin + serviceMin;
 
                 cardContent = `
                     <div class="station-cost-grid">
                         <div class="cost-grid-item" style="grid-column: span 2; background: rgba(13, 148, 136, 0.08); border: 1px solid #0d9488;">
                             <span class="cost-grid-label" style="color: #0d9488; font-weight:700;">🏁 Cự ly từ Điểm đến (B) ➔ Trạm</span>
                             <span class="cost-grid-val" style="color: #0f172a; font-size:15px; font-weight:800;">
-                                ${leg2Dist} km <small style="color:#0d9488;">(${leg2Min} phút di chuyển sau khi tới B)</small>
+                                ${bToStationDist} km <small style="color:#0d9488;">(${bToStationMin} phút di chuyển sau khi tới B)</small>
                             </span>
                         </div>
                         <div class="cost-grid-item">
