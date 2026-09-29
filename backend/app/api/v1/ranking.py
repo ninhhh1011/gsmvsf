@@ -113,8 +113,16 @@ async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
         location = resolve_current_location(context.driver_id, context.raw_latitude,
             context.raw_longitude, context.road_segment_id, context.timestamp)
 
+        repo = getattr(workflow, 'repository', None)
+        road_seg = location.road_segment_id
+        if road_seg is None and location.latitude is not None and repo is not None and hasattr(repo, 'get_nearest_segment'):
+            try:
+                road_seg = await repo.get_nearest_segment(location.latitude, location.longitude)
+            except Exception:
+                pass
+
         context = context.model_copy(update={'raw_latitude': location.latitude,
-            'raw_longitude': location.longitude, 'road_segment_id': location.road_segment_id})
+            'raw_longitude': location.longitude, 'road_segment_id': road_seg})
         location_ms = (perf_counter() - started) * 1000
         demand_started = perf_counter()
         demand = get_demand_service()

@@ -128,6 +128,11 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
     const sType = recResult.recommended_service_type || topCandidate?.service_type;
     const isSwap = sType === 'BATTERY_SWAP';
 
+    const baseTravelMin = topCandidate.features.base_travel_duration_s != null 
+        ? (topCandidate.features.base_travel_duration_s / 60).toFixed(1) 
+        : (topCandidate.eta_to_station_s / 60).toFixed(1);
+    const trafficAdjSec = topCandidate.features.traffic_adjustment_s || 0;
+    const trafficAdjMin = (trafficAdjSec / 60).toFixed(1);
     const etaStationMin = (topCandidate.eta_to_station_s / 60).toFixed(1);
     const etaStartMin = (topCandidate.eta_to_service_start_s / 60).toFixed(1);
     const etaCompleteMin = (topCandidate.eta_to_service_complete_s / 60).toFixed(1);
@@ -156,20 +161,33 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
 
             <div class="card-grid">
                 <div class="metric-item">
-                    <span class="metric-label">Đến trạm</span>
-                    <span class="metric-val highlight">${etaStationMin} <small>phút</small></span>
+                    <span class="metric-label">🚗 Lái xe cơ bản</span>
+                    <span class="metric-val highlight">${baseTravelMin} <small>phút</small></span>
                 </div>
                 <div class="metric-item">
-                    <span class="metric-label">Chờ hàng đợi</span>
-                    <span class="metric-val">${queueWaitMin} <small>phút</small></span>
+                    <span class="metric-label">🚦 Trễ tắc đường</span>
+                    <span class="metric-val ${parseFloat(trafficAdjMin) > 0 ? 'highlight-amber' : ''}" style="${parseFloat(trafficAdjMin) > 0 ? 'color:#d97706; font-weight:700;' : ''}">
+                        ${parseFloat(trafficAdjMin) > 0 ? `+${trafficAdjMin}` : '0.0'} <small>phút</small>
+                    </span>
                 </div>
                 <div class="metric-item">
-                    <span class="metric-label">Thời gian dịch vụ</span>
+                    <span class="metric-label">⏳ Chờ hàng đợi</span>
+                    <span class="metric-val ${parseFloat(queueWaitMin) > 0 ? 'highlight-amber' : ''}">
+                        ${queueWaitMin} <small>phút ${parseFloat(queueWaitMin) === 0 ? '(còn trống)' : ''}</small>
+                    </span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">⚡ Thời gian dịch vụ</span>
                     <span class="metric-val">${serviceMin} <small>phút</small></span>
                 </div>
-                <div class="metric-item">
-                    <span class="metric-label">Tổng thời gian hoàn tất</span>
-                    <span class="metric-val highlight-green">${etaCompleteMin} <small>phút</small></span>
+                <div class="metric-item" style="grid-column: span 2; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); padding: 8px 12px; border-radius: 6px;">
+                    <span class="metric-label" style="color: #059669; font-weight: 700;">⏱ Tổng chi phí thời gian hoàn tất (Cost)</span>
+                    <span class="metric-val highlight-green" style="font-size: 16px; font-weight: 800;">
+                        ${etaCompleteMin} <small>phút</small>
+                        <small style="font-size: 11px; font-weight: 600; color: #64748b; margin-left: 6px;">
+                            (= ${baseTravelMin}p lái + ${trafficAdjMin}p tắc + ${queueWaitMin}p chờ + ${serviceMin}p sạc)
+                        </small>
+                    </span>
                 </div>
             </div>
 
@@ -177,9 +195,9 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
                 <span>Lệch lộ trình: <strong>+${detourDistKm} km</strong> (+${detourMin} phút)<span class="sr-only">+${detourDistKm} km detour</span></span>
                 <span>Vị trí còn trống: <strong>${topCandidate.features.available_capacity} vị trí</strong></span>
             </div>
-            ${topCandidate.features?.traffic_adjustment_s > 30 ? `
+            ${parseFloat(trafficAdjMin) > 0 ? `
             <div style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #b45309; margin-top: 6px; display: flex; align-items: center; gap: 6px;">
-                <span>🚦 Đã tự động tính trễ do tắc đường: <strong>+${(topCandidate.features.traffic_adjustment_s / 60).toFixed(1)} phút</strong> (đã cộng vào tổng chi phí)</span>
+                <span>🚦 Đã tự động tính trễ do tắc đường: <strong>+${trafficAdjMin} phút</strong> (đã cộng vào tổng chi phí)</span>
             </div>` : ''}
 
             ${isDegraded ? `<div class="degraded-notice">⚠️ Dữ liệu suy giảm: ${degradedBadges}</div>` : ''}
@@ -187,7 +205,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
             <div class="card-explanation">
                 <div class="exp-title">Tại sao đề xuất này?</div>
                 <div class="exp-body">
-                    Được chọn để giảm thiểu tổng thời gian hoàn tất: đến trạm (${etaStationMin} phút) + thời gian chờ (${queueWaitMin} phút) + thời gian dịch vụ (${serviceMin} phút) = <strong>${etaCompleteMin} phút để hoàn tất</strong>.
+                    Được chọn để giảm thiểu tổng thời gian hoàn tất: Lái xe cơ bản (<strong>${baseTravelMin}p</strong>) + Trễ kẹt xe (<strong>+${trafficAdjMin}p</strong>) + Chờ hàng đợi (<strong>${queueWaitMin}p</strong>) + Dịch vụ (<strong>${serviceMin}p</strong>) = <strong style="color:#059669;">${etaCompleteMin} phút để hoàn tất</strong>.
                 </div>
             </div>
 

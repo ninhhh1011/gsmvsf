@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 FALLBACK_SEGMENT_IDS = [
     "9963509_3_R", "9964440_2_F", "9964440_3_F", "9965723_3_F", "9965723_6_R",
     "9978719_2_F", "10230472_0_F", "10230472_2_F", "10230481_2_R", "10231816_5_F",
+    "1087731719_8_R", "1087731719_9_F", "1087731719_8_F", "1087731719_9_R", "1087731719_7_F",
 ]
 
 
@@ -176,7 +177,7 @@ class RealtimeSimulator:
         self,
         catalog=station_catalog,
         segment_ids: Optional[list[str]] = None,
-        station_limit: int = 15,
+        station_limit: Optional[int] = None,
         seed: Optional[int] = 42,
     ):
         self.catalog = catalog

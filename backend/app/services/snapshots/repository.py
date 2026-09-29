@@ -130,3 +130,13 @@ class SnapshotRepository:
                 LIMIT $2
             ''', min_delay, limit)
         return [json.loads(row['geojson']) for row in rows if row.get('geojson')]
+
+    async def get_nearest_segment(self, latitude: float, longitude: float) -> str | None:
+        """Fetch nearest road segment ID for given coordinates."""
+        async with self.connection() as connection:
+            return await connection.fetchval('''
+                SELECT segment_id FROM road_segments
+                ORDER BY geom <-> ST_SetSRID(ST_MakePoint($1, $2), 4326)
+                LIMIT 1
+            ''', longitude, latitude)
+
