@@ -10,6 +10,7 @@ Key concepts:
 - Road Segments: Route Truth for final similarity calculation
 - 7-day window: only recent history for relevance
 - Inverted Index: H3 → [route_ids] for O(1) candidate lookup
+- Route Families: Incremental clustering with medoid representatives
 
 Architecture:
     GPS → Map Matching → Road Segments → H3 Signature → Inverted Index → Candidate Search
@@ -25,6 +26,7 @@ from .signature import H3SignatureGenerator
 from .index import RouteInvertedIndex
 from .similarity import RoadLevelSimilarity
 from .filters import HardFilters, TimeRecencyWeight
+from .families import RouteFamilyCluster, RouteFamily, RouteFamilyMember
 from .search import HistoricalRouteSearch
 
 __all__ = [
@@ -33,5 +35,8 @@ __all__ = [
     "RoadLevelSimilarity",
     "HardFilters",
     "TimeRecencyWeight",
+    "RouteFamilyCluster",
+    "RouteFamily",
+    "RouteFamilyMember",
     "HistoricalRouteSearch",
 ]
