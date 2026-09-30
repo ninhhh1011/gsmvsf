@@ -12,6 +12,7 @@ from backend.app.api.v1.demand import router as demand_router
 from backend.app.api.v1.candidate import router as candidate_router
 from backend.app.api.v1.ranking import router as ranking_router
 from backend.app.api.v1.metrics import router as metrics_router
+from backend.app.api.v1.route_history import router as route_history_router
 from backend.app.services.snapshots.models import StateError
 from backend.app.services.routing.engine import RoutingEngineError
 from backend.app.api.v1.candidate import _routing_http_error
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     app.include_router(candidate_router, prefix="/api/v1", tags=["candidate-search"])
     app.include_router(ranking_router, prefix="/api/v1", tags=["ranking"])
     app.include_router(metrics_router, prefix="/api/v1", tags=["metrics"])
+    app.include_router(route_history_router, prefix="/api/v1", tags=["route-history"])
 
     @app.exception_handler(StateError)
     async def state_error_handler(request, exc):
