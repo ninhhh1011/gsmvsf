@@ -1,6 +1,6 @@
 """
-Route History Scale Service - Phase 1
-=====================================
+Route History Scale Service
+=========================
 
 H3 Resolution 11 based spatial indexing for historical route similarity analysis.
 
@@ -11,6 +11,7 @@ Key concepts:
 - 7-day window: only recent history for relevance
 - Inverted Index: H3 → [route_ids] for O(1) candidate lookup
 - Route Families: Incremental clustering with medoid representatives
+- PostgreSQL Persistence: Source of truth for historical data
 
 Architecture:
     GPS → Map Matching → Road Segments → H3 Signature → Inverted Index → Candidate Search
@@ -20,6 +21,8 @@ Architecture:
                                                               Road-level Similarity
                                                                         ↓
                                                               Route Family Clustering
+                                                                        ↓
+                                                              PostgreSQL Persistence
 """
 
 from .signature import H3SignatureGenerator
@@ -27,6 +30,8 @@ from .index import RouteInvertedIndex
 from .similarity import RoadLevelSimilarity
 from .filters import HardFilters, TimeRecencyWeight
 from .families import RouteFamilyCluster, RouteFamily, RouteFamilyMember
+from .repository import RouteHistoryRepository
+from .importer import RouteHistoryImporter
 from .search import HistoricalRouteSearch
 
 __all__ = [
@@ -38,5 +43,7 @@ __all__ = [
     "RouteFamilyCluster",
     "RouteFamily",
     "RouteFamilyMember",
+    "RouteHistoryRepository",
+    "RouteHistoryImporter",
     "HistoricalRouteSearch",
 ]
