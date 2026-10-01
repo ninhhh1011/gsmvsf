@@ -30,6 +30,7 @@ from .familiarity import (
     FamiliarityPenalty,
     FamiliaritySource,
 )
+from .repository import RouteHistoryRepository
 
 logger = structlog.get_logger()
 
@@ -106,10 +107,10 @@ class HistoricalFamiliarityService:
     def __init__(
         self,
         config: RouteHistoryConfig,
-        historical_search_service=None,  # HistoricalRouteSearch
+        repository: RouteHistoryRepository = None,
     ):
         self.config = config
-        self.historical_search = historical_search_service
+        self.repository = repository
         self.familiarity = HistoricalFamiliarity(config.familiarity_config)
 
     def calculate_evidence(
@@ -208,22 +209,58 @@ class HistoricalFamiliarityService:
         timestamp: datetime,
         request_time: datetime,
     ):
-        """Query historical routes for this context."""
-        if self.historical_search is None:
+        """Query historical routes for this context using repository."""
+        if self.repository is None:
             return None
 
-        # Delegate to historical search service
-        # This would query the PostgreSQL inverted index
-        # and return matching routes
         try:
-            return self.historical_search.find_similar_routes(
-                route_coords=[origin, destination],
-                origin=origin,
-                destination=destination,
-                timestamp=request_time,
-                max_candidates=20,
+            origin_lat, origin_lng = origin
+            dest_lat, dest_lng = destination
+
+            # Query by driver + context
+            driver_routes = self.repository.query_by_driver(
                 driver_id=driver_id,
+                origin_lat=origin_lat,
+                origin_lng=origin_lng,
+                dest_lat=dest_lat,
+                dest_lng=dest_lng,
+                days_window=self.config.history_window_days,
+                limit=20,
             )
+
+            # Also query population-level routes for family support
+            population_routes = self.repository.query_by_origin_dest(
+                origin_lat=origin_lat,
+                origin_lng=origin_lng,
+                dest_lat=dest_lat,
+                dest_lng=dest_lng,
+                days_window=self.config.history_window_days,
+                limit=100,
+            )
+
+            if not driver_routes:
+                return None
+
+            # Calculate similarity (simplified - just count matches)
+            total_trips = len(driver_routes)
+            unique_drivers = len(set(r["driver_id"] for r in population_routes)) if population_routes else 1
+
+            # Simplified familiarity metrics
+            avg_similarity = 0.7  # Would calculate actual similarity in production
+            family_support = min(1.0, total_trips / 100.0)  # Normalized
+            unique_driver_ratio = unique_drivers / max(total_trips, 1)
+
+            class HistoryResult:
+                pass
+
+            result = HistoryResult()
+            result.total_trips = total_trips
+            result.unique_driver_ratio = unique_driver_ratio
+            result.avg_similarity = avg_similarity
+            result.dominant_family = None  # Simplified
+
+            return result
+
         except Exception as e:
             logger.warning("history_query_error", error=str(e))
             return None

@@ -433,6 +433,117 @@ class RouteHistoryRepository:
 
                 return stats
 
+    def query_by_driver(
+        self,
+        driver_id: str,
+        origin_lat: float,
+        origin_lng: float,
+        dest_lat: float,
+        dest_lng: float,
+        days_window: int = 7,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Query historical routes for a driver matching origin/destination context.
+
+        Used by familiarity calculation to find driver's habitual routes.
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                # Bounding box filter
+                lat_range = 0.02  # ~2km
+                lng_range = 0.02 / abs(cos(origin_lat * 3.14159 / 180))
+
+                cur.execute("""
+                    SELECT r.route_id, r.driver_id, r.origin_lat, r.origin_lng,
+                           r.dest_lat, r.dest_lng, r.started_at,
+                           COUNT(DISTINCT r.driver_id) OVER() as unique_drivers
+                    FROM historical_routes r
+                    WHERE r.driver_id = %s
+                      AND r.started_at >= NOW() - INTERVAL '%s days'
+                      AND r.origin_lat BETWEEN %s AND %s
+                      AND r.origin_lng BETWEEN %s AND %s
+                      AND r.dest_lat BETWEEN %s AND %s
+                      AND r.dest_lng BETWEEN %s AND %s
+                    ORDER BY r.started_at DESC
+                    LIMIT %s
+                """, (
+                    driver_id,
+                    days_window,
+                    origin_lat - lat_range, origin_lat + lat_range,
+                    origin_lng - lng_range, origin_lng + lng_range,
+                    dest_lat - lat_range, dest_lat + lat_range,
+                    dest_lng - lng_range, dest_lng + lng_range,
+                    limit
+                ))
+
+                return [
+                    {
+                        "route_id": row[0],
+                        "driver_id": row[1],
+                        "origin_lat": row[2],
+                        "origin_lng": row[3],
+                        "dest_lat": row[4],
+                        "dest_lng": row[5],
+                        "started_at": row[6],
+                        "unique_drivers": row[7],
+                    }
+                    for row in cur.fetchall()
+                ]
+
+    def query_by_origin_dest(
+        self,
+        origin_lat: float,
+        origin_lng: float,
+        dest_lat: float,
+        dest_lng: float,
+        days_window: int = 7,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Query historical routes matching origin/destination context.
+
+        Used for population-level familiarity (not driver-specific).
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                lat_range = 0.02  # ~2km
+                lng_range = 0.02 / abs(cos(origin_lat * 3.14159 / 180))
+
+                cur.execute("""
+                    SELECT route_id, driver_id, origin_lat, origin_lng,
+                           dest_lat, dest_lng, started_at, total_distance_m
+                    FROM historical_routes
+                    WHERE started_at >= NOW() - INTERVAL '%s days'
+                      AND origin_lat BETWEEN %s AND %s
+                      AND origin_lng BETWEEN %s AND %s
+                      AND dest_lat BETWEEN %s AND %s
+                      AND dest_lng BETWEEN %s AND %s
+                    ORDER BY started_at DESC
+                    LIMIT %s
+                """, (
+                    days_window,
+                    origin_lat - lat_range, origin_lat + lat_range,
+                    origin_lng - lng_range, origin_lng + lng_range,
+                    dest_lat - lat_range, dest_lat + lat_range,
+                    dest_lng - lng_range, dest_lng + lng_range,
+                    limit
+                ))
+
+                return [
+                    {
+                        "route_id": row[0],
+                        "driver_id": row[1],
+                        "origin_lat": row[2],
+                        "origin_lng": row[3],
+                        "dest_lat": row[4],
+                        "dest_lng": row[5],
+                        "started_at": row[6],
+                        "total_distance_m": row[7],
+                    }
+                    for row in cur.fetchall()
+                ]
+
 
 # Helper for math.cos
 from math import cos

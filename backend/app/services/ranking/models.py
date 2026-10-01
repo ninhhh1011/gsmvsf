@@ -78,6 +78,15 @@ class RecommendationResult(FrozenModel):
     ranked_candidates: list[RankedCandidate]
     eligible_count: Count
     policy: RankingPolicy
+    # Historical familiarity evidence
+    familiarity_enabled: bool = False
+    familiarity_status: str | None = None  # MATCHED, NO_HISTORY, DISABLED
+    route_adherence: float | None = None  # 0-1
+    family_support: float | None = None  # 0-1
+    family_id: str | None = None
+    familiarity_penalty_s: float = 0.0
+    driver_trip_count: int = 0
+    history_window_days: int = 7
     energy_context: EnergyServiceRequest
     degraded: bool
     degraded_reasons: list[str]

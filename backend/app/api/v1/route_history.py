@@ -88,7 +88,7 @@ class ErrorResponse(BaseModel):
 def get_route_repository() -> Optional[RouteHistoryRepository]:
     """Get route history repository if configured."""
     try:
-        return RouteHistoryRepository(settings.database_url_sync)
+        return RouteHistoryRepository(settings.route_history_database_url_sync)
     except Exception:
         return None
 
