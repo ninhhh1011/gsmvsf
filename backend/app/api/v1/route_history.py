@@ -26,6 +26,7 @@ from backend.app.services.route_history.integration import (
     HistoryStatus,
 )
 from backend.app.services.route_history.repository import RouteHistoryRepository
+from backend.app.services.route_history.signature import H3SignatureGenerator
 
 router = APIRouter()
 
@@ -81,6 +82,25 @@ class ErrorResponse(BaseModel):
     """Error response."""
     error: str
     detail: str
+
+
+# --- Demo Endpoint Models ---
+
+class RouteInput(BaseModel):
+    """Input for route comparison."""
+    route_id: str
+    coordinates: List[Tuple[float, float]] = Field(
+        ..., description="List of (lat, lng) coordinate tuples"
+    )
+
+
+class ComparisonResult(BaseModel):
+    """Result of route comparison using H3 signatures."""
+    shared_h3_cells: int
+    total_h3_route_a: int
+    total_h3_route_b: int
+    adherence_percentage: float
+    symmetric_similarity: float
 
 
 # --- Service Instances ---
@@ -356,6 +376,50 @@ async def compare_routes(
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to compare routes: {str(e)}")
+
+
+@router.post(
+    "/routes/compare",
+    response_model=ComparisonResult,
+    tags=["route-history"],
+    summary="Compare two routes using H3 signatures",
+)
+async def compare_routes(
+    route_a: RouteInput,
+    route_b: RouteInput,
+    resolution: int = Query(default=11, ge=8, le=12, description="H3 resolution level"),
+):
+    """
+    Compare two routes using H3 signature analysis.
+
+    Returns similarity metrics between the two routes:
+    - shared_h3_cells: Number of H3 cells shared between routes
+    - adherence_percentage: How much of route A is covered by route B
+    - symmetric_similarity: Balanced Jaccard-like similarity measure
+    """
+    try:
+        gen = H3SignatureGenerator(resolution=resolution)
+
+        # Generate signatures from coordinates
+        sig_a = gen.signature_from_coords(route_a.route_id, route_a.coordinates)
+        sig_b = gen.signature_from_coords(route_b.route_id, route_b.coordinates)
+
+        # Calculate overlap
+        common, only_a, only_b = gen.compute_hex_overlap(sig_a, sig_b)
+
+        # Calculate metrics
+        adherence = len(common) / len(sig_a.hex_sequence) if sig_a.hex_sequence else 0
+        symmetric = 2 * len(common) / (len(sig_a.hex_sequence) + len(sig_b.hex_sequence)) if (sig_a.hex_sequence and sig_b.hex_sequence) else 0
+
+        return ComparisonResult(
+            shared_h3_cells=len(common),
+            total_h3_route_a=len(sig_a.hex_sequence),
+            total_h3_route_b=len(sig_b.hex_sequence),
+            adherence_percentage=adherence * 100,
+            symmetric_similarity=symmetric * 100,
+        )
     except Exception as e:
         raise HTTPException(500, f"Failed to compare routes: {str(e)}")
 

@@ -13,6 +13,7 @@ from backend.app.api.v1.candidate import router as candidate_router
 from backend.app.api.v1.ranking import router as ranking_router
 from backend.app.api.v1.metrics import router as metrics_router
 from backend.app.api.v1.route_history import router as route_history_router
+from backend.app.api.v1.middleware import setup_middleware
 from backend.app.services.snapshots.models import StateError
 from backend.app.services.routing.engine import RoutingEngineError
 from backend.app.api.v1.candidate import _routing_http_error
@@ -27,6 +28,10 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
+    
+    # Apply middleware (rate limiting, request logging)
+    setup_middleware(app)
+    
     app.include_router(health_router, tags=["health"])
     app.include_router(health_router, prefix="/api/v1", tags=["health"])
     app.include_router(map_match_router, prefix="/api/v1", tags=["map-matching"])

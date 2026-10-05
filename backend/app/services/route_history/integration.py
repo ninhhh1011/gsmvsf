@@ -72,6 +72,9 @@ class RouteHistoryConfig:
         history_window_days: int = 7,
         min_history_trips: int = 3,
         h3_resolution: int = 11,
+        # Bayesian parameters
+        prior_strength: float = 10.0,  # Default: như có 10 tài xế đã đi
+        max_reduction_factor: float = 0.3,  # Max 30% reduction khi confidence cao
     ):
         self.enable_route_familiarity = enable_route_familiarity
         self.max_penalty_s = max_penalty_s
@@ -80,12 +83,18 @@ class RouteHistoryConfig:
         self.min_history_trips = min_history_trips
         self.h3_resolution = h3_resolution
 
-        # Create familiarity config
+        # Bayesian parameters
+        self.prior_strength = prior_strength
+        self.max_reduction_factor = max_reduction_factor
+
+        # Create familiarity config with Bayesian parameters
         self.familiarity_config = FamiliarityConfig(
             enabled=True,  # Always enabled when feature is on
             max_penalty=max_penalty_s / 100.0 if max_penalty_s else 0.1,  # Convert to ratio
             adherence_threshold=adherence_threshold,
             min_history_trips=min_history_trips,
+            prior_strength=prior_strength,
+            max_reduction_factor=max_reduction_factor,
         )
 
 

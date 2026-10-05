@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     route_history_database_url_sync: str = "postgresql://postgres:postgres@localhost:5432/route_history_db"
 
     # Route Familiarity Feature
-    enable_route_familiarity: bool = False  # Feature flag - default off for safety
+    enable_route_familiarity: bool = True  # Feature flag - enabled for H3 route history
     route_familiarity_max_penalty_s: float = 30.0  # Max penalty in seconds
 
     # Week 4 project policy; freshness follows Dataset cadence, TTL is cache retention.

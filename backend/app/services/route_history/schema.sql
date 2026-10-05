@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS historical_route_h3 (
 CREATE INDEX IF NOT EXISTS idx_historical_route_h3_cell
     ON historical_route_h3 (h3_cell_res11);
 
+-- Additional GIN indexes for efficient text search on H3 cells
+CREATE INDEX IF NOT EXISTS idx_historical_route_h3_cells_gin
+    ON historical_route_h3 USING gin (h3_cell_res11 gin_trgm_ops);
+
 -- Index for route lookups
 CREATE INDEX IF NOT EXISTS idx_historical_route_h3_route
     ON historical_route_h3 (route_id);
