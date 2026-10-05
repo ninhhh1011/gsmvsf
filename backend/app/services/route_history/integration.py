@@ -227,7 +227,6 @@ class HistoricalFamiliarityService:
                 days_window=self.config.history_window_days,
                 limit=20,
             )
-
             # Also query population-level routes for family support
             population_routes = self.repository.query_by_origin_dest(
                 origin_lat=origin_lat,
@@ -251,7 +250,12 @@ class HistoricalFamiliarityService:
             unique_driver_ratio = unique_drivers / max(total_trips, 1)
 
             class HistoryResult:
-                pass
+                def __init__(self):
+                    self.total_trips = 0
+                    self.unique_driver_ratio = 0.0
+                    self.avg_similarity = 0.0
+                    self.dominant_family = None
+                    self.has_history = True  # Flag to indicate valid result
 
             result = HistoryResult()
             result.total_trips = total_trips

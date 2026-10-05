@@ -454,10 +454,30 @@ class RouteHistoryRepository:
                 lat_range = 0.02  # ~2km
                 lng_range = 0.02 / abs(cos(origin_lat * 3.14159 / 180))
 
+                # First get unique drivers count
+                cur.execute("""
+                    SELECT COUNT(DISTINCT r.driver_id)
+                    FROM historical_routes r
+                    WHERE r.driver_id = %s
+                      AND r.started_at >= NOW() - INTERVAL '%s days'
+                      AND r.origin_lat BETWEEN %s AND %s
+                      AND r.origin_lng BETWEEN %s AND %s
+                      AND r.dest_lat BETWEEN %s AND %s
+                      AND r.dest_lng BETWEEN %s AND %s
+                """, (
+                    driver_id,
+                    days_window,
+                    origin_lat - lat_range, origin_lat + lat_range,
+                    origin_lng - lng_range, origin_lng + lng_range,
+                    dest_lat - lat_range, dest_lat + lat_range,
+                    dest_lng - lat_range, dest_lng + lng_range,
+                ))
+                unique_drivers = cur.fetchone()[0] or 1
+
+                # Then get routes
                 cur.execute("""
                     SELECT r.route_id, r.driver_id, r.origin_lat, r.origin_lng,
-                           r.dest_lat, r.dest_lng, r.started_at,
-                           COUNT(DISTINCT r.driver_id) OVER() as unique_drivers
+                           r.dest_lat, r.dest_lng, r.started_at
                     FROM historical_routes r
                     WHERE r.driver_id = %s
                       AND r.started_at >= NOW() - INTERVAL '%s days'
@@ -473,7 +493,7 @@ class RouteHistoryRepository:
                     origin_lat - lat_range, origin_lat + lat_range,
                     origin_lng - lng_range, origin_lng + lng_range,
                     dest_lat - lat_range, dest_lat + lat_range,
-                    dest_lng - lng_range, dest_lng + lng_range,
+                    dest_lng - lat_range, dest_lng + lng_range,
                     limit
                 ))
 
@@ -486,7 +506,7 @@ class RouteHistoryRepository:
                         "dest_lat": row[4],
                         "dest_lng": row[5],
                         "started_at": row[6],
-                        "unique_drivers": row[7],
+                        "unique_drivers": unique_drivers,
                     }
                     for row in cur.fetchall()
                 ]

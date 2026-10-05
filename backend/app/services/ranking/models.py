@@ -1,7 +1,7 @@
 """Ranking contracts preserve Week 2/3 models and expose costs in seconds."""
 from datetime import datetime, timezone
 from uuid import uuid4
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import Field, field_validator
 
@@ -28,6 +28,9 @@ class CandidateSearchEvidence(FrozenModel):
     result: CandidateSearchResult
     snapshot_ids: dict[str, str | None]
     catalog_digest: str
+    # Destination coordinates for familiarity calculation
+    destination_lat: Optional[float] = None
+    destination_lng: Optional[float] = None
 
     _time = field_validator('request_time', 'created_at')(aware_utc)
 
