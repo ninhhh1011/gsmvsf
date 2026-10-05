@@ -30,8 +30,17 @@ class Settings(BaseSettings):
     graphhopper_data_path: Path = Path("runtime/graphhopper")
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation"
-    database_url_sync: str = "postgresql://postgres:postgres@db:5432/ev_recommendation"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@ev_db:5432/ev_recommendation"
+    database_url_sync: str = "postgresql://postgres:postgres@ev_db:5432/ev_recommendation"
+
+    # Route History Database (separate from main EV recommendation DB)
+    # Use localhost:5432 for Windows host access (Docker port mapping)
+    route_history_database_url: str = "postgresql+asyncpg://postgres:postgres@ev_db:5432/route_history_db"
+    route_history_database_url_sync: str = "postgresql://postgres:postgres@localhost:5432/route_history_db"
+
+    # Route Familiarity Feature
+    enable_route_familiarity: bool = False  # Feature flag - default off for safety
+    route_familiarity_max_penalty_s: float = 30.0  # Max penalty in seconds
 
     # Week 4 project policy; freshness follows Dataset cadence, TTL is cache retention.
     redis_url: str = "redis://127.0.0.1:6379/0"

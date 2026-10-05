@@ -67,7 +67,9 @@ class RecommendationWorkflow:
             raise StateError(result.details or result.search_status, 'CANDIDATE_SEARCH_FAILED', 422)
         evidence = CandidateSearchEvidence(request_time=request_time, energy_request=request.energy_request,
             result=result, snapshot_ids={key: value.snapshot_id for key, value in view.items()},
-            catalog_digest=baseline_catalog_digest)
+            catalog_digest=baseline_catalog_digest,
+            destination_lat=request.destination_latitude,
+            destination_lng=request.destination_longitude)
         await self.repository.save_search(evidence)
         return evidence
 

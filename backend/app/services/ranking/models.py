@@ -1,7 +1,7 @@
 """Ranking contracts preserve Week 2/3 models and expose costs in seconds."""
 from datetime import datetime, timezone
 from uuid import uuid4
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import Field, field_validator
 
@@ -28,6 +28,9 @@ class CandidateSearchEvidence(FrozenModel):
     result: CandidateSearchResult
     snapshot_ids: dict[str, str | None]
     catalog_digest: str
+    # Destination coordinates for familiarity calculation
+    destination_lat: Optional[float] = None
+    destination_lng: Optional[float] = None
 
     _time = field_validator('request_time', 'created_at')(aware_utc)
 
@@ -78,6 +81,15 @@ class RecommendationResult(FrozenModel):
     ranked_candidates: list[RankedCandidate]
     eligible_count: Count
     policy: RankingPolicy
+    # Historical familiarity evidence
+    familiarity_enabled: bool = False
+    familiarity_status: str | None = None  # MATCHED, NO_HISTORY, DISABLED
+    route_adherence: float | None = None  # 0-1
+    family_support: float | None = None  # 0-1
+    family_id: str | None = None
+    familiarity_penalty_s: float = 0.0
+    driver_trip_count: int = 0
+    history_window_days: int = 7
     energy_context: EnergyServiceRequest
     degraded: bool
     degraded_reasons: list[str]
