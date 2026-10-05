@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GSMVSF - Báo cáo Kiến trúc Kỹ thuật</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-light: #f8fafc;
+      --card-bg: #ffffff;
+      --primary: #059669;
+      --primary-light: #ecfdf5;
+      --blue: #2563eb;
+      --blue-light: #eff6ff;
+      --amber: #d97706;
+      --amber-light: #fffbeb;
+      --red: #dc2626;
+      --red-light: #fef2f2;
+      --slate: #334155;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #020617;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 24px;
+      background: #090d16;
+      color: #94a3b8;
+      font-size: 13px;
+      border-bottom: 1px solid #1e293b;
+      z-index: 50;
+    }
+    .topbar .title { font-weight: 700; color: #f8fafc; letter-spacing: 0.5px; }
+    .topbar .controls { display: flex; gap: 12px; align-items: center; }
+    .btn-tool {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .btn-tool:hover { background: #334155; color: #fff; }
+    .btn-tool.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+    .viewport {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    .slide-stage {
+      width: 1200px;
+      height: 675px;
+      max-width: 100%;
+      max-height: 100%;
+      background: var(--bg-light);
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      position: relative;
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+      padding: 36px 48px;
+    }
+    .slide-stage.active { display: flex; animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.99); } to { opacity: 1; transform: scale(1); } }
+
+    .slide-stage.dark {
+      background: var(--bg-dark);
+      color: #f8fafc;
+      padding: 48px 56px;
+    }
+
+    .slide-category {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .slide-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 24px;
+      line-height: 1.2;
+    }
+    .slide-stage.dark .slide-title { color: #ffffff; }
+
+    .card-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      flex: 1;
+    }
+    .card-grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      flex: 1;
+    }
+    .card-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      flex: 1;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    .card.border-blue { border-color: var(--blue); }
+    .card.border-emerald { border-color: var(--primary); }
+    .card.border-amber { border-color: var(--amber); }
+    .card.border-red { border-color: var(--red); }
+    .card.border-slate { border-color: var(--slate); }
+
+    .info-banner {
+      margin-top: 18px;
+      padding: 12px 22px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .banner-blue { background: var(--blue-light); border: 1.5px solid var(--blue); color: var(--blue); }
+    .banner-emerald { background: var(--primary-light); border: 1.5px solid var(--primary); color: var(--primary); }
+    .banner-amber { background: var(--amber-light); border: 1.5px solid var(--amber); color: var(--amber); }
+
+    .nav-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 46px;
+      height: 46px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid #475569;
+      color: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: all 0.2s ease;
+      z-index: 40;
+    }
+    .nav-btn:hover { background: var(--primary); border-color: var(--primary); }
+    .nav-prev { left: 30px; }
+    .nav-next { right: 30px; }
+
+    .notes-drawer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #090d16;
+      border-top: 2px solid var(--primary);
+      padding: 16px 32px;
+      color: #e2e8f0;
+      font-size: 14px;
+      line-height: 1.6;
+      max-height: 160px;
+      overflow-y: auto;
+      display: none;
+      z-index: 100;
+    }
+    .notes-drawer.open { display: block; }
+    .notes-header { font-size: 11px; font-weight: 800; color: var(--primary); text-transform: uppercase; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="title"><i class="fa-solid fa-server" style="color: var(--primary); margin-right: 8px;"></i> GSMVSF — KIẾN TRÚC KỸ THUẬT & LUỒNG DỮ LIỆU</div>
+    <div class="controls">
+      <span id="slide-indicator" style="font-weight: 700; color: #fff;">1 / 5</span>
+      <button class="btn-tool" onclick="toggleNotes()"><i class="fa-solid fa-comment-dots"></i> Lời thoại (S)</button>
+      <a href="/GSMVSF_Tech_Architecture.pptx" download class="btn-tool active"><i class="fa-solid fa-file-powerpoint"></i> Tải file .PPTX</a>
+    </div>
+  </div>
+
+  <!-- Viewport -->
+  <div class="viewport">
+    <button class="nav-btn nav-prev" onclick="prevSlide()"><i class="fa-solid fa-chevron-left"></i></button>
+    <button class="nav-btn nav-next" onclick="nextSlide()"><i class="fa-solid fa-chevron-right"></i></button>
+
+    <!-- SLIDE 1: COVER -->
+    <div class="slide-stage dark active" id="slide-1">
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <div style="display: inline-flex; align-items: center; gap: 8px; background: #1e293b; border: 1px solid var(--primary); padding: 6px 16px; border-radius: 20px; width: fit-content; margin-bottom: 20px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--primary);"></span>
+          <span style="font-size: 11px; font-weight: 800; color: var(--primary); letter-spacing: 1px;">GSMVSF ARCHITECTURE</span>
+        </div>
+        <h1 style="font-size: 46px; font-weight: 900; line-height: 1.2; margin-bottom: 12px;">
+          Realtime EV Recommendation<br><span style="color: var(--primary);">& Dynamic Routing Engine</span>
+        </h1>
+        <p style="font-size: 18px; color: #cbd5e1; max-width: 900px; margin-bottom: 40px;">
+          Kiến trúc kỹ thuật & Luồng xử lý dữ liệu thời gian thực
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <div style="background: #1e293b; border: 1px solid #334155; padding: 18px; border-radius: 10px;">
+            <div style="color: var(--blue); font-weight: 800; font-size: 17px;">Nginx</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Port 3000 • Failover 0s</div>
+          </div>
+          <div style="background: #1e293b; border: 1px solid #334155; padding: 18px; border-radius: 10px;">
+            <div style="color: var(--primary); font-weight: 800; font-size: 17px;">FastAPI Dual</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Ports 8000 & 8002</div>
+          </div>
+          <div style="background: #1e293b; border: 1px solid #334155; padding: 18px; border-radius: 10px;">
+            <div style="color: var(--amber); font-weight: 800; font-size: 17px;">GraphHopper 11</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Port 8989 • Routing 8x</div>
+          </div>
+          <div style="background: #1e293b; border: 1px solid #334155; padding: 18px; border-radius: 10px;">
+            <div style="color: var(--red); font-weight: 800; font-size: 17px;">PostGIS & Redis</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Ports 5432 & 6379</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: 3-TIER -->
+    <div class="slide-stage" id="slide-2">
+      <div class="slide-category">HẠ TẦNG KỸ THUẬT</div>
+      <div class="slide-title">Kiến trúc Hệ thống 3 Tầng & Giao thức</div>
+      
+      <!-- Tier 1 -->
+      <div style="display: flex; justify-content: center; margin-bottom: 6px;">
+        <div style="background: #fff; border: 2px solid var(--blue); border-radius: 8px; padding: 10px 24px; text-align: center; width: 480px;">
+          <div style="font-weight: 800; font-size: 14px; color: var(--blue);">TIER 1: NGINX PROXY (:3000)</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Cân bằng tải least_conn • Failover tức thì</div>
+        </div>
+      </div>
+      <div style="text-align: center; color: var(--blue); font-size: 14px; margin-bottom: 4px;"><i class="fa-solid fa-arrow-down"></i></div>
+
+      <!-- Tier 2 -->
+      <div style="background: #f1f5f9; border: 1.5px dashed var(--primary); border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+        <div style="font-size: 10px; font-weight: 800; color: var(--primary); margin-bottom: 6px; text-transform: uppercase;">TIER 2: CỤM FASTAPI STATELESS (DUAL REPLICAS)</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div style="background: #fff; border: 2px solid var(--primary); border-radius: 8px; padding: 12px 18px;">
+            <div style="font-weight: 800; font-size: 14px; color: var(--text-main);">ev_api_1 (:8000)</div>
+            <div style="font-size: 12px; color: #475569; margin-top: 4px;">In-Process Engine • Simulator giao thông (30s)</div>
+          </div>
+          <div style="background: #fff; border: 2px solid var(--primary); border-radius: 8px; padding: 12px 18px;">
+            <div style="font-weight: 800; font-size: 14px; color: var(--text-main);">ev_api_2 (:8002)</div>
+            <div style="font-size: 12px; color: #475569; margin-top: 4px;">In-Process Engine • Standby Failover 0s</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tier 3 -->
+      <div class="card-grid-3">
+        <div class="card border-slate" style="padding: 16px 20px;">
+          <div style="font-weight: 800; font-size: 13.5px; color: var(--slate);">POSTGRESQL 16</div>
+          <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin-top: 2px;">Port 5432 • asyncpg</div>
+          <div style="font-size: 12.5px; color: #0f172a; font-weight: 700; margin-top: 6px;">Schema public & realtime</div>
+        </div>
+        <div class="card border-red" style="padding: 16px 20px;">
+          <div style="font-weight: 800; font-size: 13.5px; color: var(--red);">REDIS 7.4</div>
+          <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin-top: 2px;">Port 6379 • RESP</div>
+          <div style="font-size: 12.5px; color: #0f172a; font-weight: 700; margin-top: 6px;">L1 Cache & Khóa CAS</div>
+        </div>
+        <div class="card border-amber" style="padding: 16px 20px;">
+          <div style="font-weight: 800; font-size: 13.5px; color: var(--amber);">GRAPHHOPPER 11</div>
+          <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin-top: 2px;">Port 8989 • HTTP REST</div>
+          <div style="font-size: 12.5px; color: #0f172a; font-weight: 700; margin-top: 6px;">Routing 8x & Custom Model</div>
+        </div>
+      </div>
+
+      <div class="info-banner banner-blue">
+        <i class="fa-solid fa-bolt" style="font-size: 15px;"></i>
+        <span>Chịu lỗi HA: api_1 sập -&gt; Nginx tự chuyển sang api_2 tức thì (0s Downtime).</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: 5 STEPS -->
+    <div class="slide-stage" id="slide-3">
+      <div class="slide-category">LUỒNG THỰC THI</div>
+      <div class="slide-title">Luồng Xử lý Dữ liệu Realtime (5 Bước)</div>
+      <div class="card-grid-5">
+        <div class="card border-blue" style="justify-content: center; text-align: center;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--blue);">1. MAP MATCH</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin: 12px 0 6px 0;">GPS -&gt; Tim đường</div>
+          <div style="font-size: 11px; color: var(--text-muted);">PostGIS (10s / 50m)</div>
+        </div>
+        <div class="card border-emerald" style="justify-content: center; text-align: center;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--primary);">2. DEMAND</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin: 12px 0 6px 0;">19 Dòng xe VF</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Pin tới đích &gt;= 15%</div>
+        </div>
+        <div class="card border-amber" style="justify-content: center; text-align: center;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--amber);">3. LỌC TRẠM</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin: 12px 0 6px 0;">Quét 30 Trạm</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Chuẩn cổng &amp; pin đổi</div>
+        </div>
+        <div class="card border-slate" style="justify-content: center; text-align: center;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--slate);">4. ROUTING 8X</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin: 12px 0 6px 0;">GraphHopper 11</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Xe -&gt; Trạm -&gt; Đích</div>
+        </div>
+        <div class="card border-red" style="justify-content: center; text-align: center;">
+          <div style="font-size: 12px; font-weight: 800; color: var(--red);">5. RANKING</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin: 12px 0 6px 0;">Tối ưu Thời gian</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Top-1 Khuyến nghị</div>
+        </div>
+      </div>
+      <div class="info-banner banner-emerald">
+        <i class="fa-solid fa-stopwatch" style="font-size: 15px;"></i>
+        <span>Tổng độ trễ pipeline: 186.4ms (P50) cho toàn bộ 5 bước.</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: CONGESTION DETOUR -->
+    <div class="slide-stage" id="slide-4">
+      <div class="slide-category">ĐỊNH TUYẾN THÔNG MINH</div>
+      <div class="slide-title">Né Đường Tắc (GraphHopper Custom Model)</div>
+      <div class="card-grid-2">
+        <div class="card border-red">
+          <div style="font-size: 17px; font-weight: 800; color: var(--red); margin-bottom: 16px;">TUYẾN TRỰC TIẾP</div>
+          <div style="font-size: 14.5px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">• Quãng đường: 3.6 km</div>
+          <div style="font-size: 13.5px; color: #475569; margin-bottom: 14px;">• Trạng thái: Dính tắc đường Đê La Thành</div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--red);">• Thời gian: 32 phút</div>
+        </div>
+        <div class="card border-emerald">
+          <div style="font-size: 17px; font-weight: 800; color: var(--primary); margin-bottom: 16px;">TUYẾN VÒNG TRÁNH (CUSTOM MODEL)</div>
+          <div style="font-size: 14.5px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">• Quãng đường: 4.4 km (+800m)</div>
+          <div style="font-size: 13.5px; color: #475569; margin-bottom: 14px;">• Trạng thái: Tự bẻ lái sang đường thoáng</div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--primary);">• Thời gian: 20 phút (Nhanh hơn 12 phút!)</div>
+        </div>
+      </div>
+      <div class="info-banner banner-amber">
+        <i class="fa-solid fa-traffic-light" style="font-size: 15px;"></i>
+        <span>Cơ chế: GraphHopper phạt trọng số đường đỏ tại runtime -&gt; Tự bẻ lái né tắc.</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: HA & STATE -->
+    <div class="slide-stage" id="slide-5">
+      <div class="slide-category">ĐỘ TIN CẬY HỆ THỐNG</div>
+      <div class="slide-title">Quản lý Trạng thái & Chịu Lỗi HA</div>
+      <div class="card-grid-3">
+        <div class="card border-blue" style="justify-content: center;">
+          <div style="font-size: 15px; font-weight: 800; color: var(--blue); margin-bottom: 12px;">NGINX FAILOVER (0s)</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">api_1 sập -&gt; api_2 gánh tức thì</div>
+          <div style="font-size: 11.5px; color: var(--text-muted);">proxy_next_upstream error timeout</div>
+        </div>
+        <div class="card border-red" style="justify-content: center;">
+          <div style="font-size: 15px; font-weight: 800; color: var(--red); margin-bottom: 12px;">REDIS KHÓA CAS</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">Chống xung đột đa replica</div>
+          <div style="font-size: 11.5px; color: var(--text-muted);">expected_version &amp; generation_id</div>
+        </div>
+        <div class="card border-slate" style="justify-content: center;">
+          <div style="font-size: 15px; font-weight: 800; color: var(--slate); margin-bottom: 12px;">POSTGRES SCHEMAS</div>
+          <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">Tách dữ liệu tĩnh &amp; biến động</div>
+          <div style="font-size: 11.5px; color: var(--text-muted);">public (OSM) vs realtime (Snapshots)</div>
+        </div>
+      </div>
+      <div class="info-banner banner-blue">
+        <i class="fa-solid fa-shield-halved" style="font-size: 15px;"></i>
+        <span>Zero Single Point of Failure: Hệ thống không có điểm chết đơn lẻ.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="notes-drawer" id="notes-drawer">
+    <div class="notes-header"><i class="fa-solid fa-microphone"></i> Lời thoại thuyết trình</div>
+    <div id="notes-content">...</div>
+  </div>
+
+  <script>
+    const speakerNotes = [
+      "Slide 1: Tổng quan Tech Stack hệ thống GSMVSF.",
+      "Slide 2: Kiến trúc 3 tầng, phân tách Nginx, cụm FastAPI kép và storage PostGIS/Redis/GraphHopper.",
+      "Slide 3: Pipeline 5 bước từ lúc nhận GPS đến khi trả về Top-1 station.",
+      "Slide 4: GraphHopper Custom Model né kẹt xe, đi xa hơn 800m nhưng nhanh hơn 12 phút.",
+      "Slide 5: Cơ chế chịu lỗi HA, khóa CAS trên Redis và phân vùng Schema Postgres."
+    ];
+
+    let currentSlide = 1;
+    const totalSlides = 5;
+
+    function showSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      document.querySelectorAll('.slide-stage').forEach((el, idx) => {
+        if (idx === currentSlide - 1) {
+          el.classList.add('active');
+        } else {
+          el.classList.remove('active');
+        }
+      });
+
+      document.getElementById('slide-indicator').textContent = `${currentSlide} / ${totalSlides}`;
+      document.getElementById('notes-content').textContent = speakerNotes[currentSlide - 1];
+    }
+
+    function nextSlide() { showSlide(currentSlide + 1); }
+    function prevSlide() { showSlide(currentSlide - 1); }
+
+    function toggleNotes() {
+      const drawer = document.getElementById('notes-drawer');
+      drawer.classList.toggle('open');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key.toLowerCase() === 's') {
+        toggleNotes();
+      }
+    });
+
+    showSlide(1);
+  </script>
+</body>
+</html>
