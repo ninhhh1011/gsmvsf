@@ -136,9 +136,14 @@ export class DriverModeController {
         this._onMapPickClick = null;
         this.avoidCongestion = true;
 
+        this._isEvaluating = false;
+        this.lastEvalPos = null;
+        this.lastEvalTimestamp = 0;
+
         // Trajectory Replay Controller
         this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
             onStep: async (stepData) => await this._onReplayStep(stepData),
+            onStateChange: () => this.renderTripActiveUI(),
             session: this.session
         });
 
@@ -230,6 +235,61 @@ export class DriverModeController {
         const usable = this.currentVehicle?.usable_capacity_kwh || 17.15;
         const cons = this.currentVehicle?.consumption_wh_per_km || 95.0;
         this.estimatedRangeKm = parseFloat(((usable * 1000.0 * (this.currentSocPct / 100.0)) / cons).toFixed(1));
+    }
+
+    setBatterySoc(newSoc, triggerEvaluation = true) {
+        const val = Math.min(100, Math.max(5, parseFloat(newSoc) || 10));
+        this.currentSocPct = val;
+        this.updateEstimatedRange();
+
+        // Sync display elements in DOM
+        if (typeof document !== 'undefined') {
+            const socDisplay = document.getElementById('label-soc-slider-val');
+            if (socDisplay) {
+                socDisplay.textContent = `${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)`;
+                socDisplay.style.color = this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981');
+            }
+            const assignedDisplay = document.getElementById('label-assigned-soc-val');
+            if (assignedDisplay) {
+                assignedDisplay.textContent = `${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)`;
+                assignedDisplay.style.color = this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981');
+            }
+            const valTripSoc = document.getElementById('val-trip-soc');
+            if (valTripSoc) {
+                valTripSoc.textContent = `${this.currentSocPct.toFixed(0)}%`;
+                valTripSoc.className = `stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}`;
+            }
+            const valTripRange = document.getElementById('val-trip-range');
+            if (valTripRange) {
+                valTripRange.textContent = `${this.estimatedRangeKm.toFixed(0)} km`;
+            }
+            const valAssignedSoc = document.getElementById('val-assigned-soc');
+            if (valAssignedSoc) {
+                valAssignedSoc.textContent = `${this.currentSocPct.toFixed(0)}%`;
+            }
+            const barFill = document.getElementById('battery-bar-fill');
+            if (barFill) {
+                barFill.style.width = `${Math.max(5, this.currentSocPct)}%`;
+                barFill.className = `battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}`;
+            }
+            const slider = document.getElementById('slider-cockpit-soc');
+            if (slider && document.activeElement !== slider) {
+                slider.value = Math.round(this.currentSocPct);
+            }
+            const assignedSlider = document.getElementById('slider-assigned-soc');
+            if (assignedSlider && document.activeElement !== assignedSlider) {
+                assignedSlider.value = Math.round(this.currentSocPct);
+            }
+        }
+
+        if (triggerEvaluation && this.state === DriverState.TRIP_ACTIVE) {
+            this._evaluateAtCurrentPosition().then(() => {
+                this.renderTripActiveUI();
+                if (document.getElementById('stations-drawer')?.style.display !== 'none') {
+                    this.refreshDrawerEvaluations();
+                }
+            }).catch(err => console.warn('SOC change evaluation warning:', err));
+        }
     }
 
     setState(newState) {
@@ -427,6 +487,9 @@ export class DriverModeController {
 
         // Auto-step first observation
         await this.replay.step();
+
+        if (this.generation !== currentGen) return;
+        this.playTrip();
     }
 
     _tripToTrajectory(tripId) {
@@ -445,112 +508,128 @@ export class DriverModeController {
         const { locResp, observation } = stepData;
         if (this.state !== DriverState.TRIP_ACTIVE) return;
 
-        this.currentObservation = observation;
+        try {
+            this.currentObservation = observation;
 
-        if (locResp.matched_position) {
-            this.matchedPos = {
-                latitude: locResp.matched_position.latitude,
-                longitude: locResp.matched_position.longitude,
-                road_segment_id: locResp.matched_position.road_segment_id,
-                direction: locResp.matched_position.direction,
-                confidence: locResp.matched_position.confidence
-            };
-            this.currentPos = {
-                latitude: locResp.matched_position.latitude,
-                longitude: locResp.matched_position.longitude
-            };
-        } else if (locResp.raw_position) {
-            this.currentPos = {
-                latitude: locResp.raw_position.latitude,
-                longitude: locResp.raw_position.longitude
-            };
-            this.matchedPos = null;
-        } else if (observation) {
-            this.currentPos = {
-                latitude: observation.latitude,
-                longitude: observation.longitude
-            };
-            this.matchedPos = null;
-        }
+            if (locResp.matched_position) {
+                this.matchedPos = {
+                    latitude: locResp.matched_position.latitude,
+                    longitude: locResp.matched_position.longitude,
+                    road_segment_id: locResp.matched_position.road_segment_id,
+                    direction: locResp.matched_position.direction,
+                    confidence: locResp.matched_position.confidence
+                };
+                this.currentPos = {
+                    latitude: locResp.matched_position.latitude,
+                    longitude: locResp.matched_position.longitude
+                };
+            } else if (locResp.raw_position) {
+                this.currentPos = {
+                    latitude: locResp.raw_position.latitude,
+                    longitude: locResp.raw_position.longitude
+                };
+                this.matchedPos = null;
+            } else if (observation) {
+                this.currentPos = {
+                    latitude: observation.latitude,
+                    longitude: observation.longitude
+                };
+                this.matchedPos = null;
+            }
 
-        // Dynamic Energy & SOC depletion during movement
-        if (this.lastMovementPos && this.currentPos) {
-            const stepDistKm = straightLineDistanceKm(
-                this.lastMovementPos.latitude,
-                this.lastMovementPos.longitude,
-                this.currentPos.latitude,
-                this.currentPos.longitude
-            );
-            if (stepDistKm > 0.005) { // At least 5m
-                const usable = this.currentVehicle?.usable_capacity_kwh || 17.15;
-                const cons = this.currentVehicle?.consumption_wh_per_km || 95.0;
-                const energyKwh = stepDistKm * (cons / 1000.0);
-                const socDropPct = (energyKwh / usable) * 100.0;
+            // Dynamic Energy & SOC depletion during movement
+            if (this.lastMovementPos && this.currentPos) {
+                const stepDistKm = straightLineDistanceKm(
+                    this.lastMovementPos.latitude,
+                    this.lastMovementPos.longitude,
+                    this.currentPos.latitude,
+                    this.currentPos.longitude
+                );
+                if (stepDistKm > 0.005) { // At least 5m
+                    const usable = this.currentVehicle?.usable_capacity_kwh || 17.15;
+                    const cons = this.currentVehicle?.consumption_wh_per_km || 95.0;
+                    const energyKwh = stepDistKm * (cons / 1000.0);
+                    const socDropPct = (energyKwh / usable) * 100.0;
 
-                this.currentSocPct = Math.max(0.0, parseFloat((this.currentSocPct - socDropPct).toFixed(2)));
-                this.updateEstimatedRange();
-                this.totalDistanceTravelledKm = (this.totalDistanceTravelledKm || 0.0) + stepDistKm;
+                    this.currentSocPct = Math.max(0.0, parseFloat((this.currentSocPct - socDropPct).toFixed(2)));
+                    this.updateEstimatedRange();
+                    this.totalDistanceTravelledKm = (this.totalDistanceTravelledKm || 0.0) + stepDistKm;
+                    this.lastMovementPos = { ...this.currentPos };
+                }
+            } else if (this.currentPos) {
                 this.lastMovementPos = { ...this.currentPos };
             }
-        } else if (this.currentPos) {
-            this.lastMovementPos = { ...this.currentPos };
-        }
 
-        // Update remaining route & distance
-        const probePos = this.matchedPos || this.currentPos;
-        if (this.fullRouteCoords && this.fullRouteCoords.length > 1 && probePos) {
-            const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
+            // Update remaining route & distance
+            const probePos = this.matchedPos || this.currentPos;
+            if (this.fullRouteCoords && this.fullRouteCoords.length > 1 && probePos) {
+                const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
 
-            // Anti-spam off-route check (> 35m for 3 consecutive samples, with 5s cooldown)
-            const OFF_ROUTE_THRESHOLD_METERS = 35.0;
-            const REROUTE_COOLDOWN_MS = 5000;
-            const now = Date.now();
+                // Anti-spam off-route check (> 35m for 3 consecutive samples, with 5s cooldown)
+                const OFF_ROUTE_THRESHOLD_METERS = 35.0;
+                const REROUTE_COOLDOWN_MS = 5000;
+                const now = Date.now();
 
-            if (progress.distanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
-                this.offRouteConsecutiveSamples++;
-                if (this.offRouteConsecutiveSamples >= 3 && (now - this.lastRerouteTimestamp) > REROUTE_COOLDOWN_MS) {
-                    this.lastRerouteTimestamp = now;
+                if (progress.distanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
+                    this.offRouteConsecutiveSamples++;
+                    if (this.offRouteConsecutiveSamples >= 3 && (now - this.lastRerouteTimestamp) > REROUTE_COOLDOWN_MS) {
+                        this.lastRerouteTimestamp = now;
+                        this.offRouteConsecutiveSamples = 0;
+                        await this._triggerReroute(probePos);
+                    }
+                } else {
                     this.offRouteConsecutiveSamples = 0;
-                    await this._triggerReroute(probePos);
                 }
-            } else {
-                this.offRouteConsecutiveSamples = 0;
+
+                // Route slicing: shrink route ahead of the car
+                if (this.fullRouteCoords && this.fullRouteCoords.length > 1) {
+                    this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
+                    const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
+                        segmentIndex: this.lastPassedSegmentIndex,
+                        projPoint: progress.projPoint
+                    });
+
+                    this.directRouteGeometry = remainingCoords;
+                    this.map.updateDirectRoute(remainingCoords);
+
+                    const remainingMeters = computePolylineDistanceMeters(remainingCoords);
+                    this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
+                }
+            } else if (this.currentPos && this.currentTrip?.destination) {
+                this.remainingTripDistanceKm = straightLineDistanceKm(
+                    this.currentPos.latitude,
+                    this.currentPos.longitude,
+                    this.currentTrip.destination.latitude,
+                    this.currentTrip.destination.longitude
+                );
             }
 
-            // Route slicing: shrink route ahead of the car
-            if (this.fullRouteCoords && this.fullRouteCoords.length > 1) {
-                this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
-                const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
-                    segmentIndex: this.lastPassedSegmentIndex,
-                    projPoint: progress.projPoint
-                });
-
-                this.directRouteGeometry = remainingCoords;
-                this.map.updateDirectRoute(remainingCoords);
-
-                const remainingMeters = computePolylineDistanceMeters(remainingCoords);
-                this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
+            if (this.replay.isReplayComplete()) {
+                this.setState(DriverState.TRIP_COMPLETE);
+                this.remainingTripDistanceKm = 0.0;
+                this.map.updateDirectRoute([]);
+                await this._evaluateAtCurrentPosition();
+                this.renderTripCompleteUI();
+                return;
             }
-        } else if (this.currentPos && this.currentTrip?.destination) {
-            this.remainingTripDistanceKm = straightLineDistanceKm(
-                this.currentPos.latitude,
-                this.currentPos.longitude,
-                this.currentTrip.destination.latitude,
-                this.currentTrip.destination.longitude
-            );
-        }
 
-        if (this.replay.isReplayComplete()) {
-            this.setState(DriverState.TRIP_COMPLETE);
-            this.remainingTripDistanceKm = 0.0;
-            this.map.updateDirectRoute([]);
-            await this._evaluateAtCurrentPosition();
-            this.renderTripCompleteUI();
-            return;
-        }
+            // Periodic recommendation evaluation (every 2.5s or 50m of movement)
+            const nowMs = Date.now();
+            const distSinceLastEval = this.lastEvalPos ? straightLineDistanceKm(
+                this.lastEvalPos.latitude, this.lastEvalPos.longitude,
+                this.currentPos.latitude, this.currentPos.longitude
+            ) : 999;
 
-        await this._evaluateAtCurrentPosition();
-        this.renderTripActiveUI();
+            if (!this.lastEvalTimestamp || (nowMs - this.lastEvalTimestamp > 2500) || (distSinceLastEval > 0.05)) {
+                this.lastEvalTimestamp = nowMs;
+                this.lastEvalPos = { ...this.currentPos };
+                await this._evaluateAtCurrentPosition();
+            }
+
+            this.renderTripActiveUI();
+        } catch (stepErr) {
+            console.warn('[DriverMode] _onReplayStep error:', stepErr);
+        }
     }
 
     async _triggerReroute(fromPos) {
@@ -581,7 +660,8 @@ export class DriverModeController {
     // ─── Evaluation ─────────────────────────────────────────────────────
 
     async _evaluateAtCurrentPosition() {
-        if (!this.currentVehicle || !this.currentPos) return;
+        if (!this.currentVehicle || !this.currentPos || this._isEvaluating) return;
+        this._isEvaluating = true;
 
         const currentGen = this.generation;
         const driverId = this.session.driver_id || 'UNASSIGNED';
@@ -726,6 +806,8 @@ export class DriverModeController {
                     recommendResult: null
                 });
             }
+        } finally {
+            this._isEvaluating = false;
         }
     }
 
@@ -1735,7 +1817,7 @@ export class DriverModeController {
                     <h3 style="margin: 0; font-size: 18px;">${this.currentTrip?.trip_id}</h3>
                 </div>
 
-                <div class="hud-details" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;">
+                <div class="hud-details" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
                     <div class="stat-box">
                         <span class="stat-label">Phương tiện</span>
                         <strong class="stat-value" style="font-size: 14px;">${this.currentVehicle?.vehicle_model || 'VF 3'}</strong>
@@ -1746,7 +1828,28 @@ export class DriverModeController {
                     </div>
                     <div class="stat-box">
                         <span class="stat-label">Dung lượng Pin</span>
-                        <strong class="stat-value" style="font-size: 14px;">${this.currentSocPct.toFixed(0)}%</strong>
+                        <strong id="val-assigned-soc" class="stat-value" style="font-size: 14px;">${this.currentSocPct.toFixed(0)}%</strong>
+                    </div>
+                </div>
+
+                <!-- Interactive Battery SOC Adjuster -->
+                <div class="cockpit-soc-control" style="margin-bottom: 14px; padding: 10px 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
+                            🔋 Tùy chỉnh mức Pin ban đầu (SOC)
+                        </span>
+                        <span id="label-assigned-soc-val" style="font-size: 12px; font-weight: 700; color: ${this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981')};">
+                            ${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="range" id="slider-assigned-soc" min="5" max="100" step="1" value="${Math.round(this.currentSocPct)}"
+                               style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
+                        <div style="display: flex; gap: 4px;">
+                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="12" style="padding: 2px 6px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">12%</button>
+                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="22" style="padding: 2px 6px; font-size: 11px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.5);">22%</button>
+                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="85" style="padding: 2px 6px; font-size: 11px; color: #10b981; border-color: rgba(16, 185, 129, 0.5);">85%</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1779,6 +1882,20 @@ export class DriverModeController {
             this.startPickCustomDestination();
         });
         document.getElementById('btn-cancel-trip')?.addEventListener('click', () => this.cancelTrip());
+
+        const sliderAssigned = document.getElementById('slider-assigned-soc');
+        sliderAssigned?.addEventListener('input', (e) => {
+            this.setBatterySoc(parseFloat(e.target.value), false);
+        });
+        sliderAssigned?.addEventListener('change', (e) => {
+            this.setBatterySoc(parseFloat(e.target.value), false);
+        });
+        document.querySelectorAll('.btn-preset-assigned-soc').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const s = parseFloat(e.target.dataset.soc);
+                this.setBatterySoc(s, false);
+            });
+        });
     }
 
     renderTripActiveUI() {
@@ -1806,7 +1923,9 @@ export class DriverModeController {
                 ? (top.features.detour_duration_s / 60).toFixed(0)
                 : '2';
             const etaStationMin = (top.eta_to_station_s / 60).toFixed(0);
-            const serviceMin = (top.features.service_duration_s / 60).toFixed(0);
+            const serviceMin = top.features?.service_duration_s != null
+                ? (top.features.service_duration_s / 60).toFixed(0)
+                : '15';
             const completionMin = top.eta_to_service_complete_s != null
                 ? (top.eta_to_service_complete_s / 60).toFixed(0)
                 : Math.round(top.final_cost_s / 60).toString();
@@ -1860,7 +1979,7 @@ export class DriverModeController {
                         </div>
                         <div class="cost-grid-item">
                             <span class="cost-grid-label" style="color: #94a3b8;">🔄 Lệch lộ trình (Detour)</span>
-                            <span class="cost-grid-val" style="color: #f59e0b;">+${detourKm} km <small style="color:#fcd34d;">(+${detourMin} phút)</small></span>
+                            <span class="cost-grid-val" style="color: #f59e0b;">+${detourKm} km <span class="sr-only">detour</span><small style="color:#fcd34d;">(+${detourMin} phút)</small></span>
                         </div>
                     </div>
 
@@ -1892,10 +2011,103 @@ export class DriverModeController {
                 : '<span class="text-muted">Đang định vị...</span>');
 
         const progress = this.replay.getProgressText?.() || '';
+        const isPlaying = this.replay.isPlaying;
+        const playBtnText = isPlaying ? '▶ Đang chạy...' : (this.replay.currentIndex > 0 ? '▶ Tiếp tục' : '▶ Bắt đầu');
+        const playBtnClass = isPlaying ? 'btn btn-outline btn-sm flex-1' : 'btn btn-primary btn-sm flex-1';
+        const pauseBtnClass = isPlaying ? 'btn btn-primary btn-sm flex-1' : 'btn btn-outline btn-sm flex-1';
 
+        const postTripSnippet = this.postTripStation ? `
+            <div class="post-trip-banner" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #0d9488; border-radius: 10px; padding: 12px 14px; margin-top: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700; color: #2dd4bf; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                        <span>🏁</span> ĐÃ ĐẶT SẠC SAU KHI TỚI B
+                    </span>
+                    <button id="btn-cancel-post-trip" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 6px;">✕ Hủy</button>
+                </div>
+                <div style="font-size: 12px; color: #e2e8f0; margin-top: 6px;">
+                    Xe đang chạy thẳng đến điểm B. Sau khi trả khách sẽ tiếp tục di chuyển đến <strong>Trạm ${this.postTripStation.station_id}</strong> (${this.postTripRoute?.distance_m ? (this.postTripRoute.distance_m / 1000).toFixed(1) : '1.5'} km).
+                </div>
+            </div>
+        ` : '';
+
+        // If active HUD already mounted in DOM, perform fast in-place property updates to prevent losing slider focus
+        const existingHud = container.querySelector('#driver-active-hud');
+        if (existingHud) {
+            const elemDist = document.getElementById('val-remaining-dist');
+            if (elemDist) elemDist.innerHTML = `${this.remainingTripDistanceKm.toFixed(1)} <small>km</small>`;
+            const elemEta = document.getElementById('val-trip-eta');
+            if (elemEta) elemEta.innerHTML = `${etaMin} <small>phút</small><span class="sr-only">min</span>`;
+            const elemSoc = document.getElementById('val-trip-soc');
+            if (elemSoc) {
+                elemSoc.textContent = `${this.currentSocPct.toFixed(0)}%`;
+                elemSoc.className = `stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}`;
+            }
+            const elemRange = document.getElementById('val-trip-range');
+            if (elemRange) elemRange.innerHTML = `${this.estimatedRangeKm.toFixed(0)} <small>km</small>`;
+            const barFill = document.getElementById('battery-bar-fill');
+            if (barFill) {
+                barFill.style.width = `${Math.max(5, this.currentSocPct)}%`;
+                barFill.className = `battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}`;
+            }
+            const labelSocSlider = document.getElementById('label-soc-slider-val');
+            if (labelSocSlider) {
+                labelSocSlider.textContent = `${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)`;
+                labelSocSlider.style.color = this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981');
+            }
+            const slider = document.getElementById('slider-cockpit-soc');
+            if (slider && document.activeElement !== slider) {
+                slider.value = Math.round(this.currentSocPct);
+            }
+            const posElem = document.getElementById('hud-pos-status');
+            if (posElem) posElem.innerHTML = posStatus;
+            const progElem = document.getElementById('hud-progress-status');
+            if (progElem) progElem.textContent = progress;
+
+            const warnContainer = document.getElementById('hud-warning-container');
+            if (warnContainer) warnContainer.innerHTML = warningBanner;
+
+            const recContainer = document.getElementById('hud-rec-container');
+            if (recContainer) {
+                recContainer.innerHTML = recSnippet;
+                document.getElementById('btn-nav-station')?.addEventListener('click', () => this.navigateViaStation());
+                document.getElementById('btn-switch-post-trip-modal')?.addEventListener('click', () => {
+                    this.chargingIntent = 'AT_DESTINATION';
+                    document.querySelectorAll('.charging-intent-selector .intent-tab').forEach(t => {
+                        t.classList.toggle('active', t.dataset.intent === 'AT_DESTINATION');
+                    });
+                    this.openStationsDrawer();
+                });
+                document.getElementById('btn-view-cost-breakdown')?.addEventListener('click', () => {
+                    if (this.lastRecommendation?.ranked_candidates?.length > 0) {
+                        this.openCostBreakdownModal(this.lastRecommendation.ranked_candidates[0]);
+                    }
+                });
+            }
+
+            const postTripContainer = document.getElementById('hud-post-trip-container');
+            if (postTripContainer) {
+                postTripContainer.innerHTML = postTripSnippet;
+                document.getElementById('btn-cancel-post-trip')?.addEventListener('click', () => this.cancelPostTripStation());
+            }
+
+            const btnPlay = document.getElementById('btn-driver-replay-play');
+            if (btnPlay) {
+                btnPlay.innerHTML = playBtnText;
+                btnPlay.className = playBtnClass;
+            }
+            const btnPause = document.getElementById('btn-driver-replay-pause');
+            if (btnPause) {
+                btnPause.className = pauseBtnClass;
+            }
+            return;
+        }
+
+        // Full initial render
         container.innerHTML = `
-            <div class="driver-nav-hud">
-                ${warningBanner}
+            <div class="driver-nav-hud" id="driver-active-hud" data-hud-state="TRIP_ACTIVE">
+                <div id="hud-warning-container">
+                    ${warningBanner}
+                </div>
 
                 <div class="nav-metrics-card">
                     <div class="nav-destination" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -1912,53 +2124,69 @@ export class DriverModeController {
                     <div class="nav-stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
                         <div class="stat-box">
                             <span class="stat-label">Cự ly còn lại</span>
-                            <span class="stat-value">${this.remainingTripDistanceKm.toFixed(1)} <small>km</small></span>
+                            <span class="stat-value" id="val-remaining-dist">${this.remainingTripDistanceKm.toFixed(1)} <small>km</small></span>
                         </div>
                         <div class="stat-box">
                             <span class="stat-label">ETA</span>
-                            <span class="stat-value">${etaMin} <small>phút</small><span class="sr-only">min</span></span>
+                            <span class="stat-value" id="val-trip-eta">${etaMin} <small>phút</small><span class="sr-only">min</span></span>
                         </div>
                         <div class="stat-box">
                             <span class="stat-label">Pin (SOC)</span>
-                            <span class="stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}">${this.currentSocPct.toFixed(0)}%</span>
+                            <span class="stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}" id="val-trip-soc">${this.currentSocPct.toFixed(0)}%</span>
                         </div>
                         <div class="stat-box">
                             <span class="stat-label">Tầm xa</span>
-                            <span class="stat-value">${this.estimatedRangeKm.toFixed(0)} <small>km</small></span>
+                            <span class="stat-value" id="val-trip-range">${this.estimatedRangeKm.toFixed(0)} <small>km</small></span>
                         </div>
                     </div>
 
                     <div class="battery-bar-container" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                        <div class="battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}"
+                        <div id="battery-bar-fill" class="battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}"
                              style="width: ${Math.max(5, this.currentSocPct)}%; height: 100%;"></div>
                     </div>
 
+                    <!-- Interactive Battery SOC Adjuster -->
+                    <div class="cockpit-soc-control" style="margin-top: 10px; padding: 8px 10px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
+                                🔋 Điều chỉnh mức Pin (SOC)
+                            </span>
+                            <span id="label-soc-slider-val" style="font-size: 12px; font-weight: 700; color: ${this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981')};">
+                                ${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="range" id="slider-cockpit-soc" min="5" max="100" step="1" value="${Math.round(this.currentSocPct)}"
+                                   style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
+                            <div class="quick-soc-presets" style="display: flex; gap: 4px;">
+                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="12" title="Mức pin nguy cấp (< 15%)"
+                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">12%</button>
+                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="22" title="Mức pin khuyến cáo (< 30%)"
+                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #f59e0b; border-color: rgba(245, 158, 11, 0.5);">22%</button>
+                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="85" title="Mức pin an toàn"
+                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #10b981; border-color: rgba(16, 185, 129, 0.5);">85%</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="text-xs text-muted mt-2" style="display: flex; justify-content: space-between; font-size: 11px;">
-                        <span>${posStatus}</span>
-                        <span>${progress}</span>
+                        <span id="hud-pos-status">${posStatus}</span>
+                        <span id="hud-progress-status">${progress}</span>
                     </div>
                 </div>
 
-                ${recSnippet}
+                <div id="hud-rec-container">
+                    ${recSnippet}
+                </div>
 
-                ${this.postTripStation ? `
-                    <div class="post-trip-banner" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #0d9488; border-radius: 10px; padding: 12px 14px; margin-top: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 700; color: #2dd4bf; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                                <span>🏁</span> ĐÃ ĐẶT SẠC SAU KHI TỚI B
-                            </span>
-                            <button id="btn-cancel-post-trip" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 6px;">✕ Hủy</button>
-                        </div>
-                        <div style="font-size: 12px; color: #e2e8f0; margin-top: 6px;">
-                            Xe đang chạy thẳng đến điểm B. Sau khi trả khách sẽ tiếp tục di chuyển đến <strong>Trạm ${this.postTripStation.station_id}</strong> (${this.postTripRoute?.distance_m ? (this.postTripRoute.distance_m / 1000).toFixed(1) : '1.5'} km).
-                        </div>
-                    </div>
-                ` : ''}
+                <div id="hud-post-trip-container">
+                    ${postTripSnippet}
+                </div>
 
                 <div class="driver-controls mt-3">
                     <div class="replay-controls d-flex gap-2 mb-2" style="display: flex; gap: 8px;">
-                        <button id="btn-driver-replay-play" class="btn btn-primary btn-sm flex-1">▶ Bắt đầu</button>
-                        <button id="btn-driver-replay-pause" class="btn btn-outline btn-sm flex-1">⏸ Tạm dừng</button>
+                        <button id="btn-driver-replay-play" class="${playBtnClass}">${playBtnText}</button>
+                        <button id="btn-driver-replay-pause" class="${pauseBtnClass}">⏸ Tạm dừng</button>
                         <button id="btn-driver-replay-step" class="btn btn-outline btn-sm flex-1">⏭ Từng bước</button>
                     </div>
                     <button id="btn-complete-trip" class="btn btn-outline btn-sm btn-block">
@@ -1968,8 +2196,15 @@ export class DriverModeController {
             </div>
         `;
 
-        document.getElementById('btn-driver-replay-play')?.addEventListener('click', () => this.playTrip());
-        document.getElementById('btn-driver-replay-pause')?.addEventListener('click', () => this.pauseTrip());
+        // Bind interactive controls
+        document.getElementById('btn-driver-replay-play')?.addEventListener('click', () => {
+            this.playTrip();
+            this.renderTripActiveUI();
+        });
+        document.getElementById('btn-driver-replay-pause')?.addEventListener('click', () => {
+            this.pauseTrip();
+            this.renderTripActiveUI();
+        });
         document.getElementById('btn-driver-replay-step')?.addEventListener('click', () => this.stepTrip());
         document.getElementById('btn-nav-station')?.addEventListener('click', () => this.navigateViaStation());
         document.getElementById('btn-switch-post-trip-modal')?.addEventListener('click', () => {
@@ -1990,6 +2225,20 @@ export class DriverModeController {
         document.getElementById('btn-complete-trip')?.addEventListener('click', () => {
             this.setState(DriverState.TRIP_COMPLETE);
             this.renderTripCompleteUI();
+        });
+
+        const slider = document.getElementById('slider-cockpit-soc');
+        slider?.addEventListener('input', (e) => {
+            this.setBatterySoc(parseFloat(e.target.value), false);
+        });
+        slider?.addEventListener('change', (e) => {
+            this.setBatterySoc(parseFloat(e.target.value), true);
+        });
+        document.querySelectorAll('.btn-quick-soc').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const s = parseFloat(e.target.dataset.soc);
+                this.setBatterySoc(s, true);
+            });
         });
     }
 

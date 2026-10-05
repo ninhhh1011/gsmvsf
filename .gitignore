@@ -44,6 +44,9 @@ runtime/map_mapping/*.csv
 runtime/map_mapping/*.parquet
 runtime/benchmark_results.json
 runtime/*.png
+runtime/scratch_slides.json
+runtime/slide_media/
+/*.pptx
 samples/week1/*.csv
 samples/week1/*.json
 

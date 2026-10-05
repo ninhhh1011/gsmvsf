@@ -24,6 +24,15 @@ function getElem(id) {
     return document.getElementById(id);
 }
 
+function approxDistMeters(lat1, lon1, lat2, lon2) {
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const midLat = ((lat1 + lat2) / 2) * Math.PI / 180;
+    const x = dLon * Math.cos(midLat) * 6371000;
+    const y = dLat * 6371000;
+    return Math.sqrt(x * x + y * y);
+}
+
 export class TrajectoryReplayController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
@@ -177,8 +186,16 @@ export class TrajectoryReplayController {
         const intervalSec = 1.5;
         const stepDistMeters = Math.max(12, speedMs * intervalSec);
 
+        // Calculate total route distance first to place baseTime safely in the past
+        let totalDistMeters = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+            totalDistMeters += approxDistMeters(points[i].lat, points[i].lng, points[i + 1].lat, points[i + 1].lng);
+        }
+        const totalEstimatedSteps = Math.max(points.length, Math.ceil(totalDistMeters / stepDistMeters) + 10);
+        const totalDurationMs = totalEstimatedSteps * intervalSec * 1000;
+        const baseTime = Date.now() - totalDurationMs - 120000;
+
         const syntheticObs = [];
-        const baseTime = Date.now();
         let obsIndex = 0;
 
         for (let i = 0; i < points.length - 1; i++) {
@@ -262,10 +279,17 @@ export class TrajectoryReplayController {
 
         try {
             // Build observation payload with vehicle metadata from session
+            let obsTimestamp = obs.timestamp;
+            const nowMs = Date.now();
+            // Critical safeguard: never send a timestamp in the future to backend realtime ingestion
+            if (!obsTimestamp || new Date(obsTimestamp).getTime() > nowMs) {
+                obsTimestamp = new Date(nowMs).toISOString();
+            }
+
             const observationPayload = {
                 latitude: obs.latitude,
                 longitude: obs.longitude,
-                timestamp: obs.timestamp,
+                timestamp: obsTimestamp,
                 speed_kmh: obs.speed_kmh,
                 heading_deg: obs.heading_deg,
                 vehicle_id: this.session.vehicle_id,
@@ -302,12 +326,16 @@ export class TrajectoryReplayController {
 
             // Downstream handler (DriverModeController recommendation evaluation)
             if (this.onStep) {
-                await this.onStep({
-                    observation: obs,
-                    locResp,
-                    currentIndex: targetIndex + 1,
-                    generation: currentGen
-                });
+                try {
+                    await this.onStep({
+                        observation: obs,
+                        locResp,
+                        currentIndex: targetIndex + 1,
+                        generation: currentGen
+                    });
+                } catch (stepErr) {
+                    console.warn('[Replay] Downstream onStep warning:', stepErr);
+                }
             }
 
             // Stale check again after onStep await
@@ -361,8 +389,22 @@ export class TrajectoryReplayController {
 
             const stepSucceeded = await this.step(true);
 
-            if (!stepSucceeded || this.state !== ReplayState.PLAYING || this.generation !== loopGen) {
+            if (this.state !== ReplayState.PLAYING || this.generation !== loopGen) {
                 break;
+            }
+
+            if (!stepSucceeded) {
+                console.warn(`[Replay] Step at index ${this.currentIndex} encountered an error, waiting before retry...`);
+                await new Promise(resolve => {
+                    this.stepTimer = setTimeout(resolve, 500);
+                });
+                this.stepTimer = null;
+                // If in error state during autoplay, advance index so vehicle keeps progressing
+                if (this.state === ReplayState.ERROR && this.generation === loopGen) {
+                    this.currentIndex = Math.min(this.observations.length, this.currentIndex + 1);
+                    this.setState(ReplayState.PLAYING);
+                }
+                continue;
             }
 
             // Delay before scheduling next step

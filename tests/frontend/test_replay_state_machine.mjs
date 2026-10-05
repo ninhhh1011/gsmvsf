@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ReplayState, TrajectoryReplayController } from '../../backend/app/static/demo/js/replay.js';
-import { DriverState, straightLineDistanceKm } from '../../backend/app/static/demo/js/driver_mode.js';
+import { DriverState, DriverModeController, straightLineDistanceKm } from '../../backend/app/static/demo/js/driver_mode.js';
 
 test('ReplayState enum constants are defined correctly', () => {
     assert.equal(ReplayState.IDLE, 'IDLE');
@@ -182,4 +182,94 @@ test('straightLineDistanceKm computes accurate Haversine and is isolated from ro
 
     // Same point returns 0
     assert.equal(straightLineDistanceKm(21.0, 105.0, 21.0, 105.0), 0);
+});
+
+test('Replay step automatically guards against future timestamps', async () => {
+    let capturedTimestamp = null;
+    const mockApi = {
+        ingestDriverLocation: async (driverId, payload) => {
+            capturedTimestamp = payload.timestamp;
+            return {
+                status: 'GPS_ACCEPTED',
+                total_match_calls: 0,
+                raw_position: { latitude: payload.latitude, longitude: payload.longitude }
+            };
+        },
+        resetDriverLocation: async () => ({})
+    };
+    const mockMap = {
+        renderDriver: () => {},
+        layers: { markers: { clearLayers: () => {} }, driver: { clearLayers: () => {} } }
+    };
+
+    const replay = new TrajectoryReplayController(mockApi, mockMap);
+    // Future timestamp: 2 hours in the future
+    const futureDate = new Date(Date.now() + 7200000).toISOString();
+    replay.observations = [
+        { latitude: 21.01, longitude: 105.81, timestamp: futureDate, speed_kmh: 30, heading_deg: 90 }
+    ];
+    replay.state = ReplayState.READY;
+
+    const success = await replay.step();
+    assert.equal(success, true);
+    assert.ok(capturedTimestamp, 'Should have captured timestamp');
+    // Captured timestamp must NOT be in the future
+    assert.ok(new Date(capturedTimestamp).getTime() <= Date.now() + 50, 'Captured timestamp must be <= Date.now()');
+});
+
+test('loadFromPolyline generates observations with timestamps strictly in the past', async () => {
+    const mockApi = {
+        ingestDriverLocation: async () => ({ status: 'GPS_ACCEPTED' }),
+        resetDriverLocation: async () => ({})
+    };
+    const mockMap = {
+        fitBoundsToActive: () => {},
+        layers: { markers: { clearLayers: () => {} } }
+    };
+
+    const replay = new TrajectoryReplayController(mockApi, mockMap);
+    const coords = [
+        [21.0280, 105.8540],
+        [21.0300, 105.8500],
+        [21.0360, 105.8300]
+    ];
+    await replay.loadFromPolyline(coords, 35);
+
+    assert.ok(replay.observations.length > 5, 'Should generate synthetic observations');
+    const now = Date.now();
+    for (const obs of replay.observations) {
+        assert.ok(new Date(obs.timestamp).getTime() <= now, `Observation timestamp ${obs.timestamp} must be <= now`);
+    }
+});
+
+test('DriverModeController.setBatterySoc updates SOC and recalculates estimated range', () => {
+    const mockApi = {};
+    const mockMap = {
+        layers: { markers: { clearLayers: () => {} }, driver: { clearLayers: () => {} } }
+    };
+    const controller = new DriverModeController(mockApi, mockMap, {});
+    controller.currentVehicle = {
+        vehicle_id: 'V0001',
+        vehicle_model: 'VF 3',
+        usable_capacity_kwh: 17.15,
+        consumption_wh_per_km: 150.0
+    };
+
+    // Set SOC to 80%
+    controller.setBatterySoc(80, false);
+    assert.equal(controller.currentSocPct, 80);
+    // 17.15 * 1000 * 0.8 / 150 = 91.5 km
+    assert.equal(controller.estimatedRangeKm, 91.5);
+
+    // Set SOC to 12% (critical level)
+    controller.setBatterySoc(12, false);
+    assert.equal(controller.currentSocPct, 12);
+    // 17.15 * 1000 * 0.12 / 150 = 13.7 km
+    assert.equal(controller.estimatedRangeKm, 13.7);
+
+    // Clamps to [5, 100]
+    controller.setBatterySoc(150, false);
+    assert.equal(controller.currentSocPct, 100);
+    controller.setBatterySoc(2, false);
+    assert.equal(controller.currentSocPct, 5);
 });
