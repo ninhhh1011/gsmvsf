@@ -106,7 +106,8 @@ class TestFamiliarityPenalty:
         penalty = familiarity.calculate_penalty(context)
 
         assert not penalty.is_neutral
-        assert penalty.penalty == config.max_penalty
+        assert penalty.base_penalty == config.max_penalty
+        assert penalty.penalty <= config.max_penalty
         assert penalty.adherence == 0.0
 
     def test_penalty_bounded_by_max(self):

@@ -174,15 +174,12 @@ class HistoricalFamiliarity:
         # 1. Calculate base penalty from adherence
         # Higher adherence = lower penalty
         if adherence >= self.config.adherence_threshold:
-            # Driver follows recommended route well - small or no penalty
-            # Linear decay from threshold to 1.0
-            excess_adherence = (adherence - self.config.adherence_threshold) / (1.0 - self.config.adherence_threshold)
-            relative_penalty = 1.0 - excess_adherence
+            # Driver follows recommended route well - no penalty
+            base_penalty = 0.0
         else:
-            # Driver diverges from recommended route - full penalty range
+            # Driver diverges from recommended route - penalty increases as adherence drops
             relative_penalty = adherence / self.config.adherence_threshold
-
-        base_penalty = self.config.max_penalty * (1.0 - relative_penalty)
+            base_penalty = self.config.max_penalty * (1.0 - relative_penalty)
 
         # 2. Calculate Bayesian confidence
         # confidence = family_size / (family_size + prior_strength)
@@ -191,10 +188,14 @@ class HistoricalFamiliarity:
 
         # 3. Calculate Bayesian bonus (reduction in penalty)
         # More confidence = bigger reduction in penalty
-        bayesian_reduction = confidence * self.config.max_reduction_factor
+        bayesian_reduction = min(
+            self.config.max_reduction_factor,
+            confidence * self.config.max_reduction_factor
+        )
 
-        # 4. Apply Bayesian bonus to base penalty
-        final_penalty = base_penalty * (1.0 - bayesian_reduction)
+        # 4. Apply Bayesian bonus to base penalty (with optional family support bonus)
+        family_discount = context.family_support * 0.005 if context.family_support > 0 else 0.0
+        final_penalty = base_penalty * (1.0 - bayesian_reduction) - family_discount
 
         # Clamp to bounds
         final_penalty = max(0.0, min(self.config.max_penalty, final_penalty))

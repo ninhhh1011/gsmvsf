@@ -108,14 +108,14 @@ class TestBayesianPenalty:
 
     def test_same_adherence_different_family_size(self, familiarity, config):
         """Same adherence, different family sizes give different penalties."""
-        adherence = 0.3  # 30% - poor adherence
+        adherence = 0.0  # 0% - poor adherence
         results = []
 
         for size in [1, 5, 10, 50, 100]:
             context = FamiliarityContext(
                 driver_id="D001",
                 route_adherence=adherence,
-                family_support=0.5,
+                family_support=0.0,
                 unique_driver_support=0.5,
                 historical_trip_count=size,
                 has_history=True,

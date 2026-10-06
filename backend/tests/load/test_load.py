@@ -1,28 +1,44 @@
 """
 Load tests for EV Recommendation System.
 """
+import os
 import pytest
 import asyncio
 import aiohttp
 import time
+import random
 from concurrent.futures import ThreadPoolExecutor
 
 BASE_URL = "http://localhost:8000/api/v1"
 
+@pytest.mark.skipif(
+    not os.getenv("RUN_LOAD_TESTS"),
+    reason="Load tests require RUN_LOAD_TESTS=1 and dedicated server running",
+)
 class TestLoad:
     """Load testing scenarios."""
 
     @pytest.fixture
-    def session(self):
-        """Create aiohttp session."""
-        return aiohttp.ClientSession()
+    async def session(self):
+        """Create aiohttp session if server is reachable, else skip."""
+        try:
+            async with aiohttp.ClientSession() as s:
+                try:
+                    async with s.get(f"{BASE_URL}/health", timeout=aiohttp.ClientTimeout(total=1.0)) as resp:
+                        if resp.status != 200:
+                            pytest.skip("Test server at localhost:8000 returned non-200")
+                except Exception:
+                    pytest.skip("Test server at localhost:8000 not reachable")
+                yield s
+        except Exception:
+            pytest.skip("Could not establish aiohttp session")
 
     @pytest.mark.asyncio
     async def test_concurrent_recommendations(self, session):
         """Test 50 concurrent recommendation requests."""
         async def make_request():
             payload = {
-                "driver_id": f"D{np.random.randint(1, 100)}",
+                "driver_id": f"D{random.randint(1, 100)}",
                 "latitude": 21.0285,
                 "longitude": 105.8542,
                 "destination_lat": 21.0350,
