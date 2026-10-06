@@ -1,8 +1,0 @@
-.git
-.e2e-venv
-__pycache__
-*.pyc
-*.egg-info
-.pytest_cache
-eval-results.json
-offline-eval-results.json
