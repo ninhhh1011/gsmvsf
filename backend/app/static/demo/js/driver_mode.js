@@ -125,10 +125,16 @@ export class DriverModeController {
         this.lastDiversionLeg1 = null;
         this.lastDiversionLeg2 = null;
 
+        // Navigation lock — khoá route khi user đã chọn trạm
+        this._navigationLocked = false;
+        this._selectedStationId = null;   // station_id user đã chọn
+
         // Proactive Station Search & Destination Picking
         this.isPickingDestination = false;
         this.currentStationsFilter = 'ALL';
         this.chargingIntent = 'EN_ROUTE'; // 'EN_ROUTE' (A -> Station -> B) | 'AT_DESTINATION' (B -> Station)
+        this.customOrigin = { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
+        this.customDestination = { latitude: 21.0285, longitude: 105.8542, node_id: "DEST_B" };
         this.postTripStation = null;
         this.postTripRoute = null;
         this.postTripRecommendation = null;
@@ -148,6 +154,7 @@ export class DriverModeController {
         });
 
         this.onStateChange = options.onStateChange || (() => {});
+        window.driverMode = this;
     }
 
     setCatalogs(trips, vehicles, stations, scenarios = []) {
@@ -336,8 +343,20 @@ export class DriverModeController {
         this.generation++;
         const currentGen = this.generation;
 
-        const trip = this.trips.find(t => t.trip_id === tripId) || this.trips[0];
-        if (!trip) return;
+        let trip = this.trips.find(t => t.trip_id === tripId);
+        if (!trip) {
+            const origin = this.customOrigin || { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
+            const dest = this.customDestination || { latitude: 21.0285, longitude: 105.8542, node_id: "DEST_B" };
+            trip = {
+                trip_id: `TRIP_${Date.now()}`,
+                driver_id: "D_USER",
+                vehicle_id: this.currentVehicle?.vehicle_id || "V0001",
+                scenario_id: "CUSTOM_ROUTE",
+                origin: origin,
+                destination: dest,
+                planned_distance_m: 8500.0
+            };
+        }
 
         this.currentTrip = trip;
 
@@ -505,13 +524,15 @@ export class DriverModeController {
     // ─── Step Handling ──────────────────────────────────────────────────
 
     async _onReplayStep(stepData) {
-        const { locResp, observation } = stepData;
+        const { locResp, observation } = stepData || {};
         if (this.state !== DriverState.TRIP_ACTIVE) return;
 
         try {
-            this.currentObservation = observation;
+            if (observation) {
+                this.currentObservation = observation;
+            }
 
-            if (locResp.matched_position) {
+            if (locResp?.matched_position) {
                 this.matchedPos = {
                     latitude: locResp.matched_position.latitude,
                     longitude: locResp.matched_position.longitude,
@@ -523,7 +544,7 @@ export class DriverModeController {
                     latitude: locResp.matched_position.latitude,
                     longitude: locResp.matched_position.longitude
                 };
-            } else if (locResp.raw_position) {
+            } else if (locResp?.raw_position) {
                 this.currentPos = {
                     latitude: locResp.raw_position.latitude,
                     longitude: locResp.raw_position.longitude
@@ -613,6 +634,22 @@ export class DriverModeController {
                 return;
             }
 
+            // Kiểm tra đã đến trạm chưa
+            if (this._navigationLocked && this._selectedStationId && this.currentPos) {
+                // Tính khoảng cách đến station đã chọn
+                const selectedStation = this.stations.find(s => s.station_id === this._selectedStationId);
+                if (selectedStation) {
+                    const distKm = straightLineDistanceKm(
+                        this.currentPos.latitude, this.currentPos.longitude,
+                        selectedStation.latitude, selectedStation.longitude
+                    );
+                    if (distKm < 0.1) { // < 100m → coi như đến nơi
+                        this._navigationLocked = false;
+                        this._selectedStationId = null;
+                    }
+                }
+            }
+
             // Periodic recommendation evaluation (every 2.5s or 50m of movement)
             const nowMs = Date.now();
             const distSinceLastEval = this.lastEvalPos ? straightLineDistanceKm(
@@ -661,6 +698,21 @@ export class DriverModeController {
 
     async _evaluateAtCurrentPosition() {
         if (!this.currentVehicle || !this.currentPos || this._isEvaluating) return;
+
+        // Vẫn kiểm tra nguy hiểm DÙ ĐANG KHOÁ
+        const isDangerous = this.estimatedRangeKm < 5;
+        if (isDangerous && this._navigationLocked) {
+            // Hiện cảnh báo nhưng KHÔNG tự động unlock
+            // User phải tự bấm "Đổi trạm"
+            console.warn('[DriverMode] ⚠️ Range < 5km! User should change station.');
+        }
+
+        // Skip nếu đang khoá navigation
+        if (this._navigationLocked) {
+            this._isEvaluating = false;
+            return;
+        }
+
         this._isEvaluating = true;
 
         const currentGen = this.generation;
@@ -724,43 +776,57 @@ export class DriverModeController {
 
             this.lastRecommendation = rec;
 
+            // Nếu đang khoá navigation → skip hoàn toàn, KHÔNG re-evaluate
+            if (this._navigationLocked) {
+                this._isEvaluating = false;
+                return;
+            }
+
             let leg1Result = null;
             let leg2Result = null;
 
             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
+                // Sổ panel chọn trạm (gọi hàm mới ở Bước 3)
+                this._showRecommendationPanel(rec.ranked_candidates);
+
+                // Vẫn vẽ route cho top 1 nhưng KHÔNG khoá
                 const top = rec.ranked_candidates[0];
+                const top5Candidates = (rec.ranked_candidates || []).slice(0, 5).map((c, idx) => {
+                    const stMatch = this.stations?.find(s => s.station_id === c.station_id);
+                    return {
+                        ...c,
+                        rank: c.rank ?? (idx + 1),
+                        station_id: c.station_id,
+                        latitude: c.latitude ?? stMatch?.latitude,
+                        longitude: c.longitude ?? stMatch?.longitude,
+                    };
+                }).filter(c => c.latitude != null && c.longitude != null);
+
                 const st = this.stations.find(s => s.station_id === top.station_id);
                 if (st && this.currentTrip?.destination) {
                     const stPos = { latitude: st.latitude, longitude: st.longitude };
-                    // If recommendation station changed, compute new diversion legs
-                    if (top.station_id !== this.lastRecommendedStationId) {
-                        try {
-                            leg1Result = await this.api.computeRoute(this.currentPos, stPos, {
-                                vehicle_category: this.currentVehicle.vehicle_type
-                            });
-                            leg2Result = await this.api.computeRoute(stPos, this.currentTrip.destination, {
-                                vehicle_category: this.currentVehicle.vehicle_type
-                            });
-                            if (this.generation === currentGen) {
-                                this.lastRecommendedStationId = top.station_id;
-                                this.lastDiversionLeg1 = leg1Result;
-                                this.lastDiversionLeg2 = leg2Result;
-                                if (leg1Result?.geometry) {
-                                    this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry);
-                                }
+                    try {
+                        leg1Result = await this.api.computeRoute(this.currentPos, stPos, {
+                            vehicle_category: this.currentVehicle.vehicle_type
+                        });
+                        leg2Result = await this.api.computeRoute(stPos, this.currentTrip.destination, {
+                            vehicle_category: this.currentVehicle.vehicle_type
+                        });
+                        if (this.generation === currentGen) {
+                            this.lastRecommendedStationId = top.station_id;
+                            this.lastDiversionLeg1 = leg1Result;
+                            this.lastDiversionLeg2 = leg2Result;
+                            if (leg1Result?.geometry) {
+                                this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry, top5Candidates);
                             }
-                        } catch (routeErr) {
-                            console.warn('Recommendation diversion route error:', routeErr);
                         }
-                    } else {
-                        leg1Result = this.lastDiversionLeg1;
-                        leg2Result = this.lastDiversionLeg2;
+                    } catch (routeErr) {
+                        console.warn('Recommendation diversion route error:', routeErr);
                     }
-                    this.map.renderStations(this.stations, top.station_id, top.service_type, null, rec.ranked_candidates);
-                } else {
-                    this.map.renderStations(this.stations, top.station_id, top.service_type, null, rec.ranked_candidates);
                 }
+                this.map.renderStations(this.stations, top.station_id, top.service_type, null, rec.ranked_candidates);
             } else {
+                this._hideRecommendationPanel();
                 this.lastRecommendedStationId = null;
                 this.lastDiversionLeg1 = null;
                 this.lastDiversionLeg2 = null;
@@ -811,6 +877,112 @@ export class DriverModeController {
         }
     }
 
+    _showRecommendationPanel(candidates) {
+        if (this._navigationLocked || !candidates || candidates.length === 0) return;
+
+        // Nếu đã có panel rồi → update, không tạo mới
+        let panel = document.getElementById('recommendation-panel');
+
+        if (!panel) {
+            // Tạo panel mới
+            panel = document.createElement('div');
+            panel.id = 'recommendation-panel';
+            panel.innerHTML = `
+                <div class="rec-panel-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8fafc; font-weight: 600; font-size: 13px; color: #0f172a;">
+                    <span>🔌 Tìm thấy trạm sạc gần đó</span>
+                    <button id="rec-panel-close" class="btn btn-sm btn-outline" style="padding: 2px 8px; font-size: 12px; line-height: 1; cursor: pointer; border: 1px solid #cbd5e1; border-radius: 6px; background: transparent; color: #64748b;">✕</button>
+                </div>
+                <div id="rec-panel-list" class="rec-panel-list" style="max-height: 360px; overflow-y: auto;"></div>
+                <div class="rec-panel-footer" style="padding: 8px 14px; background: #f8fafc; border-top: 1px solid #eee; font-size: 11px; color: #64748b; text-align: center;">
+                    <small>Chọn trạm để bắt đầu điều hướng</small>
+                </div>
+            `;
+            // Style panel
+            panel.style.cssText = `
+                position: fixed; top: 80px; right: 20px; z-index: 1000;
+                width: 320px; background: white; border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                font-family: sans-serif; overflow: hidden;
+            `;
+            document.body.appendChild(panel);
+
+            // Bind close button
+            document.getElementById('rec-panel-close').onclick = () => this._hideRecommendationPanel();
+        }
+
+        // Render danh sách candidates
+        const list = document.getElementById('rec-panel-list');
+        if (!list) return;
+
+        list.innerHTML = candidates.map((c, idx) => {
+            const st = this.stations.find(s => s.station_id === c.station_id);
+            const rankColors = { 1: '#f59e0b', 2: '#3b82f6', 3: '#10b981', 4: '#8b5cf6', 5: '#6b7280' };
+            const color = rankColors[idx + 1] || '#6b7280';
+            const etaMin = c.eta_to_station_s ? (c.eta_to_station_s / 60).toFixed(1) : '?';
+            const etaService = c.eta_to_service_complete_s ? (c.eta_to_service_complete_s / 60).toFixed(0) : '?';
+            const scoreText = c.score != null ? (c.score * 100).toFixed(0) + '%' : '—';
+            return `
+                <div class="rec-candidate-item" data-station-id="${c.station_id}" style="
+                    display: flex; align-items: center; gap: 10px;
+                    padding: 10px 12px; cursor: pointer;
+                    border-bottom: 1px solid #eee;
+                    ${idx === 0 ? 'background: #fffbeb;' : 'background: white;'}
+                ">
+                    <div style="
+                        width: 28px; height: 28px; border-radius: 50%;
+                        background: ${color}; color: white;
+                        display: flex; align-items: center; justify-content: center;
+                        font-weight: bold; font-size: 14px; flex-shrink: 0;
+                        border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    ">${idx + 1}</div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 600; font-size: 13px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${st?.name || c.station_id}</div>
+                        <div style="font-size: 11px; color: #64748b;">
+                            ETA ${etaMin} phút · Sạc ${etaService} phút
+                        </div>
+                    </div>
+                    <div style="
+                        background: ${idx === 0 ? '#f59e0b' : '#e5e7eb'};
+                        color: ${idx === 0 ? 'white' : '#475569'};
+                        padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+                    ">${scoreText}</div>
+                </div>
+            `;
+        }).join('');
+
+        // Bind click vào từng item
+        list.querySelectorAll('.rec-candidate-item').forEach(item => {
+            item.onmouseenter = () => {
+                item.style.filter = 'brightness(0.95)';
+            };
+            item.onmouseleave = () => {
+                item.style.filter = 'none';
+            };
+            item.onclick = () => {
+                const stationId = item.dataset.stationId;
+                this._hideRecommendationPanel();
+                this._selectStationAndNavigate(stationId);
+            };
+        });
+    }
+
+    _hideRecommendationPanel() {
+        const panel = document.getElementById('recommendation-panel');
+        if (panel) {
+            panel.remove();
+        }
+    }
+
+    _selectStationAndNavigate(stationId) {
+        // Khoá navigation
+        this._navigationLocked = true;
+        this._selectedStationId = stationId;
+
+        // Gọi navigateViaStationId với station đã chọn
+        this.navigateViaStationId(stationId);
+        this.renderTripActiveUI();
+    }
+
     // ─── Controls ──────────────────────────────────────────────────────
 
     async stepTrip() {
@@ -847,6 +1019,10 @@ export class DriverModeController {
         this.lastDiversionLeg2 = null;
         this.remainingTripDistanceKm = 0.0;
 
+        this._navigationLocked = false;
+        this._selectedStationId = null;
+        this._hideRecommendationPanel();
+
         this.session.driver_id = null;
         this.session.vehicle_id = null;
         this.session.vehicle_category = null;
@@ -868,19 +1044,39 @@ export class DriverModeController {
     }
 
     cancelTrip() {
+        this._navigationLocked = false;
+        this._selectedStationId = null;
+        this._hideRecommendationPanel();
         this.returnToAvailable();
+    }
+
+    unlockNavigation() {
+        if (!this._navigationLocked) return;
+        this._navigationLocked = false;
+        this._selectedStationId = null;
+        // Ẩn panel nếu đang mở
+        this._hideRecommendationPanel();
+        // Re-trigger evaluate
+        this.lastEvalTimestamp = 0; // force re-evaluate
+        this._evaluateAtCurrentPosition().catch(() => {});
+        this._onReplayStep({}).catch(() => {});
+        this.renderTripActiveUI();
     }
 
     async navigateViaStation() {
         if (!this.lastRecommendation?.has_recommendation || !this.lastRecommendation.ranked_candidates?.length) return;
         const top = this.lastRecommendation.ranked_candidates[0];
-        await this.navigateViaStationId(top.station_id);
+        this._hideRecommendationPanel();
+        this._selectStationAndNavigate(top.station_id);
     }
 
     async navigateViaStationId(stationId) {
         const st = this.stations.find(s => s.station_id === stationId);
         if (!st) return;
 
+        this._navigationLocked = true;
+        this._selectedStationId = stationId;
+        this._hideRecommendationPanel();
         this.closeStationsDrawer();
 
         const currentPos = this.currentPos || (this.currentTrip?.origin ? {
@@ -906,8 +1102,17 @@ export class DriverModeController {
                 if (leg1?.geometry) {
                     this.lastRecommendedStationId = st.station_id;
                     this.lastDiversionLeg1 = leg1;
-                    this.lastDiversionLeg2 = leg2;
-                    this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry);
+                    const top5Candidates = (this.lastRecommendation?.ranked_candidates || []).slice(0, 5).map((c, idx) => {
+                        const stMatch = this.stations?.find(s => s.station_id === c.station_id);
+                        return {
+                            ...c,
+                            rank: c.rank ?? (idx + 1),
+                            station_id: c.station_id,
+                            latitude: c.latitude ?? stMatch?.latitude,
+                            longitude: c.longitude ?? stMatch?.longitude,
+                        };
+                    }).filter(c => c.latitude != null && c.longitude != null);
+                    this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry, top5Candidates);
                     this.map.fitBoundsToActive();
 
                     // Combine Leg 1 and Leg 2 for full diversion driving
@@ -1646,13 +1851,10 @@ export class DriverModeController {
         this.currentPos = { latitude: orig.latitude, longitude: orig.longitude };
         this.matchedPos = null;
 
-        const selectedTripId = document.getElementById('select-driver-trip')?.value;
-        const baseTrip = this.currentTrip || this.trips.find(t => t.trip_id === selectedTripId) || this.trips[0];
-        const dest = this.customDestination || baseTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
+        const dest = this.customDestination || { latitude: 21.0285, longitude: 105.8542 };
 
-        if (!this.currentVehicle && baseTrip?.vehicle_id) {
-            this.currentVehicle = this.vehicles.find(v => v.vehicle_id === baseTrip.vehicle_id) || this.vehicles[0];
-        }
+        const origEl = document.getElementById('text-origin-coords');
+        if (origEl) origEl.textContent = `${orig.latitude.toFixed(4)}, ${orig.longitude.toFixed(4)}`;
 
         await this._updateCustomRoute(orig, dest);
     }
@@ -1661,13 +1863,10 @@ export class DriverModeController {
         if (!dest) return;
         this.customDestination = dest;
 
-        const selectedTripId = document.getElementById('select-driver-trip')?.value;
-        const baseTrip = this.currentTrip || this.trips.find(t => t.trip_id === selectedTripId) || this.trips[0];
-        const origin = this.customOrigin || this.currentPos || baseTrip?.origin || { latitude: 21.1038023, longitude: 106.0023809 };
+        const origin = this.customOrigin || this.currentPos || { latitude: 20.9849, longitude: 105.7935 };
 
-        if (!this.currentVehicle && baseTrip?.vehicle_id) {
-            this.currentVehicle = this.vehicles.find(v => v.vehicle_id === baseTrip.vehicle_id) || this.vehicles[0];
-        }
+        const destEl = document.getElementById('text-dest-coords');
+        if (destEl) destEl.textContent = `${dest.latitude.toFixed(4)}, ${dest.longitude.toFixed(4)}`;
 
         await this._updateCustomRoute(origin, dest);
     }
@@ -1723,43 +1922,44 @@ export class DriverModeController {
         const container = document.getElementById('driver-panel-content');
         if (!container) return;
 
-        const tripOptions = this.trips.map(t => `
-            <option value="${t.trip_id}">
-                ${t.trip_id} — ${this._getScenarioDescription(t.scenario_id)} (${(t.planned_distance_m / 1000).toFixed(1)} km)
-            </option>
-        `).join('');
+        const origLat = (this.customOrigin?.latitude || 20.9849).toFixed(4);
+        const origLng = (this.customOrigin?.longitude || 105.7935).toFixed(4);
+        const destLat = (this.customDestination?.latitude || 21.0285).toFixed(4);
+        const destLng = (this.customDestination?.longitude || 105.8542).toFixed(4);
 
         container.innerHTML = `
             <div class="driver-available-card">
                 <div class="card-status-indicator">
                     <span class="pulse-dot green"></span>
-                    <h3>Sẵn sàng nhận chuyến</h3>
+                    <h3>Sẵn sàng bắt đầu hành trình</h3>
                 </div>
                 <p class="text-muted" style="margin-top: 4px; font-size: 13px;">
-                    Bản đồ dẫn đường thông minh thời gian thực. Chọn chuyến đi để bắt đầu:
+                    Dẫn đường thông minh & phân tích lộ trình thói quen. Thiết lập điểm xuất phát và điểm đến:
                 </p>
 
-                <div class="form-group mt-3">
-                    <label style="font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--text-muted);">
-                        Chọn chuyến đi:
-                    </label>
-                    <select id="select-driver-trip" class="form-control" style="margin-top: 6px;">
-                        ${tripOptions}
-                    </select>
+                <div class="endpoints-box mt-3" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
+                        <span style="color: #10b981; font-weight: 600;">📍 Điểm A (Xuất phát):</span>
+                        <span id="text-origin-coords" class="text-muted" style="font-size: 12px; font-family: monospace;">${origLat}, ${origLng}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+                        <span style="color: #ef4444; font-weight: 600;">🏁 Điểm B (Điểm đến):</span>
+                        <span id="text-dest-coords" class="text-muted" style="font-size: 12px; font-family: monospace;">${destLat}, ${destLng}</span>
+                    </div>
                 </div>
 
-                <div class="driver-actions mt-4">
-                    <button id="btn-accept-trip" class="btn btn-primary btn-lg btn-block">
-                        Nhận chuyến đi
-                    </button>
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <div class="driver-actions mt-3">
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
                         <button id="btn-pick-origin-map" class="btn btn-outline flex-1" style="font-size: 13px;">
-                            📍 Đổi điểm xuất phát (A)
+                            📍 Đổi điểm đi (A)
                         </button>
                         <button id="btn-pick-dest-map" class="btn btn-outline flex-1" style="font-size: 13px;">
                             🏁 Đổi điểm đến (B)
                         </button>
                     </div>
+                    <button id="btn-accept-trip" class="btn btn-primary btn-lg btn-block">
+                        🚀 Tạo lộ trình & Bắt đầu
+                    </button>
                     <button id="btn-go-offline" class="btn btn-outline btn-sm mt-2">
                         Chuyển ngoại tuyến
                     </button>
@@ -1768,8 +1968,7 @@ export class DriverModeController {
         `;
 
         document.getElementById('btn-accept-trip')?.addEventListener('click', () => {
-            const tripId = document.getElementById('select-driver-trip')?.value;
-            this.assignTrip(tripId);
+            this.assignTrip();
         });
 
         document.getElementById('btn-pick-origin-map')?.addEventListener('click', (e) => {
@@ -2099,6 +2298,10 @@ export class DriverModeController {
             if (btnPause) {
                 btnPause.className = pauseBtnClass;
             }
+            const changeStationBtn = document.getElementById('btn-change-station');
+            if (changeStationBtn) {
+                changeStationBtn.style.display = this._navigationLocked ? 'block' : 'none';
+            }
             return;
         }
 
@@ -2189,6 +2392,10 @@ export class DriverModeController {
                         <button id="btn-driver-replay-pause" class="${pauseBtnClass}">⏸ Tạm dừng</button>
                         <button id="btn-driver-replay-step" class="btn btn-outline btn-sm flex-1">⏭ Từng bước</button>
                     </div>
+                    <button id="btn-change-station" class="btn btn-sm btn-outline-secondary" style="margin-top: 6px; width: 100%; display: ${this._navigationLocked ? 'block' : 'none'};"
+                        onclick="driverMode.unlockNavigation()">
+                        🔄 Đổi trạm sạc khác
+                    </button>
                     <button id="btn-complete-trip" class="btn btn-outline btn-sm btn-block">
                         ✓ Hoàn thành chuyến đi
                     </button>
@@ -2206,6 +2413,9 @@ export class DriverModeController {
             this.renderTripActiveUI();
         });
         document.getElementById('btn-driver-replay-step')?.addEventListener('click', () => this.stepTrip());
+        document.getElementById('btn-change-station')?.addEventListener('click', () => {
+            this.unlockNavigation();
+        });
         document.getElementById('btn-nav-station')?.addEventListener('click', () => this.navigateViaStation());
         document.getElementById('btn-switch-post-trip-modal')?.addEventListener('click', () => {
             this.chargingIntent = 'AT_DESTINATION';
@@ -2263,6 +2473,10 @@ export class DriverModeController {
     }
 
     renderTripCompleteUI() {
+        this._navigationLocked = false;
+        this._selectedStationId = null;
+        this._hideRecommendationPanel();
+
         const container = document.getElementById('driver-panel-content');
         if (!container) return;
 

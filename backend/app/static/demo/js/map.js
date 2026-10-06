@@ -168,7 +168,8 @@ export class DemoMap {
             recommendRoute: null,
             stations: null,
             driver: null,
-            markers: null
+            markers: null,
+            h3Overlay: null
         };
 
         // State markers
@@ -178,6 +179,7 @@ export class DemoMap {
         this.destinationMarker = null;
         this.recommendedStationMarker = null;
         this.stationMarkers = new Map();
+        this.candidateBadgeMarkers = [];
 
         this.init(options);
     }
@@ -204,6 +206,7 @@ export class DemoMap {
         this.layers.stations = L.layerGroup().addTo(this.map);
         this.layers.driver = L.layerGroup().addTo(this.map);
         this.layers.markers = L.layerGroup().addTo(this.map);
+        this.layers.h3Overlay = L.layerGroup().addTo(this.map);
     }
 
     invalidateSize() {
@@ -223,23 +226,169 @@ export class DemoMap {
     clearRoutes() {
         this.layers.directRoute.clearLayers();
         this.layers.recommendRoute.clearLayers();
+        this.candidateBadgeMarkers = [];
     }
 
     clearRecommendationRoute() {
         this.layers.recommendRoute.clearLayers();
+        this.candidateBadgeMarkers = [];
+    }
+
+    clearTopCandidatesBadges() {
+        if (this.candidateBadgeMarkers && this.candidateBadgeMarkers.length > 0) {
+            this.candidateBadgeMarkers.forEach(m => {
+                if (this.layers.recommendRoute?.hasLayer(m)) {
+                    this.layers.recommendRoute.removeLayer(m);
+                }
+            });
+            this.candidateBadgeMarkers = [];
+        }
     }
 
     clearAll() {
         this.clearRoutes();
+        this.clearH3Overlay();
         this.layers.stations.clearLayers();
         this.layers.driver.clearLayers();
         this.layers.markers.clearLayers();
         this.stationMarkers.clear();
+        this.candidateBadgeMarkers = [];
         this.driverRawMarker = null;
         this.driverMatchedMarker = null;
         this.originMarker = null;
         this.destinationMarker = null;
         this.recommendedStationMarker = null;
+    }
+
+    /**
+     * Render H3 hex cells as overlay on map.
+     * @param {Array} coords - Array of [lat, lng] coordinates
+     * @param {string} fillColor - Fill color (default: red)
+     * @param {number} resolution - H3 resolution (default: 8 = ~460m hex)
+     * @param {number} opacity - Fill opacity (default: 0.3)
+     */
+    renderH3Overlay(coords, fillColor = '#ef4444', resolution = 8, opacity = 0.3) {
+        // Clear existing H3 overlay
+        this.clearH3Overlay();
+
+        if (!coords || coords.length < 2) return;
+        const h3Lib = typeof h3 !== 'undefined' ? h3 : (typeof window !== 'undefined' ? window.h3 : null);
+        if (!h3Lib) {
+            console.warn('[Map] h3 library not loaded');
+            return;
+        }
+
+        // Convert all coordinates to H3 cells
+        const hexSet = new Set();
+        for (const pt of coords) {
+            try {
+                const p1 = pt.latitude ?? pt[0];
+                const p2 = pt.longitude ?? pt[1];
+                const lat = Math.abs(p1) <= 90 ? p1 : p2;
+                const lng = Math.abs(p1) <= 90 ? p2 : p1;
+                const hexId = h3Lib.latLngToCell(lat, lng, resolution);
+                if (hexId) hexSet.add(hexId);
+            } catch (e) {
+                // Skip invalid coordinates
+            }
+        }
+
+        // Draw each hex as polygon
+        for (const hexId of hexSet) {
+            try {
+                const boundary = h3Lib.cellToBoundary(hexId);
+                const latLngs = boundary.map(v => Math.abs(v[0]) <= 90 ? [v[0], v[1]] : [v[1], v[0]]);
+
+                const polygon = L.polygon(latLngs, {
+                    color: fillColor,
+                    weight: 1,
+                    opacity: 0.6,
+                    fillColor: fillColor,
+                    fillOpacity: opacity,
+                });
+
+                polygon.bindTooltip(`H3: ${hexId.substring(0, 12)}...`);
+                polygon.addTo(this.layers.h3Overlay);
+            } catch (e) {
+                // Skip invalid hexes
+            }
+        }
+    }
+
+    /**
+     * Render heatmap overlay showing familiarity/frequency of route segments.
+     * @param {Array} coords - Array of [lat, lng] coordinates
+     * @param {number} resolution - H3 resolution (default: 8)
+     */
+    renderFamiliarityHeatmap(coords, resolution = 8) {
+        // Clear existing
+        this.clearH3Overlay();
+
+        if (!coords || coords.length < 2) return;
+        const h3Lib = typeof h3 !== 'undefined' ? h3 : (typeof window !== 'undefined' ? window.h3 : null);
+        if (!h3Lib) {
+            console.warn('[Map] h3 library not loaded');
+            return;
+        }
+
+        // Count hex frequency
+        const hexCount = {};
+        for (const pt of coords) {
+            try {
+                const p1 = pt.latitude ?? pt[0];
+                const p2 = pt.longitude ?? pt[1];
+                const lat = Math.abs(p1) <= 90 ? p1 : p2;
+                const lng = Math.abs(p1) <= 90 ? p2 : p1;
+                const hexId = h3Lib.latLngToCell(lat, lng, resolution);
+                if (hexId) {
+                    hexCount[hexId] = (hexCount[hexId] || 0) + 1;
+                }
+            } catch (e) {}
+        }
+
+        const counts = Object.values(hexCount);
+        if (counts.length === 0) return;
+
+        // Find max for normalization
+        const maxCount = Math.max(...counts);
+
+        // Color scale: blue (cold/low) -> red (hot/high)
+        const colorScale = (count) => {
+            const ratio = count / maxCount;
+            if (ratio > 0.75) return '#dc2626';      // red-600
+            if (ratio > 0.5) return '#f97316';       // orange-500
+            if (ratio > 0.25) return '#eab308';      // yellow-500
+            return '#3b82f6';                         // blue-500
+        };
+
+        // Draw hexes with colors
+        for (const [hexId, count] of Object.entries(hexCount)) {
+            try {
+                const boundary = h3Lib.cellToBoundary(hexId);
+                const latLngs = boundary.map(v => Math.abs(v[0]) <= 90 ? [v[0], v[1]] : [v[1], v[0]]);
+                const color = colorScale(count);
+
+                const polygon = L.polygon(latLngs, {
+                    color: color,
+                    weight: 1,
+                    opacity: 0.7,
+                    fillColor: color,
+                    fillOpacity: 0.35,
+                });
+
+                polygon.bindTooltip(`Count: ${count}`);
+                polygon.addTo(this.layers.h3Overlay);
+            } catch (e) {}
+        }
+    }
+
+    /**
+     * Clear H3 overlay.
+     */
+    clearH3Overlay() {
+        if (this.layers?.h3Overlay) {
+            this.layers.h3Overlay.clearLayers();
+        }
     }
 
     renderDirectRoute(geometry) {
@@ -272,6 +421,10 @@ export class DemoMap {
             opacity: 0.9,
             lineJoin: 'round'
         }).addTo(this.layers.directRoute);
+
+        if (typeof window !== 'undefined' && window.simMode?.h3OverlayEnabled) {
+            this.renderFamiliarityHeatmap(coords, 8);
+        }
 
         return line;
     }
@@ -312,12 +465,105 @@ export class DemoMap {
     }
 
     /**
+     * Render numbered ranking badges for top candidates (Rank 1 to 5).
+     * @param {Array<{station_id: string, latitude: number, longitude: number, rank?: number}>} candidates
+     */
+    renderTopCandidatesBadges(candidates) {
+        this.clearTopCandidatesBadges();
+        if (!Array.isArray(candidates) || candidates.length === 0) return;
+
+        const RANK_COLORS = {
+            1: '#f59e0b',  // cam
+            2: '#3b82f6',  // xanh dương
+            3: '#10b981',  // xanh lá
+            4: '#8b5cf6',  // tím
+            5: '#6b7280',  // xám
+        };
+
+        const top5 = candidates.slice(0, 5);
+        top5.forEach((cand, idx) => {
+            if (!cand) return;
+            const rank = cand.rank ?? (idx + 1);
+            let lat = cand.latitude;
+            let lng = cand.longitude;
+
+            if (lat == null || lng == null) {
+                const stMarker = this.stationMarkers?.get(cand.station_id);
+                if (stMarker && typeof stMarker.getLatLng === 'function') {
+                    const pos = stMarker.getLatLng();
+                    lat = pos.lat;
+                    lng = pos.lng;
+                }
+            }
+
+            if (lat == null || lng == null) return;
+
+            const color = RANK_COLORS[rank] || '#6b7280';
+            const borderWidth = rank === 1 ? '3px' : '2px';
+            const zIndexOffset = 1200 - rank;
+
+            const markerHtml = `
+                <div style="
+                    background: ${color};
+                    color: white;
+                    border-radius: 50%;
+                    width: 36px;
+                    height: 36px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    font-size: 16px;
+                    border: ${borderWidth} solid white;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                    box-sizing: border-box;
+                    user-select: none;
+                    cursor: pointer;
+                ">${rank}</div>
+            `;
+
+            const icon = L.divIcon({
+                className: 'top-candidate-badge-icon',
+                html: markerHtml,
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+            });
+
+            const marker = L.marker([lat, lng], {
+                icon: icon,
+                zIndexOffset: zIndexOffset
+            });
+
+            if (cand.station_id) {
+                marker.bindTooltip(String(cand.station_id), {
+                    direction: 'top',
+                    offset: [0, -18]
+                });
+
+                if (this.stationMarkers?.has(cand.station_id)) {
+                    marker.on('click', () => {
+                        const sm = this.stationMarkers.get(cand.station_id);
+                        if (sm && typeof sm.openPopup === 'function') {
+                            sm.openPopup();
+                        }
+                    });
+                }
+            }
+
+            marker.addTo(this.layers.recommendRoute);
+            this.candidateBadgeMarkers.push(marker);
+        });
+    }
+
+    /**
      * Render recommended diversion routes:
      * Leg 1: Driver -> Station
      * Leg 2: Station -> Destination (if available)
+     * Optional candidates array for top candidate badges.
      */
-    renderRecommendationRoute(leg1Geometry, leg2Geometry = null) {
+    renderRecommendationRoute(leg1Geometry, leg2Geometry = null, candidates = null) {
         this.layers.recommendRoute.clearLayers();
+        this.candidateBadgeMarkers = [];
 
         const boundsCoords = [];
 
@@ -354,6 +600,10 @@ export class DemoMap {
                     dashArray: '6, 6'
                 }).addTo(this.layers.recommendRoute);
             }
+        }
+
+        if (Array.isArray(candidates) && candidates.length > 0) {
+            this.renderTopCandidatesBadges(candidates);
         }
 
         return boundsCoords;

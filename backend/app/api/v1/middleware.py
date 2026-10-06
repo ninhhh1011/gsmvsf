@@ -3,7 +3,7 @@ API Middleware for rate limiting and request logging.
 """
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 import time
 from collections import defaultdict
 
@@ -18,6 +18,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next) -> Response:
         client_ip = request.client.host
+        path = request.url.path
+        if path.startswith("/api/v1/drivers/") or path.startswith("/api/v1/debug/") or path == "/health":
+            return await call_next(request)
+
         now = time.time()
         
         # Clean old requests
@@ -28,9 +32,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         
         # Check rate limit
         if len(self.requests[client_ip]) >= self.requests_per_minute:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=429,
-                detail="Rate limit exceeded. Try again later."
+                content={"detail": "Rate limit exceeded. Try again later."}
             )
         
         # Record request

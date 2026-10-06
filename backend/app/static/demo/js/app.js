@@ -6,12 +6,14 @@ import { ApiClient } from './api.js';
 import { DemoMap } from './map.js';
 import { DriverModeController } from './driver_mode.js';
 import { TrajectoryReplayController } from './replay.js';
+import { SimModeController } from './sim_mode.js';
 
 class DemoApp {
     constructor() {
         this.api = new ApiClient();
         this.map = null;
         this.driverMode = null;
+        this.simMode = null;
         this.replay = null;
 
         // Shared session context across all controllers
@@ -49,6 +51,12 @@ class DemoApp {
             this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios);
             await this.driverMode.init();
             window.driverMode = this.driverMode;
+
+            // Initialize Simulation Mode Controller
+            this.simMode = new SimModeController(this.api, this.map);
+            this.simMode.setCatalogs(this.scenarios, this.vehicles, this.stations);
+            this.simMode.init();
+            window.simMode = this.simMode;
 
             // Link app.replay to driverMode.replay to maintain single replay instance
             this.replay = this.driverMode.replay;

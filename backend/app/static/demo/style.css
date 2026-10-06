@@ -1773,6 +1773,48 @@ body {
     box-shadow: 0 0 12px rgba(2, 132, 199, 0.5);
 }
 
+.btn-fab-h3 {
+    background: #ffffff;
+    color: #1d4ed8;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 10px 16px;
+    border-radius: 30px;
+    border: 1.5px solid #93c5fd;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.18);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-fab-h3:hover {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+}
+
+.btn-fab-h3.active,
+.btn-fab-h3.btn-primary {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #1d4ed8 !important;
+    box-shadow: 0 0 16px rgba(37, 99, 235, 0.6) !important;
+}
+
+.btn-outline-secondary {
+    background: #ffffff;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.btn-outline-secondary:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
 /* Map Picker Banner Toast */
 .map-picker-banner {
     position: absolute;

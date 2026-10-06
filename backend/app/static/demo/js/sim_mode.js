@@ -34,6 +34,10 @@ export class SimModeController {
         this.lastRecommendation = null;
         this.lastCandidateResult = null;
         this.generation = 1;
+
+        // H3 Overlay toggle
+        this.h3OverlayEnabled = false;
+        this.h3ToggleBtn = null;
     }
 
     setCatalogs(scenarios, vehicles, stations) {
@@ -46,6 +50,7 @@ export class SimModeController {
         this.bindEvents();
         this.renderScenarioQuickSelect();
         this.renderVehicleSelect();
+        this.initH3Controls();
 
         // Bind map click handler for coordinate picking
         this.map.onMapClick((coords) => {
@@ -57,6 +62,100 @@ export class SimModeController {
                 this.setPickingMode(null);
             }
         });
+    }
+
+    initH3Controls() {
+        const btnMap = document.getElementById('btn-h3-overlay');
+        const btnHeader = document.getElementById('btn-h3-overlay-header');
+
+        if (btnMap) {
+            this.h3ToggleBtn = btnMap;
+            btnMap.onclick = () => this.toggleH3Overlay();
+        }
+        if (btnHeader) {
+            btnHeader.onclick = () => this.toggleH3Overlay();
+        }
+    }
+
+    toggleH3Overlay() {
+        this.h3OverlayEnabled = !this.h3OverlayEnabled;
+
+        const syncBtn = (btn) => {
+            if (!btn) return;
+            if (this.h3OverlayEnabled) {
+                btn.classList.add('active', 'btn-primary');
+                btn.classList.remove('btn-outline-secondary');
+                btn.textContent = '🔷 Ẩn H3';
+            } else {
+                btn.classList.remove('active', 'btn-primary');
+                btn.classList.add('btn-outline-secondary');
+                btn.textContent = '🔷 H3 Overlay';
+            }
+        };
+
+        syncBtn(document.getElementById('btn-h3-overlay'));
+        syncBtn(document.getElementById('btn-h3-overlay-header'));
+
+        if (this.h3OverlayEnabled) {
+            // Get current route coordinates
+            const coords = this.getCurrentRouteCoords();
+            if (coords && coords.length > 0) {
+                this.map.renderFamiliarityHeatmap(coords, 8);
+            } else {
+                console.warn('[SimMode] No route coordinates for H3 overlay');
+            }
+        } else {
+            this.map.clearH3Overlay();
+        }
+    }
+
+    /**
+     * Get current route coordinates from map/layer.
+     * Uses the direct route polyline if available.
+     */
+    getCurrentRouteCoords() {
+        // Try to get from map's direct route layer
+        if (this.map && this.map.layers && this.map.layers.directRoute) {
+            const layers = this.map.layers.directRoute.getLayers();
+            if (layers && layers.length > 0) {
+                const lastLayer = layers[layers.length - 1];
+                if (typeof lastLayer.getLatLngs === 'function') {
+                    const latLngs = lastLayer.getLatLngs();
+                    const flat = Array.isArray(latLngs[0]) ? latLngs.flat() : latLngs;
+                    return flat.map(ll => [ll.lat, ll.lng]);
+                }
+            }
+        }
+        // Fallback: driverMode fullRouteCoords or directRouteGeometry
+        if (window.driverMode?.fullRouteCoords?.length > 0) {
+            return window.driverMode.fullRouteCoords;
+        }
+        if (window.driverMode?.directRouteGeometry?.length > 0) {
+            return window.driverMode.directRouteGeometry;
+        }
+        // Fallback: check recommendRoute layer if directRoute is empty
+        if (this.map && this.map.layers && this.map.layers.recommendRoute) {
+            const layers = this.map.layers.recommendRoute.getLayers();
+            for (const l of layers) {
+                if (typeof l.getLatLngs === 'function') {
+                    const latLngs = l.getLatLngs();
+                    const flat = Array.isArray(latLngs[0]) ? latLngs.flat() : latLngs;
+                    if (flat.length > 0) {
+                        return flat.map(ll => [ll.lat, ll.lng]);
+                    }
+                }
+            }
+        }
+        // Fallback: use current driverMode custom endpoints or sim mode endpoints
+        const orig = window.driverMode?.customOrigin || this.origin || { latitude: 20.9849, longitude: 105.7935 };
+        const dest = window.driverMode?.customDestination || this.destination || { latitude: 21.0285, longitude: 105.8542 };
+        if (orig && dest) {
+            return [
+                [orig.latitude, orig.longitude],
+                [dest.latitude, dest.longitude]
+            ];
+        }
+        return [];
     }
 
     setPickingMode(mode) {
@@ -353,6 +452,13 @@ export class SimModeController {
                 this.map.renderDirectRoute(routeResult.geometry);
             }
 
+            if (this.h3OverlayEnabled) {
+                const coords = this.getCurrentRouteCoords();
+                if (coords.length > 0) {
+                    this.map.renderFamiliarityHeatmap(coords, 8);
+                }
+            }
+
             const candidatesList = candResult.candidates || [];
             const recStationId = recResult?.has_recommendation ? recResult.recommended_station_id : null;
             const recService = recResult?.has_recommendation ? recResult.recommended_service_type : null;
@@ -373,6 +479,17 @@ export class SimModeController {
             // Render diversion route to recommended station
             if (recResult?.has_recommendation && recResult.ranked_candidates?.length > 0) {
                 const top = recResult.ranked_candidates[0];
+                const top5Candidates = (recResult.ranked_candidates || []).slice(0, 5).map((c, idx) => {
+                    const stMatch = this.stations?.find(s => s.station_id === c.station_id);
+                    return {
+                        ...c,
+                        rank: c.rank ?? (idx + 1),
+                        station_id: c.station_id,
+                        latitude: c.latitude ?? stMatch?.latitude,
+                        longitude: c.longitude ?? stMatch?.longitude,
+                    };
+                }).filter(c => c.latitude != null && c.longitude != null);
+
                 const st = this.stations.find(s => s.station_id === top.station_id);
                 if (st) {
                     const stPos = { latitude: st.latitude, longitude: st.longitude };
@@ -384,7 +501,7 @@ export class SimModeController {
                             vehicle_category: vehicle.vehicle_type
                         });
                         if (this.generation !== currentGen) return;
-                        this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry);
+                        this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry, top5Candidates);
                     } catch (routeErr) {
                         console.warn('Diversion route error:', routeErr);
                     }
@@ -421,6 +538,9 @@ export class SimModeController {
             if (this.generation !== currentGen) return;
             console.error('Simulation execution failed:', err);
             this.map.clearRoutes();
+            if (this.h3OverlayEnabled) {
+                this.map.clearH3Overlay();
+            }
             this.lastRecommendation = null;
             this.renderErrorState(err);
         } finally {
@@ -503,3 +623,5 @@ export class SimModeController {
         }
     }
 }
+
+export const SimulationModeController = SimModeController;

@@ -6,6 +6,9 @@
     <title>VinFast EV — Điều Hướng & Đề Xuất Năng Lượng (Driver Cockpit)</title>
     <!-- Leaflet 1.9.4 Local CSS -->
     <link rel="stylesheet" href="/demo/static/vendor/leaflet/leaflet.css" />
+    <!-- H3-js Hexagonal Spatial Indexing -->
+    <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+    <script src="https://unpkg.com/h3-js@4.1.0/h3-js.min.js"></script>
     <!-- App Design System Stylesheet -->
     <link rel="stylesheet" href="/demo/static/style.css" />
 </head>
@@ -70,7 +73,10 @@
         </div>
 
         <!-- Actions -->
-        <div class="header-actions">
+        <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
+            <button id="btn-h3-overlay-header" class="btn btn-sm btn-outline" style="border-color: #3b82f6; color: #60a5fa; font-weight: 600;" title="Bật/Tắt H3 Familiar Hex Overlay">
+                🔷 H3 Overlay
+            </button>
             <!-- Driver status badge in header for clear status reading -->
             <span id="driver-status-badge" class="status-badge badge-available">SẴN SÀNG <span class="sr-only">AVAILABLE</span></span>
         </div>
@@ -93,6 +99,9 @@
                 </button>
                 <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
                     🏁 Đổi điểm đến (B)
+                </button>
+                <button id="btn-h3-overlay" class="btn btn-fab-h3 btn-outline-secondary" title="Hiện Familiar Routes (H3 Hex Overlay)">
+                    🔷 H3 Overlay
                 </button>
             </div>
 

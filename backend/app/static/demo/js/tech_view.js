@@ -505,7 +505,12 @@ export class TechViewController {
         }
         if (this.map.layers?.recommendRoute) {
             this.map.layers.recommendRoute.eachLayer(l => {
-                if (l.setStyle) l.setStyle({ opacity: this.layerToggles.recommendRoute ? 0.95 : 0 });
+                if (typeof l.setStyle === 'function') {
+                    l.setStyle({ opacity: this.layerToggles.recommendRoute ? 0.95 : 0 });
+                } else if (typeof l.getElement === 'function') {
+                    const el = l.getElement();
+                    if (el) el.style.display = this.layerToggles.recommendRoute ? '' : 'none';
+                }
             });
         }
     }

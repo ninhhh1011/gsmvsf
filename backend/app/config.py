@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # Route History Database (separate from main EV recommendation DB)
     # Use localhost:5432 for Windows host access (Docker port mapping)
     route_history_database_url: str = "postgresql+asyncpg://postgres:postgres@ev_db:5432/route_history_db"
-    route_history_database_url_sync: str = "postgresql://postgres:postgres@localhost:5432/route_history_db"
+    route_history_database_url_sync: str = "postgresql://postgres:postgres@127.0.0.1:5432/route_history_db"
 
     # Route Familiarity Feature
     enable_route_familiarity: bool = True  # Feature flag - enabled for H3 route history

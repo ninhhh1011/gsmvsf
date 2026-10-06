@@ -56,6 +56,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation
       - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/ev_recommendation
+      - ROUTE_HISTORY_DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/route_history_db
+      - ROUTE_HISTORY_DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/route_history_db
       - GRAPHHOPPER_BASE_URL=http://graphhopper:8989
       - DATASET_PATH=/app/dataset_v1
       - PRIMARY_PBF_PATH=/app/dataset_v1/map/raw/hanoi-patched.osm.pbf
@@ -89,6 +91,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ev_recommendation
       - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/ev_recommendation
+      - ROUTE_HISTORY_DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/route_history_db
+      - ROUTE_HISTORY_DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/route_history_db
       - GRAPHHOPPER_BASE_URL=http://graphhopper:8989
       - DATASET_PATH=/app/dataset_v1
       - PRIMARY_PBF_PATH=/app/dataset_v1/map/raw/hanoi-patched.osm.pbf
@@ -121,6 +125,8 @@ services:
     container_name: ev_frontend
     ports:
       - "3000:80"
+    volumes:
+      - ./backend/app/static/demo:/usr/share/nginx/html:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/nginx-health"]
       interval: 10s
