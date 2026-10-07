@@ -27,8 +27,6 @@ export function renderActiveCockpitView(state) {
     const range = state.range.toFixed(0);
     return {
         ...renderBatteryView(state),
-        distanceText: `${distance} km`,
-        etaText: `${eta} phút`,
         distanceMarkup: `${distance} <small>km</small>`,
         etaMarkup: `${eta} <small>phút</small><span class="sr-only">min</span>`,
         rangeMarkup: `${range} <small>km</small>`

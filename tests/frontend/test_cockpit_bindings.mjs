@@ -143,7 +143,7 @@ test('cockpit renderer owns SOC colors, classes, and active metric formatting', 
         batteryWidth: '18%', batteryClass: 'battery-bar-fill bg-danger', sliderValue: '18'
     });
     assert.deepEqual(renderActiveCockpitView({ distance: 12.34, eta: '8', soc: 18, range: 42.4 }), {
-        distanceText: '12.3 km', etaText: '8 phút', socText: '18%',
+        socText: '18%',
         distanceMarkup: '12.3 <small>km</small>', etaMarkup: '8 <small>phút</small><span class="sr-only">min</span>',
         rangeMarkup: '42 <small>km</small>',
         socClass: 'stat-value text-danger', rangeText: '42 km', batteryWidth: '18%',
