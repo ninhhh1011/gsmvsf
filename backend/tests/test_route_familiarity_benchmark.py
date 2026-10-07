@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 
 from scripts.benchmark_route_familiarity import (
     BoundedHistoryRepository,
@@ -16,6 +17,15 @@ def test_benchmark_covers_required_dataset_sizes_and_candidate_fanout():
     assert [(case.history_size, case.candidate_count) for case in benchmark_cases()] == [
         (150, 30), (10_000, 30), (100_000, 30)
     ]
+
+
+def test_personal_explain_query_uses_only_route_table_columns():
+    source = Path("scripts/benchmark_route_familiarity.py").read_text(encoding="utf-8")
+    personal_plan = source.split("personal_plan = await conn.fetch", 1)[1].split(
+        "community_plan = await conn.fetch", 1)[0]
+    assert "active_rank" not in personal_plan
+    assert "driver_rank" not in personal_plan
+    assert "ORDER BY completed_at DESC, trip_id DESC LIMIT 51" in personal_plan
 
 
 def test_benchmark_default_maps_compose_database_name_to_localhost():

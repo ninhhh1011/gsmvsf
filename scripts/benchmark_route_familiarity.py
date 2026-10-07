@@ -139,7 +139,7 @@ class BoundedHistoryRepository:
 
 
 def benchmark_database_rows(size, signature, as_of):
-    """Build 50 personal rows and history for exactly 100 community drivers."""
+    """Build 50 personal rows and distribute community history across up to 101 drivers."""
     rows = []
     for index in range(size):
         personal = index < 50
@@ -248,8 +248,7 @@ async def _postgres_measure(database_url, signature):
                 await service.assess_many("phase4-benchmark-personal", candidates, as_of)
             evaluation = await _measure_async(evaluate)
             personal_plan = await conn.fetch("""EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m,
-                               active_rank, driver_rank
+                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
                         FROM realtime.route_familiarity_routes
                         WHERE driver_id=$1 AND completed_at >= $2 AND completed_at <= $3
                         ORDER BY completed_at DESC, trip_id DESC LIMIT 51""",
@@ -270,7 +269,8 @@ async def _postgres_measure(database_url, signature):
                             FROM realtime.route_familiarity_routes r JOIN ranked_drivers d USING (driver_id)
                             WHERE r.completed_at >= $2 AND r.completed_at <= $3 AND r.cells && $4::text[]
                         )
-                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
+                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m,
+                               active_rank, driver_rank
                         FROM bounded WHERE driver_rank <= 6
                         ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606""",
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of, list(db_signature.cells))
