@@ -881,19 +881,42 @@ export class DriverModeController {
         let panel = document.getElementById('recommendation-panel');
 
         if (!panel) {
-            // Tạo panel mới
+            // Tạo panel mới — static HTML only, no user data
             panel = document.createElement('div');
             panel.id = 'recommendation-panel';
-            panel.innerHTML = `
-                <div class="rec-panel-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8fafc; font-weight: 600; font-size: 13px; color: #0f172a;">
-                    <span>🔌 Tìm thấy trạm sạc gần đó</span>
-                    <button id="rec-panel-close" class="btn btn-sm btn-outline" style="padding: 2px 8px; font-size: 12px; line-height: 1; cursor: pointer; border: 1px solid #cbd5e1; border-radius: 6px; background: transparent; color: #64748b;">✕</button>
-                </div>
-                <div id="rec-panel-list" class="rec-panel-list" style="max-height: 360px; overflow-y: auto;"></div>
-                <div class="rec-panel-footer" style="padding: 8px 14px; background: #f8fafc; border-top: 1px solid #eee; font-size: 11px; color: #64748b; text-align: center;">
-                    <small>Chọn trạm để bắt đầu điều hướng</small>
-                </div>
-            `;
+
+            const header = document.createElement('div');
+            header.className = 'rec-panel-header';
+            header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8fafc; font-weight: 600; font-size: 13px; color: #0f172a;';
+
+            const headerTitle = document.createElement('span');
+            headerTitle.textContent = '🔌 Tìm thấy trạm sạc gần đó';
+            header.appendChild(headerTitle);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.id = 'rec-panel-close';
+            closeBtn.className = 'btn btn-sm btn-outline';
+            closeBtn.textContent = '✕';
+            closeBtn.style.cssText = 'padding: 2px 8px; font-size: 12px; line-height: 1; cursor: pointer; border: 1px solid #cbd5e1; border-radius: 6px; background: transparent; color: #64748b;';
+            closeBtn.onclick = () => this._hideRecommendationPanel();
+            header.appendChild(closeBtn);
+
+            const list = document.createElement('div');
+            list.id = 'rec-panel-list';
+            list.className = 'rec-panel-list';
+            list.style.cssText = 'max-height: 360px; overflow-y: auto;';
+
+            const footer = document.createElement('div');
+            footer.className = 'rec-panel-footer';
+            footer.style.cssText = 'padding: 8px 14px; background: #f8fafc; border-top: 1px solid #eee; font-size: 11px; color: #64748b; text-align: center;';
+            const footerSmall = document.createElement('small');
+            footerSmall.textContent = 'Chọn trạm để bắt đầu điều hướng';
+            footer.appendChild(footerSmall);
+
+            panel.appendChild(header);
+            panel.appendChild(list);
+            panel.appendChild(footer);
+
             // Style panel
             panel.style.cssText = `
                 position: fixed; top: 80px; right: 20px; z-index: 1000;
@@ -902,64 +925,61 @@ export class DriverModeController {
                 font-family: sans-serif; overflow: hidden;
             `;
             document.body.appendChild(panel);
-
-            // Bind close button
-            document.getElementById('rec-panel-close').onclick = () => this._hideRecommendationPanel();
         }
 
-        // Render danh sách candidates
+        // Render danh sách candidates — DOM-safe, no innerHTML with user data
         const list = document.getElementById('rec-panel-list');
         if (!list) return;
+        list.replaceChildren();
 
-        list.innerHTML = candidates.map((c, idx) => {
+        candidates.forEach((c, idx) => {
             const st = this.stations.find(s => s.station_id === c.station_id);
             const rankColors = { 1: '#f59e0b', 2: '#3b82f6', 3: '#10b981', 4: '#8b5cf6', 5: '#6b7280' };
             const color = rankColors[idx + 1] || '#6b7280';
             const etaMin = c.eta_to_station_s ? (c.eta_to_station_s / 60).toFixed(1) : '?';
             const etaService = c.eta_to_service_complete_s ? (c.eta_to_service_complete_s / 60).toFixed(0) : '?';
             const scoreText = c.score != null ? (c.score * 100).toFixed(0) + '%' : '—';
-            return `
-                <div class="rec-candidate-item" data-station-id="${c.station_id}" style="
-                    display: flex; align-items: center; gap: 10px;
-                    padding: 10px 12px; cursor: pointer;
-                    border-bottom: 1px solid #eee;
-                    ${idx === 0 ? 'background: #fffbeb;' : 'background: white;'}
-                ">
-                    <div style="
-                        width: 28px; height: 28px; border-radius: 50%;
-                        background: ${color}; color: white;
-                        display: flex; align-items: center; justify-content: center;
-                        font-weight: bold; font-size: 14px; flex-shrink: 0;
-                        border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                    ">${idx + 1}</div>
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="font-weight: 600; font-size: 13px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${st?.name || c.station_id}</div>
-                        <div style="font-size: 11px; color: #64748b;">
-                            ETA ${etaMin} phút · Sạc ${etaService} phút
-                        </div>
-                    </div>
-                    <div style="
-                        background: ${idx === 0 ? '#f59e0b' : '#e5e7eb'};
-                        color: ${idx === 0 ? 'white' : '#475569'};
-                        padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
-                    ">${scoreText}</div>
-                </div>
-            `;
-        }).join('');
+            const bgColor = idx === 0 ? '#fffbeb' : 'white';
 
-        // Bind click vào từng item
-        list.querySelectorAll('.rec-candidate-item').forEach(item => {
-            item.onmouseenter = () => {
-                item.style.filter = 'brightness(0.95)';
-            };
-            item.onmouseleave = () => {
-                item.style.filter = 'none';
-            };
+            const item = document.createElement('div');
+            item.className = 'rec-candidate-item';
+            item.dataset.stationId = c.station_id;
+            item.style.cssText = `display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #eee; background: ${bgColor};`;
+
+            const rankDiv = document.createElement('div');
+            rankDiv.style.cssText = `width: 28px; height: 28px; border-radius: 50%; background: ${color}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);`;
+            rankDiv.textContent = String(idx + 1);
+            item.appendChild(rankDiv);
+
+            const infoDiv = document.createElement('div');
+            infoDiv.style.cssText = 'flex: 1; min-width: 0;';
+
+            const nameDiv = document.createElement('div');
+            nameDiv.style.cssText = 'font-weight: 600; font-size: 13px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+            nameDiv.textContent = st?.name || c.station_id;
+            infoDiv.appendChild(nameDiv);
+
+            const detailDiv = document.createElement('div');
+            detailDiv.style.cssText = 'font-size: 11px; color: #64748b;';
+            detailDiv.textContent = `ETA ${etaMin} phút · Sạc ${etaService} phút`;
+            infoDiv.appendChild(detailDiv);
+            item.appendChild(infoDiv);
+
+            const scoreDiv = document.createElement('div');
+            const scoreBg = idx === 0 ? '#f59e0b' : '#e5e7eb';
+            const scoreColor = idx === 0 ? 'white' : '#475569';
+            scoreDiv.style.cssText = `background: ${scoreBg}; color: ${scoreColor}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;`;
+            scoreDiv.textContent = scoreText;
+            item.appendChild(scoreDiv);
+
+            item.onmouseenter = () => { item.style.filter = 'brightness(0.95)'; };
+            item.onmouseleave = () => { item.style.filter = 'none'; };
             item.onclick = () => {
-                const stationId = item.dataset.stationId;
                 this._hideRecommendationPanel();
-                this._selectStationAndNavigate(stationId);
+                this._selectStationAndNavigate(c.station_id);
             };
+
+            list.appendChild(item);
         });
     }
 
