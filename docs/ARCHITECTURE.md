@@ -12,6 +12,12 @@ The request resolves current location, searches eligible station/service pairs, 
 
 The frontend vehicle energy catalog has one source: `GET /api/v1/vehicles/catalog`. Frontend fallback specs are used only when that request fails. Labels remain evaluation-only.
 
+## Route familiarity v2
+
+When explicitly enabled, the combined `/recommend` workflow compares the candidate's recommended GraphHopper geometry against protected completed-route history using ordered, distance-weighted H3 Resolution 11 signatures. PostgreSQL stores route history; no read API exposes it. The route producer is trusted through the existing ingestion token. Because `/recommend` has no end-user authentication, enabling familiarity also requires a trusted authenticated gateway to HMAC-sign the exact driver ID; the API verifies that signature before history access. API replicas on one host share these secrets and the same PostgreSQL data plane, which remains single-node.
+
+The default lookback is seven days. Personal history is capped at 50 trips. Community history considers at most 100 recently active drivers with up to five matching trips each, and community evidence is suppressed below five distinct drivers and never changes ranking. No history produces zero penalty. Personal history can add at most 30 seconds to final ranking cost; it cannot change eligibility, physical ETA, queue/service costs, or snapshot invalidation behavior. See [OPERATIONS.md](OPERATIONS.md) for explicit migration, destructive rollback, privacy, and benchmark operations.
+
 ## Routing and matching
 
 Routing constraints, vehicle capabilities, optimization objectives, and dynamic context are project/domain contracts. GraphHopper is the sole production adapter behind them. `EV_CAR` maps to `car`; `EV_MOTORBIKE` maps to `motorcycle` using GraphHopper's `car_access` model. The canonical patched Hanoi map is primary. Matching quality describes geometric proximity, not calibrated probability. Ambiguous directed traversal withholds road segment and direction.

@@ -36,4 +36,8 @@
 
 ## Evidence
 
+Benchmark methodology and the captured local output are recorded in
+[the Phase 4 route familiarity benchmark report](reports/phase4-route-familiarity-benchmark.md)
+and its [raw JSON plans and measurements](reports/phase4-route-familiarity-benchmark.json).
+
 This section will contain current-checkout commands and outputs after implementation. Design and historical Phase 0–3 evidence do not satisfy Phase 4 gates.

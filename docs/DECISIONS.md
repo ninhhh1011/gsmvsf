@@ -435,4 +435,6 @@ The deployed Compose topology runs two API containers on one host. The data plan
 
 The current `/recommend` boundary does not authenticate end users. When enabled, V2 therefore requires a configured identity HMAC secret and a trusted gateway signature over the request's exact driver ID; requests without a valid signature are rejected before history access. Ingestion remains restricted to a trusted producer token. Event-time queries must exclude route records completed after the evaluated request time. History lookup and route-signature sizes are bounded and truncation is explicit. This ADR authorizes Phase 4 only and does not authorize Week 6 infrastructure or unrelated work.
 
+Operations remain limited to the current single-host topology: API replicas on one host share one single-node data plane. Route familiarity schema changes are explicit; `make migrate-route-familiarity` applies the additive table/index DDL and `make rollback-route-familiarity` drops that table and its history. The opt-in local benchmark measures production signature/similarity/evaluation code at bounded logical data sizes. For PostgreSQL evidence it creates and drops a UUID-named disposable database, seeds only synthetic rows there, and records the actual asyncpg repository query plans; the configured application database is never written by the benchmark.
+
 

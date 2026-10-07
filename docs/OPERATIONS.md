@@ -25,3 +25,23 @@ The metrics endpoint is `/metrics`. Readiness is `/readiness`. Runtime dependenc
 ## Maintenance
 
 Use the repository's migration and dataset validation scripts. Dataset V1 is canonical and read-only. Keep generated reports under `runtime/`, never in `dataset_v1/`.
+
+### Route familiarity v2
+
+Route history is opt-in and `ENABLE_ROUTE_FAMILIARITY` defaults to `false`. Enabling it requires a `ROUTE_FAMILIARITY_IDENTITY_SECRET` of at least 32 bytes and an authenticated trusted gateway that signs the exact driver ID in `X-Driver-Identity-Signature`. The gateway signature is required on `/recommend`; the trusted producer token protects route ingestion. Do not expose either secret to the browser. The configured producer and identity secrets must be shared by the API containers on this single host.
+
+Apply the additive schema explicitly after reviewing the target database:
+
+```bash
+make migrate-route-familiarity
+```
+
+Rollback is destructive and drops all route familiarity history:
+
+```bash
+make rollback-route-familiarity
+```
+
+No schema migration runs at application startup. Route history stores only protected driver/trip identifiers, completion time, route distance, ordered H3 Resolution 11 cells, and per-cell distance weights. There is no history read API. Retention/erasure is an operational responsibility; disable the feature before a rollback. Personal lookup is capped at 50 recent trips. Community lookup examines at most 100 recently active drivers and five matching trips per driver (500 total); community details are hidden below five distinct supporting drivers. A seven-day event-time lookback is the default. Missing history adds no penalty; familiarity can add at most 30 seconds to final ranking cost and does not change eligibility or physical ETA.
+
+Run the local microbenchmark with `make benchmark-route-familiarity`. It reports warmups, sample count and p50/p95 for signature creation, similarity, and the actual bounded evaluator at 150, 10,000 and 100,000 logical history rows with 30 candidate routes. The evaluator harness returns the same 50/500 rows that production repository queries cap. If `DATABASE_URL` points to an available PostgreSQL server with `CREATE DATABASE` permission, the command creates a UUID-named disposable database, installs the route schema, runs actual asyncpg repository queries against 150, 10,000 and 100,000 deterministic synthetic rows, emits per-size `EXPLAIN (ANALYZE, BUFFERS)` plans, then drops that database. It never writes to the configured application database. A missing/unavailable server or denied database creation is reported as `not_measured`; those timings and plans must not be represented as measured evidence.

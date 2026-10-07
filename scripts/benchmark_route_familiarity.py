@@ -1,0 +1,273 @@
+"""Measure route-familiarity primitives, bounded evaluation, and optional PostgreSQL lookups.
+
+Run with ``python -B -m scripts.benchmark_route_familiarity``. Output is JSON;
+the script never writes route history or modifies Dataset V1.
+"""
+import argparse
+import asyncio
+from contextlib import asynccontextmanager
+import json
+import statistics
+import h3
+from urllib.parse import urlsplit, urlunsplit
+from uuid import uuid4
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from time import perf_counter
+
+from backend.app.config import settings
+from backend.app.services.route_familiarity.constants import H3_ROUTE_RESOLUTION
+from backend.app.services.route_familiarity.models import RouteSignature
+from backend.app.services.route_familiarity.repository import RouteHistoryRepository
+from backend.app.services.route_familiarity.service import RouteFamiliarityService
+from backend.app.services.route_familiarity.signature import create_route_signature
+from backend.app.services.route_familiarity.similarity import weighted_ordered_overlap
+
+HISTORY_SIZES = (150, 10_000, 100_000)
+CANDIDATE_COUNT = 30
+SAMPLES = 5
+WARMUPS = 1
+
+
+@dataclass(frozen=True)
+class BenchmarkCase:
+    history_size: int
+    candidate_count: int = CANDIDATE_COUNT
+
+
+def benchmark_cases():
+    return tuple(BenchmarkCase(size) for size in HISTORY_SIZES)
+
+
+def percentile(values, fraction):
+    ordered = sorted(values)
+    return ordered[max(0, min(len(ordered) - 1, int((len(ordered) - 1) * fraction + 0.999999)))]
+
+
+def measure(operation, *, samples=SAMPLES, warmups=WARMUPS):
+    for _ in range(warmups):
+        operation()
+    elapsed = []
+    for _ in range(samples):
+        started = perf_counter()
+        operation()
+        elapsed.append((perf_counter() - started) * 1000)
+    return {"samples": samples, "warmups": warmups,
+            "p50_ms": round(statistics.median(elapsed), 3),
+            "p95_ms": round(percentile(elapsed, 0.95), 3)}
+
+
+def _polyline(points):
+    lat = lon = 0
+    output = []
+    for point in points:
+        for axis, value in enumerate(point):
+            current = round(value * 100_000)
+            delta = current - (lat if axis == 0 else lon)
+            if axis == 0:
+                lat = current
+            else:
+                lon = current
+            encoded = ~(delta << 1) if delta < 0 else delta << 1
+            while encoded >= 0x20:
+                output.append(chr((0x20 | (encoded & 0x1f)) + 63))
+                encoded >>= 5
+            output.append(chr(encoded + 63))
+    return "".join(output)
+
+
+class BoundedHistoryRepository:
+    """Production-service harness matching the repository's documented query caps."""
+    def __init__(self, history_size, signature):
+        self.history_size = history_size
+        self.signature = signature
+        self.row = {"driver_id": "synthetic-driver", "cells": signature.cells,
+                    "cell_distances_m": signature.cell_distances_m,
+                    "distance_m": signature.distance_m, "resolution": signature.resolution}
+
+    async def personal_routes(self, *_):
+        return [self.row] * min(self.history_size, 50)
+
+    async def community_routes(self, *_):
+        return [self.row] * min(self.history_size, 500)
+
+
+async def _measure_evaluation(case, signature):
+    service = RouteFamiliarityService(BoundedHistoryRepository(case.history_size, signature))
+    candidates = {str(i): signature for i in range(case.candidate_count)}
+    async def evaluate():
+        await service.assess_many("benchmark-driver", candidates, datetime.now(UTC))
+    for _ in range(WARMUPS):
+        await evaluate()
+    results = []
+    for _ in range(SAMPLES):
+        started = perf_counter()
+        await evaluate()
+        results.append((perf_counter() - started) * 1000)
+    return {"samples": SAMPLES, "warmups": WARMUPS,
+            "p50_ms": round(statistics.median(results), 3),
+            "p95_ms": round(percentile(results, 0.95), 3),
+            "personal_rows_returned_per_candidate": min(case.history_size, 50),
+            "community_rows_returned_per_candidate": min(case.history_size, 500)}
+
+
+async def _postgres_measure(database_url, signature):
+    if not database_url:
+        return {"status": "not_measured", "reason": "DATABASE_URL is empty"}
+    database_name = f"route_familiarity_bench_{uuid4().hex}"
+    admin = conn = None
+    created = dropped = False
+    try:
+        import asyncpg
+        parsed = urlsplit(database_url.replace("postgresql+asyncpg://", "postgresql://"))
+        admin_dsn = urlunsplit((parsed.scheme, parsed.netloc, "/postgres", parsed.query, ""))
+        admin = await asyncpg.connect(admin_dsn, timeout=3)
+        await admin.execute(f'CREATE DATABASE "{database_name}"')
+        created = True
+        dsn = urlunsplit((parsed.scheme, parsed.netloc, f"/{database_name}", parsed.query, ""))
+        conn = await asyncpg.connect(dsn, timeout=3)
+        schema = (Path(__file__).resolve().parents[1] /
+                  "backend/app/services/route_familiarity/schema.sql").read_text(encoding="utf-8")
+        await conn.execute(schema)
+    except Exception as error:  # External database availability is optional for the local harness.
+        if conn:
+            await conn.close()
+        if created and admin:
+            await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+            dropped = True
+        if admin:
+            await admin.close()
+        return {"status": "not_measured", "reason": type(error).__name__,
+                "disposable_database_created": created, "disposable_database_dropped": dropped}
+    try:
+        repository = RouteHistoryRepository(_BorrowedConnectionPool(conn))
+        as_of = datetime.now(UTC)
+        center = h3.cell_to_latlng(signature.cells[0])
+        db_signature = create_route_signature([_polyline([
+            (center[0] - 0.00001, center[1]), (center[0] + 0.00001, center[1])])])
+        per_size = []
+        for size in HISTORY_SIZES:
+            await conn.execute("TRUNCATE realtime.route_familiarity_routes")
+            personal_size = (size + 1) // 2
+            await conn.executemany("""INSERT INTO realtime.route_familiarity_routes
+                        (driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+                        [("phase4-benchmark-personal" if i < personal_size else
+                          f"phase4-benchmark-community-{i:06d}", f"phase4-benchmark-trip-{i:06d}",
+                          as_of - timedelta(minutes=i % (7 * 24 * 60)), signature.distance_m,
+                          db_signature.resolution, list(db_signature.cells), list(db_signature.cell_distances_m))
+                         for i in range(size)])
+            actual = await conn.fetchval("SELECT count(*) FROM realtime.route_familiarity_routes")
+            await conn.execute("ANALYZE realtime.route_familiarity_routes")
+            async def lookup():
+                await repository.personal_routes("phase4-benchmark-personal", as_of, timedelta(days=7))
+                await repository.community_routes(list(db_signature.cells), "phase4-benchmark-personal",
+                                                  as_of, timedelta(days=7))
+            timings = await _measure_async(lookup)
+            service = RouteFamiliarityService(repository)
+            candidates = {str(i): db_signature for i in range(CANDIDATE_COUNT)}
+            async def evaluate():
+                await service.assess_many("phase4-benchmark-personal", candidates, as_of)
+            evaluation = await _measure_async(evaluate)
+            personal_plan = await conn.fetch("""EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
+                        FROM realtime.route_familiarity_routes
+                        WHERE driver_id=$1 AND completed_at >= $2 AND completed_at <= $3
+                        ORDER BY completed_at DESC LIMIT 50""",
+                        "phase4-benchmark-personal", as_of - timedelta(days=7), as_of)
+            community_plan = await conn.fetch("""EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+                        WITH active_drivers AS (
+                            SELECT driver_id, max(completed_at) AS last_completed_at
+                            FROM realtime.route_familiarity_routes
+                            WHERE driver_id <> $1 AND completed_at >= $2 AND completed_at <= $3
+                              AND cells && $4::text[]
+                            GROUP BY driver_id ORDER BY last_completed_at DESC, driver_id LIMIT 100
+                        ), bounded AS (
+                            SELECT r.*, row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC) AS driver_rank
+                            FROM realtime.route_familiarity_routes r JOIN active_drivers d USING (driver_id)
+                            WHERE r.completed_at >= $2 AND r.completed_at <= $3 AND r.cells && $4::text[]
+                        )
+                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
+                        FROM bounded WHERE driver_rank <= 5 ORDER BY completed_at DESC, driver_id LIMIT 500""",
+                        "phase4-benchmark-personal", as_of - timedelta(days=7), as_of, list(db_signature.cells))
+            per_size.append({"history_rows": actual, "repository_query_pair": timings,
+                "database_backed_full_evaluation_30_candidates": evaluation,
+                "personal_explain_analyze_buffers": [r["QUERY PLAN"] for r in personal_plan],
+                "community_explain_analyze_buffers": [r["QUERY PLAN"] for r in community_plan]})
+        await conn.close()
+        conn = None
+        await admin.execute(f'DROP DATABASE "{database_name}"')
+        dropped = True
+        created = False
+        return {"status": "measured", "per_size": per_size,
+                "disposable_database_dropped": dropped, "writes_committed": False}
+    except Exception as error:
+        return {"status": "not_measured", "reason": type(error).__name__,
+                "disposable_database_created": created}
+    finally:
+        if conn:
+            await conn.close()
+        if created and admin:
+            await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+            dropped = True
+        if admin:
+            await admin.close()
+
+
+class _BorrowedConnectionPool:
+    """Adapt one transaction-scoped asyncpg connection to the repository acquire protocol."""
+    def __init__(self, connection):
+        self.connection = connection
+
+    @asynccontextmanager
+    async def acquire(self):
+        yield self.connection
+
+
+async def _measure_async(operation):
+    for _ in range(WARMUPS):
+        await operation()
+    elapsed = []
+    for _ in range(SAMPLES):
+        started = perf_counter()
+        await operation()
+        elapsed.append((perf_counter() - started) * 1000)
+    return {"samples": SAMPLES, "warmups": WARMUPS,
+            "p50_ms": round(statistics.median(elapsed), 3),
+            "p95_ms": round(percentile(elapsed, 0.95), 3)}
+
+
+async def run(database_url):
+    polyline = _polyline([(21.0, 105.0), (21.001, 105.001), (21.002, 105.0)])
+    signature = create_route_signature([polyline])
+    same_route = RouteSignature(signature.cells, signature.cell_distances_m,
+                                 signature.distance_m, H3_ROUTE_RESOLUTION)
+    report = {"resolution": H3_ROUTE_RESOLUTION,
+              "candidate_fanout": CANDIDATE_COUNT,
+              "dataset_sizes": list(HISTORY_SIZES),
+              "route_signature": measure(lambda: create_route_signature([polyline])),
+              "similarity": measure(lambda: weighted_ordered_overlap(signature, same_route)),
+              "cases": []}
+    for case in benchmark_cases():
+        report["cases"].append({"history_size": case.history_size,
+            "candidate_count": case.candidate_count,
+            "bounded_full_evaluation": await _measure_evaluation(case, signature)})
+    report["postgresql"] = await _postgres_measure(database_url, signature)
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--database-url", default=settings.database_url)
+    parser.add_argument("--output", type=Path, help="also write the full JSON report to this path")
+    args = parser.parse_args()
+    output = json.dumps(asyncio.run(run(args.database_url)), indent=2) + "\n"
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output, encoding="utf-8")
+    print(output, end="")
+
+
+if __name__ == "__main__":
+    main()

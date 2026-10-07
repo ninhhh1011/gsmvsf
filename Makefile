@@ -1,4 +1,4 @@
-.PHONY: setup validate-data prepare-map up down logs test test-backend test-frontend test-all lint lint-fix smoke prepare-external-gps validate-external-gps load-snapshots evaluate-week4 verify-week4 ci-check
+.PHONY: setup validate-data prepare-map up down logs test test-backend test-frontend test-all lint lint-fix smoke prepare-external-gps validate-external-gps load-snapshots evaluate-week4 verify-week4 benchmark-route-familiarity migrate-route-familiarity rollback-route-familiarity ci-check
 setup:
 	python -m pip install -e "backend[dev]"
 validate-data:
@@ -34,4 +34,10 @@ evaluate-week4:
 	python -B scripts/evaluate_week4.py
 verify-week4:
 	python -B scripts/verify_week4.py
+benchmark-route-familiarity:
+	python -B -m scripts.benchmark_route_familiarity --output docs/reports/phase4-route-familiarity-benchmark.json
+migrate-route-familiarity:
+	python -B -m scripts.migrate_route_familiarity
+rollback-route-familiarity:
+	python -B -m scripts.migrate_route_familiarity --rollback
 ci-check: lint test-backend test-frontend validate-data
