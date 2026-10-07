@@ -254,7 +254,9 @@ async def _postgres_measure(database_url, signature):
         dropped = True
         created = False
         return {"status": "measured", "per_size": per_size,
-                "disposable_database_dropped": dropped, "writes_committed": False}
+                "application_database_written": False,
+                "disposable_database_writes_committed": True,
+                "disposable_database_dropped": dropped}
     except Exception as error:
         cleanup_errors = []
         if conn:

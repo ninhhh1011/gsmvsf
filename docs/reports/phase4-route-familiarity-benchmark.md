@@ -9,9 +9,9 @@ Python 3.14, and local PostgreSQL. Times are milliseconds.
 
 | Logical history rows | Evaluator p50 / p95 | Rows per candidate (personal / community) | Community drivers |
 |---:|---:|---:|---:|
-| 150 | 59.055 / 62.681 | 50 / 100 | 100 |
-| 10,000 | 326.863 / 349.129 | 50 / 500 | 100 |
-| 100,000 | 592.525 / 784.628 | 50 / 500 | 100 |
+| 150 | 81.088 / 117.831 | 50 / 100 | 100 |
+| 10,000 | 291.178 / 545.178 | 50 / 500 | 100 |
+| 100,000 | 470.908 / 693.367 | 50 / 500 | 100 |
 
 The evaluator calls the production `RouteFamiliarityService` and weighted
 similarity implementation. Fixtures contain exactly 50 personal rows. The
@@ -22,8 +22,8 @@ exercising overlap work. This is a local microbenchmark, not an API latency SLA.
 
 | Production operation | p50 / p95 |
 |---|---:|
-| `create_route_signature` | 0.095 / 0.098 |
-| `weighted_ordered_overlap` | 0.016 / 0.029 |
+| `create_route_signature` | 0.102 / 0.138 |
+| `weighted_ordered_overlap` | 0.018 / 0.032 |
 
 ## PostgreSQL repository queries
 
@@ -32,25 +32,29 @@ configured PostgreSQL server, applies the route-history schema, seeds synthetic
 rows, times the real asyncpg `personal_routes` and `community_routes` methods,
 captures `EXPLAIN (ANALYZE, BUFFERS)`, and drops the database. The configured
 application database is not written. This run reports
-`disposable_database_dropped: true` and `writes_committed: false`. Actual query
+`application_database_written: false`,
+`disposable_database_writes_committed: true`, and
+`disposable_database_dropped: true`. Synthetic seed rows are committed inside
+the disposable benchmark database so the repository queries can read them;
+that database is dropped after capture. Actual query
 results contained 50 personal plus 100 community rows for 150 total, then 50
 personal plus 500 community rows for the larger cases. Direct per-driver counts
 show maxima of 1, 5, and 5 respectively across 100 distinct drivers.
 
 | Rows in disposable DB | Lookup pair p50 / p95 | Community rows returned / drivers | Community plan execution |
 |---:|---:|---:|---:|
-| 150 | 4.586 / 7.047 | 100 / 100 | 0.602 ms, Seq Scan |
-| 10,000 | 32.666 / 35.046 | 500 / 100 | 38.391 ms, Seq Scan |
-| 100,000 | 479.178 / 627.498 | 500 / 100 | 124.184 ms, indexed time-range scan with 99,951 rows examined |
+| 150 | 3.086 / 4.072 | 100 / 100 | 0.585 ms, Seq Scan |
+| 10,000 | 35.296 / 39.892 | 500 / 100 | 52.976 ms, Seq Scan |
+| 100,000 | 439.661 / 486.754 | 500 / 100 | 202.988 ms, parallel scan with 99,950 rows examined |
 
 The same disposable database run measured production evaluation backed by the
 real repository:
 
 | PostgreSQL history rows | Full evaluation, 30 candidates, p50 / p95 |
 |---:|---:|
-| 150 | 51.039 / 60.164 ms |
-| 10,000 | 171.228 / 209.637 ms |
-| 100,000 | 649.841 / 698.409 ms |
+| 150 | 50.423 / 55.977 ms |
+| 10,000 | 278.557 / 313.942 ms |
+| 100,000 | 612.488 / 620.534 ms |
 
 Full plans, including buffers, row counts, and planning/execution time, are in
 [phase4-route-familiarity-benchmark.json](phase4-route-familiarity-benchmark.json).
