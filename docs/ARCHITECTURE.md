@@ -2,7 +2,7 @@
 
 **Project**: VinFast Green Mobility Smart Vehicle Recommendation System (GSMVSF)  
 **Date**: September 2026  
-**Status**: Milestone Complete & Verified  
+**Status**: Development Complete  
 
 ---
 
@@ -14,7 +14,7 @@ This document presents the complete architectural audit, design decisions, and p
 | :--- | :--- | :--- | :--- |
 | **Problem A** | VinFast Vehicle Model & Physics Depletion | 19 official VinFast models with battery capacities and `PROJECT_ESTIMATE` consumption rates. Dynamic physics-based SOC depletion during movement. | **VERIFIED** |
 | **Problem B** | 3-Tier Lifecycle Separation | Presentation (Nginx), Application (FastAPI), Data (Postgres, Redis, GraphHopper). Fault isolation verified. | **VERIFIED** |
-| **Problem C / Khối 2** | High Availability & Multi-Replica Scale | Dual stateless API replicas (`api_1`, `api_2`) behind Nginx load balancer (`least_conn`) with transparent failover and zero-downtime tolerance. | **VERIFIED** |
+| **Problem C / Khối 2** | Deployment Configuration | Single-node Docker Compose deployment. No Kubernetes, multi-AZ, or zero-downtime production deployment is currently implemented. | **DEVELOPMENT** |
 | **Problem D** | Realtime Operational Simulation | Bounded Markov random-walk simulator producing validated station, queue, and traffic snapshots every 30s. Dynamic cost shifts proven. | **VERIFIED** |
 | **Problem E** | Core vs Realtime Data Separation | Option 1 implemented: PostgreSQL `public` (core road network) segregated from `realtime` (volatile operational snapshots). | **VERIFIED** |
 | **Problem F** | Service Communication Architecture | End-to-end communication matrix distinguishing HTTP, asyncpg, Redis, and in-process boundaries. | **VERIFIED** |
@@ -239,13 +239,15 @@ flowchart TD
     API1 & API2 & API3 <--> Redis_Master
     Redis_Master --> Redis_Replica
     Sentinel -.->|"Automated Failover"| Redis_Master
+### Deployment Configuration
+
+The application runs via Docker Compose. No Kubernetes, multi-AZ, or production-grade HA is currently implemented.
+
+```bash
+docker compose up -d
 ```
 
-#### Enterprise Production Safeguards:
-1. **Database High Availability**: Managed Patroni cluster with Raft/Etcd consensus or AWS Aurora PostgreSQL with multi-AZ synchronous replication (RPO = 0, RTO < 30s).
-2. **Stateless Autoscaling**: FastAPI horizontal pod autoscaler (HPA) scaling between 3 and 20 pods based on CPU and request latency.
-3. **GraphHopper Routing Replicas**: Multiple pre-warmed GraphHopper instances mounted with immutable read-only OSM graphs behind internal L7 load balancer.
-4. **Redis Failover**: Redis Sentinel with 3 sentinels across distinct availability zones providing automated primary election without downtime.
+Production deployment (multi-replica, multi-AZ, zero-downtime) requires additional infrastructure and is not part of the current scope.
 
 ---
 
@@ -292,30 +294,17 @@ Evaluated Option 1 (Schema separation in single PostgreSQL) vs Option 2 (Two ind
 
 ---
 
-## 8. Khối 2: High Availability Multi-Replica Scale & Automated Failover
+## 8. Deployment Architecture
 
-### Architectural Realization (ADR-019)
-The application tier is scaled from a single point of failure into a dual stateless replica cluster:
-- **Replica 1 (`ev_api_1`)**: Port 8000 -> 8000, runs with `ENABLE_REALTIME_SIMULATOR=true` to maintain the background Markov simulation tick.
-- **Replica 2 (`ev_api_2`)**: Port 8002 -> 8000, runs with `ENABLE_REALTIME_SIMULATOR=false` as a dedicated request processing worker.
-- Both replicas share the same PostgreSQL 16 database, Redis KV cache, and GraphHopper routing engine.
-- Nginx upstream configuration (`frontend/nginx.conf`):
-  ```nginx
-  upstream backend_cluster {
-      least_conn;
-      server api_1:8000 max_fails=2 fail_timeout=5s;
-      server api_2:8000 max_fails=2 fail_timeout=5s;
-  }
-  ```
-- **Transparent Fault Tolerance Policy**:
-  ```nginx
-  proxy_next_upstream error timeout http_502 http_503 http_504;
-  proxy_next_upstream_tries 2;
-  ```
+### Docker Compose Deployment
 
-### Live Zero-Downtime Failover Verification
-- During high-rate traffic flow, `ev_api_1` was forcibly stopped (`docker stop ev_api_1`).
-- Nginx detected the connection failure within milliseconds, automatically re-routed in-flight requests to `ev_api_2`, and returned **HTTP 200 OK** to all client requests without a single dropped packet or 502 Bad Gateway response.
+The application runs via Docker Compose with single-container services:
+
+```bash
+docker compose up -d
+```
+
+No Kubernetes, multi-replica, or zero-downtime deployment is currently implemented.
 
 ---
 

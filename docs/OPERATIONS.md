@@ -7,10 +7,7 @@
 docker compose up -d
 ```
 
-### Kubernetes
-```bash
-kubectl apply -f k8s/
-```
+No Kubernetes deployment is currently configured.
 
 ## Monitoring
 
@@ -30,9 +27,9 @@ kubectl apply -f k8s/
 3. Review Prometheus metrics
 
 ### Service Down
-1. Check Docker/Kubernetes status
+1. Check Docker status: `docker compose ps`
 2. Review logs: `docker compose logs`
-3. Check external dependencies
+3. Check external dependencies (PostgreSQL, Redis, GraphHopper)
 
 ## Maintenance
 
