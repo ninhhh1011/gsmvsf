@@ -382,9 +382,11 @@ hardening remain Week 6/future scope.
 3. Demonstrate dynamic recommendation cost variance where station rankings evolve between timestamps $T_0$ and $T_1$ based on live operational changes.
 
 
-## ADR-019: Multi-Replica API & Nginx Upstream Load Balancing
+## ADR-019: Multi-Replica API & Nginx Upstream Load Balancing (Superseded)
 
-**Date:** 2026-09-29. **Status:** Approved.
+**Date:** 2026-09-29. **Status:** Historical proposal; deployment claims are not verified.
+
+The deployed Compose topology runs two API containers on one host. The data plane remains single-node. This ADR does not establish host-level failover, zero-downtime resilience, or a production SLA.
 
 **Context:** A single API container was a single point of failure (SPOF) for the application tier. High concurrency could exhaust process worker threads, and an API restart interrupted incoming client traffic.
 

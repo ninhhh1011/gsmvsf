@@ -1,55 +1,27 @@
-# Operations Guide
+﻿# Operations Guide
 
-## Deployment
+## Local deployment
 
-### Docker Compose
+Run the stack on one Docker host:
+
 ```bash
-docker compose up -d
+docker compose up -d --build
+docker compose ps
+docker compose logs -f
 ```
 
-### Kubernetes
+All published ports bind to `127.0.0.1`: PostgreSQL 5432, Redis 6379, GraphHopper 8989, API ports 8000 and 8002, and frontend 3000. The two API containers share one PostgreSQL, Redis, and GraphHopper instance. The data plane is single-node; this setup does not provide host-level failover.
+
+## Checks
+
 ```bash
-kubectl apply -f k8s/
+make lint
+make test
+make validate-data
 ```
 
-## Monitoring
-
-### Prometheus
-- Metrics endpoint: `/metrics`
-- Alerts: `app/monitoring/alerts.yml`
-
-### Grafana
-- Dashboard ID: TBD
-- Default credentials: admin/admin
-
-## Troubleshooting
-
-### High Latency
-1. Check GraphHopper health
-2. Check Redis cache hit rate
-3. Review Prometheus metrics
-
-### Service Down
-1. Check Docker/Kubernetes status
-2. Review logs: `docker compose logs`
-3. Check external dependencies
+The metrics endpoint is `/metrics`. Readiness is `/readiness`. Runtime dependencies are PostgreSQL, optional Redis cache, and GraphHopper; dependency failures are reported explicitly.
 
 ## Maintenance
 
-### Database Backup
-```bash
-pg_dump -U postgres ev_recommendation > backup.sql
-```
-
-### Clear Cache
-```bash
-redis-cli FLUSHDB
-```
-
-## SLAs
-
-| Metric | Target |
-|--------|--------|
-| P95 Latency | < 2s |
-| Error Rate | < 1% |
-| Availability | 99.5% |
+Use the repository's migration and dataset validation scripts. Dataset V1 is canonical and read-only. Keep generated reports under `runtime/`, never in `dataset_v1/`.

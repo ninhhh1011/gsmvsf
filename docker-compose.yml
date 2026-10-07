@@ -40,7 +40,7 @@ services:
     build: ./runtime/graphhopper
     container_name: ev_graphhopper
     ports:
-      - "8989:8989"
+      - "127.0.0.1:8989:8989"
     volumes:
       - ./runtime/graphhopper:/data
       - ./dataset_v1/map/raw/hanoi-patched.osm.pbf:/osm/hanoi-patched.osm.pbf:ro
@@ -69,7 +69,7 @@ services:
       - ENABLE_REALTIME_SIMULATOR=${ENABLE_REALTIME_SIMULATOR:-true}
       - REALTIME_SIMULATOR_INTERVAL_S=${REALTIME_SIMULATOR_INTERVAL_S:-30}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./dataset_v1:/app/dataset_v1:ro
     healthcheck:
@@ -102,7 +102,7 @@ services:
       - ENABLE_REALTIME_SIMULATOR=false
       - REALTIME_SIMULATOR_INTERVAL_S=${REALTIME_SIMULATOR_INTERVAL_S:-30}
     ports:
-      - "8002:8000"
+      - "127.0.0.1:8002:8000"
     volumes:
       - ./dataset_v1:/app/dataset_v1:ro
     healthcheck:
@@ -123,7 +123,7 @@ services:
       dockerfile: frontend/Dockerfile
     container_name: ev_frontend
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     volumes:
       - ./backend/app/static/demo:/usr/share/nginx/html:ro
     healthcheck:

@@ -13,7 +13,7 @@ down:
 	docker compose down
 logs:
 	docker compose logs -f
-test: test-backend
+test: test-backend test-frontend
 test-backend:
 	python -B -m pytest backend/tests -q --basetemp=runtime/migration/pytest
 test-frontend:
