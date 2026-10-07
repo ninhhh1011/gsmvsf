@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.config import Settings
+from backend.app.core.metrics import ROUTE_FAMILIARITY_WORK_LIMITS
 from backend.app.services.route_familiarity.models import RouteSignature
 from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
@@ -88,6 +89,21 @@ async def test_community_smoothing_counts_each_driver_once():
     assert assessment.community_driver_count == 5
     assert assessment.community_trip_count == 10
     assert assessment.community_adherence == pytest.approx(0.8125)
+
+
+@pytest.mark.asyncio
+async def test_matching_pair_budget_returns_entire_assessment_unavailable():
+    route = sig(["a", "b"] * 400)
+    row = dict(driver_id="me", trip_id="p", cells=list(route.cells),
+               cell_distances_m=list(route.cell_distances_m), distance_m=route.distance_m, resolution=11)
+    repo = Repository(personal=[row])
+    before = ROUTE_FAMILIARITY_WORK_LIMITS._value.get()
+    assessments = await RouteFamiliarityService(repo).assess_many(
+        "me", {("s1", "x"): sig(["a"]), ("s2", "x"): route}, NOW)
+    assert set(a.status for a in assessments.values()) == {"UNAVAILABLE"}
+    assert all(a.penalty_s == 0 for a in assessments.values())
+    assert all(a.degraded_reason == "SIMILARITY_WORK_LIMIT" for a in assessments.values())
+    assert ROUTE_FAMILIARITY_WORK_LIMITS._value.get() == before + 1
 
 
 @pytest.mark.asyncio

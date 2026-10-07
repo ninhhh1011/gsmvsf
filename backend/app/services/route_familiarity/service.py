@@ -3,8 +3,14 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from backend.app.config import settings
-from backend.app.services.route_familiarity.models import RouteSignature
-from backend.app.services.route_familiarity.similarity import weighted_ordered_overlap
+from backend.app.core.metrics import record_familiarity_work_limit
+from backend.app.services.route_familiarity.models import RouteSignature, SimilarityResult
+from backend.app.services.route_familiarity.similarity import (
+    ComparisonBudget,
+    SimilarityWorkLimitExceeded,
+    index_route_signature,
+    weighted_ordered_overlap,
+)
 
 
 @dataclass(frozen=True)
@@ -57,32 +63,54 @@ class RouteFamiliarityService:
         community = await self.repository.community_routes(
             sorted({cell for sig in valid.values() for cell in sig.cells}),
             driver_id, as_of, self.lookback)
+        personal_indexed = [self._index_row(row) for row in personal]
+        community_indexed = [self._index_row(row) for row in community]
         result = unavailable.copy()
         truncated = len(personal) >= 50 or len(community) >= 500
-        for key, recommended in valid.items():
-            personal_scores = [weighted_ordered_overlap(recommended, _signature(row)).adherence
-                               for row in personal]
-            best = max(personal_scores) if personal_scores else None
-            supporting = sum(score >= self.minimum_support for score in personal_scores)
-            confidence = len(personal) / (len(personal) + self.confidence_prior) if personal else 0.0
-            penalty = self.max_penalty_s * (1 - best) * confidence if best is not None else 0.0
-            driver_best = {}
-            driver_trips = {}
-            for row in community:
-                score = weighted_ordered_overlap(recommended, _signature(row)).adherence
-                driver = row["driver_id"]
-                if score >= self.minimum_support:
-                    driver_best[driver] = max(score, driver_best.get(driver, 0.0))
-                    driver_trips[driver] = driver_trips.get(driver, 0) + 1
-            drivers = len(driver_best)
-            visible = drivers >= self.minimum_drivers
-            adherence = ((sum(driver_best.values()) + self.prior_mean * self.prior_strength) /
-                         (drivers + self.prior_strength)) if visible else None
-            shared = (weighted_ordered_overlap(recommended, _signature(personal[personal_scores.index(best)]))
-                      .shared_route_distance_m if personal else None)
-            result[key] = FamiliarityAssessment(
-                "AVAILABLE" if personal else "NO_HISTORY", best, supporting if personal else None,
-                len(personal), adherence,
-                sum(driver_trips.values()) if visible else None, drivers if visible else None,
-                confidence, recommended.distance_m, shared, min(self.max_penalty_s, max(0.0, penalty)), truncated)
+        budget = ComparisonBudget()
+        try:
+            for key, recommended in valid.items():
+                candidate_cells = set(recommended.cells)
+                personal_results = [
+                    weighted_ordered_overlap(recommended, signature, budget=budget,
+                                             historical_positions=positions)
+                    if candidate_cells.intersection(positions) else SimilarityResult(0.0, 0.0)
+                    for signature, positions in personal_indexed
+                ]
+                best_result = max(personal_results, key=lambda score: score.adherence) if personal_results else None
+                best = best_result.adherence if best_result else None
+                supporting = sum(score.adherence >= self.minimum_support for score in personal_results)
+                confidence = len(personal) / (len(personal) + self.confidence_prior) if personal else 0.0
+                penalty = self.max_penalty_s * (1 - best) * confidence if best is not None else 0.0
+                driver_best = {}
+                driver_trips = {}
+                for row, (signature, positions) in zip(community, community_indexed):
+                    if not candidate_cells.intersection(positions):
+                        continue
+                    score = weighted_ordered_overlap(recommended, signature, budget=budget,
+                                                     historical_positions=positions).adherence
+                    driver = row["driver_id"]
+                    if score >= self.minimum_support:
+                        driver_best[driver] = max(score, driver_best.get(driver, 0.0))
+                        driver_trips[driver] = driver_trips.get(driver, 0) + 1
+                drivers = len(driver_best)
+                visible = drivers >= self.minimum_drivers
+                adherence = ((sum(driver_best.values()) + self.prior_mean * self.prior_strength) /
+                             (drivers + self.prior_strength)) if visible else None
+                result[key] = FamiliarityAssessment(
+                    "AVAILABLE" if personal else "NO_HISTORY", best, supporting if personal else None,
+                    len(personal), adherence,
+                    sum(driver_trips.values()) if visible else None, drivers if visible else None,
+                    confidence, recommended.distance_m,
+                    best_result.shared_route_distance_m if best_result else None,
+                    min(self.max_penalty_s, max(0.0, penalty)), truncated)
+        except SimilarityWorkLimitExceeded:
+            record_familiarity_work_limit()
+            return {key: FamiliarityAssessment("UNAVAILABLE", degraded_reason="SIMILARITY_WORK_LIMIT")
+                    for key in candidate_signatures}
         return result
+
+    @staticmethod
+    def _index_row(row):
+        signature = _signature(row)
+        return signature, index_route_signature(signature)

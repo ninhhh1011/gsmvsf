@@ -24,3 +24,22 @@ def test_penalty_can_break_close_tie_but_not_a_large_physical_gap():
                               saved.request_time, RankingPolicy(), station_catalog)
     ranked = rank_features(features, {("S001", "CHARGING"): type("A", (), {"penalty_s": 25})()})
     assert ranked[0].station_id == "S002"
+
+
+async def test_history_failure_is_observable_and_degraded_without_details():
+    from backend.app.services.ranking.service import RankingService
+    from backend.tests.test_week4_ranking import HistoryResolver
+
+    class BrokenEvaluator:
+        async def assess_many(self, *_):
+            raise RuntimeError("database details must not escape")
+
+    resolver = HistoryResolver(station(), queue(), traffic())
+    result = await RankingService(resolver, familiarity_evaluator=BrokenEvaluator()).recommend(
+        evidence([candidate()]), candidate_signatures={("S001", "CHARGING"): None})
+    assert result.familiarity_enabled is True
+    assert result.familiarity_status == "UNAVAILABLE"
+    assert result.degraded is True
+    assert "ROUTE_FAMILIARITY_UNAVAILABLE" in result.degraded_reasons
+    assert result.familiarity_penalty_s == 0
+    assert "database details" not in str(result.model_dump())

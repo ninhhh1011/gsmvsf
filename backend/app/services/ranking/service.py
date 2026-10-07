@@ -69,14 +69,16 @@ class RankingService:
         features = build_features(evidence, view, request_time, self.policy, self.catalog)
 
         assessments = {}
-        if self.familiarity_evaluator is not None and candidates:
+        familiarity_evaluated = self.familiarity_evaluator is not None and candidate_signatures is not None
+        if familiarity_evaluated and candidates:
             try:
                 assessments = await self.familiarity_evaluator.assess_many(
                     evidence.energy_request.driver_id, candidate_signatures or {}, evidence.request_time)
             except Exception:
                 logger.warning('route_familiarity_unavailable')
-                assessments = {key: FamiliarityAssessment('UNAVAILABLE', degraded_reason='HISTORY_LOOKUP_FAILED')
-                               for key in (candidate_signatures or {})}
+                assessments = {(candidate.station_id, candidate.service_type.value):
+                               FamiliarityAssessment('UNAVAILABLE', degraded_reason='HISTORY_LOOKUP_FAILED')
+                               for candidate in candidates}
 
         rank_started = perf_counter()
         ranked = rank_features(features, assessments)
@@ -85,12 +87,24 @@ class RankingService:
         degraded_reasons = sorted({f'{kind.upper()}_{getattr(f, kind + "_state").freshness}'
             for f in features for kind in ('station', 'queue', 'traffic')
             if getattr(f, kind + "_state").freshness != 'FRESH'})
+        selected_assessment = (assessments.get((best.station_id, best.service_type.value))
+                               if best and familiarity_evaluated else None)
+        if familiarity_evaluated and any(a.status == 'UNAVAILABLE' for a in assessments.values()):
+            degraded_reasons = sorted(set(degraded_reasons) | {'ROUTE_FAMILIARITY_UNAVAILABLE'})
         result = RecommendationResult(
             candidate_search_id=evidence.candidate_search_id,
             request_time=request_time, has_recommendation=best is not None,
             recommended_station_id=best.station_id if best else None,
             recommended_service_type=best.service_type if best else None,
             ranked_candidates=ranked[:top_n], eligible_count=len(ranked), policy=self.policy,
+            familiarity_enabled=familiarity_evaluated,
+            familiarity_status=(selected_assessment.status if selected_assessment else
+                                'UNAVAILABLE' if familiarity_evaluated and best else None),
+            route_adherence=selected_assessment.personal_adherence if selected_assessment else None,
+            family_support=selected_assessment.community_adherence if selected_assessment else None,
+            familiarity_penalty_s=selected_assessment.penalty_s if selected_assessment else 0.0,
+            driver_trip_count=selected_assessment.personal_history_trip_count or 0 if selected_assessment else 0,
+            history_window_days=getattr(getattr(self.familiarity_evaluator, 'lookback', None), 'days', 7),
             energy_context=evidence.energy_request, degraded=bool(degraded_reasons),
             degraded_reasons=degraded_reasons,
             reason='RANKED_ELIGIBLE_CANDIDATES' if best else 'NO_ELIGIBLE_CANDIDATES',

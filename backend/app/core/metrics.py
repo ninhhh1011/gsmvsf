@@ -22,6 +22,11 @@ CANDIDATE_STATE_CONFLICTS = Counter(
     'Total candidate state conflicts requiring retry'
 )
 
+ROUTE_FAMILIARITY_WORK_LIMITS = Counter(
+    'ev_route_familiarity_work_limits_total',
+    'Route familiarity evaluations rejected by the matching-pair budget'
+)
+
 
 DB_FALLBACKS = Counter(
     'ev_db_fallback_total',
@@ -136,6 +141,10 @@ def record_request(status: str, endpoint: str = 'recommend'):
 def record_candidate_conflict():
     """Record a candidate state conflict."""
     CANDIDATE_STATE_CONFLICTS.inc()
+
+
+def record_familiarity_work_limit():
+    ROUTE_FAMILIARITY_WORK_LIMITS.inc()
 
 
 def record_db_fallback():
