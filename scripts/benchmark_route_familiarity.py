@@ -40,6 +40,16 @@ def benchmark_cases():
     return tuple(BenchmarkCase(size) for size in HISTORY_SIZES)
 
 
+def host_accessible_database_url(database_url):
+    parsed = urlsplit(database_url)
+    if parsed.hostname != "ev_db":
+        return database_url
+    credentials, separator, host_port = parsed.netloc.rpartition("@")
+    host_port = host_port.replace(parsed.hostname, "127.0.0.1", 1)
+    netloc = f"{credentials}{separator}{host_port}" if separator else host_port
+    return urlunsplit(parsed._replace(netloc=netloc))
+
+
 def percentile(values, fraction):
     ordered = sorted(values)
     return ordered[max(0, min(len(ordered) - 1, int((len(ordered) - 1) * fraction + 0.999999)))]
@@ -85,12 +95,16 @@ class BoundedHistoryRepository:
         self.row = {"driver_id": "synthetic-driver", "cells": signature.cells,
                     "cell_distances_m": signature.cell_distances_m,
                     "distance_m": signature.distance_m, "resolution": signature.resolution}
+        self.community = [
+            {**self.row, "driver_id": f"synthetic-driver-{index // 5:03d}"}
+            for index in range(min(history_size, 500))
+        ]
 
     async def personal_routes(self, *_):
         return [self.row] * min(self.history_size, 50)
 
     async def community_routes(self, *_):
-        return [self.row] * min(self.history_size, 500)
+        return self.community
 
 
 async def _measure_evaluation(case, signature):
@@ -105,11 +119,15 @@ async def _measure_evaluation(case, signature):
         started = perf_counter()
         await evaluate()
         results.append((perf_counter() - started) * 1000)
+    repository = service.repository
+    community_rows = repository.community
     return {"samples": SAMPLES, "warmups": WARMUPS,
             "p50_ms": round(statistics.median(results), 3),
             "p95_ms": round(percentile(results, 0.95), 3),
             "personal_rows_returned_per_candidate": min(case.history_size, 50),
-            "community_rows_returned_per_candidate": min(case.history_size, 500)}
+            "community_rows_returned_per_candidate": len(community_rows),
+            "community_distinct_drivers_returned": len({row["driver_id"] for row in community_rows}),
+            "community_history_truncated": len(community_rows) >= 500}
 
 
 async def _postgres_measure(database_url, signature):
@@ -154,7 +172,8 @@ async def _postgres_measure(database_url, signature):
                         (driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m)
                         VALUES ($1, $2, $3, $4, $5, $6, $7)""",
                         [("phase4-benchmark-personal" if i < personal_size else
-                          f"phase4-benchmark-community-{i:06d}", f"phase4-benchmark-trip-{i:06d}",
+                          f"phase4-benchmark-community-{((i - personal_size) // 5) % 100:03d}",
+                          f"phase4-benchmark-trip-{i:06d}",
                           as_of - timedelta(minutes=i % (7 * 24 * 60)), signature.distance_m,
                           db_signature.resolution, list(db_signature.cells), list(db_signature.cell_distances_m))
                          for i in range(size)])
@@ -259,7 +278,7 @@ async def run(database_url):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database-url", default=settings.database_url)
+    parser.add_argument("--database-url", default=host_accessible_database_url(settings.database_url))
     parser.add_argument("--output", type=Path, help="also write the full JSON report to this path")
     args = parser.parse_args()
     output = json.dumps(asyncio.run(run(args.database_url)), indent=2) + "\n"
