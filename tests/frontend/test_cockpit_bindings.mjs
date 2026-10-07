@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { createCockpitBindings } from '../../backend/app/static/demo/js/ui/cockpit_bindings.js';
 import { DriverModeController } from '../../backend/app/static/demo/js/ui/driver_controller.js';
 
@@ -102,7 +102,8 @@ test('cockpit controller stays a coordinator and recommendation panel presentati
     const controllerSource = await readFile(new URL('../../backend/app/static/demo/js/ui/driver_controller.js', import.meta.url), 'utf8');
     const bindingSource = await readFile(new URL('../../backend/app/static/demo/js/ui/cockpit_bindings.js', import.meta.url), 'utf8');
     const entrypointSource = await readFile(new URL('../../backend/app/static/demo/js/driver_mode.js', import.meta.url), 'utf8');
-    const domainFiles = ['driver_state.js', 'navigation_tracker.js', 'station_evaluator.js', 'vehicle_model.js'];
+    const domainFiles = (await readdir(new URL('../../backend/app/static/demo/js/domain/', import.meta.url)))
+        .filter(name => name.endsWith('.js'));
     const domainSources = await Promise.all(domainFiles.map(name => readFile(new URL(`../../backend/app/static/demo/js/domain/${name}`, import.meta.url), 'utf8')));
     assert.ok(controllerSource.split('\n').length <= 1600, 'controller remains below the stable cockpit coordination ceiling');
     assert.doesNotMatch(controllerSource, /\b(?:document|window)\b|getElementById|querySelector|addEventListener/);
