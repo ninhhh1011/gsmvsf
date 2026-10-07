@@ -9,6 +9,7 @@ Before beginning any implementation work, read these documents in order:
 3. **[docs/DATA_CONTRACT.md](./docs/DATA_CONTRACT.md)** — Dataset structure, relationships, runtime vs evaluation data
 4. **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — Current system, planned architecture, stack
 5. **[docs/DECISIONS.md](./docs/DECISIONS.md)** — Architecture decisions and their rationale
+6. **[PHASE_TRACKER.md](./PHASE_TRACKER.md)** — Current phase and progress tracking
 
 Also read the active-week documentation when it exists (e.g., `docs/WEEK_1.md`).
 
