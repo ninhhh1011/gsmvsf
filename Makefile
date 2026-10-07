@@ -1,4 +1,4 @@
-.PHONY: setup validate-data prepare-map up down logs test test-backend test-frontend test-all lint smoke prepare-external-gps validate-external-gps load-snapshots evaluate-week4 verify-week4
+.PHONY: setup validate-data prepare-map up down logs test test-backend test-frontend test-all lint lint-fix smoke prepare-external-gps validate-external-gps load-snapshots evaluate-week4 verify-week4 ci-check
 setup:
 	python -m pip install -e "backend[dev]"
 validate-data:
@@ -34,3 +34,4 @@ evaluate-week4:
 	python -B scripts/evaluate_week4.py
 verify-week4:
 	python -B scripts/verify_week4.py
+ci-check: lint test-backend test-frontend validate-data

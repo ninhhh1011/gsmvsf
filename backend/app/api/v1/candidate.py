@@ -29,7 +29,7 @@ from backend.app.services.routing.engine import (
     raise_for_routing_failure,
 )
 from backend.app.services.routing.models import RouteRequest, RouteResult, RouteStatus
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 router = APIRouter()

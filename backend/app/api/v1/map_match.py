@@ -1,6 +1,6 @@
 """Map matching endpoints using GraphHopper and PostGIS segment resolver."""
 
-from backend.app.dependencies import get_map_matching_service, get_segment_resolver
+from backend.app.dependencies import get_map_matching_service
 from backend.app.services.map_matching import (
     MapMatchingEngineError,
     MapMatchingInvalidRequestError,

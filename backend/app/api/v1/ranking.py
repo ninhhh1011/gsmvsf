@@ -5,8 +5,6 @@ from datetime import UTC, datetime
 from time import perf_counter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
-
-from backend.app.dependencies import get_demand_service
 from backend.app.config import settings
 from backend.app.services.candidate.models import CandidateSearchRequest
 from backend.app.services.demand.models import DemandContext, RequestedServiceType
