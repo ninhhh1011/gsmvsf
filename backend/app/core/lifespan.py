@@ -37,11 +37,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         from backend.app.services.snapshots.ingestion import IngestionService
         from backend.app.services.snapshots.repository import SnapshotRepository
         from backend.app.services.snapshots.resolver import SnapshotCache, SnapshotResolver
-        from backend.app.services.route_familiarity.repository import RouteHistoryRepository
-        from backend.app.services.route_familiarity.ingestion import RouteHistoryIngestion
         app.state.db_pool = pool
-        app.state.route_history_repository = RouteHistoryRepository(pool)
-        app.state.route_history_ingestion = RouteHistoryIngestion(app.state.route_history_repository)
+        app.state.route_history_repository = None
+        app.state.route_history_ingestion = None
+        if settings.enable_route_familiarity:
+            from backend.app.services.route_familiarity.repository import RouteHistoryRepository
+            from backend.app.services.route_familiarity.ingestion import RouteHistoryIngestion
+            app.state.route_history_repository = RouteHistoryRepository(pool)
+            app.state.route_history_ingestion = RouteHistoryIngestion(app.state.route_history_repository)
         app.state.redis = redis
         app.state.http_client = client
         app.state.driver_state_repository = RedisDriverStateRepository(client=redis)

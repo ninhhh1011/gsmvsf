@@ -6,8 +6,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import ConfigDict, Field, ValidationError, field_validator
 
 from backend.app.api.v1.ranking import authorize_ingestion
-from backend.app.dependencies import get_route_history_ingestion
-from backend.app.services.route_familiarity.ingestion import RouteHistoryIngestion
+from backend.app.config import settings
 from backend.app.services.snapshots.models import FrozenModel, StateError, aware_utc
 
 router = APIRouter()
@@ -33,8 +32,12 @@ class CompletedRoute(FrozenModel):
 
 
 @router.post("/internal/route-familiarity/routes", dependencies=[Depends(authorize_ingestion)])
-async def ingest_completed_route(request: Request, response: Response,
-                                 service: RouteHistoryIngestion = Depends(get_route_history_ingestion)):
+async def ingest_completed_route(request: Request, response: Response):
+    if not settings.enable_route_familiarity:
+        raise StateError("Route familiarity ingestion is disabled", "ROUTE_FAMILIARITY_DISABLED", 503)
+    service = getattr(request.app.state, "route_history_ingestion", None)
+    if service is None:
+        raise StateError("Route history ingestion unavailable", "ROUTE_HISTORY_UNAVAILABLE", 503)
     try:
         declared_size = int(request.headers.get("content-length", "0") or 0)
     except ValueError:
