@@ -4,7 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.config import Settings
-from backend.app.core.metrics import ROUTE_FAMILIARITY_EVENTS, ROUTE_FAMILIARITY_WORK_LIMITS
+from backend.app.core.metrics import (
+    ROUTE_FAMILIARITY_EVENTS, ROUTE_FAMILIARITY_WORK_LIMITS,
+    ROUTE_FAMILIARITY_HISTORY_ROWS,
+)
 from backend.app.services.route_familiarity.models import RouteSignature
 from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
@@ -116,6 +119,23 @@ async def test_event_time_and_retrieval_caps_are_passed_to_repository():
         ("personal", ("me", NOW, timedelta(days=7))),
         ("community", (["a"], "me", NOW, timedelta(days=7))),
     ]
+
+
+@pytest.mark.asyncio
+async def test_history_rows_metric_counts_both_bounded_query_results_without_labels():
+    row = dict(driver_id="private", trip_id="private-trip", cells=["a"],
+               cell_distances_m=[100.0], distance_m=100.0, resolution=11)
+    repo = Repository(personal=[row, row], community=[row, row, row])
+    metric = ROUTE_FAMILIARITY_HISTORY_ROWS
+    before = metric._value.get()
+
+    await RouteFamiliarityService(repo).assess_many("private", {("s", "x"): sig(["a"])}, NOW)
+
+    assert metric._value.get() == before + 5
+    assert not metric._labelnames
+
+    await RouteFamiliarityService(Repository()).assess_many("private", {("s", "x"): sig(["a"])}, NOW)
+    assert metric._value.get() == before + 5
 
 
 @pytest.mark.asyncio

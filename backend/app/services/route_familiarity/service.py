@@ -5,7 +5,7 @@ from time import perf_counter
 
 from backend.app.config import settings
 from backend.app.core.metrics import (
-    observe_route_familiarity, record_familiarity_work_limit,
+    ROUTE_FAMILIARITY_HISTORY_ROWS, observe_route_familiarity, record_familiarity_work_limit,
     record_route_familiarity_event,
 )
 from backend.app.services.route_familiarity.models import RouteSignature, SimilarityResult
@@ -74,6 +74,7 @@ class RouteFamiliarityService:
         community = await self.repository.community_routes(
             sorted({cell for sig in valid.values() for cell in sig.cells}),
             driver_id, as_of, self.lookback)
+        ROUTE_FAMILIARITY_HISTORY_ROWS.inc(len(personal) + len(community))
         observe_route_familiarity('lookup', perf_counter() - lookup_started)
         record_route_familiarity_event('lookup')
         personal_indexed = [self._index_row(row) for row in personal]

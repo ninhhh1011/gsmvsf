@@ -31,6 +31,10 @@ ROUTE_FAMILIARITY_EVENTS = Counter(
     'ev_route_familiarity_events_total', 'Route familiarity work by bounded stage and outcome',
     ['stage', 'outcome']
 )
+ROUTE_FAMILIARITY_HISTORY_ROWS = Counter(
+    'ev_route_familiarity_history_rows_total',
+    'Bounded personal and community route history rows examined'
+)
 ROUTE_FAMILIARITY_LATENCY = Histogram(
     'ev_route_familiarity_latency_seconds', 'Route familiarity work duration by bounded stage',
     ['stage'], buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]
