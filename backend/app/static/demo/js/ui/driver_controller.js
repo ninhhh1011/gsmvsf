@@ -10,12 +10,6 @@
  * - Full test contract compatibility.
  */
 
-import {
-    classifyEnergyWarning,
-    renderEnergyWarningBanner,
-    renderRecommendationCard,
-    renderCostBreakdown
-} from '../components.js';
 import { TrajectoryReplayController, ReplayState } from '../replay.js';
 import {
     decodePolyline,
@@ -61,6 +55,14 @@ import {
     renderTripAssignedCardHTML,
     renderTripActiveCardHTML,
     renderPositionStatusHTML,
+    renderBatteryView,
+    renderActiveCockpitView,
+    renderStatusBadge,
+    renderTripActiveEta,
+    renderEnergyWarningHTML,
+    renderVehicleOptions,
+    renderCoordinateText,
+    renderCostBreakdownHTML,
     renderPostTripBannerHTML
 } from './cockpit_renderer.js';
 import { renderDrawerStationsListHTML } from './drawer_renderer.js';
@@ -167,7 +169,7 @@ export class DriverModeController {
         if (!this.currentVehicle) {
             this.selectVehicleModel('VF_3');
         }
-        this.bindings.setVehicleCatalog(this.vehicleCatalog, this.currentVehicle?.vehicle_model || 'VF_3');
+        this.bindings.setVehicleCatalog(renderVehicleOptions(this.vehicleCatalog), this.currentVehicle?.vehicle_model || 'VF_3');
     }
 
     async init() {
@@ -245,7 +247,7 @@ export class DriverModeController {
         this.currentSocPct = val;
         this.updateEstimatedRange();
 
-        this.bindings.updateBattery({ soc: this.currentSocPct, range: this.estimatedRangeKm });
+        this.bindings.updateBattery(renderBatteryView({ soc: this.currentSocPct, range: this.estimatedRangeKm }));
 
         if (triggerEvaluation && this.state === DriverState.TRIP_ACTIVE) {
             this._evaluateAtCurrentPosition().then(() => {
@@ -273,7 +275,7 @@ export class DriverModeController {
         };
         const vnLabel = labels[this.state] || this.state;
 
-        this.bindings.setStatusBadge(this.state, vnLabel);
+        this.bindings.setStatusBadge(renderStatusBadge(this.state, vnLabel));
     }
 
     _getScenarioDescription(scenarioId) {
@@ -1338,7 +1340,7 @@ export class DriverModeController {
 
         const dest = this.customDestination || { latitude: 21.0285, longitude: 105.8542 };
 
-        this.bindings.setOriginCoordinates(orig);
+        this.bindings.setOriginCoordinates(renderCoordinateText(orig));
 
         await this._updateCustomRoute(orig, dest);
     }
@@ -1349,7 +1351,7 @@ export class DriverModeController {
 
         const origin = this.customOrigin || this.currentPos || { latitude: 20.9849, longitude: 105.7935 };
 
-        this.bindings.setDestinationCoordinates(dest);
+        this.bindings.setDestinationCoordinates(renderCoordinateText(dest));
 
         await this._updateCustomRoute(origin, dest);
     }
@@ -1419,10 +1421,8 @@ export class DriverModeController {
     }
 
     renderTripActiveUI() {
-        let etaMin = '—';
-        if (this.lastRecommendation?.ranked_candidates?.length > 0) etaMin = (this.lastRecommendation.ranked_candidates[0].eta_to_station_s / 60).toFixed(0);
-        else if (this.remainingTripDistanceKm > 0) etaMin = Math.round(this.remainingTripDistanceKm * 2).toString();
-        const warningBanner = renderEnergyWarningBanner(this.lastRecommendation?.energy_context);
+        const etaMin = renderTripActiveEta(this.lastRecommendation, this.remainingTripDistanceKm);
+        const warningBanner = renderEnergyWarningHTML(this.lastRecommendation?.energy_context);
         const recSnippet = renderDriverRecommendation(this.lastRecommendation);
         const posStatus = renderPositionStatusHTML(this.matchedPos, this.currentPos);
         const progress = this.replay.getProgressText?.() || '';
@@ -1442,6 +1442,7 @@ export class DriverModeController {
         };
         this.bindings.renderActive(renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, playBtnClass, playBtnText, pauseBtnClass }), {
             distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm,
+            view: renderActiveCockpitView({ distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm }),
             posStatus, progress, warning: warningBanner, recommendation: recSnippet, postTrip: postTripSnippet,
             playText: playBtnText, playClass: playBtnClass, pauseClass: pauseBtnClass, navigationLocked: this._navigationLocked
         }, callbacks);
@@ -1449,7 +1450,7 @@ export class DriverModeController {
 
     openCostBreakdownModal(candidate) {
         if (!candidate) return;
-        if (this.bindings.openCostBreakdown(renderCostBreakdown(candidate))) {
+        if (this.bindings.openCostBreakdown(renderCostBreakdownHTML(candidate))) {
             const close = () => this.closeCostBreakdownModal();
             this.bindings.bindCostModalClose(close);
         }

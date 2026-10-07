@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { createCockpitBindings } from '../../backend/app/static/demo/js/ui/cockpit_bindings.js';
+import { renderBatteryView, renderActiveCockpitView, renderTripActiveEta } from '../../backend/app/static/demo/js/ui/cockpit_renderer.js';
 import { DriverModeController } from '../../backend/app/static/demo/js/ui/driver_controller.js';
 
 function element(dataset = {}) {
@@ -98,7 +99,7 @@ test('controller escapes externally supplied road identity before handing positi
     assert.doesNotMatch(positionMarkup, /<img src=x/);
 });
 
-test('cockpit controller stays a coordinator and recommendation panel presentation stays in bindings', async () => {
+test('cockpit controller coordinates while bindings only apply renderer output', async () => {
     const controllerSource = await readFile(new URL('../../backend/app/static/demo/js/ui/driver_controller.js', import.meta.url), 'utf8');
     const bindingSource = await readFile(new URL('../../backend/app/static/demo/js/ui/cockpit_bindings.js', import.meta.url), 'utf8');
     const entrypointSource = await readFile(new URL('../../backend/app/static/demo/js/driver_mode.js', import.meta.url), 'utf8');
@@ -113,4 +114,23 @@ test('cockpit controller stays a coordinator and recommendation panel presentati
     assert.doesNotMatch(entrypointSource, /recommendation-panel|rec-panel-list|renderDriverRecommendation/);
     assert.match(bindingSource, /showRecommendationPanel/);
     assert.doesNotMatch(controllerSource, /recommendation-panel|rec-panel-list|createElement\(/);
+    assert.doesNotMatch(bindingSource, /state\.soc\s*[<>=]|\.toFixed\(|#(?:ef4444|f59e0b|10b981)|bg-(?:danger|warning|success)|text-danger/);
+    assert.doesNotMatch(controllerSource, /renderRecommendationCard/);
+});
+
+test('cockpit renderer owns SOC colors, classes, and active metric formatting', () => {
+    const battery = renderBatteryView({ soc: 18, range: 42.4 });
+    assert.deepEqual(battery, {
+        labelText: '18% (42 km)', labelColor: '#ef4444', socText: '18%',
+        socClass: 'stat-value text-danger', rangeText: '42 km',
+        batteryWidth: '18%', batteryClass: 'battery-bar-fill bg-danger', sliderValue: '18'
+    });
+    assert.deepEqual(renderActiveCockpitView({ distance: 12.34, eta: '8', soc: 18, range: 42.4 }), {
+        distanceText: '12.3 km', etaText: '8 phút', socText: '18%',
+        socClass: 'stat-value text-danger', rangeText: '42 km', batteryWidth: '18%',
+        batteryClass: 'battery-bar-fill bg-danger', labelText: '18% (42 km)',
+        labelColor: '#ef4444', sliderValue: '18'
+    });
+    assert.equal(renderTripActiveEta({ ranked_candidates: [{ eta_to_station_s: 300 }] }, 30), '5');
+    assert.equal(renderTripActiveEta(null, 30), '60');
 });

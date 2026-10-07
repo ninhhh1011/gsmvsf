@@ -6,6 +6,56 @@
 import { renderEnergyWarningBanner, renderRecommendationCard, renderCostBreakdown } from '../components.js';
 import { escapeHtml } from '../domain/route-display.js';
 
+export function renderBatteryView({ soc, range }) {
+    const percent = soc.toFixed(0);
+    const rangeKm = range.toFixed(0);
+    const critical = soc < 20;
+    const warning = soc < 30;
+    const color = critical ? '#ef4444' : warning ? '#f59e0b' : '#10b981';
+    return {
+        labelText: `${percent}% (${rangeKm} km)`, labelColor: color,
+        socText: `${percent}%`, socClass: `stat-value ${critical ? 'text-danger' : ''}`,
+        rangeText: `${rangeKm} km`, batteryWidth: `${Math.max(5, soc)}%`,
+        batteryClass: `battery-bar-fill ${critical ? 'bg-danger' : warning ? 'bg-warning' : 'bg-success'}`,
+        sliderValue: String(Math.round(soc))
+    };
+}
+
+export function renderActiveCockpitView(state) {
+    return {
+        ...renderBatteryView(state),
+        distanceText: `${state.distance.toFixed(1)} km`,
+        etaText: `${state.eta} phút`
+    };
+}
+
+export function renderTripActiveEta(recommendation, remainingDistanceKm) {
+    if (recommendation?.ranked_candidates?.length > 0) {
+        return (recommendation.ranked_candidates[0].eta_to_station_s / 60).toFixed(0);
+    }
+    return remainingDistanceKm > 0 ? Math.round(remainingDistanceKm * 2).toString() : '—';
+}
+
+export function renderStatusBadge(state, label) {
+    return { label, accessibleState: state, className: `status-badge badge-${state.toLowerCase()}` };
+}
+
+export function renderVehicleOptions(vehicles) {
+    return vehicles.map(({ id, name, battery_kwh }) => ({ id, label: `${name} (${battery_kwh.toFixed(1)} kWh)` }));
+}
+
+export function renderCoordinateText(coords) {
+    return `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
+}
+
+export function renderCostBreakdownHTML(candidate) {
+    return renderCostBreakdown(candidate);
+}
+
+export function renderEnergyWarningHTML(context) {
+    return renderEnergyWarningBanner(context);
+}
+
 /**
  * Render Available HUD card.
  */
@@ -142,6 +192,7 @@ export function renderTripCompleteCardHTML(lastRecommendation, postTripStation) 
 
 
 export function renderTripAssignedCardHTML(controller) {
+    const battery = renderBatteryView({ soc: controller.currentSocPct, range: controller.estimatedRangeKm });
     return `
             <div class="driver-nav-hud">
                 <div class="hud-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -173,12 +224,12 @@ export function renderTripAssignedCardHTML(controller) {
                         <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
                             🔋 Tùy chỉnh mức Pin ban đầu (SOC)
                         </span>
-                        <span id="label-assigned-soc-val" style="font-size: 12px; font-weight: 700; color: ${controller.currentSocPct < 20 ? '#ef4444' : (controller.currentSocPct < 30 ? '#f59e0b' : '#10b981')};">
-                            ${controller.currentSocPct.toFixed(0)}% (${controller.estimatedRangeKm.toFixed(0)} km)
+                        <span id="label-assigned-soc-val" style="font-size: 12px; font-weight: 700; color: ${battery.labelColor};">
+                            ${battery.labelText}
                         </span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="range" id="slider-assigned-soc" min="5" max="100" step="1" value="${Math.round(controller.currentSocPct)}"
+                        <input type="range" id="slider-assigned-soc" min="5" max="100" step="1" value="${battery.sliderValue}"
                                style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
                         <div style="display: flex; gap: 4px;">
                             <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="12" style="padding: 2px 6px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">12%</button>
@@ -209,6 +260,7 @@ export function renderTripAssignedCardHTML(controller) {
 }
 
 export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, playBtnClass, playBtnText, pauseBtnClass }) {
+    const battery = renderBatteryView({ soc: controller.currentSocPct, range: controller.estimatedRangeKm });
     return `
             <div class="driver-nav-hud" id="driver-active-hud" data-hud-state="TRIP_ACTIVE">
                 <div id="hud-warning-container">
@@ -238,7 +290,7 @@ export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, po
                         </div>
                         <div class="stat-box">
                             <span class="stat-label">Pin (SOC)</span>
-                            <span class="stat-value ${controller.currentSocPct < 20 ? 'text-danger' : ''}" id="val-trip-soc">${controller.currentSocPct.toFixed(0)}%</span>
+                            <span class="${battery.socClass}" id="val-trip-soc">${battery.socText}</span>
                         </div>
                         <div class="stat-box">
                             <span class="stat-label">Tầm xa</span>
@@ -247,8 +299,8 @@ export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, po
                     </div>
 
                     <div class="battery-bar-container" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                        <div id="battery-bar-fill" class="battery-bar-fill ${controller.currentSocPct < 20 ? 'bg-danger' : (controller.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}"
-                             style="width: ${Math.max(5, controller.currentSocPct)}%; height: 100%;"></div>
+                        <div id="battery-bar-fill" class="${battery.batteryClass}"
+                             style="width: ${battery.batteryWidth}; height: 100%;"></div>
                     </div>
 
                     <!-- Interactive Battery SOC Adjuster -->
@@ -257,12 +309,12 @@ export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, po
                             <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
                                 🔋 Điều chỉnh mức Pin (SOC)
                             </span>
-                            <span id="label-soc-slider-val" style="font-size: 12px; font-weight: 700; color: ${controller.currentSocPct < 20 ? '#ef4444' : (controller.currentSocPct < 30 ? '#f59e0b' : '#10b981')};">
-                                ${controller.currentSocPct.toFixed(0)}% (${controller.estimatedRangeKm.toFixed(0)} km)
+                            <span id="label-soc-slider-val" style="font-size: 12px; font-weight: 700; color: ${battery.labelColor};">
+                                ${battery.labelText}
                             </span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="range" id="slider-cockpit-soc" min="5" max="100" step="1" value="${Math.round(controller.currentSocPct)}"
+                            <input type="range" id="slider-cockpit-soc" min="5" max="100" step="1" value="${battery.sliderValue}"
                                    style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
                             <div class="quick-soc-presets" style="display: flex; gap: 4px;">
                                 <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="12" title="Mức pin nguy cấp (< 15%)"

@@ -1,4 +1,4 @@
-/** Browser boundary for the driver cockpit: DOM lookup, rendering, and event translation. */
+/** Browser boundary for the driver cockpit: DOM lookup and event translation. */
 export function createCockpitBindings(root = globalThis.document) {
     const get = id => root?.getElementById(id);
     const listen = (id, type, callback, options) => get(id)?.addEventListener(type, callback, options);
@@ -27,13 +27,13 @@ export function createCockpitBindings(root = globalThis.document) {
     }
 
     return {
-        setVehicleCatalog(vehicles, selected) {
+        setVehicleCatalog(options, selected) {
             const select = get('cockpit-vehicle-select');
             if (!select) return;
-            select.replaceChildren(...vehicles.map(vehicle => {
+            select.replaceChildren(...options.map(({ id, label }) => {
                 const option = root.createElement('option');
-                option.value = vehicle.id;
-                option.textContent = `${vehicle.name} (${vehicle.battery_kwh.toFixed(1)} kWh)`;
+                option.value = id;
+                option.textContent = label;
                 return option;
             }));
             select.value = selected;
@@ -63,32 +63,31 @@ export function createCockpitBindings(root = globalThis.document) {
                 callbacks.changeFilter(event.currentTarget.dataset.filter || 'ALL');
             }));
         },
-        setStatusBadge(state, label) {
+        setStatusBadge(view) {
             const badge = get('driver-status-badge');
             if (badge) {
-                badge.textContent = label;
+                badge.textContent = view.label;
                 const stateLabel = root.createElement('span');
                 stateLabel.className = 'sr-only';
-                stateLabel.textContent = state;
+                stateLabel.textContent = view.accessibleState;
                 badge.appendChild(stateLabel);
-                badge.className = `status-badge badge-${state.toLowerCase()}`;
+                badge.className = view.className;
             }
         },
-        updateBattery(state) {
-            const percent = state.soc.toFixed(0), range = state.range.toFixed(0), color = state.soc < 20 ? '#ef4444' : state.soc < 30 ? '#f59e0b' : '#10b981';
+        updateBattery(view) {
             for (const id of ['label-soc-slider-val', 'label-assigned-soc-val']) {
-                const el = get(id); if (el) { el.textContent = `${percent}% (${range} km)`; el.style.color = color; }
+                const el = get(id); if (el) { el.textContent = view.labelText; el.style.color = view.labelColor; }
             }
-            const soc = get('val-trip-soc'); if (soc) { soc.textContent = `${percent}%`; soc.className = `stat-value ${state.soc < 20 ? 'text-danger' : ''}`; }
-            const tripRange = get('val-trip-range'); if (tripRange) tripRange.textContent = `${range} km`;
-            const assignedSoc = get('val-assigned-soc'); if (assignedSoc) assignedSoc.textContent = `${percent}%`;
-            const bar = get('battery-bar-fill'); if (bar) { bar.style.width = `${Math.max(5, state.soc)}%`; bar.className = `battery-bar-fill ${state.soc < 20 ? 'bg-danger' : state.soc < 30 ? 'bg-warning' : 'bg-success'}`; }
-            for (const id of ['slider-cockpit-soc', 'slider-assigned-soc']) { const slider = get(id); if (slider && root.activeElement !== slider) slider.value = Math.round(state.soc); }
+            const soc = get('val-trip-soc'); if (soc) { soc.textContent = view.socText; soc.className = view.socClass; }
+            const tripRange = get('val-trip-range'); if (tripRange) tripRange.textContent = view.rangeText;
+            const assignedSoc = get('val-assigned-soc'); if (assignedSoc) assignedSoc.textContent = view.socText;
+            const bar = get('battery-bar-fill'); if (bar) { bar.style.width = view.batteryWidth; bar.className = view.batteryClass; }
+            for (const id of ['slider-cockpit-soc', 'slider-assigned-soc']) { const slider = get(id); if (slider && root.activeElement !== slider) slider.value = view.sliderValue; }
         },
         isStationsDrawerOpen() { const drawer = get('stations-drawer'); return !!drawer && drawer.style.display !== 'none'; },
         setStationsDrawerOpen(open) { const drawer = get('stations-drawer'); if (drawer) drawer.style.display = open ? 'flex' : 'none'; return !!drawer; },
-        setOriginCoordinates(coords) { const el = get('text-origin-coords'); if (el) el.textContent = `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`; },
-        setDestinationCoordinates(coords) { const el = get('text-dest-coords'); if (el) el.textContent = `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`; },
+        setOriginCoordinates(text) { const el = get('text-origin-coords'); if (el) el.textContent = text; },
+        setDestinationCoordinates(text) { const el = get('text-dest-coords'); if (el) el.textContent = text; },
         setNavigationButtonState(text, disabled) { const button = get('btn-nav-station'); if (button) { button.textContent = text; button.disabled = disabled; } },
         setActiveIntent(value) { each('.charging-intent-selector .intent-tab', tab => tab.classList.toggle('active', tab.dataset.intent === value)); },
         showRouteUnavailable(message) { root?.defaultView?.alert(message); },
@@ -114,13 +113,14 @@ export function createCockpitBindings(root = globalThis.document) {
             const existing = container.querySelector('#driver-active-hud');
             if (!existing) { container.innerHTML = html; bindActiveControls(callbacks); }
             else {
-                const dist = get('val-remaining-dist'); if (dist) dist.innerHTML = `${state.distance.toFixed(1)} <small>km</small>`;
-                const eta = get('val-trip-eta'); if (eta) eta.innerHTML = `${state.eta} <small>phút</small><span class="sr-only">min</span>`;
-                const soc = get('val-trip-soc'); if (soc) { soc.textContent = `${state.soc.toFixed(0)}%`; soc.className = `stat-value ${state.soc < 20 ? 'text-danger' : ''}`; }
-                const range = get('val-trip-range'); if (range) range.innerHTML = `${state.range.toFixed(0)} <small>km</small>`;
-                const bar = get('battery-bar-fill'); if (bar) { bar.style.width = `${Math.max(5, state.soc)}%`; bar.className = `battery-bar-fill ${state.soc < 20 ? 'bg-danger' : state.soc < 30 ? 'bg-warning' : 'bg-success'}`; }
-                const label = get('label-soc-slider-val'); if (label) { label.textContent = `${state.soc.toFixed(0)}% (${state.range.toFixed(0)} km)`; label.style.color = state.soc < 20 ? '#ef4444' : state.soc < 30 ? '#f59e0b' : '#10b981'; }
-                const slider = get('slider-cockpit-soc'); if (slider && root.activeElement !== slider) slider.value = Math.round(state.soc);
+                const view = state.view;
+                const dist = get('val-remaining-dist'); if (dist) dist.textContent = view.distanceText;
+                const eta = get('val-trip-eta'); if (eta) eta.textContent = view.etaText;
+                const soc = get('val-trip-soc'); if (soc) { soc.textContent = view.socText; soc.className = view.socClass; }
+                const range = get('val-trip-range'); if (range) range.textContent = view.rangeText;
+                const bar = get('battery-bar-fill'); if (bar) { bar.style.width = view.batteryWidth; bar.className = view.batteryClass; }
+                const label = get('label-soc-slider-val'); if (label) { label.textContent = view.labelText; label.style.color = view.labelColor; }
+                const slider = get('slider-cockpit-soc'); if (slider && root.activeElement !== slider) slider.value = view.sliderValue;
                 const pos = get('hud-pos-status'); if (pos) pos.innerHTML = state.posStatus;
                 const progress = get('hud-progress-status'); if (progress) progress.textContent = state.progress;
                 const warning = get('hud-warning-container'); if (warning) warning.innerHTML = state.warning;
