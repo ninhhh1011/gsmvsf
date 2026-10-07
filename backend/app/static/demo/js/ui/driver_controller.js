@@ -59,18 +59,21 @@ import {
     renderOfflineCardHTML,
     renderTripCompleteCardHTML,
     renderTripAssignedCardHTML,
-    renderTripActiveCardHTML
+    renderTripActiveCardHTML,
+    renderPositionStatusHTML,
+    renderPostTripBannerHTML
 } from './cockpit_renderer.js';
 import { renderDrawerStationsListHTML } from './drawer_renderer.js';
-import { renderDriverRecommendation } from './driver_recommendation_renderer.js';
+import { renderDriverRecommendation, renderRecommendationPanelHTML } from './driver_recommendation_renderer.js';
 import { MapPicker } from './map_picker.js';
-import { escapeHtml } from '../domain/route-display.js';
+import { createCockpitBindings } from './cockpit_bindings.js';
 
 export class DriverModeController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
         this.map = mapEngine;
         this.options = options;
+        this.bindings = options.bindings || createCockpitBindings();
         this.mapPicker = new MapPicker({
             mapController: this.map,
             onOriginSelected: async (coords) => await this.setCustomOrigin(coords),
@@ -153,9 +156,6 @@ export class DriverModeController {
         });
 
         this.onStateChange = options.onStateChange || (() => {});
-        if (typeof window !== 'undefined') {
-            window.driverMode = this;
-        }
     }
 
     setCatalogs(trips, vehicles, stations, scenarios = [], vehicleCatalog = []) {
@@ -167,26 +167,14 @@ export class DriverModeController {
         if (!this.currentVehicle) {
             this.selectVehicleModel('VF_3');
         }
-        const select = document.getElementById('cockpit-vehicle-select');
-        if (select) {
-            select.replaceChildren(...this.vehicleCatalog.map(vehicle => {
-                const option = document.createElement('option');
-                option.value = vehicle.id;
-                option.textContent = `${vehicle.name} (${vehicle.battery_kwh.toFixed(1)} kWh)`;
-                return option;
-            }));
-            select.value = this.currentVehicle?.vehicle_model || 'VF_3';
-        }
+        this.bindings.setVehicleCatalog(this.vehicleCatalog, this.currentVehicle?.vehicle_model || 'VF_3');
     }
 
     async init() {
         this.setState(DriverState.AVAILABLE);
         this.renderAvailableUI();
         this.bindGlobalControls();
-        const select = document.getElementById('cockpit-vehicle-select');
-        if (select) {
-            select.value = this.currentVehicle?.vehicle_model || 'VF_3';
-        }
+        this.bindings.setVehicleSelection(this.currentVehicle?.vehicle_model || 'VF_3');
     }
 
     renderCurrentStateUI() {
@@ -233,10 +221,7 @@ export class DriverModeController {
         this.updateEstimatedRange();
 
         // Sync dropdown UI
-        const select = document.getElementById('cockpit-vehicle-select');
-        if (select && select.value !== spec.vehicle_model) {
-            select.value = spec.vehicle_model;
-        }
+        this.bindings.setVehicleSelection(spec.vehicle_model);
 
         console.log(`[VEHICLE SWITCHED] Model: ${spec.vehicle_model} (${spec.usable_kwh} kWh, ${spec.consumption_wh_km} Wh/km), Current Range: ${this.estimatedRangeKm} km`);
 
@@ -244,8 +229,7 @@ export class DriverModeController {
         this.renderCurrentStateUI();
 
         // If stations drawer is open, refresh evaluations
-        const drawer = document.getElementById('stations-drawer');
-        if (drawer && drawer.style.display !== 'none') {
+        if (this.bindings.isStationsDrawerOpen()) {
             this.refreshDrawerEvaluations();
         }
     }
@@ -261,50 +245,12 @@ export class DriverModeController {
         this.currentSocPct = val;
         this.updateEstimatedRange();
 
-        // Sync display elements in DOM
-        if (typeof document !== 'undefined') {
-            const socDisplay = document.getElementById('label-soc-slider-val');
-            if (socDisplay) {
-                socDisplay.textContent = `${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)`;
-                socDisplay.style.color = this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981');
-            }
-            const assignedDisplay = document.getElementById('label-assigned-soc-val');
-            if (assignedDisplay) {
-                assignedDisplay.textContent = `${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)`;
-                assignedDisplay.style.color = this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981');
-            }
-            const valTripSoc = document.getElementById('val-trip-soc');
-            if (valTripSoc) {
-                valTripSoc.textContent = `${this.currentSocPct.toFixed(0)}%`;
-                valTripSoc.className = `stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}`;
-            }
-            const valTripRange = document.getElementById('val-trip-range');
-            if (valTripRange) {
-                valTripRange.textContent = `${this.estimatedRangeKm.toFixed(0)} km`;
-            }
-            const valAssignedSoc = document.getElementById('val-assigned-soc');
-            if (valAssignedSoc) {
-                valAssignedSoc.textContent = `${this.currentSocPct.toFixed(0)}%`;
-            }
-            const barFill = document.getElementById('battery-bar-fill');
-            if (barFill) {
-                barFill.style.width = `${Math.max(5, this.currentSocPct)}%`;
-                barFill.className = `battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}`;
-            }
-            const slider = document.getElementById('slider-cockpit-soc');
-            if (slider && document.activeElement !== slider) {
-                slider.value = Math.round(this.currentSocPct);
-            }
-            const assignedSlider = document.getElementById('slider-assigned-soc');
-            if (assignedSlider && document.activeElement !== assignedSlider) {
-                assignedSlider.value = Math.round(this.currentSocPct);
-            }
-        }
+        this.bindings.updateBattery({ soc: this.currentSocPct, range: this.estimatedRangeKm });
 
         if (triggerEvaluation && this.state === DriverState.TRIP_ACTIVE) {
             this._evaluateAtCurrentPosition().then(() => {
                 this.renderTripActiveUI();
-                if (document.getElementById('stations-drawer')?.style.display !== 'none') {
+                if (this.bindings.isStationsDrawerOpen()) {
                     this.refreshDrawerEvaluations();
                 }
             }).catch(err => console.warn('SOC change evaluation warning:', err));
@@ -318,9 +264,6 @@ export class DriverModeController {
     }
 
     updateHeaderBadge() {
-        const badge = document.getElementById('driver-status-badge');
-        if (!badge) return;
-
         const labels = {
             'AVAILABLE': 'SẴN SÀNG',
             'TRIP_ASSIGNED': 'ĐÃ NHẬN CHUYẾN',
@@ -330,8 +273,7 @@ export class DriverModeController {
         };
         const vnLabel = labels[this.state] || this.state;
 
-        badge.innerHTML = `${vnLabel} <span class="sr-only">${this.state}</span>`;
-        badge.className = `status-badge badge-${this.state.toLowerCase()}`;
+        this.bindings.setStatusBadge(this.state, vnLabel);
     }
 
     _getScenarioDescription(scenarioId) {
@@ -890,120 +832,17 @@ export class DriverModeController {
     }
 
     _showRecommendationPanel(candidates) {
-        if (this._navigationLocked || !candidates || candidates.length === 0) return;
-
-        // Nếu đã có panel rồi → update, không tạo mới
-        let panel = document.getElementById('recommendation-panel');
-
-        if (!panel) {
-            // Tạo panel mới — static HTML only, no user data
-            panel = document.createElement('div');
-            panel.id = 'recommendation-panel';
-
-            const header = document.createElement('div');
-            header.className = 'rec-panel-header';
-            header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8fafc; font-weight: 600; font-size: 13px; color: #0f172a;';
-
-            const headerTitle = document.createElement('span');
-            headerTitle.textContent = '🔌 Tìm thấy trạm sạc gần đó';
-            header.appendChild(headerTitle);
-
-            const closeBtn = document.createElement('button');
-            closeBtn.id = 'rec-panel-close';
-            closeBtn.className = 'btn btn-sm btn-outline';
-            closeBtn.textContent = '✕';
-            closeBtn.style.cssText = 'padding: 2px 8px; font-size: 12px; line-height: 1; cursor: pointer; border: 1px solid #cbd5e1; border-radius: 6px; background: transparent; color: #64748b;';
-            closeBtn.onclick = () => this._hideRecommendationPanel();
-            header.appendChild(closeBtn);
-
-            const list = document.createElement('div');
-            list.id = 'rec-panel-list';
-            list.className = 'rec-panel-list';
-            list.style.cssText = 'max-height: 360px; overflow-y: auto;';
-
-            const footer = document.createElement('div');
-            footer.className = 'rec-panel-footer';
-            footer.style.cssText = 'padding: 8px 14px; background: #f8fafc; border-top: 1px solid #eee; font-size: 11px; color: #64748b; text-align: center;';
-            const footerSmall = document.createElement('small');
-            footerSmall.textContent = 'Chọn trạm để bắt đầu điều hướng';
-            footer.appendChild(footerSmall);
-
-            panel.appendChild(header);
-            panel.appendChild(list);
-            panel.appendChild(footer);
-
-            // Style panel
-            panel.style.cssText = `
-                position: fixed; top: 80px; right: 20px; z-index: 1000;
-                width: 320px; background: white; border-radius: 12px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-                font-family: sans-serif; overflow: hidden;
-            `;
-            document.body.appendChild(panel);
-        }
-
-        // Render danh sách candidates — DOM-safe, no innerHTML with user data
-        const list = document.getElementById('rec-panel-list');
-        if (!list) return;
-        list.replaceChildren();
-
-        candidates.forEach((c, idx) => {
-            const st = this.stations.find(s => s.station_id === c.station_id);
-            const rankColors = { 1: '#f59e0b', 2: '#3b82f6', 3: '#10b981', 4: '#8b5cf6', 5: '#6b7280' };
-            const color = rankColors[idx + 1] || '#6b7280';
-            const etaMin = c.eta_to_station_s ? (c.eta_to_station_s / 60).toFixed(1) : '?';
-            const etaService = c.eta_to_service_complete_s ? (c.eta_to_service_complete_s / 60).toFixed(0) : '?';
-            const scoreText = c.score != null ? (c.score * 100).toFixed(0) + '%' : '—';
-            const bgColor = idx === 0 ? '#fffbeb' : 'white';
-
-            const item = document.createElement('div');
-            item.className = 'rec-candidate-item';
-            item.dataset.stationId = c.station_id;
-            item.style.cssText = `display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #eee; background: ${bgColor};`;
-
-            const rankDiv = document.createElement('div');
-            rankDiv.style.cssText = `width: 28px; height: 28px; border-radius: 50%; background: ${color}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);`;
-            rankDiv.textContent = String(idx + 1);
-            item.appendChild(rankDiv);
-
-            const infoDiv = document.createElement('div');
-            infoDiv.style.cssText = 'flex: 1; min-width: 0;';
-
-            const nameDiv = document.createElement('div');
-            nameDiv.style.cssText = 'font-weight: 600; font-size: 13px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
-            nameDiv.textContent = st?.name || c.station_id;
-            infoDiv.appendChild(nameDiv);
-
-            const detailDiv = document.createElement('div');
-            detailDiv.style.cssText = 'font-size: 11px; color: #64748b;';
-            detailDiv.textContent = `ETA ${etaMin} phút · Sạc ${etaService} phút`;
-            infoDiv.appendChild(detailDiv);
-            item.appendChild(infoDiv);
-
-            const scoreDiv = document.createElement('div');
-            const scoreBg = idx === 0 ? '#f59e0b' : '#e5e7eb';
-            const scoreColor = idx === 0 ? 'white' : '#475569';
-            scoreDiv.style.cssText = `background: ${scoreBg}; color: ${scoreColor}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;`;
-            scoreDiv.textContent = scoreText;
-            item.appendChild(scoreDiv);
-
-            item.onmouseenter = () => { item.style.filter = 'brightness(0.95)'; };
-            item.onmouseleave = () => { item.style.filter = 'none'; };
-            item.onclick = () => {
+        if (this._navigationLocked || !candidates?.length) return;
+        this.bindings.showRecommendationPanel(renderRecommendationPanelHTML(candidates, this.stations), {
+            close: () => this._hideRecommendationPanel(),
+            selectStation: stationId => {
                 this._hideRecommendationPanel();
-                this._selectStationAndNavigate(c.station_id);
-            };
-
-            list.appendChild(item);
+                this._selectStationAndNavigate(stationId);
+            }
         });
     }
 
-    _hideRecommendationPanel() {
-        const panel = document.getElementById('recommendation-panel');
-        if (panel) {
-            panel.remove();
-        }
-    }
+    _hideRecommendationPanel() { this.bindings.hideRecommendationPanel(); }
 
     _selectStationAndNavigate(stationId) {
         // Khoá navigation
@@ -1119,11 +958,7 @@ export class DriverModeController {
         const stationPos = { latitude: st.latitude, longitude: st.longitude };
         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
 
-        const navBtn = document.getElementById('btn-nav-station');
-        if (navBtn) {
-            navBtn.textContent = 'Đang dẫn đường...';
-            navBtn.disabled = true;
-        }
+        this.bindings.setNavigationButtonState('Đang dẫn đường...', true);
 
         try {
             if (this.currentTrip?.destination) {
@@ -1258,84 +1093,33 @@ export class DriverModeController {
     // ─── Proactive Station Drawer & Map Destination Picking ─────────────
 
     bindGlobalControls() {
-        const vehicleSelect = document.getElementById('cockpit-vehicle-select');
-        if (vehicleSelect) {
-            vehicleSelect.addEventListener('change', (e) => {
-                this.selectVehicleModel(e.target.value);
-            });
-        }
-
-        // Traffic delay calculation is enabled by default in backend recommendation pipeline
-
-        document.getElementById('btn-open-stations-drawer')?.addEventListener('click', () => {
-            this.openStationsDrawer();
-        });
-
-        document.getElementById('btn-close-stations-drawer')?.addEventListener('click', () => {
-            this.closeStationsDrawer();
-        });
-
-        document.getElementById('btn-pick-custom-origin')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            this.startPickCustomOrigin();
-        });
-
-        document.getElementById('btn-pick-custom-dest')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            this.startPickCustomDestination();
-        });
-
-        document.getElementById('btn-cancel-pick')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.cancelAllPicking();
-        });
-
-        document.getElementById('btn-cancel-pick-dest')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.cancelAllPicking();
-        });
-
-        // Charging intent selector (En-route vs Post-Trip)
-        const intentTabs = document.querySelectorAll('.charging-intent-selector .intent-tab');
-        intentTabs.forEach(tab => {
-            tab.addEventListener('click', async (e) => {
-                const btn = e.currentTarget;
-                intentTabs.forEach(t => t.classList.remove('active'));
-                btn.classList.add('active');
-                this.chargingIntent = btn.dataset.intent || 'EN_ROUTE';
+        this.bindings.bindGlobalControls({
+            selectVehicle: value => this.selectVehicleModel(value),
+            openStations: () => this.openStationsDrawer(),
+            closeStations: () => this.closeStationsDrawer(),
+            pickOrigin: () => this.startPickCustomOrigin(),
+            pickDestination: () => this.startPickCustomDestination(),
+            cancelPicking: () => this.cancelAllPicking(),
+            changeIntent: async value => {
+                this.chargingIntent = value;
                 this.renderStationsDrawer(this.currentStationsFilter);
                 await this.refreshDrawerEvaluations();
-            });
-        });
-
-        // Filter tabs in stations drawer
-        const filterTabs = document.querySelectorAll('.drawer-filters .filter-tab');
-        filterTabs.forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                filterTabs.forEach(t => t.classList.remove('active'));
-                e.target.classList.add('active');
-                const filter = e.target.dataset.filter || 'ALL';
-                this.currentStationsFilter = filter;
-                this.renderStationsDrawer(filter);
-            });
+            },
+            changeFilter: value => {
+                this.currentStationsFilter = value;
+                this.renderStationsDrawer(value);
+            }
         });
     }
 
     async openStationsDrawer(filter = null) {
-        const drawer = document.getElementById('stations-drawer');
-        if (!drawer) return;
         if (filter) this.currentStationsFilter = filter;
-        drawer.style.display = 'flex';
+        if (!this.bindings.setStationsDrawerOpen(true)) return;
         this.renderStationsDrawer(this.currentStationsFilter);
         await this.refreshDrawerEvaluations();
     }
 
-    closeStationsDrawer() {
-        const drawer = document.getElementById('stations-drawer');
-        if (drawer) drawer.style.display = 'none';
-    }
+    closeStationsDrawer() { this.bindings.setStationsDrawerOpen(false); }
 
     async refreshDrawerEvaluations() {
         const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
@@ -1428,10 +1212,6 @@ export class DriverModeController {
     }
 
     renderStationsDrawer(filter = 'ALL') {
-        const listContainer = document.getElementById('stations-drawer-list');
-        const countSpan = document.getElementById('drawer-station-count');
-        if (!listContainer) return;
-
         const currentPos = this.currentPos || (this.currentTrip?.origin ? {
             latitude: this.currentTrip.origin.latitude,
             longitude: this.currentTrip.origin.longitude
@@ -1499,16 +1279,7 @@ export class DriverModeController {
             });
         }
 
-        if (countSpan) {
-            countSpan.textContent = `${filtered.length} trạm khả dụng`;
-        }
-
-        if (filtered.length === 0) {
-            listContainer.innerHTML = `<div class="text-center text-muted p-4">Không tìm thấy trạm phù hợp với bộ lọc.</div>`;
-            return;
-        }
-
-        listContainer.innerHTML = renderDrawerStationsListHTML(filtered, {
+        const html = renderDrawerStationsListHTML(filtered, {
             topRecId,
             isAtDest,
             activeRec,
@@ -1518,31 +1289,10 @@ export class DriverModeController {
             postTripStationId: this.postTripStation?.station_id,
             remainingTripDistanceKm: this.remainingTripDistanceKm
         });
-
-        // Bind clicks on cards
-        listContainer.querySelectorAll('.btn-nav-drawer-station').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const stId = btn.dataset.stationId;
-                this.navigateViaStationId(stId);
-            });
-        });
-
-        listContainer.querySelectorAll('.btn-nav-post-trip-station').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const stId = btn.dataset.stationId;
-                await this.setPostTripStation(stId);
-            });
-        });
-
-        listContainer.querySelectorAll('.btn-zoom-station').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const lat = parseFloat(btn.dataset.lat);
-                const lng = parseFloat(btn.dataset.lng);
-                this.map.map.flyTo([lat, lng], 16);
-            });
+        this.bindings.renderDrawer(html, filtered.length, {
+            navigate: data => this.navigateViaStationId(data.stationId),
+            setPostTrip: data => this.setPostTripStation(data.stationId),
+            zoom: data => this.map.map.flyTo([parseFloat(data.lat), parseFloat(data.lng)], 16)
         });
     }
 
@@ -1588,8 +1338,7 @@ export class DriverModeController {
 
         const dest = this.customDestination || { latitude: 21.0285, longitude: 105.8542 };
 
-        const origEl = document.getElementById('text-origin-coords');
-        if (origEl) origEl.textContent = `${orig.latitude.toFixed(4)}, ${orig.longitude.toFixed(4)}`;
+        this.bindings.setOriginCoordinates(orig);
 
         await this._updateCustomRoute(orig, dest);
     }
@@ -1600,8 +1349,7 @@ export class DriverModeController {
 
         const origin = this.customOrigin || this.currentPos || { latitude: 20.9849, longitude: 105.7935 };
 
-        const destEl = document.getElementById('text-dest-coords');
-        if (destEl) destEl.textContent = `${dest.latitude.toFixed(4)}, ${dest.longitude.toFixed(4)}`;
+        this.bindings.setDestinationCoordinates(dest);
 
         await this._updateCustomRoute(origin, dest);
     }
@@ -1647,280 +1395,81 @@ export class DriverModeController {
                 [origin.latitude, origin.longitude],
                 [dest.latitude, dest.longitude]
             ]);
-            alert('GraphHopper chưa tìm thấy đường xe chạy kết nối điểm này. Vui lòng chọn vị trí gần đường giao thông hơn.');
+            this.bindings.showRouteUnavailable('GraphHopper chưa tìm thấy đường xe chạy kết nối điểm này. Vui lòng chọn vị trí gần đường giao thông hơn.');
         }
     }
 
     // ─── UI Renderers ───────────────────────────────────────────────────
 
     renderAvailableUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        container.innerHTML = renderAvailableCardHTML(this.customOrigin, this.customDestination);
-
-        document.getElementById('btn-accept-trip')?.addEventListener('click', () => {
-            this.assignTrip();
+        this.bindings.renderAvailable(renderAvailableCardHTML(this.customOrigin, this.customDestination), {
+            accept: () => this.assignTrip(), pickOrigin: () => this.startPickCustomOrigin(),
+            pickDestination: () => this.startPickCustomDestination(), goOffline: () => this.goOffline()
         });
-
-        document.getElementById('btn-pick-origin-map')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.startPickCustomOrigin();
-        });
-
-        document.getElementById('btn-pick-dest-map')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.startPickCustomDestination();
-        });
-
-        document.getElementById('btn-go-offline')?.addEventListener('click', () => this.goOffline());
     }
 
-    renderOfflineUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        container.innerHTML = renderOfflineCardHTML();
-        document.getElementById('btn-go-online')?.addEventListener('click', () => this.goOnline());
-    }
+    renderOfflineUI() { this.bindings.renderOffline(renderOfflineCardHTML(), { goOnline: () => this.goOnline() }); }
 
     renderTripAssignedUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        container.innerHTML = renderTripAssignedCardHTML(this);
-
-        document.getElementById('btn-start-driving')?.addEventListener('click', () => this.startTrip());
-        document.getElementById('btn-assigned-pick-origin')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.startPickCustomOrigin();
-        });
-        document.getElementById('btn-assigned-pick-dest')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.startPickCustomDestination();
-        });
-        document.getElementById('btn-cancel-trip')?.addEventListener('click', () => this.cancelTrip());
-
-        const sliderAssigned = document.getElementById('slider-assigned-soc');
-        sliderAssigned?.addEventListener('input', (e) => {
-            this.setBatterySoc(parseFloat(e.target.value), false);
-        });
-        sliderAssigned?.addEventListener('change', (e) => {
-            this.setBatterySoc(parseFloat(e.target.value), false);
-        });
-        document.querySelectorAll('.btn-preset-assigned-soc').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const s = parseFloat(e.target.dataset.soc);
-                this.setBatterySoc(s, false);
-            });
+        this.bindings.renderAssigned(renderTripAssignedCardHTML(this), {
+            start: () => this.startTrip(), pickOrigin: () => this.startPickCustomOrigin(),
+            pickDestination: () => this.startPickCustomDestination(), cancel: () => this.cancelTrip(),
+            setSoc: (value, evaluate) => this.setBatterySoc(value, evaluate)
         });
     }
 
     renderTripActiveUI() {
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
         let etaMin = '—';
-        if (this.lastRecommendation?.ranked_candidates?.length > 0) {
-            const top = this.lastRecommendation.ranked_candidates[0];
-            etaMin = (top.eta_to_station_s / 60).toFixed(0);
-        } else if (this.remainingTripDistanceKm > 0) {
-            etaMin = Math.round(this.remainingTripDistanceKm * 2).toString();
-        }
-
+        if (this.lastRecommendation?.ranked_candidates?.length > 0) etaMin = (this.lastRecommendation.ranked_candidates[0].eta_to_station_s / 60).toFixed(0);
+        else if (this.remainingTripDistanceKm > 0) etaMin = Math.round(this.remainingTripDistanceKm * 2).toString();
         const warningBanner = renderEnergyWarningBanner(this.lastRecommendation?.energy_context);
-
         const recSnippet = renderDriverRecommendation(this.lastRecommendation);
-        const posStatus = this.matchedPos
-            ? `<span class="text-success">Khớp đường: ${this.matchedPos.road_segment_id || 'đã khớp'} <span class="sr-only">Road: ${this.matchedPos.road_segment_id || 'matched'}</span></span>`
-            : (this.currentPos
-                ? `<span class="text-warning">GPS trực tiếp (${this.currentPos.latitude.toFixed(4)}, ${this.currentPos.longitude.toFixed(4)}) <span class="sr-only">Raw GPS</span></span>`
-                : '<span class="text-muted">Đang định vị...</span>');
-
+        const posStatus = renderPositionStatusHTML(this.matchedPos, this.currentPos);
         const progress = this.replay.getProgressText?.() || '';
         const isPlaying = this.replay.isPlaying;
         const playBtnText = isPlaying ? '▶ Đang chạy...' : (this.replay.currentIndex > 0 ? '▶ Tiếp tục' : '▶ Bắt đầu');
         const playBtnClass = isPlaying ? 'btn btn-outline btn-sm flex-1' : 'btn btn-primary btn-sm flex-1';
         const pauseBtnClass = isPlaying ? 'btn btn-primary btn-sm flex-1' : 'btn btn-outline btn-sm flex-1';
-
-        const postTripSnippet = this.postTripStation ? `
-            <div class="post-trip-banner" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #0d9488; border-radius: 10px; padding: 12px 14px; margin-top: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 700; color: #2dd4bf; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                        <span>🏁</span> ĐÃ ĐẶT SẠC SAU KHI TỚI B
-                    </span>
-                    <button id="btn-cancel-post-trip" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 6px;">✕ Hủy</button>
-                </div>
-                <div style="font-size: 12px; color: #e2e8f0; margin-top: 6px;">
-                    Xe đang chạy thẳng đến điểm B. Sau khi trả khách sẽ tiếp tục di chuyển đến <strong>Trạm ${escapeHtml(this.postTripStation.station_id)}</strong> (${this.postTripRoute?.distance_m ? (this.postTripRoute.distance_m / 1000).toFixed(1) : '1.5'} km).
-                </div>
-            </div>
-        ` : '';
-
-        // If active HUD already mounted in DOM, perform fast in-place property updates to prevent losing slider focus
-        const existingHud = container.querySelector('#driver-active-hud');
-        if (existingHud) {
-            const elemDist = document.getElementById('val-remaining-dist');
-            if (elemDist) elemDist.innerHTML = `${this.remainingTripDistanceKm.toFixed(1)} <small>km</small>`;
-            const elemEta = document.getElementById('val-trip-eta');
-            if (elemEta) elemEta.innerHTML = `${etaMin} <small>phút</small><span class="sr-only">min</span>`;
-            const elemSoc = document.getElementById('val-trip-soc');
-            if (elemSoc) {
-                elemSoc.textContent = `${this.currentSocPct.toFixed(0)}%`;
-                elemSoc.className = `stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}`;
-            }
-            const elemRange = document.getElementById('val-trip-range');
-            if (elemRange) elemRange.innerHTML = `${this.estimatedRangeKm.toFixed(0)} <small>km</small>`;
-            const barFill = document.getElementById('battery-bar-fill');
-            if (barFill) {
-                barFill.style.width = `${Math.max(5, this.currentSocPct)}%`;
-                barFill.className = `battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}`;
-            }
-            const labelSocSlider = document.getElementById('label-soc-slider-val');
-            if (labelSocSlider) {
-                labelSocSlider.textContent = `${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)`;
-                labelSocSlider.style.color = this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981');
-            }
-            const slider = document.getElementById('slider-cockpit-soc');
-            if (slider && document.activeElement !== slider) {
-                slider.value = Math.round(this.currentSocPct);
-            }
-            const posElem = document.getElementById('hud-pos-status');
-            if (posElem) posElem.innerHTML = posStatus;
-            const progElem = document.getElementById('hud-progress-status');
-            if (progElem) progElem.textContent = progress;
-
-            const warnContainer = document.getElementById('hud-warning-container');
-            if (warnContainer) warnContainer.innerHTML = warningBanner;
-
-            const recContainer = document.getElementById('hud-rec-container');
-            if (recContainer) {
-                recContainer.innerHTML = recSnippet;
-                document.getElementById('btn-nav-station')?.addEventListener('click', () => this.navigateViaStation());
-                document.getElementById('btn-switch-post-trip-modal')?.addEventListener('click', () => {
-                    this.chargingIntent = 'AT_DESTINATION';
-                    document.querySelectorAll('.charging-intent-selector .intent-tab').forEach(t => {
-                        t.classList.toggle('active', t.dataset.intent === 'AT_DESTINATION');
-                    });
-                    this.openStationsDrawer();
-                });
-                document.getElementById('btn-view-cost-breakdown')?.addEventListener('click', () => {
-                    if (this.lastRecommendation?.ranked_candidates?.length > 0) {
-                        this.openCostBreakdownModal(this.lastRecommendation.ranked_candidates[0]);
-                    }
-                });
-            }
-
-            const postTripContainer = document.getElementById('hud-post-trip-container');
-            if (postTripContainer) {
-                postTripContainer.innerHTML = postTripSnippet;
-                document.getElementById('btn-cancel-post-trip')?.addEventListener('click', () => this.cancelPostTripStation());
-            }
-
-            const btnPlay = document.getElementById('btn-driver-replay-play');
-            if (btnPlay) {
-                btnPlay.innerHTML = playBtnText;
-                btnPlay.className = playBtnClass;
-            }
-            const btnPause = document.getElementById('btn-driver-replay-pause');
-            if (btnPause) {
-                btnPause.className = pauseBtnClass;
-            }
-            const changeStationBtn = document.getElementById('btn-change-station');
-            if (changeStationBtn) {
-                changeStationBtn.style.display = this._navigationLocked ? 'block' : 'none';
-            }
-            return;
-        }
-
-        // Full initial render
-        container.innerHTML = renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, playBtnClass, playBtnText, pauseBtnClass });
-
-        // Bind interactive controls
-        document.getElementById('btn-driver-replay-play')?.addEventListener('click', () => {
-            this.playTrip();
-            this.renderTripActiveUI();
-        });
-        document.getElementById('btn-driver-replay-pause')?.addEventListener('click', () => {
-            this.pauseTrip();
-            this.renderTripActiveUI();
-        });
-        document.getElementById('btn-driver-replay-step')?.addEventListener('click', () => this.stepTrip());
-        document.getElementById('btn-change-station')?.addEventListener('click', () => {
-            this.unlockNavigation();
-        });
-        document.getElementById('btn-nav-station')?.addEventListener('click', () => this.navigateViaStation());
-        document.getElementById('btn-switch-post-trip-modal')?.addEventListener('click', () => {
-            this.chargingIntent = 'AT_DESTINATION';
-            document.querySelectorAll('.charging-intent-selector .intent-tab').forEach(t => {
-                t.classList.toggle('active', t.dataset.intent === 'AT_DESTINATION');
-            });
-            this.openStationsDrawer();
-        });
-        document.getElementById('btn-cancel-post-trip')?.addEventListener('click', () => {
-            this.cancelPostTripStation();
-        });
-        document.getElementById('btn-view-cost-breakdown')?.addEventListener('click', () => {
-            if (this.lastRecommendation?.ranked_candidates?.length > 0) {
-                this.openCostBreakdownModal(this.lastRecommendation.ranked_candidates[0]);
-            }
-        });
-        document.getElementById('btn-complete-trip')?.addEventListener('click', () => {
-            this.setState(DriverState.TRIP_COMPLETE);
-            this.renderTripCompleteUI();
-        });
-
-        const slider = document.getElementById('slider-cockpit-soc');
-        slider?.addEventListener('input', (e) => {
-            this.setBatterySoc(parseFloat(e.target.value), false);
-        });
-        slider?.addEventListener('change', (e) => {
-            this.setBatterySoc(parseFloat(e.target.value), true);
-        });
-        document.querySelectorAll('.btn-quick-soc').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const s = parseFloat(e.target.dataset.soc);
-                this.setBatterySoc(s, true);
-            });
-        });
+        const postTripSnippet = renderPostTripBannerHTML(this.postTripStation, this.postTripRoute);
+        const callbacks = {
+            play: () => { this.playTrip(); this.renderTripActiveUI(); }, pause: () => { this.pauseTrip(); this.renderTripActiveUI(); },
+            step: () => this.stepTrip(), unlockNavigation: () => this.unlockNavigation(), navigateViaStation: () => this.navigateViaStation(),
+            switchToDestination: () => { this.chargingIntent = 'AT_DESTINATION'; this.bindings.setActiveIntent('AT_DESTINATION'); this.openStationsDrawer(); },
+            cancelPostTrip: () => this.cancelPostTripStation(),
+            viewCostBreakdown: () => { if (this.lastRecommendation?.ranked_candidates?.length) this.openCostBreakdownModal(this.lastRecommendation.ranked_candidates[0]); },
+            completeTrip: () => { this.setState(DriverState.TRIP_COMPLETE); this.renderTripCompleteUI(); },
+            setSoc: (value, evaluate) => this.setBatterySoc(value, evaluate)
+        };
+        this.bindings.renderActive(renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, playBtnClass, playBtnText, pauseBtnClass }), {
+            distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm,
+            posStatus, progress, warning: warningBanner, recommendation: recSnippet, postTrip: postTripSnippet,
+            playText: playBtnText, playClass: playBtnClass, pauseClass: pauseBtnClass, navigationLocked: this._navigationLocked
+        }, callbacks);
     }
 
     openCostBreakdownModal(candidate) {
-        const modal = document.getElementById('cost-breakdown-modal');
-        const body = document.getElementById('cost-modal-body');
-        if (!modal || !body || !candidate) return;
-
-        body.innerHTML = renderCostBreakdown(candidate);
-        modal.style.display = 'flex';
-
-        const closeModal = () => {
-            modal.style.display = 'none';
-        };
-        document.getElementById('btn-close-cost-modal')?.addEventListener('click', closeModal, { once: true });
-        document.getElementById('cost-modal-backdrop')?.addEventListener('click', closeModal, { once: true });
+        if (!candidate) return;
+        if (this.bindings.openCostBreakdown(renderCostBreakdown(candidate))) {
+            const close = () => this.closeCostBreakdownModal();
+            this.bindings.bindCostModalClose(close);
+        }
     }
 
-    closeCostBreakdownModal() {
-        const modal = document.getElementById('cost-breakdown-modal');
-        if (modal) modal.style.display = 'none';
-    }
+    closeCostBreakdownModal() { this.bindings.closeCostBreakdown(); }
 
     renderTripCompleteUI() {
         this._navigationLocked = false;
         this._selectedStationId = null;
         this._hideRecommendationPanel();
-
-        const container = document.getElementById('driver-panel-content');
-        if (!container) return;
-
-        container.innerHTML = renderTripCompleteCardHTML(this.lastRecommendation, this.postTripStation);
-
-        document.getElementById('btn-start-post-trip-nav')?.addEventListener('click', async () => {
-            const st = this.postTripStation;
-            this.postTripStation = null;
-            this.postTripRoute = null;
-            await this.navigateViaStationId(st.station_id);
+        this.bindings.renderComplete(renderTripCompleteCardHTML(this.lastRecommendation, this.postTripStation), {
+            startPostTrip: async () => {
+                const station = this.postTripStation;
+                this.postTripStation = null;
+                this.postTripRoute = null;
+                await this.navigateViaStationId(station.station_id);
+            },
+            backAvailable: () => this.returnToAvailable()
         });
-        document.getElementById('btn-back-available')?.addEventListener('click', () => this.returnToAvailable());
     }
+
 }

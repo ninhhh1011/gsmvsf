@@ -94,3 +94,31 @@ export function renderDriverRecommendation(recResult) {
                 </div>
             `;
 }
+
+export function renderRecommendationPanelHTML(candidates, stations) {
+    const items = candidates.map((candidate, index) => {
+        const station = stations.find(item => item.station_id === candidate.station_id);
+        const eta = candidate.eta_to_station_s ? (candidate.eta_to_station_s / 60).toFixed(1) : '?';
+        const service = candidate.eta_to_service_complete_s ? (candidate.eta_to_service_complete_s / 60).toFixed(0) : '?';
+        const color = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#6b7280'][index] || '#6b7280';
+        const score = candidate.score != null ? `${(candidate.score * 100).toFixed(0)}%` : '—';
+        return `
+            <div class="rec-candidate-item" data-station-id="${escapeHtml(candidate.station_id)}" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #eee; background: ${index === 0 ? '#fffbeb' : 'white'};">
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: ${color}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">${index + 1}</div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 600; font-size: 13px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(station?.name || candidate.station_id)}</div>
+                    <div style="font-size: 11px; color: #64748b;">ETA ${eta} phút · Sạc ${service} phút</div>
+                </div>
+                <div style="background: ${index === 0 ? '#f59e0b' : '#e5e7eb'}; color: ${index === 0 ? 'white' : '#475569'}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">${score}</div>
+            </div>`;
+    }).join('');
+    return `
+        <div id="recommendation-panel" style="position: fixed; top: 80px; right: 20px; z-index: 1000; width: 320px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); font-family: sans-serif; overflow: hidden;">
+        <div class="rec-panel-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8fafc; font-weight: 600; font-size: 13px; color: #0f172a;">
+            <span>🔌 Tìm thấy trạm sạc gần đó</span>
+            <button id="rec-panel-close" class="btn btn-sm btn-outline" style="padding: 2px 8px; font-size: 12px; line-height: 1; cursor: pointer; border: 1px solid #cbd5e1; border-radius: 6px; background: transparent; color: #64748b;">✕</button>
+        </div>
+        <div id="rec-panel-list" class="rec-panel-list" style="max-height: 360px; overflow-y: auto;">${items}</div>
+        <div class="rec-panel-footer" style="padding: 8px 14px; background: #f8fafc; border-top: 1px solid #eee; font-size: 11px; color: #64748b; text-align: center;"><small>Chọn trạm để bắt đầu điều hướng</small></div>
+        </div>`;
+}

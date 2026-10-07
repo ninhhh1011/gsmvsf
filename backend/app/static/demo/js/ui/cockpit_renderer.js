@@ -72,6 +72,32 @@ export function renderOfflineCardHTML() {
     `;
 }
 
+export function renderPositionStatusHTML(matchedPos, currentPos) {
+    if (matchedPos) {
+        const roadId = escapeHtml(matchedPos.road_segment_id || 'đã khớp');
+        return `<span class="text-success">Khớp đường: ${roadId} <span class="sr-only">Road: ${roadId}</span></span>`;
+    }
+    if (currentPos) {
+        const format = value => Number.isFinite(Number(value)) ? Number(value).toFixed(4) : escapeHtml(String(value));
+        return `<span class="text-warning">GPS trực tiếp (${format(currentPos.latitude)}, ${format(currentPos.longitude)}) <span class="sr-only">Raw GPS</span></span>`;
+    }
+    return '<span class="text-muted">Đang định vị...</span>';
+}
+
+export function renderPostTripBannerHTML(station, route) {
+    if (!station) return '';
+    const distance = Number(route?.distance_m);
+    const distanceKm = Number.isFinite(distance) && distance ? (distance / 1000).toFixed(1) : '1.5';
+    return `
+        <div class="post-trip-banner" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #0d9488; border-radius: 10px; padding: 12px 14px; margin-top: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; color: #2dd4bf; font-size: 13px; display: flex; align-items: center; gap: 6px;">🏁 ĐÃ ĐẶT SẠC SAU KHI TỚI B</span>
+                <button id="btn-cancel-post-trip" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 6px;">✕ Hủy</button>
+            </div>
+            <div style="font-size: 12px; color: #e2e8f0; margin-top: 6px;">Xe đang chạy thẳng đến điểm B. Sau khi trả khách sẽ tiếp tục di chuyển đến <strong>Trạm ${escapeHtml(station.station_id)}</strong> (${distanceKm} km).</div>
+        </div>`;
+}
+
 /**
  * Render Trip Complete HUD card.
  */

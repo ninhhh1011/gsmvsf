@@ -8,8 +8,23 @@ import assert from 'node:assert/strict';
 import {
     renderAvailableCardHTML,
     renderOfflineCardHTML,
-    renderTripCompleteCardHTML
+    renderTripCompleteCardHTML,
+    renderPositionStatusHTML,
+    renderPostTripBannerHTML
 } from '../../backend/app/static/demo/js/ui/cockpit_renderer.js';
+
+test('position renderer escapes external road IDs and preserves raw GPS presentation', () => {
+    assert.match(renderPositionStatusHTML({ road_segment_id: '<img src=x>' }, null), /&lt;img src=x&gt;/);
+    assert.doesNotMatch(renderPositionStatusHTML({ road_segment_id: '<img src=x>' }, null), /<img src=x>/);
+    assert.match(renderPositionStatusHTML(null, { latitude: 0, longitude: 1 }), /0\.0000, 1\.0000/);
+});
+
+test('post trip banner renderer escapes station supplied markup', () => {
+    const html = renderPostTripBannerHTML({ station_id: '<script>x</script>' }, { distance_m: 1200 });
+    assert.match(html, /&lt;script&gt;x&lt;\/script&gt;/);
+    assert.doesNotMatch(html, /<script>/);
+    assert.match(html, /1\.2 km/);
+});
 
 test('renderAvailableCardHTML renders complete cockpit ready state with origin and dest', () => {
     const origin = { latitude: 20.9849, longitude: 105.7935 };

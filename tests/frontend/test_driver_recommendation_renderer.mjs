@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { renderDriverRecommendation } from '../../backend/app/static/demo/js/ui/driver_recommendation_renderer.js';
+import { renderDriverRecommendation, renderRecommendationPanelHTML } from '../../backend/app/static/demo/js/ui/driver_recommendation_renderer.js';
 import { DriverModeController } from '../../backend/app/static/demo/js/ui/driver_controller.js';
 
 test('renders the top station summary and escapes station supplied markup', () => {
@@ -31,6 +31,13 @@ test('renders no recommendation as an empty snippet', () => {
     assert.equal(renderDriverRecommendation(null), '');
 });
 
+test('recommendation panel renderer escapes station IDs and names', () => {
+    const html = renderRecommendationPanelHTML([{ station_id: '<img src=x>', score: 0.5 }], [{ station_id: '<img src=x>', name: '<script>bad</script>' }]);
+    assert.match(html, /&lt;script&gt;bad&lt;\/script&gt;/);
+    assert.match(html, /data-station-id="&lt;img src=x&gt;"/);
+    assert.doesNotMatch(html, /<script>|data-station-id="<img/);
+});
+
 test('controller puts the extracted recommendation renderer output in the active HUD', () => {
     const rec = {
         has_recommendation: true,
@@ -40,29 +47,16 @@ test('controller puts the extracted recommendation renderer output in the active
         }]
     };
     let renderedHtml = '';
-    const originalDocument = globalThis.document;
-    const container = { querySelector: () => ({}) };
-    globalThis.document = {
-        getElementById(id) {
-            if (id === 'driver-panel-content') return container;
-            if (id === 'hud-rec-container') return { set innerHTML(value) { renderedHtml = value; } };
-            return null;
-        }
-    };
-
-    try {
-        const controller = Object.create(DriverModeController.prototype);
-        Object.assign(controller, {
-            lastRecommendation: rec, remainingTripDistanceKm: 0, matchedPos: null, currentPos: null,
-            replay: { getProgressText: () => '', isPlaying: false, currentIndex: 0 },
-            currentSocPct: 50, estimatedRangeKm: 100, _navigationLocked: false
-        });
-        controller.renderTripActiveUI();
-        assert.equal(renderedHtml, renderDriverRecommendation(rec));
-        assert.match(renderedHtml, /ST&lt;42&gt;/);
-    } finally {
-        globalThis.document = originalDocument;
-    }
+    const controller = Object.create(DriverModeController.prototype);
+    Object.assign(controller, {
+        lastRecommendation: rec, remainingTripDistanceKm: 0, matchedPos: null, currentPos: null,
+        replay: { getProgressText: () => '', isPlaying: false, currentIndex: 0 },
+        currentSocPct: 50, estimatedRangeKm: 100, _navigationLocked: false,
+        bindings: { renderActive(html, state) { renderedHtml = state.recommendation; assert.match(html, /driver-active-hud/); } }
+    });
+    controller.renderTripActiveUI();
+    assert.equal(renderedHtml, renderDriverRecommendation(rec));
+    assert.match(renderedHtml, /ST&lt;42&gt;/);
 });
 
 test('escapes nonnumeric available capacity instead of inserting it as markup', () => {
