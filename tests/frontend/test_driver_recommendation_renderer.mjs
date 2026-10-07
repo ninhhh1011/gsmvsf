@@ -52,7 +52,7 @@ test('controller puts the extracted recommendation renderer output in the active
         lastRecommendation: rec, remainingTripDistanceKm: 0, matchedPos: null, currentPos: null,
         replay: { getProgressText: () => '', isPlaying: false, currentIndex: 0 },
         currentSocPct: 50, estimatedRangeKm: 100, _navigationLocked: false,
-        bindings: { renderActive(html, state) { renderedHtml = state.recommendation; assert.match(html, /driver-active-hud/); } }
+        bindings: { renderActive(html, state) { renderedHtml = state.recommendation; assert.match(html, /driver-active-hud/); assert.match(html, /id="btn-change-station"/); assert.doesNotMatch(html, /onclick=/); } }
     });
     controller.renderTripActiveUI();
     assert.equal(renderedHtml, renderDriverRecommendation(rec));

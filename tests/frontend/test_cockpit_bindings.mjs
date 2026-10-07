@@ -46,6 +46,21 @@ test('cockpit bindings translate browser events into semantic callbacks', () => 
     assert.deepEqual(events, [['vehicle', 'MODEL_X'], ['origin'], ['intent', 'AT_DESTINATION'], ['filter', 'CHARGING']]);
 });
 
+test('active cockpit binds change station to the semantic unlock callback', () => {
+    const button = element();
+    const container = { innerHTML: '', querySelector: () => null };
+    const root = {
+        getElementById: id => id === 'driver-panel-content' ? container : id === 'btn-change-station' ? button : null,
+        querySelectorAll: () => []
+    };
+    let unlocks = 0;
+    createCockpitBindings(root).renderActive('<button id="btn-change-station"></button>', {}, {
+        unlockNavigation: () => { unlocks += 1; }
+    });
+    button.fire('click');
+    assert.equal(unlocks, 1);
+});
+
 test('controller delegates recommendation panel rendering and selection to bindings', () => {
     const calls = [];
     const controller = Object.create(DriverModeController.prototype);

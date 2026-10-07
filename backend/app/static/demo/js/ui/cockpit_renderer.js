@@ -295,8 +295,7 @@ export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, po
                         <button id="btn-driver-replay-pause" class="${pauseBtnClass}">⏸ Tạm dừng</button>
                         <button id="btn-driver-replay-step" class="btn btn-outline btn-sm flex-1">⏭ Từng bước</button>
                     </div>
-                    <button id="btn-change-station" class="btn btn-sm btn-outline-secondary" style="margin-top: 6px; width: 100%; display: ${controller._navigationLocked ? 'block' : 'none'};"
-                        onclick="driverMode.unlockNavigation()">
+                    <button id="btn-change-station" class="btn btn-sm btn-outline-secondary" style="margin-top: 6px; width: 100%; display: ${controller._navigationLocked ? 'block' : 'none'};">
                         🔄 Đổi trạm sạc khác
                     </button>
                     <button id="btn-complete-trip" class="btn btn-outline btn-sm btn-block">

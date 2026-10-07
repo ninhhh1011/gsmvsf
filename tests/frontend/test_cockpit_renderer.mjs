@@ -12,6 +12,18 @@ import {
     renderPositionStatusHTML,
     renderPostTripBannerHTML
 } from '../../backend/app/static/demo/js/ui/cockpit_renderer.js';
+import { renderEnergyWarningBanner } from '../../backend/app/static/demo/js/components.js';
+
+test('energy warning renderer escapes an external reason code', () => {
+    const html = renderEnergyWarningBanner({
+        need_service: true,
+        reason_code: '<img src=x onerror=alert(1)>',
+        estimated_remaining_range_km: 10,
+        remaining_trip_distance_km: 20
+    });
+    assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+    assert.doesNotMatch(html, /<img src=x/);
+});
 
 test('position renderer escapes external road IDs and preserves raw GPS presentation', () => {
     assert.match(renderPositionStatusHTML({ road_segment_id: '<img src=x>' }, null), /&lt;img src=x&gt;/);
