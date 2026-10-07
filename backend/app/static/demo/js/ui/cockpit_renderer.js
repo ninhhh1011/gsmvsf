@@ -22,10 +22,16 @@ export function renderBatteryView({ soc, range }) {
 }
 
 export function renderActiveCockpitView(state) {
+    const distance = state.distance.toFixed(1);
+    const eta = escapeHtml(state.eta);
+    const range = state.range.toFixed(0);
     return {
         ...renderBatteryView(state),
-        distanceText: `${state.distance.toFixed(1)} km`,
-        etaText: `${state.eta} phút`
+        distanceText: `${distance} km`,
+        etaText: `${eta} phút`,
+        distanceMarkup: `${distance} <small>km</small>`,
+        etaMarkup: `${eta} <small>phút</small><span class="sr-only">min</span>`,
+        rangeMarkup: `${range} <small>km</small>`
     };
 }
 

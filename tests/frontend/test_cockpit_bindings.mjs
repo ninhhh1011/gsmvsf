@@ -62,6 +62,23 @@ test('active cockpit binds change station to the semantic unlock callback', () =
     assert.equal(unlocks, 1);
 });
 
+test('incremental active rendering preserves metric units and accessible ETA text', () => {
+    const metrics = {
+        'val-remaining-dist': element(), 'val-trip-eta': element(), 'val-trip-soc': element(),
+        'val-trip-range': element(), 'battery-bar-fill': element(), 'label-soc-slider-val': element()
+    };
+    const container = { innerHTML: '', querySelector: () => element() };
+    const root = { getElementById: id => id === 'driver-panel-content' ? container : metrics[id] || null, querySelectorAll: () => [], activeElement: null };
+
+    createCockpitBindings(root).renderActive('', {
+        view: renderActiveCockpitView({ distance: 12.34, eta: '8', soc: 60, range: 42.4 })
+    }, {});
+
+    assert.equal(metrics['val-remaining-dist'].innerHTML, '12.3 <small>km</small>');
+    assert.equal(metrics['val-trip-eta'].innerHTML, '8 <small>phút</small><span class="sr-only">min</span>');
+    assert.equal(metrics['val-trip-range'].innerHTML, '42 <small>km</small>');
+});
+
 test('controller delegates recommendation panel rendering and selection to bindings', () => {
     const calls = [];
     const controller = Object.create(DriverModeController.prototype);
@@ -127,10 +144,13 @@ test('cockpit renderer owns SOC colors, classes, and active metric formatting', 
     });
     assert.deepEqual(renderActiveCockpitView({ distance: 12.34, eta: '8', soc: 18, range: 42.4 }), {
         distanceText: '12.3 km', etaText: '8 phút', socText: '18%',
+        distanceMarkup: '12.3 <small>km</small>', etaMarkup: '8 <small>phút</small><span class="sr-only">min</span>',
+        rangeMarkup: '42 <small>km</small>',
         socClass: 'stat-value text-danger', rangeText: '42 km', batteryWidth: '18%',
         batteryClass: 'battery-bar-fill bg-danger', labelText: '18% (42 km)',
         labelColor: '#ef4444', sliderValue: '18'
     });
+    assert.equal(renderActiveCockpitView({ distance: 1, eta: '<img>', soc: 18, range: 2 }).etaMarkup, '&lt;img&gt; <small>phút</small><span class="sr-only">min</span>');
     assert.equal(renderTripActiveEta({ ranked_candidates: [{ eta_to_station_s: 300 }] }, 30), '5');
     assert.equal(renderTripActiveEta(null, 30), '60');
 });

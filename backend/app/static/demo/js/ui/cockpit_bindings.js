@@ -114,10 +114,10 @@ export function createCockpitBindings(root = globalThis.document) {
             if (!existing) { container.innerHTML = html; bindActiveControls(callbacks); }
             else {
                 const view = state.view;
-                const dist = get('val-remaining-dist'); if (dist) dist.textContent = view.distanceText;
-                const eta = get('val-trip-eta'); if (eta) eta.textContent = view.etaText;
+                const dist = get('val-remaining-dist'); if (dist) dist.innerHTML = view.distanceMarkup;
+                const eta = get('val-trip-eta'); if (eta) eta.innerHTML = view.etaMarkup;
                 const soc = get('val-trip-soc'); if (soc) { soc.textContent = view.socText; soc.className = view.socClass; }
-                const range = get('val-trip-range'); if (range) range.textContent = view.rangeText;
+                const range = get('val-trip-range'); if (range) range.innerHTML = view.rangeMarkup;
                 const bar = get('battery-bar-fill'); if (bar) { bar.style.width = view.batteryWidth; bar.className = view.batteryClass; }
                 const label = get('label-soc-slider-val'); if (label) { label.textContent = view.labelText; label.style.color = view.labelColor; }
                 const slider = get('slider-cockpit-soc'); if (slider && root.activeElement !== slider) slider.value = view.sliderValue;
