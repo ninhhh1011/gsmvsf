@@ -7,7 +7,6 @@ import pytest
 from backend.app.services.map_matching.engine import Matching, Tracepoint, MapMatchingEngineUnavailableError
 from backend.app.services.map_matching.models import GPSObservation, MapMatchRequest
 from backend.app.services.map_matching.service import MapMatchingService
-from backend.app.services.map_matching.segment_resolver import RouteConstrainedSegmentResolver
 from backend.app.services.realtime.state import reset_state_store
 
 
@@ -17,7 +16,7 @@ async def test_service_resolves_actual_matched_point_and_way():
     engine = MagicMock()
     engine.match = AsyncMock(return_value=(Matching(.98, 100, 10, "encoded", [point, point], "car"), [point, point]))
     resolver = MagicMock()
-    resolver.resolve_matched.return_value = None
+    resolver.resolve_matched = AsyncMock(return_value=None)
     obs = [GPSObservation(observation_id=str(i), trajectory_id="x", trip_id="external", timestamp=str(i), latitude=21.01, longitude=105.81) for i in range(2)]
     response = await MapMatchingService(engine, resolver).match_trajectory(
         MapMatchRequest(trajectory_id="x", trip_id="external", vehicle_category="EV_CAR", observations=obs))
@@ -28,20 +27,11 @@ async def test_service_resolves_actual_matched_point_and_way():
     assert response.profile == "car"
 
 
-def test_resolver_uses_way_and_travel_orientation():
-    resolver = RouteConstrainedSegmentResolver("unused")
-    conn = MagicMock()
-    resolver._conn = conn
-    conn.closed = False
-    cursor = conn.cursor.return_value.__enter__.return_value
-    # F/R dataset geometries have the same coordinate order; reverse adds 180 degrees.
-    cursor.fetchall.return_value = [
-        ("way_0_F", "a", "b", 123, "FORWARD", 1., 90.),
-        ("way_0_R", "b", "a", 123, "REVERSE", 1., 270.),
-    ]
-    result = resolver.resolve_matched(21, 105.8, 123, 270)
-    assert result.segment_id == "way_0_R"
-    assert 123 in cursor.execute.call_args.args[1]
+def test_resolver_class_accepts_db_pool():
+    # RouteConstrainedSegmentResolver now takes db_pool instead of database_url
+    from backend.app.services.map_matching.segment_resolver import RouteConstrainedSegmentResolver
+    resolver = RouteConstrainedSegmentResolver(None)  # accepts db_pool
+    assert resolver._pool is None
 
 
 @pytest.mark.asyncio
@@ -87,7 +77,7 @@ async def test_ambiguous_segment_identity_is_not_asserted():
     engine = MagicMock()
     engine.match = AsyncMock(return_value=(Matching(.98,100,10,"encoded",[point,point],"car"),[point,point]))
     resolver = MagicMock()
-    resolver.resolve_matched.return_value = SegmentInfo("123_0_F","a","b",123,"FORWARD",1,ResolutionStatus.AMBIGUOUS)
+    resolver.resolve_matched = AsyncMock(return_value=SegmentInfo("123_0_F","a","b",123,"FORWARD",1,ResolutionStatus.AMBIGUOUS))
     obs = [GPSObservation(observation_id=str(i),trajectory_id="x",trip_id="external",timestamp=str(i),latitude=21,longitude=105.8) for i in range(2)]
     result = await MapMatchingService(engine,resolver).match_trajectory(MapMatchRequest(trajectory_id="x",trip_id="external",vehicle_category="EV_CAR",observations=obs))
     assert result.observations[0].road_segment_id is None

@@ -41,8 +41,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.redis = redis
         app.state.http_client = client
 
-        from backend.app.api.v1.candidate import set_candidate_service
         from backend.app.services.candidate.service import CandidateSearchService
+        from backend.app.services.demand.capability import VehicleCapabilityResolver
         from backend.app.services.demand.service import DemandService
         from backend.app.services.map_matching.graphhopper_adapter import (
             GraphHopperMapMatchingAdapter,
@@ -58,13 +58,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         routing_adapter = GraphHopperRoutingAdapter(client=client)
         app.state.routing_adapter = routing_adapter
         app.state.candidate_service = CandidateSearchService(routing_engine=routing_adapter)
-        app.state.demand_service = DemandService()
-        app.state.segment_resolver = RouteConstrainedSegmentResolver(settings.database_url_sync)
+        app.state.demand_service = DemandService(capability_resolver=VehicleCapabilityResolver())
+        app.state.segment_resolver = RouteConstrainedSegmentResolver(pool)
         app.state.map_matching_service = MapMatchingService(
             GraphHopperMapMatchingAdapter(base_url=settings.graphhopper_base_url),
             app.state.segment_resolver,
         )
-        set_candidate_service(app.state.candidate_service)
 
         repository = SnapshotRepository(pool, timeout_s=settings.snapshot_db_timeout_s)
         policy = RankingPolicy(missing_queue_wait_s=settings.missing_queue_wait_s,
@@ -92,12 +91,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.candidate_service = None
             app.state.demand_service = None
             app.state.map_matching_service = None
-            if getattr(app.state, "segment_resolver", None) is not None:
-                app.state.segment_resolver.close()
             app.state.segment_resolver = None
             app.state.db_pool = None
             app.state.redis = None
             app.state.http_client = None
             graphhopper.http_client = None
-            set_candidate_service(None)
     logger.info("application_shutdown")
