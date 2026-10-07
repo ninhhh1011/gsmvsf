@@ -117,7 +117,7 @@ class BoundedHistoryRepository:
         self.row = {"driver_id": "synthetic-driver", "cells": signature.cells,
                     "cell_distances_m": signature.cell_distances_m,
                     "distance_m": signature.distance_m, "resolution": signature.resolution}
-        community_count = max(history_size - 50, 0)
+        community_count = max(history_size - 51, 0)
         base_time = datetime(2026, 1, 1, tzinfo=UTC)
         self.community = [
             {**self.row, "driver_id": f"synthetic-driver-{index % community_driver_count:03d}",
@@ -132,18 +132,18 @@ class BoundedHistoryRepository:
             -int(row["trip_id"].rsplit("-", 1)[1]), row["driver_id"]))
 
     async def personal_routes(self, *_):
-        return [self.row] * min(self.history_size, 50)
+        return [self.row] * min(self.history_size, 51)
 
     async def community_routes(self, *_):
         return self.community
 
 
 def benchmark_database_rows(size, signature, as_of):
-    """Build 50 personal rows and distribute community history across up to 101 drivers."""
+    """Build 51 personal rows and distribute community history across up to 101 drivers."""
     rows = []
     for index in range(size):
-        personal = index < 50
-        community_index = index - 50
+        personal = index < 51
+        community_index = index - 51
         driver_id = ("phase4-benchmark-personal" if personal else
                      f"phase4-benchmark-community-{community_index % 101:03d}")
         age_minutes = 0 if personal else community_index // 101
@@ -170,8 +170,11 @@ async def _measure_evaluation(case, signature):
     return {"samples": SAMPLES, "warmups": WARMUPS,
             "p50_ms": round(statistics.median(results), 3),
             "p95_ms": round(percentile(results, 0.95), 3),
-            "personal_rows_returned_per_candidate": min(case.history_size, 50),
+            "personal_rows_returned_per_candidate": min(case.history_size, 51),
+            "personal_rows_scored_per_candidate": min(case.history_size, 50),
+            "personal_history_truncated": case.history_size > 50,
             "community_rows_returned_per_candidate": len(community_rows),
+            "community_rows_scored_per_candidate": min(len(community_rows), 500),
             "community_distinct_drivers_returned": len({row["driver_id"] for row in community_rows}),
             "community_history_truncated": (len(community_rows) > 500 or any(
                 row["active_rank"] > 100 or row["driver_rank"] > 5 for row in community_rows))}
@@ -196,6 +199,7 @@ async def _postgres_measure(database_url, signature):
                   "backend/app/services/route_familiarity/schema.sql").read_text(encoding="utf-8")
         await conn.execute(schema)
     except Exception as error:  # External database availability is optional for the local harness.
+        connected = conn is not None
         cleanup_errors = []
         if conn:
             try:
@@ -215,6 +219,8 @@ async def _postgres_measure(database_url, signature):
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
+        if created and connected:
+            raise
         return {"status": "not_measured", "reason": type(error).__name__,
                 **database_lifecycle_report(database_name, created, dropped, cleanup_errors)}
     try:
@@ -242,6 +248,10 @@ async def _postgres_measure(database_url, signature):
             community_rows = await repository.community_routes(
                 list(db_signature.cells), "phase4-benchmark-personal", as_of, timedelta(days=7))
             community_per_driver = Counter(row["driver_id"] for row in community_rows)
+            community_scored = [row for row in community_rows
+                                if row["active_rank"] <= 100 and row["driver_rank"] <= 5][:500]
+            community_truncated = (len(community_rows) > 500 or any(
+                row["active_rank"] > 100 or row["driver_rank"] > 5 for row in community_rows))
             service = RouteFamiliarityService(repository)
             candidates = {str(i): db_signature for i in range(CANDIDATE_COUNT)}
             async def evaluate():
@@ -279,6 +289,10 @@ async def _postgres_measure(database_url, signature):
                     "community": len(community_rows),
                     "community_distinct_drivers": len(community_per_driver),
                     "community_max_rows_per_driver": max(community_per_driver.values(), default=0)},
+                "repository_rows_scored": {"personal": min(len(personal_rows), 50),
+                    "community": len(community_scored)},
+                "history_truncated": {"personal": len(personal_rows) > 50,
+                    "community": community_truncated},
                 "database_backed_full_evaluation_30_candidates": evaluation,
                 "personal_explain_analyze_buffers": [r["QUERY PLAN"] for r in personal_plan],
                 "community_explain_analyze_buffers": [r["QUERY PLAN"] for r in community_plan]})
@@ -312,8 +326,7 @@ async def _postgres_measure(database_url, signature):
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
-        return {"status": "not_measured", "reason": type(error).__name__,
-                **database_lifecycle_report(database_name, created, dropped, cleanup_errors)}
+        raise
     finally:
         if conn:
             await conn.close()

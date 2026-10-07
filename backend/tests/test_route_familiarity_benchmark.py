@@ -1,6 +1,9 @@
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
 
 from scripts.benchmark_route_familiarity import (
     BoundedHistoryRepository,
@@ -9,6 +12,7 @@ from scripts.benchmark_route_familiarity import (
     database_lifecycle_report,
     host_accessible_database_url,
     raise_for_cleanup_failure,
+    _postgres_measure,
 )
 from backend.app.services.route_familiarity.models import RouteSignature
 
@@ -117,9 +121,9 @@ def test_in_memory_community_fixture_preserves_sparse_history_size():
     for row in rows:
         per_driver[row["driver_id"]] = per_driver.get(row["driver_id"], 0) + 1
 
-    assert len(rows) == 100
-    assert len(personal) == 50
-    assert len(per_driver) == 100
+    assert len(rows) == 99
+    assert len(personal) == 51
+    assert len(per_driver) == 99
     assert set(per_driver.values()) == {1}
 
 
@@ -133,9 +137,9 @@ def test_postgres_fixture_has_exact_personal_and_community_distribution():
         for row in community:
             per_driver[row[0]] = per_driver.get(row[0], 0) + 1
 
-        assert len(personal) == 50
-        assert len(community) == size - 50
-        assert len(per_driver) == (100 if size == 150 else 101)
+        assert len(personal) == 51
+        assert len(community) == size - 51
+        assert len(per_driver) == (99 if size == 150 else 101)
         assert min(per_driver.values()) >= 1
         if size == 150:
             assert set(per_driver.values()) == {1}
@@ -143,9 +147,79 @@ def test_postgres_fixture_has_exact_personal_and_community_distribution():
             assert min(per_driver.values()) >= 5
 
 
+def test_personal_sentinel_is_exposed_as_truncated_but_not_scored():
+    repository = BoundedHistoryRepository(150, RouteSignature(("cell",), (1.0,), 1.0, 11))
+    from backend.app.services.route_familiarity.service import RouteFamiliarityService
+
+    result = asyncio.run(RouteFamiliarityService(repository).assess_many(
+        "benchmark-driver", {"candidate": repository.signature}, datetime.now(UTC)))
+    assert len(asyncio.run(repository.personal_routes())) == 51
+    assessment = result["candidate"]
+    assert assessment.personal_history_trip_count == 50
+    assert assessment.history_truncated
+
+
+@pytest.mark.asyncio
+async def test_measurement_failure_after_create_cleans_database_and_reraises(monkeypatch):
+    import asyncpg
+
+    commands = []
+
+    class FakeConnection:
+        async def execute(self, sql, *args):
+            if sql.startswith("TRUNCATE"):
+                raise RuntimeError("measurement query failed")
+
+        async def close(self):
+            pass
+
+    class FakeAdmin:
+        async def execute(self, sql):
+            commands.append(sql)
+
+        async def close(self):
+            pass
+
+    admin = FakeAdmin()
+
+    async def connect(dsn, timeout):
+        return admin if dsn.endswith("/postgres") else FakeConnection()
+
+    monkeypatch.setattr(asyncpg, "connect", connect)
+    with pytest.raises(RuntimeError, match="measurement query failed"):
+        await _postgres_measure("postgresql://postgres:postgres@127.0.0.1:5432/ev", RouteSignature(
+            ("8b415d8c9a00fff",), (1.0,), 1.0, 11))
+    assert any(command.startswith('DROP DATABASE IF EXISTS "route_familiarity_bench_')
+               for command in commands)
+
+
+@pytest.mark.asyncio
+async def test_unavailable_disposable_connection_is_not_measured_and_is_cleaned(monkeypatch):
+    import asyncpg
+
+    commands = []
+    admin = AsyncMock()
+    admin.execute.side_effect = lambda sql: commands.append(sql)
+    admin.close.return_value = None
+    connect_count = 0
+
+    async def connect(dsn, timeout):
+        nonlocal connect_count
+        connect_count += 1
+        if connect_count == 1:
+            return admin
+        raise ConnectionError("disposable database unavailable")
+
+    monkeypatch.setattr(asyncpg, "connect", connect)
+    report = await _postgres_measure("postgresql://postgres:postgres@127.0.0.1:5432/ev", RouteSignature(
+        ("8b415d8c9a00fff",), (1.0,), 1.0, 11))
+    assert report["status"] == "not_measured"
+    assert report["disposable_database_dropped"]
+
+
 def test_benchmark_exact_community_cap_does_not_mark_history_truncated():
     repository = BoundedHistoryRepository(
-        550, RouteSignature(("cell",), (1.0,), 1.0, 11), community_driver_count=100)
+        551, RouteSignature(("cell",), (1.0,), 1.0, 11), community_driver_count=100)
     rows = asyncio.run(repository.community_routes())
     assert len(rows) == 500
     assert not any(row["driver_rank"] > 5 or row["active_rank"] > 100 for row in rows)

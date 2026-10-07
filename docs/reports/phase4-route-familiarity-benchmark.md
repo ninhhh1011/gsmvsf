@@ -7,27 +7,32 @@ H3 Resolution 11, Python 3.14, and local PostgreSQL. Times are milliseconds.
 
 ## Production Python paths
 
-| Logical history rows | Evaluator p50 / p95 | Rows per candidate (personal / community) | Community drivers |
-|---:|---:|---:|---:|
-| 150 | 176.366 / 234.860 | 50 / 100 | 100 |
-| 10,000 | 639.559 / 788.880 | 50 / 500 | 100 |
-| 100,000 | 345.812 / 398.546 | 50 / 500 | 100 |
+| Logical history rows | Evaluator p50 / p95 | Rows fetched (personal / community) | Rows scored (personal / community) | Community drivers fetched |
+|---:|---:|---:|---:|---:|
+| 150 | 73.076 / 94.060 | 51 / 99 | 50 / 99 | 99 |
+| 10,000 | 250.063 / 709.203 | 51 / 606 | 50 / 500 | 101 |
+| 100,000 | 506.906 / 569.575 | 51 / 606 | 50 / 500 | 101 |
 
 The evaluator calls the production `RouteFamiliarityService` and weighted
-similarity implementation. The 150-row case contains one route for each of 100
-community drivers; larger cases contain at least five routes for each. All
-fixture routes share one cell, deliberately exercising overlap work. This is a
-local microbenchmark, not an API latency SLA.
+similarity implementation. The 150-row fixture contains 51 personal rows and
+99 community rows, one for each community driver. Larger fixtures contain 51
+personal rows and distribute the remainder across 101 active community drivers.
+Queries fetch one personal sentinel and community sentinels (the 101st driver
+and sixth route per driver); scoring still uses at most 50 personal and 500
+community rows. Therefore `history_truncated` is true for personal history in
+all three cases, and for community history in the larger cases. All fixture
+routes share one cell, deliberately exercising overlap work. This is a local
+microbenchmark, not an API latency SLA.
 
 | Production operation | p50 / p95 |
 |---|---:|
-| `create_route_signature` | 0.207 / 0.223 |
-| `weighted_ordered_overlap` | 0.037 / 0.069 |
+| `create_route_signature` | 0.120 / 0.130 |
+| `weighted_ordered_overlap` | 0.021 / 0.036 |
 
 ## PostgreSQL repository queries
 
 The benchmark creates disposable database
-`route_familiarity_bench_558d72ef9c924e9999121184bb776cf2` on the configured
+`route_familiarity_bench_dbab8d16a79a46f299b432cc23d65474` on the configured
 PostgreSQL server, applies the route-history schema, seeds synthetic rows, times
 the real asyncpg `personal_routes` and `community_routes` methods, captures
 `EXPLAIN (ANALYZE, BUFFERS)`, and drops the database. The configured application
@@ -39,21 +44,24 @@ dropped. JSON lifecycle flags: `disposable_database_created: true`,
 `application_database_written: false`; `cleanup_errors` is empty. The
 orchestrator independently confirmed zero leftover UUID benchmark databases.
 
-| Rows in disposable DB | Lookup pair p50 / p95 | Community rows returned / drivers | Community plan execution |
-|---:|---:|---:|---:|
-| 150 | 3.163 / 4.044 | 100 / 100 | 0.701 ms, Seq Scan |
-| 10,000 | 35.593 / 38.789 | 500 / 100 | 39.989 ms, Seq Scan |
-| 100,000 | 563.218 / 717.936 | 500 / 100 | 181.286 ms, parallel scan; 99,950 joined rows |
+| Rows in disposable DB | Lookup pair p50 / p95 | Rows fetched (personal / community) | Rows scored (personal / community) | Community drivers / max fetched per driver |
+|---:|---:|---:|---:|---:|
+| 150 | 3.802 / 5.649 | 51 / 99 | 50 / 99 | 99 / 1 |
+| 10,000 | 37.226 / 39.848 | 51 / 606 | 50 / 500 | 101 / 6 |
+| 100,000 | 475.489 / 582.590 | 51 / 606 | 50 / 500 | 101 / 6 |
 
-Direct per-driver counts show maxima of 1, 5, and 5 respectively across 100
-distinct drivers. The same disposable database run measured production
-evaluation backed by the real repository:
+Community query plan execution was 1.322 ms, 34.613 ms, and 143.847 ms
+respectively (Seq Scan for 150/10,000 rows; parallel scan at 100,000 rows).
+
+The actual personal and community truncation flags were true/false for the
+150-row case and true/true for both larger cases. The same disposable database
+run measured production evaluation backed by the real repository:
 
 | PostgreSQL history rows | Full evaluation, 30 candidates, p50 / p95 |
 |---:|---:|
-| 150 | 50.447 / 89.391 ms |
-| 10,000 | 242.334 / 264.078 ms |
-| 100,000 | 982.108 / 1288.332 ms |
+| 150 | 65.491 / 72.840 ms |
+| 10,000 | 250.174 / 259.951 ms |
+| 100,000 | 682.634 / 769.073 ms |
 
 Full plans, including buffers, row counts, and planning/execution time, are in
 [phase4-route-familiarity-benchmark.json](phase4-route-familiarity-benchmark.json).
@@ -80,6 +88,9 @@ to the disposable database. The benchmark CLI maps the Compose-only `ev_db`
 hostname to `127.0.0.1` for this host-run command; an explicit
 `--database-url` keeps its supplied hostname.
 
-The benchmark requires PostgreSQL `CREATE DATABASE` permission. Failures report
-`status: not_measured`, the reason, and whether cleanup/drop succeeded. Missing
+The benchmark requires PostgreSQL `CREATE DATABASE` permission. An unavailable
+server, denied create, or unavailable connection to the new disposable database
+returns `status: not_measured` with cleanup state. Errors after the database
+connection is established are cleaned up and re-raised so broken measurement
+queries cannot be reported as an unavailable optional database. Missing
 database timings must not be represented as measured.
