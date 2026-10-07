@@ -63,14 +63,16 @@ without an unmeasured query rewrite.
 ## Database operation evidence
 
 The additive migration and destructive rollback were verified against local
-PostgreSQL. Rollback exited 0; a final apply with `DEBUG=false` also exited 0.
-Fresh command evidence:
+PostgreSQL. Immediately before rollback, the route table existed with 0 rows.
+Rollback removed the table, and the final apply recreated it empty. Fresh
+command evidence:
 
 ```text
+Before rollback: to_regclass('realtime.route_familiarity_routes') = true; row count = 0
 python -B -m scripts.migrate_route_familiarity --rollback  exit 0
-python -B -m scripts.migrate_route_familiarity             exit 0 (DEBUG=false)
-SELECT to_regclass('realtime.route_familiarity_routes');  true
-SELECT count(*) FROM realtime.route_familiarity_routes;   0
+Immediately after rollback: to_regclass('realtime.route_familiarity_routes') IS NOT NULL = false
+python -B -m scripts.migrate_route_familiarity             exit 0
+After final apply: to_regclass('realtime.route_familiarity_routes') = true; row count = 0
 ```
 
 These migration operations are separate from the benchmark, which wrote only
