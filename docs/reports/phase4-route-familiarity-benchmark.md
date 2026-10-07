@@ -63,17 +63,20 @@ without an unmeasured query rewrite.
 
 ## Database operation evidence
 
-The additive migration and destructive rollback commands were run against the
-local PostgreSQL service and exited successfully:
+The additive migration and destructive rollback were both verified against the
+local PostgreSQL service. After rollback verification, the migration was run
+again idempotently so the application database ends with the empty schema:
 
 ```text
-python -B -m scripts.migrate_route_familiarity          exit 0
 python -B -m scripts.migrate_route_familiarity --rollback  exit 0
+python -B -m scripts.migrate_route_familiarity             exit 0
+SELECT to_regclass('realtime.route_familiarity_routes');  realtime.route_familiarity_routes
+SELECT count(*) FROM realtime.route_familiarity_routes;   0
 ```
 
-The local application database retains the empty familiarity table from the
-explicit migration. Benchmark measurements used disposable databases only;
-the UUID database was dropped after capture.
+The current database check confirms the table exists and contains zero rows.
+These migration checks are separate from the benchmark measurements, which
+used disposable databases only; the UUID database was dropped after capture.
 
 The CLI maps the application's Compose-only `ev_db` hostname to `127.0.0.1`
 for this host-run benchmark; an explicit `--database-url` keeps its given host.
