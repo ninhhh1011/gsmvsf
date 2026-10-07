@@ -16,7 +16,7 @@ import {
     simplifyTrajectoryRDP
 } from '../../backend/app/static/demo/js/map.js';
 import { classifyEnergyWarning } from '../../backend/app/static/demo/js/components.js';
-import { DriverState } from '../../backend/app/static/demo/js/driver_mode.js';
+import { DriverState } from '../../backend/app/static/demo/js/domain/driver_state.js';
 
 test('ApiError sets flags correctly', () => {
     const err409 = new ApiError('Conflict', 409, 'CANDIDATE_STATE_CHANGED', { detail: 'state changed' });

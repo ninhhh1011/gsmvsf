@@ -57,7 +57,9 @@ import { isStationCompatibleWithVehicle, filterStations } from '../domain/statio
 import {
     renderAvailableCardHTML,
     renderOfflineCardHTML,
-    renderTripCompleteCardHTML
+    renderTripCompleteCardHTML,
+    renderTripAssignedCardHTML,
+    renderTripActiveCardHTML
 } from './cockpit_renderer.js';
 import { renderDrawerStationsListHTML } from './drawer_renderer.js';
 import { MapPicker } from './map_picker.js';
@@ -1685,70 +1687,7 @@ export class DriverModeController {
         const container = document.getElementById('driver-panel-content');
         if (!container) return;
 
-        container.innerHTML = `
-            <div class="driver-nav-hud">
-                <div class="hud-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span class="badge badge-info">
-                        ĐÃ NHẬN CHUYẾN
-                        <span class="sr-only">TRIP_ASSIGNED TRIP ASSIGNED</span>
-                    </span>
-                    <h3 style="margin: 0; font-size: 18px;">${escapeHtml(this.currentTrip?.trip_id || '')}</h3>
-                </div>
-
-                <div class="hud-details" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
-                    <div class="stat-box">
-                        <span class="stat-label">Phương tiện</span>
-                        <strong class="stat-value" style="font-size: 14px;">${this.currentVehicle?.vehicle_model || 'VF 3'}</strong>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">Cự ly dự kiến</span>
-                        <strong class="stat-value" style="font-size: 14px;">${(this.currentTrip?.planned_distance_m / 1000).toFixed(1)} km</strong>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">Dung lượng Pin</span>
-                        <strong id="val-assigned-soc" class="stat-value" style="font-size: 14px;">${this.currentSocPct.toFixed(0)}%</strong>
-                    </div>
-                </div>
-
-                <!-- Interactive Battery SOC Adjuster -->
-                <div class="cockpit-soc-control" style="margin-bottom: 14px; padding: 10px 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
-                            🔋 Tùy chỉnh mức Pin ban đầu (SOC)
-                        </span>
-                        <span id="label-assigned-soc-val" style="font-size: 12px; font-weight: 700; color: ${this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981')};">
-                            ${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)
-                        </span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="range" id="slider-assigned-soc" min="5" max="100" step="1" value="${Math.round(this.currentSocPct)}"
-                               style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
-                        <div style="display: flex; gap: 4px;">
-                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="12" style="padding: 2px 6px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">12%</button>
-                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="22" style="padding: 2px 6px; font-size: 11px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.5);">22%</button>
-                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="85" style="padding: 2px 6px; font-size: 11px; color: #10b981; border-color: rgba(16, 185, 129, 0.5);">85%</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="driver-actions">
-                    <button id="btn-start-driving" class="btn btn-success btn-lg btn-block">
-                        ▶ Bắt đầu lái xe
-                    </button>
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button id="btn-assigned-pick-origin" class="btn btn-outline flex-1" style="font-size: 13px;">
-                            📍 Đổi điểm xuất phát (A)
-                        </button>
-                        <button id="btn-assigned-pick-dest" class="btn btn-outline flex-1" style="font-size: 13px;">
-                            🏁 Đổi điểm đến (B)
-                        </button>
-                    </div>
-                    <button id="btn-cancel-trip" class="btn btn-outline btn-sm mt-2">
-                        Hủy nhận chuyến
-                    </button>
-                </div>
-            </div>
-        `;
+        container.innerHTML = renderTripAssignedCardHTML(this);
 
         document.getElementById('btn-start-driving')?.addEventListener('click', () => this.startTrip());
         document.getElementById('btn-assigned-pick-origin')?.addEventListener('click', (e) => {
@@ -1985,102 +1924,7 @@ export class DriverModeController {
         }
 
         // Full initial render
-        container.innerHTML = `
-            <div class="driver-nav-hud" id="driver-active-hud" data-hud-state="TRIP_ACTIVE">
-                <div id="hud-warning-container">
-                    ${warningBanner}
-                </div>
-
-                <div class="nav-metrics-card">
-                    <div class="nav-destination" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div>
-                            <span class="text-sm text-muted" style="font-size: 11px; text-transform: uppercase;">Điểm đến</span>
-                            <div class="dest-name" style="font-weight: 700; font-size: 16px;">
-                                Điểm trả khách
-                                <span class="sr-only">Passenger Drop-off (Trả khách)</span>
-                            </div>
-                        </div>
-                        <span class="badge badge-teal">Đang di chuyển</span>
-                    </div>
-
-                    <div class="nav-stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
-                        <div class="stat-box">
-                            <span class="stat-label">Cự ly còn lại</span>
-                            <span class="stat-value" id="val-remaining-dist">${this.remainingTripDistanceKm.toFixed(1)} <small>km</small></span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">ETA</span>
-                            <span class="stat-value" id="val-trip-eta">${etaMin} <small>phút</small><span class="sr-only">min</span></span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">Pin (SOC)</span>
-                            <span class="stat-value ${this.currentSocPct < 20 ? 'text-danger' : ''}" id="val-trip-soc">${this.currentSocPct.toFixed(0)}%</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">Tầm xa</span>
-                            <span class="stat-value" id="val-trip-range">${this.estimatedRangeKm.toFixed(0)} <small>km</small></span>
-                        </div>
-                    </div>
-
-                    <div class="battery-bar-container" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                        <div id="battery-bar-fill" class="battery-bar-fill ${this.currentSocPct < 20 ? 'bg-danger' : (this.currentSocPct < 30 ? 'bg-warning' : 'bg-success')}"
-                             style="width: ${Math.max(5, this.currentSocPct)}%; height: 100%;"></div>
-                    </div>
-
-                    <!-- Interactive Battery SOC Adjuster -->
-                    <div class="cockpit-soc-control" style="margin-top: 10px; padding: 8px 10px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
-                                🔋 Điều chỉnh mức Pin (SOC)
-                            </span>
-                            <span id="label-soc-slider-val" style="font-size: 12px; font-weight: 700; color: ${this.currentSocPct < 20 ? '#ef4444' : (this.currentSocPct < 30 ? '#f59e0b' : '#10b981')};">
-                                ${this.currentSocPct.toFixed(0)}% (${this.estimatedRangeKm.toFixed(0)} km)
-                            </span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="range" id="slider-cockpit-soc" min="5" max="100" step="1" value="${Math.round(this.currentSocPct)}"
-                                   style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
-                            <div class="quick-soc-presets" style="display: flex; gap: 4px;">
-                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="12" title="Mức pin nguy cấp (< 15%)"
-                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">12%</button>
-                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="22" title="Mức pin khuyến cáo (< 30%)"
-                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #f59e0b; border-color: rgba(245, 158, 11, 0.5);">22%</button>
-                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="85" title="Mức pin an toàn"
-                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #10b981; border-color: rgba(16, 185, 129, 0.5);">85%</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="text-xs text-muted mt-2" style="display: flex; justify-content: space-between; font-size: 11px;">
-                        <span id="hud-pos-status">${posStatus}</span>
-                        <span id="hud-progress-status">${progress}</span>
-                    </div>
-                </div>
-
-                <div id="hud-rec-container">
-                    ${recSnippet}
-                </div>
-
-                <div id="hud-post-trip-container">
-                    ${postTripSnippet}
-                </div>
-
-                <div class="driver-controls mt-3">
-                    <div class="replay-controls d-flex gap-2 mb-2" style="display: flex; gap: 8px;">
-                        <button id="btn-driver-replay-play" class="${playBtnClass}">${playBtnText}</button>
-                        <button id="btn-driver-replay-pause" class="${pauseBtnClass}">⏸ Tạm dừng</button>
-                        <button id="btn-driver-replay-step" class="btn btn-outline btn-sm flex-1">⏭ Từng bước</button>
-                    </div>
-                    <button id="btn-change-station" class="btn btn-sm btn-outline-secondary" style="margin-top: 6px; width: 100%; display: ${this._navigationLocked ? 'block' : 'none'};"
-                        onclick="driverMode.unlockNavigation()">
-                        🔄 Đổi trạm sạc khác
-                    </button>
-                    <button id="btn-complete-trip" class="btn btn-outline btn-sm btn-block">
-                        ✓ Hoàn thành chuyến đi
-                    </button>
-                </div>
-            </div>
-        `;
+        container.innerHTML = renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, playBtnClass, playBtnText, pauseBtnClass });
 
         // Bind interactive controls
         document.getElementById('btn-driver-replay-play')?.addEventListener('click', () => {
