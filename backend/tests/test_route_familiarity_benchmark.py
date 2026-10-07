@@ -38,11 +38,13 @@ def test_in_memory_community_fixture_models_five_routes_for_each_of_100_drivers(
     for row in rows:
         per_driver[row["driver_id"]] = per_driver.get(row["driver_id"], 0) + 1
 
-    assert len(rows) == 500
+    assert len(rows) == 600
+    assert all(row["active_rank"] <= 100 and row["driver_rank"] <= 6 for row in rows)
+    assert sum(row["driver_rank"] <= 5 and row["active_rank"] <= 100 for row in rows) == 500
     assert len(per_driver) == 100
-    assert set(per_driver.values()) == {5}
+    assert set(per_driver.values()) == {6}
     assert len(per_driver) <= 100
-    assert max(per_driver.values()) <= 5
+    assert max(per_driver.values()) == 6
 
 
 def test_database_lifecycle_report_keeps_created_state_after_drop():
@@ -115,3 +117,10 @@ def test_postgres_fixture_has_exact_personal_and_community_distribution():
             assert set(per_driver.values()) == {1}
         else:
             assert min(per_driver.values()) >= 5
+
+
+def test_benchmark_exact_community_cap_does_not_mark_history_truncated():
+    repository = BoundedHistoryRepository(550, RouteSignature(("cell",), (1.0,), 1.0, 11))
+    rows = asyncio.run(repository.community_routes())
+    assert len(rows) == 500
+    assert not any(row["driver_rank"] > 5 or row["active_rank"] > 100 for row in rows)

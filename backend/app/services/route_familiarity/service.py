@@ -46,6 +46,8 @@ class RouteFamiliarityService:
         self.repository = repository
         self.lookback = timedelta(days=lookback_days if lookback_days is not None else settings.route_familiarity_lookback_days)
         self.max_penalty_s = max_penalty_s if max_penalty_s is not None else settings.max_familiarity_penalty_s
+        if not 0 <= self.max_penalty_s <= 30:
+            raise ValueError("max_penalty_s must be between 0 and 30")
         self.minimum_support = (minimum_support_adherence if minimum_support_adherence is not None
                                 else settings.familiarity_minimum_support_adherence)
         self.prior_mean = prior_mean if prior_mean is not None else settings.familiarity_prior_mean
@@ -127,7 +129,7 @@ class RouteFamiliarityService:
                     sum(driver_trips.values()) if visible else None, drivers if visible else None,
                     confidence, recommended.distance_m,
                     best_result.shared_route_distance_m if best_result else None,
-                    min(self.max_penalty_s, max(0.0, penalty)), truncated)
+                    min(30.0, self.max_penalty_s, max(0.0, penalty)), truncated)
         except SimilarityWorkLimitExceeded:
             record_familiarity_work_limit()
             record_route_familiarity_event('comparison', 'unavailable')

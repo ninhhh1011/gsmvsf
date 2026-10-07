@@ -179,6 +179,22 @@ def test_familiarity_penalty_configuration_cannot_exceed_contract_cap():
         Settings(_env_file=None, max_familiarity_penalty_s=30.01)
 
 
+@pytest.mark.parametrize("override", [-0.01, 30.01])
+def test_service_rejects_penalty_overrides_outside_contract_cap(override):
+    with pytest.raises(ValueError, match="max_penalty_s"):
+        RouteFamiliarityService(Repository(), max_penalty_s=override)
+
+
+@pytest.mark.asyncio
+async def test_final_penalty_remains_capped_even_if_service_override_changes():
+    row = dict(driver_id="d", trip_id="t", cells=["other"], cell_distances_m=[100.0],
+               distance_m=100.0, resolution=11)
+    service = RouteFamiliarityService(Repository(personal=[row] * 50), max_penalty_s=30)
+    service.max_penalty_s = 100
+    assessment = (await service.assess_many("d", {("s", "x"): sig(["target"])}, NOW))["s", "x"]
+    assert assessment.penalty_s == 30
+
+
 @pytest.mark.asyncio
 async def test_truncation_uses_sentinel_metadata_not_exact_full_result_counts():
     row = dict(driver_id="d", trip_id="t", cells=["a"], cell_distances_m=[100.0],

@@ -110,16 +110,18 @@ def _polyline(points):
 
 
 class BoundedHistoryRepository:
-    """Production-service harness matching the repository's documented query caps."""
+    """Production-service harness with one sentinel row beyond each history cap."""
     def __init__(self, history_size, signature):
         self.history_size = history_size
         self.signature = signature
         self.row = {"driver_id": "synthetic-driver", "cells": signature.cells,
                     "cell_distances_m": signature.cell_distances_m,
                     "distance_m": signature.distance_m, "resolution": signature.resolution}
+        community_count = max(history_size - 50, 0)
         self.community = [
-            {**self.row, "driver_id": f"synthetic-driver-{index % 100:03d}"}
-            for index in range(min(max(history_size - 50, 0), 500))
+            {**self.row, "driver_id": f"synthetic-driver-{index % 100:03d}",
+             "active_rank": index % 100 + 1, "driver_rank": index // 100 + 1}
+            for index in range(min(community_count, 600))
         ]
 
     async def personal_routes(self, *_):
@@ -164,7 +166,8 @@ async def _measure_evaluation(case, signature):
             "personal_rows_returned_per_candidate": min(case.history_size, 50),
             "community_rows_returned_per_candidate": len(community_rows),
             "community_distinct_drivers_returned": len({row["driver_id"] for row in community_rows}),
-            "community_history_truncated": len(community_rows) >= 500}
+            "community_history_truncated": (len(community_rows) > 500 or any(
+                row["active_rank"] > 100 or row["driver_rank"] > 5 for row in community_rows))}
 
 
 async def _postgres_measure(database_url, signature):
@@ -241,7 +244,7 @@ async def _postgres_measure(database_url, signature):
                         SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
                         FROM realtime.route_familiarity_routes
                         WHERE driver_id=$1 AND completed_at >= $2 AND completed_at <= $3
-                        ORDER BY completed_at DESC LIMIT 50""",
+                        ORDER BY completed_at DESC, trip_id DESC LIMIT 51""",
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of)
             community_plan = await conn.fetch("""EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
                         WITH active_drivers AS (
@@ -249,14 +252,19 @@ async def _postgres_measure(database_url, signature):
                             FROM realtime.route_familiarity_routes
                             WHERE driver_id <> $1 AND completed_at >= $2 AND completed_at <= $3
                               AND cells && $4::text[]
-                            GROUP BY driver_id ORDER BY last_completed_at DESC, driver_id LIMIT 100
+                            GROUP BY driver_id ORDER BY last_completed_at DESC, driver_id LIMIT 101
+                        ), ranked_drivers AS (
+                            SELECT *, row_number() OVER (ORDER BY last_completed_at DESC, driver_id) AS active_rank
+                            FROM active_drivers
                         ), bounded AS (
-                            SELECT r.*, row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC) AS driver_rank
-                            FROM realtime.route_familiarity_routes r JOIN active_drivers d USING (driver_id)
+                            SELECT r.*, d.active_rank,
+                                row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC, r.trip_id DESC) AS driver_rank
+                            FROM realtime.route_familiarity_routes r JOIN ranked_drivers d USING (driver_id)
                             WHERE r.completed_at >= $2 AND r.completed_at <= $3 AND r.cells && $4::text[]
                         )
                         SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
-                        FROM bounded WHERE driver_rank <= 5 ORDER BY completed_at DESC, driver_id LIMIT 500""",
+                        FROM bounded WHERE driver_rank <= 6
+                        ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606""",
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of, list(db_signature.cells))
             per_size.append({"history_rows": actual, "repository_query_pair": timings,
                 "repository_rows_returned": {"personal": len(personal_rows),
