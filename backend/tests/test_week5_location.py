@@ -23,10 +23,14 @@ def state():
 
 @pytest.mark.asyncio
 async def test_candidate_current_state_uses_existing_fields(state):
-    service = SimpleNamespace(search_candidates=AsyncMock(return_value='result'))
-    assert await evaluate_and_search(EvaluateAndSearchApiRequest(vehicle_id='V0001',
-        driver_id=DRIVER, timestamp=T, current_soc_pct=10), service) == 'result'
-    energy = service.search_candidates.call_args.args[0].energy_request
+    from unittest.mock import patch
+    # Mock the candidate service to avoid real GraphHopper calls
+    mock_svc = SimpleNamespace(search_candidates=AsyncMock(return_value='result'))
+    # Patch at the usage site in candidate.py
+    with patch('backend.app.api.v1.candidate.get_candidate_service', return_value=mock_svc):
+        assert await evaluate_and_search(EvaluateAndSearchApiRequest(vehicle_id='V0001',
+            driver_id=DRIVER, timestamp=T, current_soc_pct=10)) == 'result'
+    energy = mock_svc.search_candidates.call_args.args[0].energy_request
     assert (energy.latitude, energy.longitude, energy.road_segment_id) == (21.1, 105.1, 'segment')
 
 @pytest.mark.asyncio

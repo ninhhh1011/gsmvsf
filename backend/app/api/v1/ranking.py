@@ -6,6 +6,7 @@ from time import perf_counter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 
+from backend.app.dependencies import get_demand_service
 from backend.app.config import settings
 from backend.app.services.candidate.models import CandidateSearchRequest
 from backend.app.services.demand.models import DemandContext, RequestedServiceType
@@ -109,7 +110,7 @@ async def rank(request: RankRequest, workflow=Depends(get_workflow)):
 
 
 @router.post('/recommend', response_model=RecommendationResult)
-async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
+async def recommend(request: RecommendRequest, request_obj: Request, workflow=Depends(get_workflow)):
     started = perf_counter()
     try:
         context = request.context
@@ -129,7 +130,7 @@ async def recommend(request: RecommendRequest, workflow=Depends(get_workflow)):
             'raw_longitude': location.longitude, 'road_segment_id': road_seg})
         location_ms = (perf_counter() - started) * 1000
         demand_started = perf_counter()
-        demand = get_demand_service()
+        demand = get_demand_service(request_obj)
         energy = (demand.process_driver_request(context, request.requested_service)
                   if request.requested_service is not None else demand.evaluate_auto_demand(context))
         demand_ms = (perf_counter() - demand_started) * 1000
@@ -183,7 +184,7 @@ async def ingest_queue(snapshot: QueueSnapshot, response: Response, service=Depe
     return await ingest_snapshot(snapshot, response, service)
 
 
-@router.post('/snapshots/simulate-tick')
+@router.post('/snapshots/simulate-tick', dependencies=[Depends(authorize_ingestion)])
 async def trigger_simulation_tick(request: Request):
     """Trigger an on-demand simulation tick (Problem D)."""
     simulator = getattr(request.app.state, 'realtime_simulator', None)

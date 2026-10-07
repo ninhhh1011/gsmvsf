@@ -8,18 +8,10 @@ RUN apt-get update && apt-get install -y \
 
 COPY backend/pyproject.toml .
 
-RUN pip install --no-cache-dir "uvicorn[standard]>=0.32.0" \
-    "fastapi>=0.115.0" \
-    "pydantic>=2.9.0" \
-    "pydantic-settings>=2.6.0" \
-    "httpx>=0.27.0" \
-    "structlog>=24.0.0" \
-    "psycopg2-binary>=2.9.0" \
-    "pandas>=2.0.0" \
-    "asyncpg>=0.30.0" \
-    "redis>=5.2.0,<9" \
-    "prometheus-client>=0.21.0"
+# Install from pyproject.toml (not requirements.txt which is auto-generated)
+RUN pip install --no-cache-dir -e .
 
+# Copy application code
 COPY backend/app/ ./backend/app/
 
 ENV PYTHONPATH=/app

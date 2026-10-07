@@ -32,11 +32,11 @@ class DemandService:
 
     def __init__(
         self,
-        capability_resolver: VehicleCapabilityResolver | None = None,
+        capability_resolver: VehicleCapabilityResolver,
         auto_detector: AutoDemandDetector | None = None,
         driver_requester: DriverRequestProcessor | None = None,
     ):
-        self._resolver = capability_resolver or get_capability_resolver()
+        self._resolver = capability_resolver
         self._auto_detector = auto_detector or AutoDemandDetector(self._resolver)
         self._driver_requester = driver_requester or DriverRequestProcessor(self._resolver)
 
@@ -191,21 +191,18 @@ class DemandService:
         return request
 
 
-# Global service instance
-_global_service: DemandService | None = None
+# Backwards-compatible getter for test fixtures (no request context available)
+def get_demand_service(request: object | None = None) -> "DemandService":
+    """Get DemandService instance from request.app.state or create standalone for tests."""
+    if request is not None and hasattr(request, "app"):
+        svc = getattr(request.app.state, "demand_service", None)
+        if svc is not None:
+            return svc
+    # Fallback for test fixtures that don't use request context
+    return DemandService(capability_resolver=get_capability_resolver())
 
 
-def get_demand_service(request: object | None = None) -> DemandService:
-    """Get DemandService instance, resolving from request.app.state if available."""
-    if request and hasattr(request, "app") and getattr(request.app.state, "demand_service", None) is not None:
-        return request.app.state.demand_service
-    global _global_service
-    if _global_service is None:
-        _global_service = DemandService()
-    return _global_service
-
-
-def reset_demand_service():
-    """Reset global DemandService for testing."""
-    global _global_service
-    _global_service = None
+# Exists only for __init__.py backwards compatibility - does nothing (stateless service)
+def reset_demand_service() -> None:
+    """No-op: DemandService is now stateless and request-scoped. Kept for API compatibility."""
+    pass

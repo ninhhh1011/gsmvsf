@@ -59,9 +59,13 @@ def test_candidate_service_requires_injected_engine():
 
 
 def test_candidate_factory_uses_graphhopper_only():
+    # When app.state and fixture singleton are both None, the fallback creates
+    # a service with a fresh GraphHopperRoutingAdapter.
     set_candidate_service(None)
     try:
-        assert isinstance(get_candidate_service().routing_engine, GraphHopperRoutingAdapter)
+        from backend.app.dependencies import get_candidate_service as dep_get
+        svc = dep_get()
+        assert isinstance(svc.routing_engine, GraphHopperRoutingAdapter)
     finally:
         set_candidate_service(None)
 

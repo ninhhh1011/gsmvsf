@@ -9,6 +9,7 @@ Provides:
 
 from datetime import datetime
 
+from backend.app.dependencies import get_candidate_service, get_demand_service
 from backend.app.services.candidate.models import (
     CandidateSearchRequest,
     CandidateSearchResult,
@@ -19,7 +20,6 @@ from backend.app.services.demand.models import (
     EnergyServiceRequest,
     RequestedServiceType,
 )
-from backend.app.services.demand.service import get_demand_service
 from backend.app.services.realtime.location import resolve_current_location
 from backend.app.services.routing.engine import (
     RouteNotFoundError,
@@ -28,30 +28,17 @@ from backend.app.services.routing.engine import (
     RoutingTimeoutError,
     raise_for_routing_failure,
 )
-from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from backend.app.services.routing.models import RouteRequest, RouteResult, RouteStatus
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 router = APIRouter()
 
-_candidate_service_instance: CandidateSearchService | None = None
-
-
-def get_candidate_service(request: Request = None) -> CandidateSearchService:
-    """Resolve CandidateSearchService from request.app.state, with singleton fallback for testing."""
-    if request is not None and hasattr(request, "app") and getattr(request.app.state, "candidate_service", None) is not None:
-        return request.app.state.candidate_service
-    global _candidate_service_instance
-    if _candidate_service_instance is None:
-        _candidate_service_instance = CandidateSearchService(routing_engine=GraphHopperRoutingAdapter())
-    return _candidate_service_instance
-
 
 def set_candidate_service(service: CandidateSearchService | None) -> None:
-    """Override singleton for testing."""
-    global _candidate_service_instance
-    _candidate_service_instance = service
+    """Route test-fixture singleton to the fallback in dependencies.py."""
+    from backend.app.dependencies import set_candidate_service_fallback
+    set_candidate_service_fallback(service)
 
 
 def _routing_http_error(exc: RoutingEngineError) -> HTTPException:
@@ -68,8 +55,9 @@ def _routing_http_error(exc: RoutingEngineError) -> HTTPException:
 @router.post("/route", response_model=RouteResult, summary="Compute a road route for a vehicle")
 async def route(
     request: RouteRequest,
-    service: CandidateSearchService = Depends(get_candidate_service),
+    request_obj: Request,
 ) -> RouteResult:
+    service = get_candidate_service(request_obj)
     try:
         result = await service.routing_engine.route(request)
         raise_for_routing_failure(result)
@@ -116,12 +104,13 @@ class EvaluateAndSearchApiRequest(BaseModel):
 )
 async def search_candidates(
     request: CandidateSearchRequest,
+    request_obj: Request,
     eligible_only: bool = Query(False, description="If true, return only eligible candidates"),
-    service: CandidateSearchService = Depends(get_candidate_service),
 ) -> CandidateSearchResult:
     """
     Execute Week 3 candidate search and multi-leg routing for an EnergyServiceRequest.
     """
+    service = get_candidate_service(request_obj)
     try:
         return await service.search_candidates(request, eligible_only=eligible_only)
     except RoutingEngineError as exc:
@@ -136,7 +125,7 @@ async def search_candidates(
 )
 async def evaluate_and_search(
     request: EvaluateAndSearchApiRequest,
-    service: CandidateSearchService = Depends(get_candidate_service),
+    request_obj: Request = None,
 ) -> CandidateSearchResult:
     """
     Seamless integration endpoint:
@@ -164,7 +153,7 @@ async def evaluate_and_search(
         road_segment_id=location.road_segment_id,
     )
 
-    demand_svc = get_demand_service()
+    demand_svc = get_demand_service(request_obj)
     if request.requested_service is not None:
         energy_req: EnergyServiceRequest = demand_svc.process_driver_request(
             demand_ctx, request.requested_service
@@ -180,6 +169,7 @@ async def evaluate_and_search(
         max_candidates=request.max_candidates,
     )
 
+    service = get_candidate_service(request_obj)
     try:
         return await service.search_candidates(search_req, eligible_only=request.eligible_only)
     except RoutingEngineError as exc:

@@ -23,7 +23,10 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ev_recommendation
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    # Bind to localhost only for security:
+    # Prevents external hosts from connecting directly to PostgreSQL.
+    # Only containers on the same Docker network can access via service name 'db'.
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

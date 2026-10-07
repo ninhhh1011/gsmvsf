@@ -11,6 +11,7 @@ Provides:
 
 from datetime import datetime
 
+from backend.app.dependencies import get_demand_service
 from backend.app.services.demand.capability import (
     UnknownVehicleError,
     UnknownVehicleModelError,
@@ -22,9 +23,8 @@ from backend.app.services.demand.models import (
     RequestedServiceType,
     VehicleCapability,
 )
-from backend.app.services.demand.service import get_demand_service
 from backend.app.services.realtime.location import resolve_current_location
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Path as FPath
 from pydantic import BaseModel, Field
 
@@ -70,7 +70,7 @@ class DriverIntentApiRequest(BaseModel):
     response_model=EnergyServiceRequest,
     summary="Evaluate auto-detected energy service demand",
 )
-async def evaluate_demand(payload: EvaluateDemandApiRequest) -> EnergyServiceRequest:
+async def evaluate_demand(payload: EvaluateDemandApiRequest, request: Request = None) -> EnergyServiceRequest:
     """
     Evaluate vehicle telemetry to determine if an energy service is needed.
     Returns canonical EnergyServiceRequest.
@@ -101,7 +101,7 @@ async def evaluate_demand(payload: EvaluateDemandApiRequest) -> EnergyServiceReq
         road_segment_id=payload.road_segment_id,
     )
 
-    demand_service = get_demand_service()
+    demand_service = get_demand_service(request)
     return demand_service.evaluate_auto_demand(ctx)
 
 
@@ -110,7 +110,7 @@ async def evaluate_demand(payload: EvaluateDemandApiRequest) -> EnergyServiceReq
     response_model=EnergyServiceRequest,
     summary="Process explicit driver service request",
 )
-async def submit_driver_request(payload: DriverIntentApiRequest) -> EnergyServiceRequest:
+async def submit_driver_request(payload: DriverIntentApiRequest, request: Request = None) -> EnergyServiceRequest:
     """
     Process an explicit energy service request from the driver (CHARGING, BATTERY_SWAP, ANY).
     Validates capability and returns canonical EnergyServiceRequest.
@@ -136,7 +136,7 @@ async def submit_driver_request(payload: DriverIntentApiRequest) -> EnergyServic
         road_segment_id=payload.road_segment_id,
     )
 
-    demand_service = get_demand_service()
+    demand_service = get_demand_service(request)
     return demand_service.process_driver_request(ctx, payload.requested_service_type)
 
 
@@ -244,6 +244,7 @@ async def get_model_capability(
 async def evaluate_driver_demand_with_realtime_state(
     driver_id: str = FPath(..., description="Driver ID (e.g. D0001)"),
     payload: EvaluateDemandApiRequest = ...,
+    request: Request = None,
 ) -> EnergyServiceRequest:
     """
     Evaluate demand for an active driver, automatically incorporating Week 1
@@ -272,5 +273,5 @@ async def evaluate_driver_demand_with_realtime_state(
         road_segment_id=location.road_segment_id,
     )
 
-    demand_service = get_demand_service()
+    demand_service = get_demand_service(request)
     return demand_service.evaluate_auto_demand(ctx)
