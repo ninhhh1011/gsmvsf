@@ -6,9 +6,6 @@
     <title>VinFast EV — Điều Hướng & Đề Xuất Năng Lượng (Driver Cockpit)</title>
     <!-- Leaflet 1.9.4 Local CSS -->
     <link rel="stylesheet" href="/demo/static/vendor/leaflet/leaflet.css" />
-    <!-- H3-js Hexagonal Spatial Indexing -->
-    <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
-    <script src="https://unpkg.com/h3-js@4.1.0/h3-js.min.js"></script>
     <!-- App Design System Stylesheet -->
     <link rel="stylesheet" href="/demo/static/style.css" />
 </head>
@@ -97,9 +94,6 @@
                 <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
                     🏁 Đổi điểm đến (B)
                 </button>
-                <button id="btn-h3-overlay" class="btn btn-fab-h3 btn-outline-secondary" title="Hiện Familiar Routes (H3 Hex Overlay)">
-                    🔷 H3 Overlay
-                </button>
             </div>
 
             <!-- Map Picker Instruction Toast Banner (hidden by default) -->
@@ -153,19 +147,7 @@
                     <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.25); font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600;" title="Thời gian kẹt xe và độ trễ giao thông được tự động tính vào Cost và đề xuất trạm">🚦 Tự động tính tắc đường</span>
                     <label for="cockpit-vehicle-select" class="text-xs text-muted" style="font-size: 11px; margin: 0;">Mẫu xe:</label>
                     <select id="cockpit-vehicle-select" class="form-control form-control-sm" style="background: #1e293b; color: #38bdf8; border: 1px solid #334155; font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight: 600; cursor: pointer;" title="Đổi mẫu xe VinFast">
-                        <option value="VF_3">VF 3 (17.2 kWh · 95 Wh/km)</option>
-                        <option value="VF_5">VF 5 (34.3 kWh · 125 Wh/km)</option>
-                        <option value="VF_6">VF 6 (54.8 kWh · 145 Wh/km)</option>
-                        <option value="VF_7_ECO">VF 7 Eco (54.8 kWh · 155 Wh/km)</option>
-                        <option value="VF_7_PLUS">VF 7 Plus (69.3 kWh · 170 Wh/km)</option>
-                        <option value="VF_8">VF 8 (80.7 kWh · 195 Wh/km)</option>
-                        <option value="VF_9">VF 9 (113.2 kWh · 235 Wh/km)</option>
-                        <option value="VF_E34">VF e34 (38.6 kWh · 135 Wh/km)</option>
-                        <option value="EVO200">Evo200 [Xe máy] (3.2 kWh · 40 Wh/km)</option>
-                        <option value="FELIZ_S">Feliz S [Xe máy] (3.2 kWh · 42 Wh/km)</option>
-                        <option value="KLARA_S_2022">Klara S [Xe máy] (3.2 kWh · 45 Wh/km)</option>
-                        <option value="EVO">Evo [Pin đổi] (2.8 kWh · 38 Wh/km)</option>
-                        <option value="FELIZ_II">Feliz II [Pin đổi] (2.8 kWh · 40 Wh/km)</option>
+                        <option value="VF_3">Loading models...</option>
                     </select>
                     <span class="status-indicator-dot online"></span>
                 </div>
