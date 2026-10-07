@@ -119,13 +119,23 @@ async def test_event_time_and_retrieval_caps_are_passed_to_repository():
 
 
 @pytest.mark.asyncio
-async def test_missing_route_geometry_is_unavailable_without_history_reads():
+async def test_missing_route_geometry_is_unavailable_without_history_reads(monkeypatch):
+    from backend.app.services.route_familiarity import service as familiarity_service
+
     repo = Repository()
+    events, durations = [], []
+    monkeypatch.setattr(familiarity_service, "record_route_familiarity_event",
+                        lambda *event: events.append(event))
+    monkeypatch.setattr(familiarity_service, "observe_route_familiarity",
+                        lambda *timing: durations.append(timing))
     assessment = (await RouteFamiliarityService(repo).assess_many(
-        "me", {("s", "x"): None}, NOW))["s", "x"]
+        "private-driver", {("s", "x"): None}, NOW))["s", "x"]
     assert assessment.status == "UNAVAILABLE"
     assert assessment.penalty_s == 0
     assert repo.calls == []
+    assert ("assessment", "unavailable") in events
+    assert ("fallback", "unavailable") in events
+    assert any(stage == "evaluation" and elapsed >= 0 for stage, elapsed in durations)
 
 
 def test_feature_is_off_by_default_and_enabled_requires_identity_secret():

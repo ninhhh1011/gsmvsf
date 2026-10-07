@@ -43,3 +43,19 @@ async def test_history_failure_is_observable_and_degraded_without_details():
     assert "ROUTE_FAMILIARITY_UNAVAILABLE" in result.degraded_reasons
     assert result.familiarity_penalty_s == 0
     assert "database details" not in str(result.model_dump())
+
+
+async def test_enabled_familiarity_has_no_disabled_status_when_no_candidate_is_selected():
+    from backend.app.services.ranking.service import RankingService
+    from backend.tests.test_week4_ranking import HistoryResolver
+
+    class Evaluator:
+        async def assess_many(self, *_):
+            raise AssertionError("no candidates should not query history")
+
+    result = await RankingService(HistoryResolver(), familiarity_evaluator=Evaluator()).recommend(
+        evidence([]), candidate_signatures={}, include_familiarity=True)
+    assert result.familiarity_enabled is True
+    assert result.has_recommendation is False
+    assert result.familiarity_status is None
+    assert result.familiarity is None

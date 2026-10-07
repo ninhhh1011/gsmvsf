@@ -64,6 +64,10 @@ class RouteFamiliarityService:
         unavailable = {key: FamiliarityAssessment("UNAVAILABLE", degraded_reason="ROUTE_GEOMETRY_UNAVAILABLE")
                        for key, sig in candidate_signatures.items() if sig is None}
         if not valid:
+            for assessment in unavailable.values():
+                record_route_familiarity_event('assessment', assessment.status.lower())
+                record_route_familiarity_event('fallback', 'unavailable')
+            observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
             return unavailable
         lookup_started = perf_counter()
         personal = await self.repository.personal_routes(driver_id, as_of, self.lookback)
