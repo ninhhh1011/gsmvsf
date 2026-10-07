@@ -27,7 +27,7 @@ export function straightLineDistanceKm(lat1, lng1, lat2, lng2) {
  * Standard vehicle models catalog with battery & consumption specifications.
  * Supports VinFast, BYD, Tesla, Hyundai, and custom EV brands.
  */
-export const DEFAULT_MODEL_SPECS = {
+export const FALLBACK_MODEL_SPECS = {
     // --- VinFast EV Cars ---
     'VF_3': { vehicle_model: 'VF_3', brand: 'VinFast', display_name: 'VF 3', vehicle_type: 'EV_CAR', usable_kwh: 17.15, consumption_wh_km: 95.0, charging_supported: true, swap_supported: false },
     'VF_5': { vehicle_model: 'VF_5', brand: 'VinFast', display_name: 'VF 5', vehicle_type: 'EV_CAR', usable_kwh: 34.25, consumption_wh_km: 125.0, charging_supported: true, swap_supported: false },
@@ -59,7 +59,7 @@ export const DEFAULT_MODEL_SPECS = {
 };
 
 // Mutable catalog registry allowing dynamic additions at runtime
-export const MODEL_SPECS = { ...DEFAULT_MODEL_SPECS };
+export const MODEL_SPECS = { ...FALLBACK_MODEL_SPECS };
 
 // Backward compatibility alias for existing consumers
 export const VINFAST_MODEL_SPECS = MODEL_SPECS;

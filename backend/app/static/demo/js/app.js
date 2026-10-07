@@ -7,6 +7,8 @@ import { DemoMap } from './map.js';
 import { DriverModeController } from './driver_mode.js';
 import { TrajectoryReplayController } from './replay.js';
 import { SimModeController } from './sim_mode.js';
+import { fetchVehicleCatalog } from './domain/vehicle-catalog.js';
+import { FALLBACK_MODEL_SPECS } from './domain/vehicle_model.js';
 
 class DemoApp {
     constructor() {
@@ -48,7 +50,7 @@ class DemoApp {
             this.driverMode = new DriverModeController(this.api, this.map, {
                 session: this.session
             });
-            this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios);
+            this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios, this.vehicleCatalog);
             await this.driverMode.init();
             window.driverMode = this.driverMode;
 
@@ -81,6 +83,22 @@ class DemoApp {
         ]);
 
         const [stResult, vResult, scResult, trResult] = results;
+        try {
+            this.vehicleCatalog = await fetchVehicleCatalog();
+        } catch (error) {
+            console.warn('[App] Vehicle catalog API unavailable; using fallback model specifications:', error);
+            this.vehicleCatalog = Object.values(FALLBACK_MODEL_SPECS).map(spec => ({
+                id: spec.vehicle_model,
+                name: spec.display_name,
+                battery_kwh: spec.usable_kwh,
+                efficiency_kwh_per_km: spec.consumption_wh_km / 1000,
+                vehicle_type: spec.vehicle_type,
+                supported_services: [
+                    ...(spec.charging_supported ? ['charging'] : []),
+                    ...(spec.swap_supported ? ['battery_swap'] : [])
+                ]
+            }));
+        }
 
         // Check each catalog and report failures
         const errors = [];
@@ -92,7 +110,18 @@ class DemoApp {
             this.stations = [];
         }
         if (vResult.status === 'fulfilled') {
-            this.vehicles = vResult.value || [];
+            const specs = new Map(this.vehicleCatalog.map(item => [item.id, item]));
+            this.vehicles = (vResult.value || []).map(vehicle => {
+                const spec = specs.get(vehicle.vehicle_model);
+                return spec ? {
+                    ...vehicle,
+                    vehicle_type: spec.vehicle_type,
+                    usable_capacity_kwh: spec.battery_kwh,
+                    consumption_wh_per_km: spec.efficiency_kwh_per_km * 1000,
+                    charging_supported: spec.supported_services.includes('charging'),
+                    swap_supported: spec.supported_services.includes('battery_swap')
+                } : vehicle;
+            });
         } else {
             errors.push(`Vehicles: ${vResult.reason?.message || 'load failed'}`);
             this.vehicles = [];

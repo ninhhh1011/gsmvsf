@@ -4,6 +4,7 @@
  */
 
 import { renderEnergyWarningBanner, renderRecommendationCard, renderCostBreakdown } from '../components.js';
+import { escapeHtml } from '../domain/route-display.js';
 
 /**
  * Render Available HUD card.
@@ -92,10 +93,10 @@ export function renderTripCompleteCardHTML(lastRecommendation, postTripStation) 
                 <div style="background: rgba(13, 148, 136, 0.12); border: 1px solid #0d9488; border-radius: 10px; padding: 14px; margin-top: 12px; margin-bottom: 12px;">
                     <div style="font-weight: 700; color: #0d9488; font-size: 14px;">⚡ BƯỚC TIẾP THEO: ĐI SẠC PIN</div>
                     <p style="font-size: 13px; color: #cbd5e1; margin: 4px 0 10px 0;">
-                        Bạn đã chọn sạc tại <strong>Trạm ${postTripStation.station_id}</strong> (${postTripStation.name || ''}) sau khi trả khách.
+                        Bạn đã chọn sạc tại <strong>Trạm ${escapeHtml(postTripStation.station_id)}</strong> (${escapeHtml(postTripStation.name || '')}) sau khi trả khách.
                     </p>
                     <button id="btn-start-post-trip-nav" class="btn btn-success btn-lg btn-block">
-                        ⚡ Dẫn đường tới Trạm ${postTripStation.station_id} ngay
+                        ⚡ Dẫn đường tới Trạm ${escapeHtml(postTripStation.station_id)} ngay
                     </button>
                 </div>
             ` : ''}

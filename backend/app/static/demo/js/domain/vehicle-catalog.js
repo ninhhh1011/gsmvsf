@@ -3,7 +3,7 @@
  * Fetches catalog from backend API. Pure fetch logic, no DOM.
  */
 
-import { registerVehicleModel } from './vehicle_model.js';
+import { MODEL_SPECS, registerVehicleModel } from './vehicle_model.js';
 
 /** @type {Array|null} Cached catalog response */
 let _catalogCache = null;
@@ -12,19 +12,15 @@ let _catalogCache = null;
  * Fetch vehicle catalog from GET /api/v1/vehicles/catalog.
  * Returns the JSON array or throws on failure.
  */
-export async function fetchVehicleCatalog(apiClient) {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = `${baseUrl}/api/v1/vehicles/catalog`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Vehicle catalog fetch failed: HTTP ${response.status}`);
-    }
+export async function fetchVehicleCatalog() {
+    const response = await fetch('/api/v1/vehicles/catalog');
+    if (!response.ok) throw new Error(`Vehicle catalog fetch failed: HTTP ${response.status}`);
     const data = await response.json();
     if (!Array.isArray(data)) {
         throw new Error('Vehicle catalog did not return an array');
     }
     _catalogCache = data;
+    for (const key of Object.keys(MODEL_SPECS)) delete MODEL_SPECS[key];
 
     // Auto-register each catalog entry into MODEL_SPECS for consistency
     for (const item of data) {
