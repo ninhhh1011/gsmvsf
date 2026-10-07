@@ -4,15 +4,39 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
     renderAvailableCardHTML,
     renderOfflineCardHTML,
     renderTripCompleteCardHTML,
     renderPositionStatusHTML,
-    renderPostTripBannerHTML
+    renderPostTripBannerHTML,
+    renderStatusBadge,
+    renderReplayControls
 } from '../../backend/app/static/demo/js/ui/cockpit_renderer.js';
 import { renderEnergyWarningBanner } from '../../backend/app/static/demo/js/components.js';
+
+test('cockpit renderer owns driver-state labels and replay presentation', () => {
+    assert.equal(renderStatusBadge('TRIP_ACTIVE').label, '\u0110ANG DI CHUY\u1ec2N');
+    assert.equal(renderStatusBadge('UNKNOWN').label, 'UNKNOWN');
+    const initial = renderReplayControls({ isPlaying: false, currentIndex: 0 });
+    const resumed = renderReplayControls({ isPlaying: false, currentIndex: 2 });
+    const playing = renderReplayControls({ isPlaying: true, currentIndex: 2 });
+    assert.equal(initial.playText, '\u25b6 B\u1eaft \u0111\u1ea7u');
+    assert.equal(resumed.playText, '\u25b6 Ti\u1ebfp t\u1ee5c');
+    assert.equal(playing.playText, '\u25b6 \u0110ang ch\u1ea1y...');
+    assert.equal(initial.playClass, 'btn btn-primary btn-sm flex-1');
+    assert.equal(initial.pauseClass, 'btn btn-outline btn-sm flex-1');
+    assert.equal(playing.playClass, 'btn btn-outline btn-sm flex-1');
+    assert.equal(playing.pauseClass, 'btn btn-primary btn-sm flex-1');
+});
+
+test('driver controller coordinates replay facts without owning labels or button presentation', async () => {
+    const source = await readFile(new URL('../../backend/app/static/demo/js/ui/driver_controller.js', import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /SẴN SÀNG|ĐÃ NHẬN CHUYẾN|ĐANG DI CHUYỂN|HOÀN THÀNH|NGOẠI TUYẾN/);
+    assert.doesNotMatch(source, /▶ (?:Đang chạy|Tiếp tục|Bắt đầu)|btn-(?:outline|primary) btn-sm flex-1/);
+});
 
 test('energy warning renderer escapes an external reason code', () => {
     const html = renderEnergyWarningBanner({

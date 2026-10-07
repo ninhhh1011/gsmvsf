@@ -40,8 +40,23 @@ export function renderTripActiveEta(recommendation, remainingDistanceKm) {
     return remainingDistanceKm > 0 ? Math.round(remainingDistanceKm * 2).toString() : '—';
 }
 
-export function renderStatusBadge(state, label) {
-    return { label, accessibleState: state, className: `status-badge badge-${state.toLowerCase()}` };
+export function renderStatusBadge(state) {
+    const labels = {
+        AVAILABLE: '\u1eb4N S\u00c0NG',
+        TRIP_ASSIGNED: '\u0110\u00c3 NH\u1eacN CHUY\u1ebeN',
+        TRIP_ACTIVE: '\u0110ANG DI CHUY\u1ec2N',
+        TRIP_COMPLETE: 'HO\u00c0N TH\u00c0NH',
+        OFFLINE: 'NGO\u1ea0I TUY\u1ebeN'
+    };
+    return { label: labels[state] || state, accessibleState: state, className: `status-badge badge-${state.toLowerCase()}` };
+}
+
+export function renderReplayControls({ isPlaying, currentIndex }) {
+    return {
+        playText: isPlaying ? '\u25b6 \u0110ang ch\u1ea1y...' : (currentIndex > 0 ? '\u25b6 Ti\u1ebfp t\u1ee5c' : '\u25b6 B\u1eaft \u0111\u1ea7u'),
+        playClass: isPlaying ? 'btn btn-outline btn-sm flex-1' : 'btn btn-primary btn-sm flex-1',
+        pauseClass: isPlaying ? 'btn btn-primary btn-sm flex-1' : 'btn btn-outline btn-sm flex-1'
+    };
 }
 
 export function renderVehicleOptions(vehicles) {
@@ -263,8 +278,9 @@ export function renderTripAssignedCardHTML(controller) {
         `;
 }
 
-export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, playBtnClass, playBtnText, pauseBtnClass }) {
+export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, replayControls }) {
     const battery = renderBatteryView({ soc: controller.currentSocPct, range: controller.estimatedRangeKm });
+    const { playClass: playBtnClass, playText: playBtnText, pauseClass: pauseBtnClass } = replayControls;
     return `
             <div class="driver-nav-hud" id="driver-active-hud" data-hud-state="TRIP_ACTIVE">
                 <div id="hud-warning-container">

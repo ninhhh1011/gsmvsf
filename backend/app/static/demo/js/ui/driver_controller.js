@@ -58,6 +58,7 @@ import {
     renderBatteryView,
     renderActiveCockpitView,
     renderStatusBadge,
+    renderReplayControls,
     renderTripActiveEta,
     renderEnergyWarningHTML,
     renderVehicleOptions,
@@ -266,16 +267,7 @@ export class DriverModeController {
     }
 
     updateHeaderBadge() {
-        const labels = {
-            'AVAILABLE': 'SẴN SÀNG',
-            'TRIP_ASSIGNED': 'ĐÃ NHẬN CHUYẾN',
-            'TRIP_ACTIVE': 'ĐANG DI CHUYỂN',
-            'TRIP_COMPLETE': 'HOÀN THÀNH',
-            'OFFLINE': 'NGOẠI TUYẾN'
-        };
-        const vnLabel = labels[this.state] || this.state;
-
-        this.bindings.setStatusBadge(renderStatusBadge(this.state, vnLabel));
+        this.bindings.setStatusBadge(renderStatusBadge(this.state));
     }
 
     _getScenarioDescription(scenarioId) {
@@ -1426,10 +1418,7 @@ export class DriverModeController {
         const recSnippet = renderDriverRecommendation(this.lastRecommendation);
         const posStatus = renderPositionStatusHTML(this.matchedPos, this.currentPos);
         const progress = this.replay.getProgressText?.() || '';
-        const isPlaying = this.replay.isPlaying;
-        const playBtnText = isPlaying ? '▶ Đang chạy...' : (this.replay.currentIndex > 0 ? '▶ Tiếp tục' : '▶ Bắt đầu');
-        const playBtnClass = isPlaying ? 'btn btn-outline btn-sm flex-1' : 'btn btn-primary btn-sm flex-1';
-        const pauseBtnClass = isPlaying ? 'btn btn-primary btn-sm flex-1' : 'btn btn-outline btn-sm flex-1';
+        const replayControls = renderReplayControls({ isPlaying: this.replay.isPlaying, currentIndex: this.replay.currentIndex });
         const postTripSnippet = renderPostTripBannerHTML(this.postTripStation, this.postTripRoute);
         const callbacks = {
             play: () => { this.playTrip(); this.renderTripActiveUI(); }, pause: () => { this.pauseTrip(); this.renderTripActiveUI(); },
@@ -1440,11 +1429,11 @@ export class DriverModeController {
             completeTrip: () => { this.setState(DriverState.TRIP_COMPLETE); this.renderTripCompleteUI(); },
             setSoc: (value, evaluate) => this.setBatterySoc(value, evaluate)
         };
-        this.bindings.renderActive(renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, playBtnClass, playBtnText, pauseBtnClass }), {
+        this.bindings.renderActive(renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, replayControls }), {
             distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm,
             view: renderActiveCockpitView({ distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm }),
             posStatus, progress, warning: warningBanner, recommendation: recSnippet, postTrip: postTripSnippet,
-            playText: playBtnText, playClass: playBtnClass, pauseClass: pauseBtnClass, navigationLocked: this._navigationLocked
+            ...replayControls, navigationLocked: this._navigationLocked
         }, callbacks);
     }
 
