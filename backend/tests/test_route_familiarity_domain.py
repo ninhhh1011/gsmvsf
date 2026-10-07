@@ -1,4 +1,5 @@
 import pytest
+import h3
 
 from backend.app.services.route_familiarity.constants import H3_ROUTE_RESOLUTION
 from backend.app.services.route_familiarity.signature import (
@@ -73,6 +74,17 @@ def test_short_nonzero_route_can_stay_in_one_cell():
     assert signature.distance_m > 0
 
 
+def test_densified_samples_in_same_cell_collapse_and_sum_their_weights():
+    cell = h3.latlng_to_cell(21.0, 105.0, H3_ROUTE_RESOLUTION)
+    latitude, longitude = h3.cell_to_latlng(cell)
+    route = polyline([(latitude - 0.00008, longitude), (latitude + 0.00008, longitude)])
+
+    signature = create_route_signature([route])
+
+    assert signature.cells == (cell,)
+    assert signature.cell_distances_m == pytest.approx((signature.distance_m,), abs=0.001)
+
+
 def test_weighted_ordered_overlap_is_directional_and_bounded():
     forward = create_route_signature([polyline([(21.0, 105.0), (21.002, 105.0)])])
     reverse = create_route_signature([polyline([(21.002, 105.0), (21.0, 105.0)])])
@@ -98,3 +110,13 @@ def test_weighted_ordered_overlap_uses_optimal_ordered_alignment():
     result = weighted_ordered_overlap(recommended, historical)
     assert result.shared_route_distance_m == 2.0
     assert result.adherence == pytest.approx(1 / 6)
+
+
+def test_weighted_ordered_overlap_measures_partial_ordered_match():
+    recommended = RouteSignature(("a", "b", "c"), (10.0, 20.0, 30.0), 60.0, H3_ROUTE_RESOLUTION)
+    historical = RouteSignature(("x", "b", "c", "y"), (5.0, 15.0, 40.0, 8.0), 68.0, H3_ROUTE_RESOLUTION)
+
+    result = weighted_ordered_overlap(recommended, historical)
+
+    assert result.shared_route_distance_m == pytest.approx(45.0)
+    assert result.adherence == pytest.approx(0.75)
