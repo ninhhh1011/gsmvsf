@@ -45,10 +45,31 @@ def host_accessible_database_url(database_url):
     parsed = urlsplit(database_url)
     if parsed.hostname != "ev_db":
         return database_url
-    credentials, separator, host_port = parsed.netloc.rpartition("@")
-    host_port = host_port.replace(parsed.hostname, "127.0.0.1", 1)
-    netloc = f"{credentials}{separator}{host_port}" if separator else host_port
+    authority_start = parsed.netloc.rfind("@") + 1
+    host_start = authority_start
+    host_end = host_start + len(parsed.hostname)
+    netloc = parsed.netloc[:host_start] + "127.0.0.1" + parsed.netloc[host_end:]
     return urlunsplit(parsed._replace(netloc=netloc))
+
+
+def database_lifecycle_report(database_name, created, dropped, cleanup_errors):
+    return {
+        "disposable_database_name": database_name,
+        "disposable_database_created": created,
+        "disposable_database_dropped": dropped,
+        "cleanup_succeeded": not cleanup_errors and (not created or dropped),
+        "cleanup_errors": cleanup_errors,
+    }
+
+
+def raise_for_cleanup_failure(report):
+    postgres = report["postgresql"]
+    if postgres.get("cleanup_succeeded") is False:
+        database_name = postgres["disposable_database_name"]
+        raise SystemExit(
+            f"route familiarity benchmark cleanup failed for {database_name}; "
+            "inspect PostgreSQL and remove the disposable database manually"
+        )
 
 
 def percentile(values, fraction):
@@ -176,7 +197,6 @@ async def _postgres_measure(database_url, signature):
             try:
                 await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
                 dropped = True
-                created = False
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
         if admin:
@@ -186,9 +206,7 @@ async def _postgres_measure(database_url, signature):
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
         return {"status": "not_measured", "reason": type(error).__name__,
-                "disposable_database_created": created, "disposable_database_dropped": dropped,
-                "cleanup_succeeded": not cleanup_errors and (not created or dropped),
-                "cleanup_errors": cleanup_errors}
+                **database_lifecycle_report(database_name, created, dropped, cleanup_errors)}
     try:
         repository = RouteHistoryRepository(_BorrowedConnectionPool(conn))
         as_of = datetime.now(UTC)
@@ -252,11 +270,12 @@ async def _postgres_measure(database_url, signature):
         conn = None
         await admin.execute(f'DROP DATABASE "{database_name}"')
         dropped = True
-        created = False
+        await admin.close()
+        admin = None
         return {"status": "measured", "per_size": per_size,
                 "application_database_written": False,
                 "disposable_database_writes_committed": True,
-                "disposable_database_dropped": dropped}
+                **database_lifecycle_report(database_name, created, dropped, [])}
     except Exception as error:
         cleanup_errors = []
         if conn:
@@ -269,7 +288,6 @@ async def _postgres_measure(database_url, signature):
             try:
                 await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
                 dropped = True
-                created = False
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
         if admin:
@@ -279,9 +297,7 @@ async def _postgres_measure(database_url, signature):
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
         return {"status": "not_measured", "reason": type(error).__name__,
-                "disposable_database_created": created, "disposable_database_dropped": dropped,
-                "cleanup_succeeded": not cleanup_errors and (not created or dropped),
-                "cleanup_errors": cleanup_errors}
+                **database_lifecycle_report(database_name, created, dropped, cleanup_errors)}
     finally:
         if conn:
             await conn.close()
@@ -336,11 +352,13 @@ def main():
     parser.add_argument("--database-url", default=host_accessible_database_url(settings.database_url))
     parser.add_argument("--output", type=Path, help="also write the full JSON report to this path")
     args = parser.parse_args()
-    output = json.dumps(asyncio.run(run(args.database_url)), indent=2) + "\n"
+    report = asyncio.run(run(args.database_url))
+    output = json.dumps(report, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output, encoding="utf-8")
     print(output, end="")
+    raise_for_cleanup_failure(report)
 
 
 if __name__ == "__main__":
