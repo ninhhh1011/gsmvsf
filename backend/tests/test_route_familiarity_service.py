@@ -172,3 +172,28 @@ def test_feature_is_off_by_default_and_enabled_requires_identity_secret():
         Settings(_env_file=None, enable_route_familiarity=True)
     assert Settings(_env_file=None, enable_route_familiarity=True,
                     route_familiarity_identity_secret="x" * 32).enable_route_familiarity
+
+
+def test_familiarity_penalty_configuration_cannot_exceed_contract_cap():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, max_familiarity_penalty_s=30.01)
+
+
+@pytest.mark.asyncio
+async def test_truncation_uses_sentinel_metadata_not_exact_full_result_counts():
+    row = dict(driver_id="d", trip_id="t", cells=["a"], cell_distances_m=[100.0],
+               distance_m=100.0, resolution=11)
+    assessment = (await RouteFamiliarityService(Repository(personal=[row] * 50)).assess_many(
+        "d", {("s", "x"): sig(["a"])}, NOW))["s", "x"]
+    assert assessment.history_truncated is False
+
+    repo = Repository(personal=[row] * 51)
+    assessment = (await RouteFamiliarityService(repo).assess_many(
+        "d", {("s", "x"): sig(["a"])}, NOW))["s", "x"]
+    assert assessment.history_truncated is True
+
+    for sentinel in (dict(active_rank=101, driver_rank=1), dict(active_rank=1, driver_rank=6)):
+        repo = Repository(community=[dict(row, **sentinel)])
+        assessment = (await RouteFamiliarityService(repo).assess_many(
+            "d", {("s", "x"): sig(["a"])}, NOW))["s", "x"]
+        assert assessment.history_truncated is True

@@ -50,10 +50,12 @@ async def test_history_queries_are_as_of_and_bounded():
     await repo.community_routes(["abc"], "d", as_of, timedelta(days=7))
     calls = [call.args[0] for call in conn.fetch.await_args_list]
     assert all("completed_at <=" in sql for sql in calls)
-    assert "LIMIT 50" in calls[0]
-    assert "LIMIT 500" in calls[1]
+    assert "LIMIT 51" in calls[0]
+    assert "LIMIT 606" in calls[1]
+    assert "ORDER BY completed_at DESC, trip_id DESC" in calls[0]
+    assert "ORDER BY r.completed_at DESC, r.trip_id DESC" in calls[1]
     assert "ORDER BY last_completed_at DESC, driver_id" in calls[1]
-    assert "PARTITION BY r.driver_id ORDER BY r.completed_at DESC" in calls[1]
+    assert "PARTITION BY r.driver_id ORDER BY r.completed_at DESC, r.trip_id DESC" in calls[1]
 
 
 def test_migration_has_constraints_indexes_and_rollback():

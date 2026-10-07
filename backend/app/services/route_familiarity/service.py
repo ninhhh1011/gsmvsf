@@ -70,16 +70,23 @@ class RouteFamiliarityService:
             observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
             return unavailable
         lookup_started = perf_counter()
-        personal = await self.repository.personal_routes(driver_id, as_of, self.lookback)
-        community = await self.repository.community_routes(
+        personal_rows = await self.repository.personal_routes(driver_id, as_of, self.lookback)
+        community_rows = await self.repository.community_routes(
             sorted({cell for sig in valid.values() for cell in sig.cells}),
             driver_id, as_of, self.lookback)
+        personal_truncated = len(personal_rows) > 50
+        community_truncated = (len(community_rows) > 500 or
+                               any(row.get("active_rank", 1) > 100 or row.get("driver_rank", 1) > 5
+                                   for row in community_rows))
+        personal = personal_rows[:50]
+        community = [row for row in community_rows
+                      if row.get("active_rank", 1) <= 100 and row.get("driver_rank", 1) <= 5][:500]
         observe_route_familiarity('lookup', perf_counter() - lookup_started)
         record_route_familiarity_event('lookup')
         personal_indexed = [self._index_row(row) for row in personal]
         community_indexed = [self._index_row(row) for row in community]
         result = unavailable.copy()
-        truncated = len(personal) >= 50 or len(community) >= 500
+        truncated = personal_truncated or community_truncated
         budget = ComparisonBudget()
         comparison_started = perf_counter()
         try:

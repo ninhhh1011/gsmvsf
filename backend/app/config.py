@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     enable_route_familiarity: bool = False
     route_familiarity_identity_secret: str = ""
     route_familiarity_lookback_days: int = Field(default=7, ge=1, le=365)
-    max_familiarity_penalty_s: float = Field(default=30.0, ge=0, allow_inf_nan=False)
+    max_familiarity_penalty_s: float = Field(default=30.0, ge=0, le=30, allow_inf_nan=False)
     familiarity_minimum_support_adherence: float = Field(default=0.10, ge=0, le=1)
     familiarity_prior_mean: float = Field(default=0.5, ge=0, le=1)
     familiarity_prior_strength: float = Field(default=3.0, ge=0, allow_inf_nan=False)

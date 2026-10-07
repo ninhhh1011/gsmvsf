@@ -54,7 +54,7 @@ class RouteHistoryRepository:
                 SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
                 FROM realtime.route_familiarity_routes
                 WHERE driver_id=$1 AND completed_at >= $2 AND completed_at <= $3
-                ORDER BY completed_at DESC LIMIT 50
+                ORDER BY completed_at DESC, trip_id DESC LIMIT 51
             """, driver_id, as_of - lookback, as_of)
 
     async def community_routes(self, cells: list[str], exclude_driver_id: str,
@@ -70,14 +70,19 @@ class RouteHistoryRepository:
                       AND cells && $4::text[]
                     GROUP BY driver_id
                     ORDER BY last_completed_at DESC, driver_id
-                    LIMIT 100
+                    LIMIT 101
+                ), ranked_drivers AS (
+                    SELECT *, row_number() OVER (ORDER BY last_completed_at DESC, driver_id) AS active_rank
+                    FROM active_drivers
                 ), bounded AS (
-                    SELECT r.*, row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC) AS driver_rank
+                    SELECT r.*, d.active_rank,
+                           row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC, r.trip_id DESC) AS driver_rank
                     FROM realtime.route_familiarity_routes r
-                    JOIN active_drivers d USING (driver_id)
+                    JOIN ranked_drivers d USING (driver_id)
                     WHERE r.completed_at >= $2 AND r.completed_at <= $3 AND r.cells && $4::text[]
                 )
-                SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
-                FROM bounded WHERE driver_rank <= 5
-                ORDER BY completed_at DESC, driver_id LIMIT 500
+                SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m,
+                       active_rank, driver_rank
+                FROM bounded WHERE driver_rank <= 6
+                ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606
             """, exclude_driver_id, as_of - lookback, as_of, cells)
