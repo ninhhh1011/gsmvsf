@@ -5,6 +5,7 @@ the script never writes route history or modifies Dataset V1.
 """
 import argparse
 import asyncio
+from collections import Counter
 from contextlib import asynccontextmanager
 import json
 import statistics
@@ -208,6 +209,11 @@ async def _postgres_measure(database_url, signature):
                 await repository.community_routes(list(db_signature.cells), "phase4-benchmark-personal",
                                                   as_of, timedelta(days=7))
             timings = await _measure_async(lookup)
+            personal_rows = await repository.personal_routes(
+                "phase4-benchmark-personal", as_of, timedelta(days=7))
+            community_rows = await repository.community_routes(
+                list(db_signature.cells), "phase4-benchmark-personal", as_of, timedelta(days=7))
+            community_per_driver = Counter(row["driver_id"] for row in community_rows)
             service = RouteFamiliarityService(repository)
             candidates = {str(i): db_signature for i in range(CANDIDATE_COUNT)}
             async def evaluate():
@@ -235,6 +241,10 @@ async def _postgres_measure(database_url, signature):
                         FROM bounded WHERE driver_rank <= 5 ORDER BY completed_at DESC, driver_id LIMIT 500""",
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of, list(db_signature.cells))
             per_size.append({"history_rows": actual, "repository_query_pair": timings,
+                "repository_rows_returned": {"personal": len(personal_rows),
+                    "community": len(community_rows),
+                    "community_distinct_drivers": len(community_per_driver),
+                    "community_max_rows_per_driver": max(community_per_driver.values(), default=0)},
                 "database_backed_full_evaluation_30_candidates": evaluation,
                 "personal_explain_analyze_buffers": [r["QUERY PLAN"] for r in personal_plan],
                 "community_explain_analyze_buffers": [r["QUERY PLAN"] for r in community_plan]})
