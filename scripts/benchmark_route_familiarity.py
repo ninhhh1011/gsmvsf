@@ -96,8 +96,8 @@ class BoundedHistoryRepository:
                     "cell_distances_m": signature.cell_distances_m,
                     "distance_m": signature.distance_m, "resolution": signature.resolution}
         self.community = [
-            {**self.row, "driver_id": f"synthetic-driver-{index // 5:03d}"}
-            for index in range(min(history_size, 500))
+            {**self.row, "driver_id": f"synthetic-driver-{index % 100:03d}"}
+            for index in range(min(max(history_size - 50, 0), 500))
         ]
 
     async def personal_routes(self, *_):
@@ -105,6 +105,21 @@ class BoundedHistoryRepository:
 
     async def community_routes(self, *_):
         return self.community
+
+
+def benchmark_database_rows(size, signature, as_of):
+    """Build 50 personal rows and history for exactly 100 community drivers."""
+    rows = []
+    for index in range(size):
+        personal = index < 50
+        community_index = index - 50
+        driver_id = ("phase4-benchmark-personal" if personal else
+                     f"phase4-benchmark-community-{community_index % 100:03d}")
+        age_minutes = 0 if personal else community_index // 100
+        rows.append((driver_id, f"phase4-benchmark-trip-{index:06d}",
+                     as_of - timedelta(minutes=age_minutes), signature.distance_m,
+                     signature.resolution, list(signature.cells), list(signature.cell_distances_m)))
+    return rows
 
 
 async def _measure_evaluation(case, signature):
@@ -149,15 +164,30 @@ async def _postgres_measure(database_url, signature):
                   "backend/app/services/route_familiarity/schema.sql").read_text(encoding="utf-8")
         await conn.execute(schema)
     except Exception as error:  # External database availability is optional for the local harness.
+        cleanup_errors = []
         if conn:
-            await conn.close()
+            try:
+                await conn.close()
+            except Exception as cleanup_error:
+                cleanup_errors.append(type(cleanup_error).__name__)
+            conn = None
         if created and admin:
-            await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
-            dropped = True
+            try:
+                await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+                dropped = True
+                created = False
+            except Exception as cleanup_error:
+                cleanup_errors.append(type(cleanup_error).__name__)
         if admin:
-            await admin.close()
+            try:
+                await admin.close()
+            except Exception as cleanup_error:
+                cleanup_errors.append(type(cleanup_error).__name__)
+            admin = None
         return {"status": "not_measured", "reason": type(error).__name__,
-                "disposable_database_created": created, "disposable_database_dropped": dropped}
+                "disposable_database_created": created, "disposable_database_dropped": dropped,
+                "cleanup_succeeded": not cleanup_errors and (not created or dropped),
+                "cleanup_errors": cleanup_errors}
     try:
         repository = RouteHistoryRepository(_BorrowedConnectionPool(conn))
         as_of = datetime.now(UTC)
@@ -167,16 +197,10 @@ async def _postgres_measure(database_url, signature):
         per_size = []
         for size in HISTORY_SIZES:
             await conn.execute("TRUNCATE realtime.route_familiarity_routes")
-            personal_size = (size + 1) // 2
             await conn.executemany("""INSERT INTO realtime.route_familiarity_routes
                         (driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m)
                         VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-                        [("phase4-benchmark-personal" if i < personal_size else
-                          f"phase4-benchmark-community-{((i - personal_size) // 5) % 100:03d}",
-                          f"phase4-benchmark-trip-{i:06d}",
-                          as_of - timedelta(minutes=i % (7 * 24 * 60)), signature.distance_m,
-                          db_signature.resolution, list(db_signature.cells), list(db_signature.cell_distances_m))
-                         for i in range(size)])
+                        benchmark_database_rows(size, db_signature, as_of))
             actual = await conn.fetchval("SELECT count(*) FROM realtime.route_familiarity_routes")
             await conn.execute("ANALYZE realtime.route_familiarity_routes")
             async def lookup():
@@ -222,14 +246,33 @@ async def _postgres_measure(database_url, signature):
         return {"status": "measured", "per_size": per_size,
                 "disposable_database_dropped": dropped, "writes_committed": False}
     except Exception as error:
+        cleanup_errors = []
+        if conn:
+            try:
+                await conn.close()
+            except Exception as cleanup_error:
+                cleanup_errors.append(type(cleanup_error).__name__)
+            conn = None
+        if created and admin:
+            try:
+                await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+                dropped = True
+                created = False
+            except Exception as cleanup_error:
+                cleanup_errors.append(type(cleanup_error).__name__)
+        if admin:
+            try:
+                await admin.close()
+            except Exception as cleanup_error:
+                cleanup_errors.append(type(cleanup_error).__name__)
+            admin = None
         return {"status": "not_measured", "reason": type(error).__name__,
-                "disposable_database_created": created}
+                "disposable_database_created": created, "disposable_database_dropped": dropped,
+                "cleanup_succeeded": not cleanup_errors and (not created or dropped),
+                "cleanup_errors": cleanup_errors}
     finally:
         if conn:
             await conn.close()
-        if created and admin:
-            await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
-            dropped = True
         if admin:
             await admin.close()
 
