@@ -94,6 +94,11 @@
                 <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
                     🏁 Đổi điểm đến (B)
                 </button>
+                <label class="route-familiarity-toggle" title="Simulation / Debug: explain the selected recommendation route">
+                    <input id="toggle-route-familiarity" type="checkbox" disabled>
+                    H3 route cells
+                </label>
+                <span id="route-familiarity-count" class="route-familiarity-count" aria-live="polite">Route cells hidden</span>
             </div>
 
             <!-- Map Picker Instruction Toast Banner (hidden by default) -->
@@ -178,6 +183,7 @@
     </main>
 
     <script src="/demo/static/vendor/leaflet/leaflet.js"></script>
+    <script src="/demo/static/vendor/h3/h3-js.umd.js"></script>
     <script type="module" src="/demo/static/js/app.js"></script>
 </body>
 </html>

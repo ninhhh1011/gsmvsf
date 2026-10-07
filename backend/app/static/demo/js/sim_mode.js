@@ -6,12 +6,21 @@
  */
 
 import { renderPipelineLatency, renderCandidateTable, renderRecommendationCard, renderEnergyWarningBanner, renderConflictAlert } from './components.js';
+import { RouteFamiliarityOverlay } from './ui/route_familiarity_overlay.js';
 
 export class SimModeController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
         this.map = mapEngine;
         this.options = options;
+        this.routeFamiliarityOverlay = typeof document !== 'undefined' && typeof window !== 'undefined' &&
+            window.h3 && mapEngine?.map ? new RouteFamiliarityOverlay({
+                map: mapEngine.map,
+                leaflet: window.L,
+                h3: window.h3,
+                toggle: document.getElementById('toggle-route-familiarity'),
+                countElement: document.getElementById('route-familiarity-count')
+            }) : null;
         this.scenarios = [];
         this.vehicles = [];
         this.stations = [];
@@ -35,7 +44,6 @@ export class SimModeController {
         this.lastCandidateResult = null;
         this.generation = 1;
 
-        // H3 Overlay toggle
     }
 
     setCatalogs(scenarios, vehicles, stations) {
@@ -337,6 +345,7 @@ export class SimModeController {
 
             this.lastCandidateResult = candResult;
             this.lastRecommendation = recResult;
+            this.routeFamiliarityOverlay?.setRoute(recResult?.familiarity);
 
             // Handle 409 Conflict if returned
             if (recResult?.error && recResult.error.isConflict) {
