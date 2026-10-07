@@ -9,30 +9,32 @@ H3 Resolution 11, Python 3.14, and local PostgreSQL. Times are milliseconds.
 
 | Logical history rows | Evaluator p50 / p95 | Rows fetched (personal / community) | Rows scored (personal / community) | Community drivers fetched |
 |---:|---:|---:|---:|---:|
-| 150 | 75.086 / 97.656 | 51 / 99 | 50 / 99 | 99 |
-| 10,000 | 350.435 / 551.270 | 51 / 606 | 50 / 500 | 101 |
-| 100,000 | 651.294 / 940.043 | 51 / 606 | 50 / 500 | 101 |
+| 150 | 59.468 / 65.060 | 51 / 99 | 50 / 99 | 99 |
+| 10,000 | 256.569 / 286.775 | 51 / 606 | 50 / 500 | 101 |
+| 100,000 | 496.179 / 675.905 | 51 / 606 | 50 / 500 | 101 |
 
 The evaluator calls the production `RouteFamiliarityService` and weighted
-similarity implementation. The 150-row fixture contains 51 personal rows and
+similarity implementation. Both the in-memory and PostgreSQL measurements use
+the same deterministic Hanoi route signature: 9 resolution-11 cells and about
+304 m of route distance. The 150-row fixture contains 51 personal rows and
 99 community rows, one for each community driver. Larger fixtures contain 51
 personal rows and distribute the remainder across 101 active community drivers.
 Queries fetch one personal sentinel and community sentinels (the 101st driver
 and sixth route per driver); scoring still uses at most 50 personal and 500
 community rows. Therefore `history_truncated` is true for personal history in
-all three cases, and for community history in the larger cases. All fixture
-routes share one cell, deliberately exercising overlap work. This is a local
+all three cases, and for community history in the larger cases. All synthetic
+historical rows use the same signature, deliberately exercising overlap work. This is a local
 microbenchmark, not an API latency SLA.
 
 | Production operation | p50 / p95 |
 |---|---:|
-| `create_route_signature` | 0.171 / 0.178 |
-| `weighted_ordered_overlap` | 0.030 / 0.049 |
+| `create_route_signature` | 0.108 / 0.116 |
+| `weighted_ordered_overlap` | 0.016 / 0.027 |
 
 ## PostgreSQL repository queries
 
 The benchmark creates disposable database
-`route_familiarity_bench_0103ee81b4eb4b72b4c2bfc484a729e9` on the configured
+`route_familiarity_bench_1b5585e3625b41239650d2914edcb578` on the configured
 PostgreSQL server, applies the route-history schema, seeds synthetic rows, times
 the real asyncpg `personal_routes` and `community_routes` methods, captures
 `EXPLAIN (ANALYZE, BUFFERS)`, and drops the database. The configured application
@@ -46,11 +48,11 @@ orchestrator independently confirmed zero leftover UUID benchmark databases.
 
 | Rows in disposable DB | Lookup pair p50 / p95 | Rows fetched (personal / community) | Rows scored (personal / community) | Community drivers / max fetched per driver |
 |---:|---:|---:|---:|---:|
-| 150 | 4.229 / 7.084 | 51 / 99 | 50 / 99 | 99 / 1 |
-| 10,000 | 54.189 / 78.544 | 51 / 606 | 50 / 500 | 101 / 6 |
-| 100,000 | 459.452 / 529.231 | 51 / 606 | 50 / 500 | 101 / 6 |
+| 150 | 6.343 / 6.582 | 51 / 99 | 50 / 99 | 99 / 1 |
+| 10,000 | 55.713 / 60.493 | 51 / 606 | 50 / 500 | 101 / 6 |
+| 100,000 | 687.832 / 876.290 | 51 / 606 | 50 / 500 | 101 / 6 |
 
-Community query plan execution was 0.948 ms, 35.183 ms, and 159.915 ms
+Community query plan execution was 1.199 ms, 40.081 ms, and 255.508 ms
 respectively (Seq Scan for 150/10,000 rows; parallel scan at 100,000 rows).
 
 The actual personal and community truncation flags were true/false for the
@@ -59,9 +61,9 @@ run measured production evaluation backed by the real repository:
 
 | PostgreSQL history rows | Full evaluation, 30 candidates, p50 / p95 |
 |---:|---:|
-| 150 | 66.700 / 104.657 ms |
-| 10,000 | 256.491 / 314.120 ms |
-| 100,000 | 725.179 / 899.567 ms |
+| 150 | 193.017 / 207.157 ms |
+| 10,000 | 682.636 / 774.646 ms |
+| 100,000 | 1230.875 / 2930.565 ms |
 
 Full plans, including buffers, row counts, and planning/execution time, are in
 [phase4-route-familiarity-benchmark.json](phase4-route-familiarity-benchmark.json).

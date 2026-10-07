@@ -9,7 +9,6 @@ from collections import Counter
 from contextlib import asynccontextmanager
 import json
 import statistics
-import h3
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 from dataclasses import dataclass
@@ -20,7 +19,11 @@ from time import perf_counter
 from backend.app.config import settings
 from backend.app.services.route_familiarity.constants import H3_ROUTE_RESOLUTION
 from backend.app.services.route_familiarity.models import RouteSignature
-from backend.app.services.route_familiarity.repository import RouteHistoryRepository
+from backend.app.services.route_familiarity.repository import (
+    COMMUNITY_ROUTES_QUERY,
+    PERSONAL_ROUTES_QUERY,
+    RouteHistoryRepository,
+)
 from backend.app.services.route_familiarity.service import RouteFamiliarityService
 from backend.app.services.route_familiarity.signature import create_route_signature
 from backend.app.services.route_familiarity.similarity import weighted_ordered_overlap
@@ -29,6 +32,8 @@ HISTORY_SIZES = (150, 10_000, 100_000)
 CANDIDATE_COUNT = 30
 SAMPLES = 5
 WARMUPS = 1
+PERSONAL_EXPLAIN_QUERY = f"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {PERSONAL_ROUTES_QUERY}"
+COMMUNITY_EXPLAIN_QUERY = f"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {COMMUNITY_ROUTES_QUERY}"
 
 
 @dataclass(frozen=True)
@@ -109,33 +114,64 @@ def _polyline(points):
     return "".join(output)
 
 
+def benchmark_route_points():
+    return tuple((21.0285 + index * 0.00265 / 4,
+                  105.8542 + (-1) ** index * 0.00009) for index in range(5))
+
+
+def benchmark_route_signature():
+    return create_route_signature([_polyline(benchmark_route_points())])
+
+
 class BoundedHistoryRepository:
     """Production harness; sentinel rows appear only when history exceeds a cap."""
-    def __init__(self, history_size, signature, community_driver_count=101):
+    def __init__(self, history_size, signature, community_driver_count=101, as_of=None):
         self.history_size = history_size
         self.signature = signature
-        self.row = {"driver_id": "synthetic-driver", "cells": signature.cells,
-                    "cell_distances_m": signature.cell_distances_m,
-                    "distance_m": signature.distance_m, "resolution": signature.resolution}
+        self.as_of = as_of or datetime.now(UTC)
+        self.personal = [{
+            "driver_id": "benchmark-driver", "trip_id": f"personal-trip-{index:03d}",
+            "completed_at": self.as_of - timedelta(minutes=index),
+            "cells": signature.cells, "cell_distances_m": signature.cell_distances_m,
+            "distance_m": signature.distance_m, "resolution": signature.resolution,
+        } for index in range(min(history_size, 51))]
         community_count = max(history_size - 51, 0)
-        base_time = datetime(2026, 1, 1, tzinfo=UTC)
-        self.community = [
-            {**self.row, "driver_id": f"synthetic-driver-{index % community_driver_count:03d}",
+        self.community = [{
+             "driver_id": f"synthetic-driver-{index % community_driver_count:03d}",
              "trip_id": f"synthetic-trip-{index:06d}",
-             "completed_at": base_time - timedelta(minutes=index // community_driver_count),
-             "active_rank": index % community_driver_count + 1,
-             "driver_rank": index // community_driver_count + 1}
-            for index in range(min(community_count, community_driver_count * 6))
-        ]
-        self.community.sort(key=lambda row: (
+             "completed_at": self.as_of - timedelta(minutes=index // community_driver_count),
+             "cells": signature.cells, "cell_distances_m": signature.cell_distances_m,
+             "distance_m": signature.distance_m, "resolution": signature.resolution,
+        } for index in range(min(community_count, community_driver_count * 6))]
+
+    async def personal_routes(self, driver_id, as_of, lookback):
+        lower_bound = as_of - lookback
+        rows = [row for row in self.personal if row["driver_id"] == driver_id and
+                lower_bound <= row["completed_at"] <= as_of]
+        rows.sort(key=lambda row: (row["completed_at"], row["trip_id"]), reverse=True)
+        return rows[:51]
+
+    async def community_routes(self, cells, exclude_driver_id, as_of, lookback):
+        wanted_cells = set(cells)
+        if not wanted_cells:
+            return []
+        lower_bound = as_of - lookback
+        rows = [row for row in self.community if row["driver_id"] != exclude_driver_id and
+                lower_bound <= row["completed_at"] <= as_of and wanted_cells.intersection(row["cells"])]
+        latest = {}
+        for row in rows:
+            latest[row["driver_id"]] = max(latest.get(row["driver_id"], row["completed_at"]), row["completed_at"])
+        drivers = sorted(latest, key=lambda driver: (-latest[driver].timestamp(), driver))[:101]
+        bounded = []
+        for active_rank, driver in enumerate(drivers, 1):
+            history = [row for row in rows if row["driver_id"] == driver]
+            history.sort(key=lambda row: (row["completed_at"], row["trip_id"]), reverse=True)
+            bounded.extend({**row, "active_rank": active_rank, "driver_rank": driver_rank}
+                           for driver_rank, row in enumerate(history[:6], 1))
+        bounded.sort(key=lambda row: (
             -row["completed_at"].timestamp(),
             -int(row["trip_id"].rsplit("-", 1)[1]), row["driver_id"]))
-
-    async def personal_routes(self, *_):
-        return [self.row] * min(self.history_size, 51)
-
-    async def community_routes(self, *_):
-        return self.community
+        return bounded[:606]
 
 
 def benchmark_database_rows(size, signature, as_of):
@@ -154,10 +190,12 @@ def benchmark_database_rows(size, signature, as_of):
 
 
 async def _measure_evaluation(case, signature):
-    service = RouteFamiliarityService(BoundedHistoryRepository(case.history_size, signature))
+    as_of = datetime.now(UTC)
+    service = RouteFamiliarityService(
+        BoundedHistoryRepository(case.history_size, signature, as_of=as_of))
     candidates = {str(i): signature for i in range(case.candidate_count)}
     async def evaluate():
-        await service.assess_many("benchmark-driver", candidates, datetime.now(UTC))
+        await service.assess_many("benchmark-driver", candidates, as_of)
     for _ in range(WARMUPS):
         await evaluate()
     results = []
@@ -166,13 +204,16 @@ async def _measure_evaluation(case, signature):
         await evaluate()
         results.append((perf_counter() - started) * 1000)
     repository = service.repository
-    community_rows = repository.community
+    personal_rows = await repository.personal_routes("benchmark-driver", as_of, service.lookback)
+    community_rows = await repository.community_routes(
+        sorted({cell for route in candidates.values() for cell in route.cells}),
+        "benchmark-driver", as_of, service.lookback)
     return {"samples": SAMPLES, "warmups": WARMUPS,
             "p50_ms": round(statistics.median(results), 3),
             "p95_ms": round(percentile(results, 0.95), 3),
-            "personal_rows_returned_per_candidate": min(case.history_size, 51),
+            "personal_rows_returned_per_candidate": len(personal_rows),
             "personal_rows_scored_per_candidate": min(case.history_size, 50),
-            "personal_history_truncated": case.history_size > 50,
+            "personal_history_truncated": len(personal_rows) > 50,
             "community_rows_returned_per_candidate": len(community_rows),
             "community_rows_scored_per_candidate": min(len(community_rows), 500),
             "community_distinct_drivers_returned": len({row["driver_id"] for row in community_rows}),
@@ -231,9 +272,7 @@ async def _postgres_measure(database_url, signature):
     try:
         repository = RouteHistoryRepository(_BorrowedConnectionPool(conn))
         as_of = datetime.now(UTC)
-        center = h3.cell_to_latlng(signature.cells[0])
-        db_signature = create_route_signature([_polyline([
-            (center[0] - 0.00001, center[1]), (center[0] + 0.00001, center[1])])])
+        db_signature = signature
         per_size = []
         for size in HISTORY_SIZES:
             await conn.execute("TRUNCATE realtime.route_familiarity_routes")
@@ -262,32 +301,9 @@ async def _postgres_measure(database_url, signature):
             async def evaluate():
                 await service.assess_many("phase4-benchmark-personal", candidates, as_of)
             evaluation = await _measure_async(evaluate)
-            personal_plan = await conn.fetch("""EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
-                        FROM realtime.route_familiarity_routes
-                        WHERE driver_id=$1 AND completed_at >= $2 AND completed_at <= $3
-                        ORDER BY completed_at DESC, trip_id DESC LIMIT 51""",
+            personal_plan = await conn.fetch(PERSONAL_EXPLAIN_QUERY,
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of)
-            community_plan = await conn.fetch("""EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-                        WITH active_drivers AS (
-                            SELECT driver_id, max(completed_at) AS last_completed_at
-                            FROM realtime.route_familiarity_routes
-                            WHERE driver_id <> $1 AND completed_at >= $2 AND completed_at <= $3
-                              AND cells && $4::text[]
-                            GROUP BY driver_id ORDER BY last_completed_at DESC, driver_id LIMIT 101
-                        ), ranked_drivers AS (
-                            SELECT *, row_number() OVER (ORDER BY last_completed_at DESC, driver_id) AS active_rank
-                            FROM active_drivers
-                        ), bounded AS (
-                            SELECT r.*, d.active_rank,
-                                row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC, r.trip_id DESC) AS driver_rank
-                            FROM realtime.route_familiarity_routes r JOIN ranked_drivers d USING (driver_id)
-                            WHERE r.completed_at >= $2 AND r.completed_at <= $3 AND r.cells && $4::text[]
-                        )
-                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m,
-                               active_rank, driver_rank
-                        FROM bounded WHERE driver_rank <= 6
-                        ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606""",
+            community_plan = await conn.fetch(COMMUNITY_EXPLAIN_QUERY,
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of, list(db_signature.cells))
             per_size.append({"history_rows": actual, "repository_query_pair": timings,
                 "repository_rows_returned": {"personal": len(personal_rows),
@@ -368,11 +384,13 @@ async def _measure_async(operation):
 
 
 async def run(database_url):
-    polyline = _polyline([(21.0, 105.0), (21.001, 105.001), (21.002, 105.0)])
+    polyline = _polyline(benchmark_route_points())
     signature = create_route_signature([polyline])
     same_route = RouteSignature(signature.cells, signature.cell_distances_m,
                                  signature.distance_m, H3_ROUTE_RESOLUTION)
     report = {"resolution": H3_ROUTE_RESOLUTION,
+              "benchmark_route": {"cell_count": len(signature.cells),
+                                  "distance_m": round(signature.distance_m, 3)},
               "candidate_fanout": CANDIDATE_COUNT,
               "dataset_sizes": list(HISTORY_SIZES),
               "route_signature": measure(lambda: create_route_signature([polyline])),

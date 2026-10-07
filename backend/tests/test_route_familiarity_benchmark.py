@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -24,12 +24,58 @@ def test_benchmark_covers_required_dataset_sizes_and_candidate_fanout():
 
 
 def test_personal_explain_query_uses_only_route_table_columns():
-    source = Path("scripts/benchmark_route_familiarity.py").read_text(encoding="utf-8")
-    personal_plan = source.split("personal_plan = await conn.fetch", 1)[1].split(
-        "community_plan = await conn.fetch", 1)[0]
-    assert "active_rank" not in personal_plan
-    assert "driver_rank" not in personal_plan
-    assert "ORDER BY completed_at DESC, trip_id DESC LIMIT 51" in personal_plan
+    from backend.app.services.route_familiarity.repository import PERSONAL_ROUTES_QUERY
+    from scripts.benchmark_route_familiarity import PERSONAL_EXPLAIN_QUERY
+
+    assert "active_rank" not in PERSONAL_ROUTES_QUERY
+    assert "driver_rank" not in PERSONAL_ROUTES_QUERY
+    assert PERSONAL_EXPLAIN_QUERY == f"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {PERSONAL_ROUTES_QUERY}"
+
+
+def test_community_explain_wraps_the_repository_query_exactly():
+    from backend.app.services.route_familiarity.repository import COMMUNITY_ROUTES_QUERY
+    from scripts.benchmark_route_familiarity import COMMUNITY_EXPLAIN_QUERY
+
+    assert COMMUNITY_EXPLAIN_QUERY == f"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {COMMUNITY_ROUTES_QUERY}"
+
+
+def test_union_cell_community_cap_is_global_and_explanation_only():
+    spec = Path("docs/superpowers/specs/2026-10-07-route-familiarity-v2-design.md").read_text(
+        encoding="utf-8").lower()
+    assert "global across the union of candidate cells" in spec
+    assert "may depend on other candidates in the batch" in spec
+    assert "explanation-only" in spec
+
+
+def test_benchmark_route_signature_has_nine_cells_and_about_304_meters():
+    from scripts.benchmark_route_familiarity import benchmark_route_signature
+
+    signature = benchmark_route_signature()
+    assert len(signature.cells) == 9
+    assert signature.distance_m == pytest.approx(304, abs=1)
+
+
+def test_bounded_history_repository_honors_driver_time_window_and_cells():
+    base = datetime(2026, 10, 8, tzinfo=UTC)
+    signature = RouteSignature(("cell",), (1.0,), 1.0, 11)
+    repository = BoundedHistoryRepository(150, signature, as_of=base)
+    request_time = base - timedelta(minutes=10)
+    window = timedelta(minutes=5)
+
+    personal = asyncio.run(repository.personal_routes("benchmark-driver", request_time, window))
+    assert personal
+    assert all(row["driver_id"] == "benchmark-driver" for row in personal)
+    assert all(request_time - window <= row["completed_at"] <= request_time for row in personal)
+
+    community = asyncio.run(repository.community_routes(
+        ["cell"], "benchmark-driver", base, window))
+    assert community
+    assert all(row["driver_id"] != "benchmark-driver" for row in community)
+    assert all(base - window <= row["completed_at"] <= base for row in community)
+    assert asyncio.run(repository.community_routes(
+        ["cell"], "benchmark-driver", base - timedelta(seconds=1), window)) == []
+    assert asyncio.run(repository.community_routes(
+        ["unmatched"], "benchmark-driver", request_time, window)) == []
 
 
 def test_benchmark_default_maps_compose_database_name_to_localhost():
@@ -47,7 +93,8 @@ def test_benchmark_replaces_only_database_host_and_preserves_credentials_and_que
 def test_in_memory_community_fixture_models_101_drivers_and_sentinel_routes():
     repository = BoundedHistoryRepository(10_000, RouteSignature(("cell",), (1.0,), 1.0, 11))
 
-    rows = asyncio.run(repository.community_routes())
+    rows = asyncio.run(repository.community_routes(
+        list(repository.signature.cells), "benchmark-driver", repository.as_of, timedelta(days=7)))
     per_driver = {}
     for row in rows:
         per_driver[row["driver_id"]] = per_driver.get(row["driver_id"], 0) + 1
@@ -68,10 +115,11 @@ def test_benchmark_active_driver_sentinel_marks_history_truncated():
     repository = BoundedHistoryRepository(10_000, RouteSignature(("cell",), (1.0,), 1.0, 11))
     from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
-    repository.community = [row for row in repository.community if row["driver_rank"] <= 5]
-    assert any(row["active_rank"] == 101 for row in repository.community)
+    repository.community = [row for row in repository.community
+                            if int(row["trip_id"].rsplit("-", 1)[1]) // 101 == 0]
+    assert len(repository.community) == 101
     assessment = asyncio.run(RouteFamiliarityService(repository).assess_many(
-        "benchmark-driver", {"candidate": repository.signature}, datetime.now(UTC)))
+        "benchmark-driver", {"candidate": repository.signature}, repository.as_of))
     assert assessment["candidate"].history_truncated
 
 
@@ -115,8 +163,9 @@ def test_cleanup_failure_is_actionable_cli_error():
 def test_in_memory_community_fixture_preserves_sparse_history_size():
     repository = BoundedHistoryRepository(150, RouteSignature(("cell",), (1.0,), 1.0, 11))
 
-    rows = asyncio.run(repository.community_routes())
-    personal = asyncio.run(repository.personal_routes())
+    rows = asyncio.run(repository.community_routes(
+        list(repository.signature.cells), "benchmark-driver", repository.as_of, timedelta(days=7)))
+    personal = asyncio.run(repository.personal_routes("benchmark-driver", repository.as_of, timedelta(days=7)))
     per_driver = {}
     for row in rows:
         per_driver[row["driver_id"]] = per_driver.get(row["driver_id"], 0) + 1
@@ -152,8 +201,9 @@ def test_personal_sentinel_is_exposed_as_truncated_but_not_scored():
     from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
     result = asyncio.run(RouteFamiliarityService(repository).assess_many(
-        "benchmark-driver", {"candidate": repository.signature}, datetime.now(UTC)))
-    assert len(asyncio.run(repository.personal_routes())) == 51
+        "benchmark-driver", {"candidate": repository.signature}, repository.as_of))
+    assert len(asyncio.run(repository.personal_routes(
+        "benchmark-driver", repository.as_of, timedelta(days=7)))) == 51
     assessment = result["candidate"]
     assert assessment.personal_history_trip_count == 50
     assert assessment.history_truncated
@@ -288,6 +338,7 @@ async def test_failed_setup_cleanup_names_database_and_chains_setup_error(monkey
 def test_benchmark_exact_community_cap_does_not_mark_history_truncated():
     repository = BoundedHistoryRepository(
         551, RouteSignature(("cell",), (1.0,), 1.0, 11), community_driver_count=100)
-    rows = asyncio.run(repository.community_routes())
+    rows = asyncio.run(repository.community_routes(
+        list(repository.signature.cells), "benchmark-driver", repository.as_of, timedelta(days=7)))
     assert len(rows) == 500
     assert not any(row["driver_rank"] > 5 or row["active_rank"] > 100 for row in rows)
