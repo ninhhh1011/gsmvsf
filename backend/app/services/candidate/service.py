@@ -24,7 +24,7 @@ CandidateSearchResult
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from backend.app.config import settings
 from backend.app.services.candidate.compatibility import check_station_service_compatibility
@@ -37,7 +37,7 @@ from backend.app.services.candidate.models import (
     EvaluatedCandidate,
 )
 from backend.app.services.candidate.station_catalog import StationCatalog, station_catalog
-from backend.app.services.demand.capability import get_capability_resolver
+from backend.app.services.demand.capability import VehicleCapabilityResolver
 from backend.app.services.demand.models import EnergyServiceRequest, RequestSource, VehicleCategory
 from backend.app.services.routing.engine import RoutingEngine, RoutingInvalidRequestError
 from backend.app.services.routing.models import Position, VehicleRoutingProfile
@@ -56,9 +56,11 @@ class CandidateSearchService:
         routing_engine: RoutingEngine,
         catalog: StationCatalog | None = None,
         max_concurrent_routes: int | None = None,
+        capability_resolver: VehicleCapabilityResolver | None = None,
     ):
         self.routing_engine = routing_engine
         self.catalog = catalog or station_catalog
+        self.capability_resolver = capability_resolver or VehicleCapabilityResolver()
         self.route_calculator = MultiLegRouteCalculator(
             self.routing_engine,
             max_concurrent_routes=max_concurrent_routes or settings.max_concurrent_routes,
@@ -126,7 +128,7 @@ class CandidateSearchService:
 
         # 5. Resolve vehicle capability
         vehicle_cap = None
-        resolver = get_capability_resolver()
+        resolver = self.capability_resolver
         if esr.vehicle_model:
             try:
                 vehicle_cap = resolver.resolve_by_model(esr.vehicle_model)
@@ -257,7 +259,7 @@ class CandidateSearchService:
 
         return CandidateSearchResult(
             service_request_id=req_id,
-            search_timestamp=datetime.utcnow(),
+            search_timestamp=datetime.now(UTC),
             search_status="SUCCESS",
             total_candidates_evaluated=len(evaluated_candidates),
             eligible_count=eligible_count,

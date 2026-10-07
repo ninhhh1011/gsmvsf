@@ -242,7 +242,7 @@ async def predict(contexts, prediction_path, dataset):
     from backend.app.main import create_app
     from backend.app.services.candidate.models import CandidateSearchRequest
     from backend.app.services.demand.models import DemandContext
-    from backend.app.services.demand.service import get_demand_service
+    from backend.app.services.demand.service import create_demand_service
 
     manifest = dict(kind='manifest', schema_version=1, fingerprint=fingerprint(contexts, dataset, settings),
                     event_ids=[c['event_id'] for c in contexts], location_method='CAUSAL_RAW_GPS',
@@ -253,7 +253,7 @@ async def predict(contexts, prediction_path, dataset):
     prediction_path.write_text(json.dumps(manifest) + '\n', encoding='utf-8')
 
     app = create_app()
-    demand = get_demand_service()
+    demand = create_demand_service()
     async with app.router.lifespan_context(app):
         workflow = app.state.recommendation_workflow
         if not await workflow.routing_engine.is_healthy():

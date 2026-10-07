@@ -2,7 +2,7 @@
 Unit tests for Week 2 Demand Detection domain models and contracts.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
@@ -73,7 +73,7 @@ def test_energy_service_request_auto_no_need():
         driver_id="D0001",
         vehicle_id="V0001",
         trip_id="T0001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.AUTO_DETECTED,
         need_service=False,
         allowed_service_types=[ServiceType.CHARGING],
@@ -90,7 +90,7 @@ def test_energy_service_request_auto_no_need():
         EnergyServiceRequest(
             service_request_id="REQ-002",
             vehicle_id="V0001",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             request_source=RequestSource.AUTO_DETECTED,
             need_service=False,
             allowed_service_types=[ServiceType.CHARGING],
@@ -104,7 +104,7 @@ def test_energy_service_request_auto_swap_capable_remains_unresolved():
     req = EnergyServiceRequest(
         service_request_id="REQ-003",
         vehicle_id="V0003",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.AUTO_DETECTED,
         need_service=True,
         allowed_service_types=[ServiceType.CHARGING, ServiceType.BATTERY_SWAP],
@@ -119,7 +119,7 @@ def test_energy_service_request_auto_swap_capable_remains_unresolved():
         EnergyServiceRequest(
             service_request_id="REQ-004",
             vehicle_id="V0003",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             request_source=RequestSource.AUTO_DETECTED,
             need_service=True,
             allowed_service_types=[ServiceType.CHARGING, ServiceType.BATTERY_SWAP],
@@ -134,7 +134,7 @@ def test_energy_service_request_driver_any_remains_unresolved():
     req = EnergyServiceRequest(
         service_request_id="REQ-005",
         vehicle_id="V0003",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.DRIVER_REQUEST,
         need_service=True,
         requested_service_type=RequestedServiceType.ANY,
@@ -150,7 +150,7 @@ def test_energy_service_request_driver_any_remains_unresolved():
         EnergyServiceRequest(
             service_request_id="REQ-006",
             vehicle_id="V0003",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             request_source=RequestSource.DRIVER_REQUEST,
             need_service=True,
             requested_service_type=RequestedServiceType.ANY,
@@ -166,7 +166,7 @@ def test_energy_service_request_unsupported():
     req = EnergyServiceRequest(
         service_request_id="REQ-007",
         vehicle_id="V0001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.DRIVER_REQUEST,
         need_service=True,
         requested_service_type=RequestedServiceType.BATTERY_SWAP,
@@ -186,7 +186,7 @@ def test_no_station_or_ranking_fields_allowed():
         EnergyServiceRequest(
             service_request_id="REQ-008",
             vehicle_id="V0001",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             request_source=RequestSource.AUTO_DETECTED,
             need_service=True,
             allowed_service_types=[ServiceType.CHARGING],

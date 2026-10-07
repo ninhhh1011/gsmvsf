@@ -7,7 +7,7 @@ Provides:
 - POST /api/v1/candidate-search/evaluate: End-to-end evaluation from telemetry to candidate search
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from backend.app.dependencies import get_candidate_service, get_demand_service
 from backend.app.services.candidate.models import (
@@ -36,9 +36,17 @@ router = APIRouter()
 
 
 def set_candidate_service(service: CandidateSearchService | None) -> None:
-    """Route test-fixture singleton to the fallback in dependencies.py."""
-    from backend.app.dependencies import set_candidate_service_fallback
-    set_candidate_service_fallback(service)
+    """Set the application service for tests; runtime getters read app.state."""
+    from backend.app.main import app
+    from backend.app.services.demand.capability import VehicleCapabilityResolver
+    from backend.app.services.demand.service import DemandService
+    from backend.app.services.realtime.state import DriverStateStore
+    resolver = VehicleCapabilityResolver()
+    app.state.candidate_service = service
+    app.state.capability_resolver = resolver
+    app.state.demand_service = DemandService(resolver)
+    if not hasattr(app.state, 'driver_state_store'):
+        app.state.driver_state_store = DriverStateStore()
 
 
 def _routing_http_error(exc: RoutingEngineError) -> HTTPException:
@@ -133,9 +141,11 @@ async def evaluate_and_search(
     2. Evaluate Week 2 demand detection to produce canonical EnergyServiceRequest.
     3. Execute Week 3 candidate search and multi-leg routing.
     """
-    request_time = request.timestamp if request.timestamp is not None else datetime.utcnow()
+    request_time = request.timestamp if request.timestamp is not None else datetime.now(UTC)
     location = resolve_current_location(request.driver_id, request.raw_latitude,
-                                        request.raw_longitude, request.road_segment_id, request_time)
+                                        request.raw_longitude, request.road_segment_id, request_time,
+                                        getattr(request_obj.app.state, "driver_state_store", None)
+                                        if request_obj is not None else None)
 
     demand_ctx = DemandContext(
         vehicle_id=request.vehicle_id,

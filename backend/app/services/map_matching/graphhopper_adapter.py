@@ -4,7 +4,6 @@ import xml.etree.ElementTree as ET
 
 import httpx
 from backend.app.config import settings
-from backend.app.services import graphhopper
 from backend.app.services.graphhopper import profile_for_vehicle
 from backend.app.services.map_matching.engine import (
     MapMatchingEngineError,
@@ -64,7 +63,7 @@ class GraphHopperMapMatchingAdapter:
     def __init__(self, base_url=None, timeout=60.0, client=None):
         self.base_url = (base_url or settings.graphhopper_base_url).rstrip("/")
         self.timeout = timeout
-        self._client = client or graphhopper.http_client
+        self._client = client
 
     async def match(self, coordinates, *, vehicle_category):
         try:
@@ -80,7 +79,9 @@ class GraphHopperMapMatchingAdapter:
         segment = ET.SubElement(ET.SubElement(gpx, "trk"), "trkseg")
         for lon, lat in coordinates:
             ET.SubElement(segment, "trkpt", lat=str(lat), lon=str(lon))
-        client = self._client or httpx.AsyncClient(timeout=self.timeout)
+        if self._client is None:
+            raise MapMatchingEngineUnavailableError("GraphHopper client is not initialized by application lifespan")
+        client = self._client
         try:
             response = await client.post(
                 self.base_url + "/match", content=ET.tostring(gpx),
@@ -136,6 +137,3 @@ class GraphHopperMapMatchingAdapter:
             raise MapMatchingTimeoutError("GraphHopper matching timed out") from exc
         except httpx.RequestError as exc:
             raise MapMatchingEngineUnavailableError("GraphHopper unavailable") from exc
-        finally:
-            if self._client is None:
-                await client.aclose()

@@ -2,7 +2,7 @@
 Integration tests for CandidateSearchService.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 import pytest
 
 from backend.app.services.candidate.models import (
@@ -32,7 +32,7 @@ async def test_invalid_request_short_circuit(service):
     esr = EnergyServiceRequest(
         service_request_id="REQ-INVALID",
         vehicle_id="V001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.DRIVER_REQUEST,
         requested_service_type=RequestedServiceType.BATTERY_SWAP,
         need_service=True,
@@ -57,7 +57,7 @@ async def test_no_service_needed_short_circuit(service):
     esr = EnergyServiceRequest(
         service_request_id="REQ-NO-SERVICE",
         vehicle_id="V001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.AUTO_DETECTED,
         need_service=False,
         allowed_service_types=[ServiceType.CHARGING],

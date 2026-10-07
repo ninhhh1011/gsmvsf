@@ -13,6 +13,9 @@ from backend.app.api.v1.vehicles import router as vehicles_router
 from backend.app.config import settings
 from backend.app.core.lifespan import lifespan
 from backend.app.services.routing.engine import RoutingEngineError
+from backend.app.services.realtime.state import DriverStateStore
+from backend.app.services.demand.capability import VehicleCapabilityResolver
+from backend.app.services.demand.service import DemandService
 from backend.app.services.snapshots.models import StateError
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -26,6 +29,9 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
+    app.state.driver_state_store = DriverStateStore()
+    app.state.capability_resolver = VehicleCapabilityResolver()
+    app.state.demand_service = DemandService(app.state.capability_resolver)
 
     # Apply middleware (rate limiting, request logging)
     setup_middleware(app)

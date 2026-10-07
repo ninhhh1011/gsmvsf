@@ -31,7 +31,6 @@ from backend.app.services.realtime.driver_state_manager import (
     DriverStateUnavailableError,
     trace_state_to_snapshot,
     snapshot_to_trace_state,
-    get_driver_state_manager,
     set_driver_state_manager,
     reset_driver_state_manager,
 )

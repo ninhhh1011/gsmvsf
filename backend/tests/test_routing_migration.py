@@ -58,14 +58,15 @@ def test_candidate_service_requires_injected_engine():
         CandidateSearchService()
 
 
-def test_candidate_factory_uses_graphhopper_only():
-    # When app.state and fixture singleton are both None, the fallback creates
-    # a service with a fresh GraphHopperRoutingAdapter.
+def test_candidate_getter_requires_lifespan_state():
+    # Runtime service access is app-scoped and never creates a lazy adapter.
     set_candidate_service(None)
     try:
+        from types import SimpleNamespace
+        from fastapi import HTTPException
         from backend.app.dependencies import get_candidate_service as dep_get
-        svc = dep_get()
-        assert isinstance(svc.routing_engine, GraphHopperRoutingAdapter)
+        with pytest.raises(HTTPException):
+            dep_get(SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(candidate_service=None))))
     finally:
         set_candidate_service(None)
 

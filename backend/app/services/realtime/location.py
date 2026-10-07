@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from math import isfinite
 
-from backend.app.services.realtime.state import get_state_store
 from backend.app.services.snapshots.models import StateError
 
 
@@ -27,7 +26,7 @@ def valid_coordinates(latitude, longitude):
             -90 <= latitude <= 90 and -180 <= longitude <= 180)
 
 
-def resolve_current_location(driver_id, latitude, longitude, road_segment_id, request_time):
+def resolve_current_location(driver_id, latitude, longitude, road_segment_id, request_time, state_store=None):
     """Use explicit, matched, then accepted raw; never read future current state.
 
     Week 1 owns match reset/validity. last_match_time is its observation event
@@ -41,7 +40,7 @@ def resolve_current_location(driver_id, latitude, longitude, road_segment_id, re
         if not valid_coordinates(latitude, longitude):
             raise StateError('Invalid origin coordinates', 'INVALID_LOCATION', 422)
         return CurrentLocation(latitude, longitude, road_segment_id, 'EXPLICIT', timestamp)
-    state = get_state_store().get(driver_id) if driver_id is not None else None
+    state = state_store.get(driver_id) if state_store is not None and driver_id is not None else None
     if state is not None:
         matched = state.last_matched_state
         if (matched is not None and state.last_match_time is not None and

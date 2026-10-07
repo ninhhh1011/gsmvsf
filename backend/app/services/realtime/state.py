@@ -5,6 +5,7 @@ Maintains bounded GPS observation history and match state per driver.
 """
 
 import hashlib
+from contextvars import ContextVar
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -138,7 +139,7 @@ class MatchedState:
     direction: str | None = None
     confidence: float | None = None
     route_geometry: str | None = None
-    matched_at: datetime = field(default_factory=datetime.utcnow)
+    matched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         """Export to dict for serialization."""
@@ -395,19 +396,19 @@ class DriverStateStore:
         return len(self._states)
 
 
-# Global state store instance
-_global_store: DriverStateStore | None = None
+# Test-only standalone callers share state within their current execution context.
+_test_store: ContextVar[DriverStateStore | None] = ContextVar("test_driver_state_store", default=None)
 
 
 def get_state_store() -> DriverStateStore:
-    """Get global state store instance."""
-    global _global_store
-    if _global_store is None:
-        _global_store = DriverStateStore()
-    return _global_store
+    store = _test_store.get()
+    if store is None:
+        store = DriverStateStore()
+        _test_store.set(store)
+    return store
 
 
-def reset_state_store():
-    """Reset global state store (for testing)."""
-    global _global_store
-    _global_store = None
+def reset_state_store() -> None:
+    _test_store.set(None)
+
+

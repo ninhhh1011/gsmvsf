@@ -357,19 +357,10 @@ class VehicleCapabilityResolver:
         return sorted(self._models.keys())
 
 
-# Global singleton instance
-_global_resolver: VehicleCapabilityResolver | None = None
-
-
 def get_capability_resolver() -> VehicleCapabilityResolver:
-    """Get or create singleton VehicleCapabilityResolver."""
-    global _global_resolver
-    if _global_resolver is None:
-        _global_resolver = VehicleCapabilityResolver()
-    return _global_resolver
+    """Create a resolver for standalone domain/test use; app code uses app.state."""
+    return VehicleCapabilityResolver()
 
 
-def reset_capability_resolver():
-    """Reset singleton for tests."""
-    global _global_resolver
-    _global_resolver = None
+def reset_capability_resolver() -> None:
+    """Compatibility no-op; callers now own resolver instances explicitly."""

@@ -11,6 +11,11 @@ from backend.app.services.realtime.state import GPSObservation, MatchedState, ge
 T = datetime(2026, 9, 1, tzinfo=timezone.utc)
 DRIVER = 'week5-location-test'
 
+def app_request():
+    from backend.app.services.demand.service import create_demand_service
+    state = SimpleNamespace(driver_state_store=get_state_store(), demand_service=create_demand_service())
+    return SimpleNamespace(app=SimpleNamespace(state=state))
+
 @pytest.fixture
 def state():
     store = get_state_store()
@@ -29,7 +34,7 @@ async def test_candidate_current_state_uses_existing_fields(state):
     # Patch at the usage site in candidate.py
     with patch('backend.app.api.v1.candidate.get_candidate_service', return_value=mock_svc):
         assert await evaluate_and_search(EvaluateAndSearchApiRequest(vehicle_id='V0001',
-            driver_id=DRIVER, timestamp=T, current_soc_pct=10)) == 'result'
+            driver_id=DRIVER, timestamp=T, current_soc_pct=10), request_obj=app_request()) == 'result'
     energy = mock_svc.search_candidates.call_args.args[0].energy_request
     assert (energy.latitude, energy.longitude, energy.road_segment_id) == (21.1, 105.1, 'segment')
 
@@ -38,14 +43,14 @@ async def test_candidate_current_state_uses_existing_fields(state):
 async def test_explicit_coordinates_not_overwritten(state, coordinates):
     result = await evaluate_driver_demand_with_realtime_state(DRIVER, EvaluateDemandApiRequest(
         vehicle_id='V0001', timestamp=T, current_soc_pct=10,
-        raw_latitude=coordinates[0], raw_longitude=coordinates[1]))
+        raw_latitude=coordinates[0], raw_longitude=coordinates[1]), request=app_request())
     assert (result.latitude, result.longitude) == coordinates
     assert result.road_segment_id is None  # A cached match belongs to a different position.
 
 
 def test_resolver_respects_event_time_and_week1_gap_reset(state):
     from backend.app.services.realtime.location import resolve_current_location
-    resolve = lambda at: resolve_current_location(DRIVER, None, None, None, at)
+    resolve = lambda at: resolve_current_location(DRIVER, None, None, None, at, get_state_store())
     assert resolve(T).source == 'MATCHED'
     assert resolve(T - timedelta(microseconds=1)).source == 'LOCATION_UNAVAILABLE'
     # matched_at is execution time and must not block historical observation matches.
@@ -78,6 +83,7 @@ async def test_recommend_location_bridge(state, branch, coordinates, expected):
             ranked_candidates=[], eligible_count=0, policy=RankingPolicy(),
             energy_context=request.energy_request, degraded=False, degraded_reasons=[], reason='TEST')
     app = create_app()
+    app.state.driver_state_store = get_state_store()
     app.dependency_overrides[get_workflow] = lambda: SimpleNamespace(recommend=recommend)
     if branch == 'raw':
         state.last_matched_state = None
@@ -121,7 +127,7 @@ async def test_partial_coordinates_are_not_mixed_with_cached_state(state):
     from backend.app.services.snapshots.models import StateError
     with pytest.raises(StateError) as error:
         await evaluate_driver_demand_with_realtime_state(DRIVER, EvaluateDemandApiRequest(
-            vehicle_id='V0001', timestamp=T, raw_latitude=0.0))
+            vehicle_id='V0001', timestamp=T, raw_latitude=0.0), request=app_request())
     assert error.value.status == 422
     assert error.value.detail['error_code'] == 'INVALID_LOCATION'
 

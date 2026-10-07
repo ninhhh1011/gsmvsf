@@ -9,10 +9,7 @@ import logging
 import uuid
 
 from backend.app.services.demand.auto_detector import AutoDemandDetector
-from backend.app.services.demand.capability import (
-    VehicleCapabilityResolver,
-    get_capability_resolver,
-)
+from backend.app.services.demand.capability import VehicleCapabilityResolver
 from backend.app.services.demand.driver_requester import DriverRequestProcessor
 from backend.app.services.demand.models import (
     DemandContext,
@@ -117,6 +114,7 @@ class DemandService:
         )
         return request
 
+
     def process_driver_request(
         self,
         context: DemandContext,
@@ -191,18 +189,6 @@ class DemandService:
         return request
 
 
-# Backwards-compatible getter for test fixtures (no request context available)
-def get_demand_service(request: object | None = None) -> "DemandService":
-    """Get DemandService instance from request.app.state or create standalone for tests."""
-    if request is not None and hasattr(request, "app"):
-        svc = getattr(request.app.state, "demand_service", None)
-        if svc is not None:
-            return svc
-    # Fallback for test fixtures that don't use request context
-    return DemandService(capability_resolver=get_capability_resolver())
-
-
-# Exists only for __init__.py backwards compatibility - does nothing (stateless service)
-def reset_demand_service() -> None:
-    """No-op: DemandService is now stateless and request-scoped. Kept for API compatibility."""
-    pass
+def create_demand_service() -> DemandService:
+    """Create a standalone service for offline evaluation and unit tests."""
+    return DemandService(VehicleCapabilityResolver())
