@@ -9,6 +9,7 @@ from backend.app.api.v1.metrics import router as metrics_router
 from backend.app.api.v1.middleware import setup_middleware
 from backend.app.api.v1.ranking import router as ranking_router
 from backend.app.api.v1.realtime import router as realtime_router
+from backend.app.api.v1.route_familiarity import router as route_familiarity_router
 from backend.app.api.v1.vehicles import router as vehicles_router
 from backend.app.config import settings
 from backend.app.core.lifespan import lifespan
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(candidate_router, prefix="/api/v1", tags=["candidate-search"])
     app.include_router(ranking_router, prefix="/api/v1", tags=["ranking"])
     app.include_router(metrics_router, prefix="/api/v1", tags=["metrics"])
+    app.include_router(route_familiarity_router, prefix="/api/v1", tags=["route-familiarity"])
     app.include_router(vehicles_router, prefix="/api/v1", tags=["vehicles"])
 
     @app.exception_handler(StateError)
