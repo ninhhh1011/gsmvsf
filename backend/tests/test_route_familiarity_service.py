@@ -103,12 +103,14 @@ async def test_matching_pair_budget_returns_entire_assessment_unavailable():
                cell_distances_m=list(route.cell_distances_m), distance_m=route.distance_m, resolution=11)
     repo = Repository(personal=[row])
     before = ROUTE_FAMILIARITY_WORK_LIMITS._value.get()
+    history_pairs_before = ROUTE_FAMILIARITY_HISTORY_PAIRS._value.get()
     assessments = await RouteFamiliarityService(repo).assess_many(
         "me", {("s1", "x"): sig(["a"]), ("s2", "x"): route}, NOW)
     assert set(a.status for a in assessments.values()) == {"UNAVAILABLE"}
     assert all(a.penalty_s == 0 for a in assessments.values())
     assert all(a.degraded_reason == "SIMILARITY_WORK_LIMIT" for a in assessments.values())
     assert ROUTE_FAMILIARITY_WORK_LIMITS._value.get() == before + 1
+    assert ROUTE_FAMILIARITY_HISTORY_PAIRS._value.get() == history_pairs_before + 2
 
 
 @pytest.mark.asyncio

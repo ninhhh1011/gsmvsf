@@ -33,7 +33,7 @@ ROUTE_FAMILIARITY_EVENTS = Counter(
 )
 ROUTE_FAMILIARITY_HISTORY_PAIRS = Counter(
     'ev_route_familiarity_history_pairs_total',
-    'Candidate and bounded personal or community history pairs examined'
+    'Candidate and bounded personal or community history pairs considered, including work-limited attempts'
 )
 ROUTE_FAMILIARITY_LATENCY = Histogram(
     'ev_route_familiarity_latency_seconds', 'Route familiarity work duration by bounded stage',
