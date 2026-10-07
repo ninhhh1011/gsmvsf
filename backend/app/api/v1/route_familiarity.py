@@ -13,6 +13,15 @@ from backend.app.services.snapshots.models import FrozenModel, StateError, aware
 router = APIRouter()
 
 
+async def _read_bounded_body(request: Request, limit: int) -> bytes:
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > limit:
+            raise StateError("Invalid completed route", "INVALID_ROUTE", 422)
+        body.extend(chunk)
+    return bytes(body)
+
+
 class CompletedRoute(FrozenModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     driver_id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.:-]+$")
@@ -33,9 +42,7 @@ async def ingest_completed_route(request: Request, response: Response,
     if declared_size > 105_000:
         raise StateError("Invalid completed route", "INVALID_ROUTE", 422)
     try:
-        body = await request.body()
-        if len(body) > 105_000:
-            raise ValueError
+        body = await _read_bounded_body(request, 105_000)
         payload = CompletedRoute.model_validate(json.loads(body))
     except (json.JSONDecodeError, ValidationError, UnicodeDecodeError, ValueError):
         raise StateError("Invalid completed route", "INVALID_ROUTE", 422) from None
