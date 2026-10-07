@@ -70,6 +70,8 @@ class CandidateSearchService:
         self,
         request: CandidateSearchRequest,
         eligible_only: bool = False,
+        *,
+        _signature_sink: dict | None = None,
     ) -> CandidateSearchResult:
         """
         Execute full candidate search pipeline for an incoming CandidateSearchRequest.
@@ -183,6 +185,7 @@ class CandidateSearchService:
             profile=vehicle_profile,
             cached_direct_route=cached_direct,
             constraints=request.constraints,
+            include_leg_results=_signature_sink is not None,
         )
 
         # 9. Evaluate all candidate pairs using pre-computed routes
@@ -204,7 +207,8 @@ class CandidateSearchService:
             )
 
             # Use pre-computed route
-            is_reach, route_metrics, _ = station_routes.get(station.station_id, (False, None, None))
+            route_result = station_routes.get(station.station_id, (False, None, None))
+            is_reach, route_metrics = route_result[:2]
 
             net_dist_m = route_metrics.distance_to_station_m if (is_reach and route_metrics) else None
 
@@ -237,6 +241,19 @@ class CandidateSearchService:
                 route_metrics=route_metrics,
             )
             evaluated_candidates.append(candidate)
+            if candidate.eligible and _signature_sink is not None:
+                key = (station.station_id, service_type.value)
+                _signature_sink[key] = None
+            if candidate.eligible and _signature_sink is not None and dest_pos is not None:
+                leg1, leg2 = route_result[2:4]
+                if (leg1 is not None and leg2 is not None and leg1.geometry and leg2.geometry and
+                        leg2.status.value == "SUCCESS"):
+                    from backend.app.services.route_familiarity.signature import create_route_signature
+                    try:
+                        _signature_sink[key] = create_route_signature(
+                            [leg1.geometry, leg2.geometry])
+                    except ValueError:
+                        pass  # Invalid or over-limit recommended geometry is unavailable.
 
         # Count eligible candidates
         eligible_count = sum(1 for c in evaluated_candidates if c.eligible)

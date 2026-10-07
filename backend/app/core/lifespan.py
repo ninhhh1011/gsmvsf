@@ -83,8 +83,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         resolver = SnapshotResolver(repository, cache, policy)
         app.state.snapshot_resolver = resolver
         app.state.snapshot_ingestion = IngestionService(repository, cache=cache)
+        familiarity_evaluator = None
+        if settings.enable_route_familiarity:
+            from backend.app.services.route_familiarity.service import RouteFamiliarityService
+            familiarity_evaluator = RouteFamiliarityService(app.state.route_history_repository)
         app.state.recommendation_workflow = RecommendationWorkflow(repository, resolver,
-            routing_adapter, policy=policy)
+            routing_adapter, policy=policy, familiarity_evaluator=familiarity_evaluator)
         from backend.app.services.snapshots.simulator import RealtimeSimulator
         simulator = RealtimeSimulator()
         app.state.realtime_simulator = simulator

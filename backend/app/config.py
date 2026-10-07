@@ -1,7 +1,7 @@
 """Application configuration management."""
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,6 +54,22 @@ class Settings(BaseSettings):
     traffic_fresh_s: float = Field(default=1800, ge=0, allow_inf_nan=False)
     missing_queue_wait_s: float = Field(default=5400, ge=0, allow_inf_nan=False)
     snapshot_ingestion_token: str = ""
+
+    enable_route_familiarity: bool = False
+    route_familiarity_identity_secret: str = ""
+    route_familiarity_lookback_days: int = Field(default=7, ge=1, le=365)
+    max_familiarity_penalty_s: float = Field(default=30.0, ge=0, allow_inf_nan=False)
+    familiarity_minimum_support_adherence: float = Field(default=0.10, ge=0, le=1)
+    familiarity_prior_mean: float = Field(default=0.5, ge=0, le=1)
+    familiarity_prior_strength: float = Field(default=3.0, ge=0, allow_inf_nan=False)
+    familiarity_minimum_community_drivers: int = Field(default=5, ge=1, le=100)
+    familiarity_confidence_prior_strength: float = Field(default=3.0, gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_route_familiarity(self):
+        if self.enable_route_familiarity and len(self.route_familiarity_identity_secret.encode()) < 32:
+            raise ValueError("ROUTE_FAMILIARITY_IDENTITY_SECRET must be at least 32 bytes when enabled")
+        return self
 
     # Mapping
     mapping_dir: Path = Path("runtime/map_mapping")
