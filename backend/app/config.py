@@ -1,8 +1,8 @@
 """Application configuration management."""
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
 
+    # City & Geographic Configuration (Default Hanoi, configurable for HCMC, Da Nang, etc.)
+    city_name: str = "Hanoi"
+    map_default_center_lat: float = 21.0285
+    map_default_center_lng: float = 105.8542
+    map_default_zoom: int = 13
+    map_bbox_min_lat: float = 20.8000
+    map_bbox_min_lng: float = 105.6000
+    map_bbox_max_lat: float = 21.2500
+    map_bbox_max_lng: float = 106.1000
+
     # Paths
     app_path: Path = Path(__file__).parent
     dataset_path: Path = Path("dataset_v1")
@@ -32,15 +42,6 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@ev_db:5432/ev_recommendation"
     database_url_sync: str = "postgresql://postgres:postgres@ev_db:5432/ev_recommendation"
-
-    # Route History Database (separate from main EV recommendation DB)
-    # Use localhost:5432 for Windows host access (Docker port mapping)
-    route_history_database_url: str = "postgresql+asyncpg://postgres:postgres@ev_db:5432/route_history_db"
-    route_history_database_url_sync: str = "postgresql://postgres:postgres@localhost:5432/route_history_db"
-
-    # Route Familiarity Feature
-    enable_route_familiarity: bool = False  # Feature flag - default off for safety
-    route_familiarity_max_penalty_s: float = 30.0  # Max penalty in seconds
 
     # Week 4 project policy; freshness follows Dataset cadence, TTL is cache retention.
     redis_url: str = "redis://127.0.0.1:6379/0"

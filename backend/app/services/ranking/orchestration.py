@@ -1,7 +1,7 @@
 """Request workflow; only this layer may retry Candidate Search on a conflict."""
-from time import perf_counter
+from datetime import UTC
 from math import isfinite
-from datetime import timezone
+from time import perf_counter
 
 from backend.app.core.logging import get_logger
 from backend.app.services.candidate.service import CandidateSearchService
@@ -62,7 +62,7 @@ class RecommendationWorkflow:
         # Week 3's internal clock is datetime.utcnow(); normalize at this boundary.
         if result.search_timestamp.tzinfo is None:
             result = result.model_copy(update={
-                'search_timestamp': result.search_timestamp.replace(tzinfo=timezone.utc)})
+                'search_timestamp': result.search_timestamp.replace(tzinfo=UTC)})
         if result.search_status not in ('SUCCESS', 'NO_SERVICE_NEEDED'):
             raise StateError(result.details or result.search_status, 'CANDIDATE_SEARCH_FAILED', 422)
         evidence = CandidateSearchEvidence(request_time=request_time, energy_request=request.energy_request,

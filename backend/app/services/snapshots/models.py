@@ -1,5 +1,5 @@
 """Dataset-shaped snapshot values; timestamps and freshness are domain evidence."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, uuid5
 
@@ -13,7 +13,7 @@ Positive = Annotated[float, Field(gt=0)]
 def aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError('An explicit timezone is required')
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
 
 
 class FrozenModel(BaseModel):

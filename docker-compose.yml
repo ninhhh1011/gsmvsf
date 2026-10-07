@@ -121,6 +121,8 @@ services:
     container_name: ev_frontend
     ports:
       - "3000:80"
+    volumes:
+      - ./backend/app/static/demo:/usr/share/nginx/html:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/nginx-health"]
       interval: 10s

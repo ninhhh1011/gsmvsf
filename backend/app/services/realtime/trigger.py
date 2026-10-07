@@ -6,7 +6,7 @@ Policy parameters are from docs/WEEK_1_REALTIME_POLICY.md
 """
 
 from datetime import datetime
-from typing import Protocol, Tuple
+from typing import Protocol
 
 from backend.app.services.realtime.state import DriverTraceState
 
@@ -23,7 +23,7 @@ class TriggerPolicy(Protocol):
         self,
         obs_timestamp: datetime,
         state: DriverTraceState,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Check if map matching should be triggered.
 
@@ -52,7 +52,7 @@ class TimeTrigger:
         self,
         obs_timestamp: datetime,
         state: DriverTraceState,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         if state.last_match_time is None:
             return True, "INITIAL"
 
@@ -78,7 +78,7 @@ class DistanceTrigger:
         self,
         obs_timestamp: datetime,
         state: DriverTraceState,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         if state.movement_since_match < self.distance_meters:
             return False, f"NOT_DIST({state.movement_since_match:.0f}m<{self.distance_meters}m)"
 
@@ -109,7 +109,7 @@ class HybridTrigger:
         self,
         obs_timestamp: datetime,
         state: DriverTraceState,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         elapsed = 0.0
 
         # Check time condition

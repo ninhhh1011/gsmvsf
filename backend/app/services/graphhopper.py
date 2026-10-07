@@ -1,8 +1,8 @@
 """Shared vehicle-to-GraphHopper profile mapping. No engine selection."""
 import csv
-import httpx
 from functools import lru_cache
 
+import httpx
 from backend.app.config import settings
 
 # One event-loop-local client owned by application lifespan.

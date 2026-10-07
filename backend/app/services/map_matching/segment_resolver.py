@@ -2,7 +2,13 @@
 from dataclasses import dataclass
 from enum import Enum
 
-import psycopg2
+
+class SegmentResolverError(Exception):
+    """Domain exception for segment resolution errors."""
+
+
+class SegmentResolverUnavailableError(SegmentResolverError):
+    """Raised when the database backing segment resolver is unreachable."""
 
 
 class ResolutionStatus(Enum):
@@ -30,27 +36,36 @@ class RouteConstrainedSegmentResolver:
         self._conn = None
 
     def _get_connection(self):
-        if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(self.database_url, connect_timeout=5)
-            self._conn.autocommit = True
+        if self._conn is None or getattr(self._conn, "closed", False):
+            try:
+                import psycopg2
+                self._conn = psycopg2.connect(self.database_url, connect_timeout=5)
+                self._conn.autocommit = True
+            except Exception as exc:
+                raise SegmentResolverUnavailableError(f"Database connection failed: {exc}") from exc
         return self._conn
 
     def resolve_matched(self, lat, lon, osm_way_id=None, bearing=None, max_distance_m=100.0):
         """Use actual way identity when supplied; otherwise expose spatial ambiguity."""
-        with self._get_connection().cursor() as cursor:
-            cursor.execute("""
-                SELECT segment_id, from_node_id, to_node_id, osm_way_id, travel_direction,
-                    ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography),
-                    degrees(ST_Azimuth(ST_StartPoint(geom), ST_EndPoint(geom))) +
-                        CASE WHEN travel_direction = 'REVERSE' THEN 180 ELSE 0 END
-                FROM road_segments
-                WHERE (%s IS NULL OR osm_way_id = %s)
-                  AND geom && ST_Expand(ST_SetSRID(ST_MakePoint(%s,%s),4326), %s)
-                  AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography, %s)
-                ORDER BY 6, segment_id LIMIT 8
-            """, (lon, lat, osm_way_id, osm_way_id, lon, lat, max_distance_m / 100000,
-                  lon, lat, max_distance_m))
-            rows = cursor.fetchall()
+        try:
+            with self._get_connection().cursor() as cursor:
+                cursor.execute("""
+                    SELECT segment_id, from_node_id, to_node_id, osm_way_id, travel_direction,
+                        ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography),
+                        degrees(ST_Azimuth(ST_StartPoint(geom), ST_EndPoint(geom))) +
+                            CASE WHEN travel_direction = 'REVERSE' THEN 180 ELSE 0 END
+                    FROM road_segments
+                    WHERE (%s IS NULL OR osm_way_id = %s)
+                      AND geom && ST_Expand(ST_SetSRID(ST_MakePoint(%s,%s),4326), %s)
+                      AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography, %s)
+                    ORDER BY 6, segment_id LIMIT 8
+                """, (lon, lat, osm_way_id, osm_way_id, lon, lat, max_distance_m / 100000,
+                      lon, lat, max_distance_m))
+                rows = cursor.fetchall()
+        except SegmentResolverUnavailableError:
+            raise
+        except Exception as exc:
+            raise SegmentResolverUnavailableError(f"Database query failed: {exc}") from exc
         if not rows:
             return None
         # Dataset F/R rows share WKT orientation; the SQL adds 180 for reverse travel.

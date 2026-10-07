@@ -1,13 +1,10 @@
 """Synchronous Week 4 APIs; operational writes use a separate internal token."""
 import hmac
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from time import perf_counter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
-
-logger = logging.getLogger(__name__)
-from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from backend.app.config import settings
 from backend.app.services.candidate.models import CandidateSearchRequest
@@ -16,9 +13,16 @@ from backend.app.services.demand.service import get_demand_service
 from backend.app.services.ranking.models import CandidateSearchEvidence, RecommendationResult
 from backend.app.services.realtime.location import resolve_current_location
 from backend.app.services.snapshots.models import (
-    FrozenModel, QueueSnapshot, StateError, StationStateSnapshot, TrafficSnapshot, aware_utc,
+    FrozenModel,
+    QueueSnapshot,
+    StateError,
+    StationStateSnapshot,
+    TrafficSnapshot,
+    aware_utc,
 )
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -182,13 +186,12 @@ async def ingest_queue(snapshot: QueueSnapshot, response: Response, service=Depe
 @router.post('/snapshots/simulate-tick')
 async def trigger_simulation_tick(request: Request):
     """Trigger an on-demand simulation tick (Problem D)."""
-    from datetime import timezone
     simulator = getattr(request.app.state, 'realtime_simulator', None)
     ingestion = getattr(request.app.state, 'snapshot_ingestion', None)
     if simulator is None or ingestion is None:
         raise HTTPException(503, 'Snapshot simulator or ingestion service not initialized')
     try:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         count = await simulator.tick(ingestion, timestamp=now)
         return {
             'status': 'ok',

@@ -11,7 +11,7 @@ Contains:
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -73,17 +73,17 @@ class VehicleCapability(BaseModel):
     vehicle_model: str
     vehicle_category: VehicleCategory
     battery_architecture: str = "FIXED_TRACTION_PACK"
-    battery_capacity_kwh: Optional[float] = None
-    usable_capacity_kwh: Optional[float] = None
-    battery_module_capacity_kwh: Optional[float] = None
-    max_battery_modules: Optional[float] = None
+    battery_capacity_kwh: float | None = None
+    usable_capacity_kwh: float | None = None
+    battery_module_capacity_kwh: float | None = None
+    max_battery_modules: float | None = None
     charging_supported: bool = True
     swap_supported: bool = False
     public_swap_compatible: bool = False
-    charging_interface_class: Optional[str] = None
-    swap_battery_family: Optional[str] = None
+    charging_interface_class: str | None = None
+    swap_battery_family: str | None = None
     capability_source_class: str = "VINFAST_OFFICIAL_BATTERY_SPEC"
-    estimated_consumption_wh_per_km: Optional[float] = None
+    estimated_consumption_wh_per_km: float | None = None
     consumption_source: str = "PROJECT_ESTIMATE"
 
     @property
@@ -115,7 +115,7 @@ class VehicleCapability(BaseModel):
             return self.estimated_consumption_wh_per_km
         return 150.0 if self.vehicle_category == VehicleCategory.EV_CAR else 45.0
 
-    def calculate_soc_drop(self, distance_km: float, consumption_wh_per_km: Optional[float] = None) -> float:
+    def calculate_soc_drop(self, distance_km: float, consumption_wh_per_km: float | None = None) -> float:
         """
         Calculate battery SOC percentage drop for a given distance travelled in km.
         Formula: delta_soc_pct = (distance_km * consumption_kwh_per_km / usable_capacity_kwh) * 100.0
@@ -129,7 +129,7 @@ class VehicleCapability(BaseModel):
         energy_kwh = distance_km * (cons / 1000.0)
         return (energy_kwh / usable) * 100.0
 
-    def estimate_range_km(self, soc_pct: float, consumption_wh_per_km: Optional[float] = None) -> float:
+    def estimate_range_km(self, soc_pct: float, consumption_wh_per_km: float | None = None) -> float:
         """
         Estimate remaining vehicle range in km for a given SOC percentage.
         Formula: range_km = (usable_capacity_kwh * 1000.0 * (soc_pct / 100.0)) / consumption_wh_per_km
@@ -150,24 +150,24 @@ class DemandContext(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     vehicle_id: str
-    driver_id: Optional[str] = None
-    trip_id: Optional[str] = None
+    driver_id: str | None = None
+    trip_id: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    current_soc_pct: Optional[float] = None
-    estimated_remaining_range_km: Optional[float] = None
-    remaining_trip_distance_km: Optional[float] = None
-    distance_travelled_km: Optional[float] = None
-    planned_trip_distance_km: Optional[float] = None
-    safety_reserve_km: Optional[float] = None
-    remaining_energy_kwh: Optional[float] = None
-    energy_margin_km: Optional[float] = None
-    consumption_wh_per_km: Optional[float] = None
-    minimum_safe_soc_pct: Optional[float] = None
+    current_soc_pct: float | None = None
+    estimated_remaining_range_km: float | None = None
+    remaining_trip_distance_km: float | None = None
+    distance_travelled_km: float | None = None
+    planned_trip_distance_km: float | None = None
+    safety_reserve_km: float | None = None
+    remaining_energy_kwh: float | None = None
+    energy_margin_km: float | None = None
+    consumption_wh_per_km: float | None = None
+    minimum_safe_soc_pct: float | None = None
 
     # Realtime location / map-matching state from Week 1 (if available)
-    raw_latitude: Optional[float] = None
-    raw_longitude: Optional[float] = None
-    road_segment_id: Optional[str] = None
+    raw_latitude: float | None = None
+    raw_longitude: float | None = None
+    road_segment_id: str | None = None
 
 
 class NeedServiceDecision(BaseModel):
@@ -176,12 +176,12 @@ class NeedServiceDecision(BaseModel):
     """
     need_service: bool
     reason_code: ReasonCode
-    safety_reserve_km: Optional[float] = None
-    remaining_trip_distance_km: Optional[float] = None
-    remaining_energy_kwh: Optional[float] = None
-    estimated_remaining_range_km: Optional[float] = None
-    energy_margin_km: Optional[float] = None
-    details: Optional[str] = None
+    safety_reserve_km: float | None = None
+    remaining_trip_distance_km: float | None = None
+    remaining_energy_kwh: float | None = None
+    estimated_remaining_range_km: float | None = None
+    energy_margin_km: float | None = None
+    details: str | None = None
 
 
 class EnergyServiceRequest(BaseModel):
@@ -194,48 +194,48 @@ class EnergyServiceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     service_request_id: str
-    driver_id: Optional[str] = None
+    driver_id: str | None = None
     vehicle_id: str
-    trip_id: Optional[str] = None
+    trip_id: str | None = None
     timestamp: datetime
 
     request_source: RequestSource
     need_service: bool
 
     # Requested service (from driver if DRIVER_REQUEST, None if AUTO_DETECTED)
-    requested_service_type: Optional[RequestedServiceType] = None
+    requested_service_type: RequestedServiceType | None = None
 
     # Services allowed by vehicle capability
     allowed_service_types: list[ServiceType]
 
     # Concrete resolved service if deterministic, None if unresolved (e.g. swap-capable AUTO or ANY)
-    resolved_service_type: Optional[ServiceType] = None
+    resolved_service_type: ServiceType | None = None
 
     request_valid: bool = True
     reason_code: ReasonCode
 
     # Energy and trip metrics
-    current_soc_pct: Optional[float] = None
-    remaining_energy_kwh: Optional[float] = None
-    estimated_remaining_range_km: Optional[float] = None
-    remaining_trip_distance_km: Optional[float] = None
-    safety_reserve_km: Optional[float] = None
-    energy_margin_km: Optional[float] = None
+    current_soc_pct: float | None = None
+    remaining_energy_kwh: float | None = None
+    estimated_remaining_range_km: float | None = None
+    remaining_trip_distance_km: float | None = None
+    safety_reserve_km: float | None = None
+    energy_margin_km: float | None = None
 
     # Vehicle metadata
-    vehicle_model: Optional[str] = None
-    vehicle_type: Optional[str] = None
-    battery_capacity_kwh: Optional[float] = None
-    usable_capacity_kwh: Optional[float] = None
-    installed_battery_modules: Optional[int] = None
+    vehicle_model: str | None = None
+    vehicle_type: str | None = None
+    battery_capacity_kwh: float | None = None
+    usable_capacity_kwh: float | None = None
+    installed_battery_modules: int | None = None
     swap_supported: bool = False
     charging_supported: bool = True
     public_swap_compatible: bool = False
 
     # Location context (from Week 1 state if provided)
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    road_segment_id: Optional[str] = None
+    latitude: float | None = None
+    longitude: float | None = None
+    road_segment_id: str | None = None
 
     @model_validator(mode="after")
     def validate_semantic_invariants(self) -> "EnergyServiceRequest":

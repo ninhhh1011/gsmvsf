@@ -1,0 +1,65 @@
+groups:
+  - name: recommendation_alerts
+    interval: 30s
+    rules:
+      # Latency alerts
+      - alert: HighP99Latency
+        expr: histogram_quantile(0.99, rate(ev_recommendation_latency_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency exceeds 5 seconds"
+          description: "P99 latency is {{ $value }}s"
+
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, rate(ev_recommendation_latency_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 latency exceeds 2 seconds"
+
+      # Error rate alerts
+      - alert: HighErrorRate
+        expr: rate(ev_recommendation_errors_total[5m]) / rate(ev_recommendation_requests_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate exceeds 1%"
+
+      - alert: ServiceDown
+        expr: up{job="ev-recommendation"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is down"
+
+      # Cache alerts
+      - alert: LowCacheHitRate
+        expr: rate(ev_cache_hits_total[5m]) / rate(ev_cache_requests_total[5m]) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache hit rate below 70%"
+
+      # Traffic alerts
+      - alert: HighTraffic
+        expr: rate(ev_recommendation_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High traffic detected"
+
+      # Queue alerts
+      - alert: QueueBacklog
+        expr: ev_queue_depth > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue backlog detected"

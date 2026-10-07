@@ -6,16 +6,17 @@ station for a specific service type (CHARGING vs BATTERY_SWAP).
 Preserves exact semantics from Dataset V1.3.1 generator.
 """
 
-from typing import Any, Optional, Union
+from typing import Any
+
 from backend.app.services.candidate.station_catalog import StationRecord, _parse_tokens
 from backend.app.services.demand.capability import VehicleCapability
 from backend.app.services.demand.models import ServiceType, VehicleCategory
 
 
 def check_station_service_compatibility(
-    vehicle: Union[VehicleCapability, dict[str, Any], Any],
+    vehicle: VehicleCapability | dict[str, Any] | Any,
     station: StationRecord,
-    service_type: Union[ServiceType, str],
+    service_type: ServiceType | str,
 ) -> bool:
     """
     Evaluate if vehicle can physically receive the given service at the station.

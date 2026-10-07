@@ -1,6 +1,6 @@
 """Request-time location bridge over the existing Week 1 accepted state."""
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from math import isfinite
 
 from backend.app.services.realtime.state import get_state_store
@@ -18,7 +18,7 @@ class CurrentLocation:
 
 def utc(value: datetime) -> datetime:
     # Week 1 also accepts legacy naive UTC observations; this does not age state.
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def valid_coordinates(latitude, longitude):

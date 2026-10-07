@@ -4,12 +4,10 @@ Per-driver trace state for realtime map matching.
 Maintains bounded GPS observation history and match state per driver.
 """
 
+import hashlib
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-import hashlib
-
+from datetime import UTC, datetime, timedelta
 
 # Constants from benchmark policy
 DEFAULT_CONTEXT_WINDOW_SECONDS = 30.0
@@ -82,7 +80,7 @@ def ensure_utc(dt: datetime) -> datetime:
     if dt is None:
         return None
     if dt.tzinfo is not None:
-        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
     # Naive datetimes are kept as-is (assumed UTC)
     return dt
 
@@ -95,9 +93,9 @@ class GPSObservation:
     timestamp: datetime
     latitude: float
     longitude: float
-    speed_kmh: Optional[float] = None
-    heading_deg: Optional[float] = None
-    accuracy_m: Optional[float] = None
+    speed_kmh: float | None = None
+    heading_deg: float | None = None
+    accuracy_m: float | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "GPSObservation":
@@ -135,11 +133,11 @@ class MatchedState:
     """Result of a map match operation."""
     matched_latitude: float
     matched_longitude: float
-    road_segment_id: Optional[str] = None
-    osm_way_id: Optional[int] = None
-    direction: Optional[str] = None
-    confidence: Optional[float] = None
-    route_geometry: Optional[str] = None
+    road_segment_id: str | None = None
+    osm_way_id: int | None = None
+    direction: str | None = None
+    confidence: float | None = None
+    route_geometry: str | None = None
     matched_at: datetime = field(default_factory=datetime.utcnow)
 
     def to_dict(self) -> dict:
@@ -165,16 +163,16 @@ class DriverTraceState:
     """
     driver_id: str
     observations: deque[GPSObservation] = field(default_factory=lambda: deque(maxlen=1000))
-    last_match_time: Optional[datetime] = None
-    last_matched_state: Optional[MatchedState] = None
+    last_match_time: datetime | None = None
+    last_matched_state: MatchedState | None = None
     movement_since_match: float = 0.0
-    last_observation_timestamp: Optional[datetime] = None
+    last_observation_timestamp: datetime | None = None
     observations_since_match: int = 0
     consecutive_stationary: int = 0
     total_observations_received: int = 0
     total_match_calls: int = 0
-    last_trigger_reason: Optional[str] = None
-    last_match_latency_ms: Optional[float] = None
+    last_trigger_reason: str | None = None
+    last_match_latency_ms: float | None = None
     current_status: str = "WARMING_UP"
     generation: int = 1  # Incremented on reset to invalidate old requests
     seen_observation_ids: set = field(default_factory=set)  # For deduplication
@@ -297,7 +295,7 @@ class DriverTraceState:
         """Check if driver appears to be stationary."""
         return self.consecutive_stationary >= DEFAULT_STATIONARY_THRESHOLD
 
-    def reset_after_match(self, matched_state: Optional[MatchedState] = None):
+    def reset_after_match(self, matched_state: MatchedState | None = None):
         """Reset after successful match."""
         self.last_match_time = self.last_observation_timestamp
         self.movement_since_match = 0.0
@@ -318,7 +316,7 @@ class DriverTraceState:
         self.total_match_calls = 0
         self.generation += 1  # Invalidate requests from previous generation
 
-    def get_current_raw_position(self) -> Optional[tuple[float, float]]:
+    def get_current_raw_position(self) -> tuple[float, float] | None:
         """Get most recent raw GPS position."""
         if self.observations:
             last = self.observations[-1]
@@ -378,7 +376,7 @@ class DriverStateStore:
             self._states[driver_id] = DriverTraceState(driver_id=driver_id)
         return self._states[driver_id]
 
-    def get(self, driver_id: str) -> Optional[DriverTraceState]:
+    def get(self, driver_id: str) -> DriverTraceState | None:
         """Get state if exists."""
         return self._states.get(driver_id)
 
@@ -398,7 +396,7 @@ class DriverStateStore:
 
 
 # Global state store instance
-_global_store: Optional[DriverStateStore] = None
+_global_store: DriverStateStore | None = None
 
 
 def get_state_store() -> DriverStateStore:

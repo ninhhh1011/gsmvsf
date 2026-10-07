@@ -15,9 +15,8 @@ Implements the physical energy feasibility baseline:
   resolved_service_type=None (no forced swap).
 """
 
-from typing import Optional
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 from backend.app.services.demand.capability import (
     VehicleCapabilityResolver,
@@ -57,7 +56,7 @@ class SafetyReservePolicy:
     """
     safety_reserve_ratio: float = DEFAULT_SAFETY_RESERVE_RATIO
     min_safety_reserve_km: float = DEFAULT_MIN_SAFETY_RESERVE_KM
-    fixed_safety_reserve_km: Optional[float] = None
+    fixed_safety_reserve_km: float | None = None
     low_soc_warning_margin_pct: float = DEFAULT_LOW_SOC_WARNING_MARGIN_PCT
     default_minimum_safe_soc_pct: float = DEFAULT_MINIMUM_SAFE_SOC_PCT
 
@@ -68,8 +67,8 @@ class SafetyReservePolicy:
 
     def compute_safety_reserve_km(
         self,
-        remaining_trip_distance_km: Optional[float],
-        vehicle_model: Optional[str] = None,
+        remaining_trip_distance_km: float | None,
+        vehicle_model: str | None = None,
     ) -> float:
         """
         Compute required safety reserve buffer in km.
@@ -92,8 +91,8 @@ class AutoDemandDetector:
 
     def __init__(
         self,
-        capability_resolver: Optional[VehicleCapabilityResolver] = None,
-        policy: Optional[SafetyReservePolicy] = None,
+        capability_resolver: VehicleCapabilityResolver | None = None,
+        policy: SafetyReservePolicy | None = None,
         safety_reserve_ratio: float = DEFAULT_SAFETY_RESERVE_RATIO,
         min_safety_reserve_km: float = DEFAULT_MIN_SAFETY_RESERVE_KM,
         low_soc_warning_margin_pct: float = DEFAULT_LOW_SOC_WARNING_MARGIN_PCT,
@@ -113,15 +112,15 @@ class AutoDemandDetector:
         """Return the current safety reserve policy."""
         return self._policy
 
-    def compute_safety_reserve_km(self, remaining_trip_distance_km: Optional[float]) -> float:
+    def compute_safety_reserve_km(self, remaining_trip_distance_km: float | None) -> float:
         """Compute required safety reserve buffer in km via policy."""
         return self._policy.compute_safety_reserve_km(remaining_trip_distance_km)
 
     def calculate_remaining_energy_kwh(
         self,
         soc_pct: float,
-        usable_capacity_kwh: Optional[float],
-    ) -> Optional[float]:
+        usable_capacity_kwh: float | None,
+    ) -> float | None:
         """
         Calculate remaining energy in battery in kWh.
         remaining_energy_kwh = usable_capacity_kwh * (soc_pct / 100.0)
@@ -133,9 +132,9 @@ class AutoDemandDetector:
     def estimate_remaining_range_km(
         self,
         soc_pct: float,
-        usable_capacity_kwh: Optional[float],
-        consumption_wh_per_km: Optional[float],
-    ) -> Optional[float]:
+        usable_capacity_kwh: float | None,
+        consumption_wh_per_km: float | None,
+    ) -> float | None:
         """
         Estimate remaining vehicle range in km based on usable capacity and consumption.
         Range (km) = (usable_capacity_kwh * 1000 * (soc_pct / 100)) / consumption_wh_per_km
@@ -148,7 +147,7 @@ class AutoDemandDetector:
     def evaluate_need(
         self,
         context: DemandContext,
-        capability: Optional[VehicleCapability] = None,
+        capability: VehicleCapability | None = None,
     ) -> NeedServiceDecision:
         """
         Evaluate whether the driver currently needs an energy service based on:
@@ -283,7 +282,7 @@ class AutoDemandDetector:
         self,
         need_service: bool,
         capability: VehicleCapability,
-    ) -> Optional[ServiceType]:
+    ) -> ServiceType | None:
         """
         Determine resolved service type for AUTO_DETECTED request according to V1.3.1 semantics:
         - If need_service is False: None

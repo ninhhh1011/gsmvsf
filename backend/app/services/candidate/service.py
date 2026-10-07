@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 from backend.app.config import settings
 from backend.app.services.candidate.compatibility import check_station_service_compatibility
@@ -55,8 +54,8 @@ class CandidateSearchService:
     def __init__(
         self,
         routing_engine: RoutingEngine,
-        catalog: Optional[StationCatalog] = None,
-        max_concurrent_routes: Optional[int] = None,
+        catalog: StationCatalog | None = None,
+        max_concurrent_routes: int | None = None,
     ):
         self.routing_engine = routing_engine
         self.catalog = catalog or station_catalog
@@ -115,7 +114,7 @@ class CandidateSearchService:
             driver_pos = Position(latitude=esr.latitude, longitude=esr.longitude, node_id=esr.road_segment_id)
 
             # 4. Establish destination position (if provided)
-            dest_pos: Optional[Position] = None
+            dest_pos: Position | None = None
             if request.destination_latitude is not None and request.destination_longitude is not None:
                 dest_pos = Position(
                     latitude=request.destination_latitude,

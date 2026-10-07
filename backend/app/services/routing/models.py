@@ -7,7 +7,8 @@ GraphHopper, or any specific HTTP/engine schema.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -17,7 +18,7 @@ class Position(BaseModel):
 
     latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
-    node_id: Optional[str] = None
+    node_id: str | None = None
 
     @property
     def coordinates_lat_lon(self) -> tuple[float, float]:
@@ -51,10 +52,10 @@ class VehicleRoutingProfile(BaseModel):
     """Vehicle characteristics relevant to route computation."""
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    vehicle_id: Optional[str] = None
-    vehicle_model: Optional[str] = None
-    vehicle_category: Optional[str] = None
-    routing_profile_hint: Optional[str] = None
+    vehicle_id: str | None = None
+    vehicle_model: str | None = None
+    vehicle_category: str | None = None
+    routing_profile_hint: str | None = None
 
 
 class RouteConstraints(BaseModel):
@@ -62,7 +63,7 @@ class RouteConstraints(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     avoid_segments: list[str] = Field(default_factory=list)
-    max_distance_m: Optional[float] = None
+    max_distance_m: float | None = None
     custom: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -70,8 +71,8 @@ class DynamicRoutingContext(BaseModel):
     """Dynamic contextual data that directly impacts the road path."""
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    timestamp: Optional[datetime] = None
-    traffic_delay_factor: Optional[float] = None
+    timestamp: datetime | None = None
+    traffic_delay_factor: float | None = None
     affected_segments: list[str] = Field(default_factory=list)
 
 
@@ -83,7 +84,7 @@ class RouteLeg(BaseModel):
     to_position: Position
     distance_m: float
     duration_s: float
-    geometry: Optional[str] = None
+    geometry: str | None = None
     annotation_nodes: list[int] = Field(default_factory=list)
 
 
@@ -97,10 +98,10 @@ class RouteRequest(BaseModel):
     origin: Position
     destination: Position
     via: list[Position] = Field(default_factory=list)
-    profile: Optional[VehicleRoutingProfile] = None
-    constraints: Optional[RouteConstraints] = None
+    profile: VehicleRoutingProfile | None = None
+    constraints: RouteConstraints | None = None
     objective: OptimizationObjective = OptimizationObjective.MIN_TRAVEL_TIME
-    dynamic_context: Optional[DynamicRoutingContext] = None
+    dynamic_context: DynamicRoutingContext | None = None
 
 
 class RouteResult(BaseModel):
@@ -114,7 +115,7 @@ class RouteResult(BaseModel):
     distance_m: float = 0.0
     duration_s: float = 0.0
     legs: list[RouteLeg] = Field(default_factory=list)
-    geometry: Optional[str] = None
+    geometry: str | None = None
     engine_name: str = "unknown"
-    error_message: Optional[str] = None
+    error_message: str | None = None
     raw_metadata: dict[str, Any] = Field(default_factory=dict)

@@ -14,21 +14,18 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Optional
 
-from backend.app.services.realtime.state import (
-    DriverTraceState,
-    DriverStateStore,
-    get_state_store,
-)
 from backend.app.services.realtime.driver_state_repository import (
     DriverStateRepository,
-    RedisDriverStateRepository,
-    InMemoryDriverStateRepository,
     DriverTraceStateSnapshot,
+    InMemoryDriverStateRepository,
+    RedisDriverStateRepository,
     get_driver_state_repository,
 )
-
+from backend.app.services.realtime.state import (
+    DriverTraceState,
+    get_state_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +86,10 @@ def trace_state_to_snapshot(state: DriverTraceState, version: int = 1) -> Driver
 
 class DriverStateError(Exception):
     """Base exception for driver state operations."""
-    pass
 
 
 class DriverStateUnavailableError(DriverStateError):
     """Raised when the shared driver state store is unavailable."""
-    pass
 
 
 class DriverStateManager:
@@ -121,26 +116,26 @@ class DriverStateManager:
 
     def __init__(
         self,
-        repository: Optional[DriverStateRepository] = None,
+        repository: DriverStateRepository | None = None,
     ):
         self._repository = repository
 
     @classmethod
-    def for_production(cls) -> "DriverStateManager":
+    def for_production(cls) -> DriverStateManager:
         """Create a manager for production use with Redis."""
         return cls(repository=RedisDriverStateRepository())
 
     @classmethod
-    def for_local(cls) -> "DriverStateManager":
+    def for_local(cls) -> DriverStateManager:
         """Create a manager for local development without Redis."""
         return cls(repository=InMemoryDriverStateRepository())
 
     @classmethod
-    def for_testing(cls) -> "DriverStateManager":
+    def for_testing(cls) -> DriverStateManager:
         """Create a manager for unit testing."""
         return cls(repository=InMemoryDriverStateRepository())
 
-    def _get_repo(self) -> Optional[DriverStateRepository]:
+    def _get_repo(self) -> DriverStateRepository | None:
         """Get the configured repository."""
         if self._repository is None:
             try:
@@ -189,8 +184,8 @@ class DriverStateManager:
         try:
             if not await repo.health_check():
                 raise DriverStateUnavailableError(
-                    f"Redis driver state store is not available. "
-                    f"Cannot serve stateful driver operations without shared state."
+                    "Redis driver state store is not available. "
+                    "Cannot serve stateful driver operations without shared state."
                 )
         except Exception as e:
             raise DriverStateUnavailableError(
@@ -242,8 +237,8 @@ class DriverStateManager:
         try:
             if not await repo.health_check():
                 raise DriverStateUnavailableError(
-                    f"Redis driver state store is not available. "
-                    f"Cannot persist driver state without shared state store."
+                    "Redis driver state store is not available. "
+                    "Cannot persist driver state without shared state store."
                 )
         except DriverStateUnavailableError:
             raise
@@ -298,8 +293,8 @@ class DriverStateManager:
         try:
             if not await repo.health_check():
                 raise DriverStateUnavailableError(
-                    f"Redis driver state store is not available. "
-                    f"Cannot persist driver state without shared state store."
+                    "Redis driver state store is not available. "
+                    "Cannot persist driver state without shared state store."
                 )
         except DriverStateUnavailableError:
             raise
@@ -517,7 +512,7 @@ class DriverStateManager:
 
 
 # Global manager instance
-_driver_state_manager: Optional[DriverStateManager] = None
+_driver_state_manager: DriverStateManager | None = None
 
 
 def get_driver_state_manager() -> DriverStateManager:

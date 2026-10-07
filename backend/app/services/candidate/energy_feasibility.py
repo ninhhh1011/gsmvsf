@@ -7,14 +7,13 @@ Preserves exact canonical formula from Dataset V1.3.1:
   feasible = (route_distance_km + 0.5 <= estimated_remaining_range_km)
 """
 
-from typing import Optional
 
 SOC_REACH_BUFFER_KM: float = 0.5
 
 
 def check_energy_feasibility_to_station(
-    network_distance_m: Optional[float],
-    estimated_remaining_range_km: Optional[float],
+    network_distance_m: float | None,
+    estimated_remaining_range_km: float | None,
     buffer_km: float = SOC_REACH_BUFFER_KM,
 ) -> bool:
     """

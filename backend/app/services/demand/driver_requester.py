@@ -10,7 +10,6 @@ Enforces V1.3.1 semantics:
 - Explicit driver requests have need_service = True.
 """
 
-from typing import Optional
 import logging
 
 from backend.app.services.demand.capability import (
@@ -35,8 +34,8 @@ class DriverRequestDecision:
         request_valid: bool,
         reason_code: ReasonCode,
         allowed_service_types: list[ServiceType],
-        resolved_service_type: Optional[ServiceType] = None,
-        details: Optional[str] = None,
+        resolved_service_type: ServiceType | None = None,
+        details: str | None = None,
     ):
         self.request_valid = request_valid
         self.reason_code = reason_code
@@ -50,7 +49,7 @@ class DriverRequestProcessor:
     Processes and validates explicit driver service intents.
     """
 
-    def __init__(self, capability_resolver: Optional[VehicleCapabilityResolver] = None):
+    def __init__(self, capability_resolver: VehicleCapabilityResolver | None = None):
         self._resolver = capability_resolver or get_capability_resolver()
 
     def process_request(

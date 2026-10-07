@@ -2,17 +2,22 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import httpx
-
 from backend.app.config import settings
 from backend.app.services import graphhopper
 from backend.app.services.graphhopper import profile_for_vehicle
 from backend.app.services.routing.engine import RoutingEngine
 from backend.app.services.routing.models import (
-    DynamicRoutingContext, OptimizationObjective, Position, RouteConstraints,
-    RouteLeg, RouteRequest, RouteResult, RouteStatus, VehicleRoutingProfile,
+    DynamicRoutingContext,
+    OptimizationObjective,
+    Position,
+    RouteConstraints,
+    RouteLeg,
+    RouteRequest,
+    RouteResult,
+    RouteStatus,
+    VehicleRoutingProfile,
 )
 
 
@@ -30,8 +35,8 @@ def _metric(value) -> float:
 
 
 class GraphHopperRoutingAdapter(RoutingEngine):
-    def __init__(self, base_url: Optional[str] = None, timeout_seconds: float = 10.0,
-                 client: Optional[httpx.AsyncClient] = None):
+    def __init__(self, base_url: str | None = None, timeout_seconds: float = 10.0,
+                 client: httpx.AsyncClient | None = None):
         self.base_url = (base_url or settings.graphhopper_base_url).rstrip("/")
         self.timeout_seconds = timeout_seconds
         self._client = client or graphhopper.http_client

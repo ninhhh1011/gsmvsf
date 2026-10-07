@@ -5,7 +5,6 @@ Evaluates eligibility of candidate station/service pairs against physical, opera
 routing, and energy constraints using exact deterministic precedence from Dataset V1.3.1.
 """
 
-from typing import Optional
 from backend.app.services.candidate.models import (
     CandidateEligibilityReason,
     StationOperationalSnapshot,

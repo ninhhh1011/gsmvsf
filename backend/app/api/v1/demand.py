@@ -10,9 +10,6 @@ Provides:
 """
 
 from datetime import datetime
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Path as FPath, status
-from pydantic import BaseModel, Field
 
 from backend.app.services.demand.capability import (
     UnknownVehicleError,
@@ -27,6 +24,9 @@ from backend.app.services.demand.models import (
 )
 from backend.app.services.demand.service import get_demand_service
 from backend.app.services.realtime.location import resolve_current_location
+from fastapi import APIRouter, HTTPException, status
+from fastapi import Path as FPath
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
@@ -34,35 +34,35 @@ router = APIRouter()
 class EvaluateDemandApiRequest(BaseModel):
     """Payload to evaluate auto demand."""
     vehicle_id: str
-    driver_id: Optional[str] = None
-    trip_id: Optional[str] = None
-    timestamp: Optional[datetime] = None
-    current_soc_pct: Optional[float] = Field(None, description="Battery SOC percentage (0-100)")
-    estimated_remaining_range_km: Optional[float] = None
-    remaining_trip_distance_km: Optional[float] = None
-    distance_travelled_km: Optional[float] = None
-    planned_trip_distance_km: Optional[float] = None
-    safety_reserve_km: Optional[float] = None
-    consumption_wh_per_km: Optional[float] = None
-    minimum_safe_soc_pct: Optional[float] = None
-    raw_latitude: Optional[float] = None
-    raw_longitude: Optional[float] = None
-    road_segment_id: Optional[str] = None
+    driver_id: str | None = None
+    trip_id: str | None = None
+    timestamp: datetime | None = None
+    current_soc_pct: float | None = Field(None, description="Battery SOC percentage (0-100)")
+    estimated_remaining_range_km: float | None = None
+    remaining_trip_distance_km: float | None = None
+    distance_travelled_km: float | None = None
+    planned_trip_distance_km: float | None = None
+    safety_reserve_km: float | None = None
+    consumption_wh_per_km: float | None = None
+    minimum_safe_soc_pct: float | None = None
+    raw_latitude: float | None = None
+    raw_longitude: float | None = None
+    road_segment_id: str | None = None
 
 
 class DriverIntentApiRequest(BaseModel):
     """Payload to submit explicit driver intent."""
     vehicle_id: str
     requested_service_type: RequestedServiceType
-    driver_id: Optional[str] = None
-    trip_id: Optional[str] = None
-    timestamp: Optional[datetime] = None
-    current_soc_pct: Optional[float] = None
-    estimated_remaining_range_km: Optional[float] = None
-    remaining_trip_distance_km: Optional[float] = None
-    raw_latitude: Optional[float] = None
-    raw_longitude: Optional[float] = None
-    road_segment_id: Optional[str] = None
+    driver_id: str | None = None
+    trip_id: str | None = None
+    timestamp: datetime | None = None
+    current_soc_pct: float | None = None
+    estimated_remaining_range_km: float | None = None
+    remaining_trip_distance_km: float | None = None
+    raw_latitude: float | None = None
+    raw_longitude: float | None = None
+    road_segment_id: str | None = None
 
 
 @router.post(
@@ -173,7 +173,7 @@ class EnergyStepRequest(BaseModel):
     vehicle_model: str = Field(..., description="VinFast model name (e.g. VF_3, VF_8, EVO)")
     distance_km: float = Field(..., ge=0, description="Distance traveled in km")
     current_soc_pct: float = Field(..., ge=0, le=100, description="Current SOC percentage")
-    consumption_wh_per_km: Optional[float] = Field(None, gt=0, description="Optional override consumption")
+    consumption_wh_per_km: float | None = Field(None, gt=0, description="Optional override consumption")
 
 
 class EnergyStepResponse(BaseModel):

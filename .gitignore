@@ -33,7 +33,22 @@ node_modules/
 skills-lock.json
 test-results/
 
-# Project
+# Presentation & Plan Clutter
+*.pptx
+*.xlsx
+!dataset_v1/*.xlsx
+*_prompt.md
+*.prompt.md
+PLAN*.md
+EVALUATION_REPORT.md
+FINAL_9_5_REPORT.md
+
+# Review Trees & Snapshots
+audit_review/
+fixpack_review/
+claude_week1_skills/
+
+# Project Runtime
 runtime/osrm/*.osrm
 runtime/osrm/*.osm.bz2
 runtime/osrm/*.osm.pbf
@@ -46,7 +61,7 @@ runtime/benchmark_results.json
 runtime/*.png
 runtime/scratch_slides.json
 runtime/slide_media/
-/*.pptx
+runtime/week5/replay-*/
 samples/week1/*.csv
 samples/week1/*.json
 
@@ -66,9 +81,8 @@ runtime/migration/
 runtime/week4/
 runtime/week5/
 
-# Local agent memory, preserved outside the product source
-.claude/memory/
+# Local agent memory and tools
+.claude/
 tools/
 *.exe
-docs/superpowers/
 docs/DAILY_REPORT_*.md

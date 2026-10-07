@@ -10,37 +10,28 @@ import logging
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Literal
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException, status, Depends
-from pydantic import BaseModel, Field
-
-from backend.app.config import settings
-from backend.app.services.realtime.state import (
-    DriverStateStore,
-    DriverTraceState,
-    GPSObservation,
-    MatchedState,
-    get_state_store,
-    reset_state_store,
-    ensure_utc,
-)
+from backend.app.api.v1.map_match import get_map_matching_service
+from backend.app.services.graphhopper import resolve_vehicle_category
+from backend.app.services.map_matching import SegmentResolverUnavailableError
+from backend.app.services.map_matching.engine import MapMatchingEngineError, MapMatchingNoMatchError
+from backend.app.services.map_matching.models import GPSObservation as ServiceGPSObservation
+from backend.app.services.map_matching.models import MapMatchRequest
 from backend.app.services.realtime.driver_state_manager import (
+    DriverStateUnavailableError,
     get_driver_state_manager,
     trace_state_to_snapshot,
 )
-from backend.app.services.realtime.trigger import HybridTrigger, get_default_policy
-from backend.app.services.map_matching.models import MapMatchRequest, MapMatchResponse, GPSObservation as ServiceGPSObservation
-from backend.app.services.map_matching.engine import MapMatchingEngineError, MapMatchingNoMatchError
-from backend.app.services.graphhopper import resolve_vehicle_category
-from backend.app.api.v1.map_match import get_map_matching_service
-from backend.app.services.realtime.driver_state_manager import (
-    get_driver_state_manager,
-    DriverStateManager,
-    DriverStateUnavailableError,
+from backend.app.services.realtime.state import (
+    DriverTraceState,
+    GPSObservation,
+    MatchedState,
+    ensure_utc,
 )
-import psycopg2
-
+from backend.app.services.realtime.trigger import get_default_policy
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -63,35 +54,35 @@ class MatchingStatus(str, Enum):
 # Request/Response Models
 class LocationIngestionRequest(BaseModel):
     """Request to ingest a GPS observation."""
-    vehicle_id: Optional[str] = None
-    vehicle_category: Optional[Literal["EV_CAR", "EV_MOTORBIKE"]] = None
-    observation_id: Optional[str] = None
+    vehicle_id: str | None = None
+    vehicle_category: Literal["EV_CAR", "EV_MOTORBIKE"] | None = None
+    observation_id: str | None = None
     timestamp: datetime
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
-    speed_kmh: Optional[float] = Field(None, ge=0)
-    heading_deg: Optional[float] = Field(None, ge=0, lt=360)
-    accuracy_m: Optional[float] = Field(None, ge=0)
+    speed_kmh: float | None = Field(None, ge=0)
+    heading_deg: float | None = Field(None, ge=0, lt=360)
+    accuracy_m: float | None = Field(None, ge=0)
 
 
 class LocationResponse(BaseModel):
     """Response with current driver state."""
     driver_id: str
     status: MatchingStatus
-    trigger_reason: Optional[str] = None
-    raw_position: Optional[dict] = None
-    matched_position: Optional[dict] = None
-    last_match_time: Optional[str] = None
-    last_match_latency_ms: Optional[float] = None
+    trigger_reason: str | None = None
+    raw_position: dict | None = None
+    matched_position: dict | None = None
+    last_match_time: str | None = None
+    last_match_latency_ms: float | None = None
     total_observations: int = 0
     total_match_calls: int = 0
     buffered_points: int = 0
     movement_since_match_m: float = 0.0
     is_stationary: bool = False
-    message: Optional[str] = None
+    message: str | None = None
 
 
-def _validate_observation(req: LocationIngestionRequest) -> tuple[bool, Optional[str]]:
+def _validate_observation(req: LocationIngestionRequest) -> tuple[bool, str | None]:
     """Validate GPS observation."""
     # Check coordinates
     if not (-90 <= req.latitude <= 90):
@@ -208,7 +199,7 @@ async def _add_observation_with_cas(
             # Same observation ID but different payload - conflict
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Observation conflict: {str(e)}",
+                detail=f"Observation conflict: {e!s}",
             )
 
         # Step 6: Get base version for CAS from repository
@@ -290,13 +281,12 @@ async def ingest_location(
     )
 
     # Add observation with CAS to prevent lost updates
-    state_manager = get_driver_state_manager()
     try:
         state, is_stale, gap_reset, gap_reason = await _add_observation_with_cas(driver_id, obs)
     except DriverStateUnavailableError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Driver state store unavailable: {str(e)}",
+            detail=f"Driver state store unavailable: {e!s}",
         )
 
     # Check stale observation result
@@ -416,7 +406,7 @@ async def ingest_location(
         response, latency_ms = await _call_map_match(context, request.vehicle_category, request.vehicle_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except (MapMatchingEngineError, psycopg2.Error) as exc:
+    except (MapMatchingEngineError, SegmentResolverUnavailableError) as exc:
         state.current_status = MatchingStatus.ENGINE_UNAVAILABLE.value
         # Try to persist ENGINE_UNAVAILABLE state, but return even if fails
         try:
@@ -485,7 +475,7 @@ async def ingest_location(
         # Return error - cannot ACK final state that wasn't committed
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Match succeeded but driver state unavailable: {str(e)}. Retry required.",
+            detail=f"Match succeeded but driver state unavailable: {e!s}. Retry required.",
         )
 
     return LocationResponse(
@@ -529,7 +519,7 @@ async def get_driver_location(
     except DriverStateUnavailableError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Driver state store unavailable: {str(e)}",
+            detail=f"Driver state store unavailable: {e!s}",
         )
 
     raw_pos = state.get_current_raw_position()
@@ -597,8 +587,8 @@ async def get_trajectory_observations(trajectory_id: str) -> list[dict]:
     Get observations for a trajectory from Dataset V1.
     Debug endpoint for UI replay.
     """
-    import gzip
     import csv
+    import gzip
     from pathlib import Path
 
     gps_file = Path("dataset_v1/gps/gps_observations.csv.gz")
