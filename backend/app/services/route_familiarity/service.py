@@ -5,7 +5,7 @@ from time import perf_counter
 
 from backend.app.config import settings
 from backend.app.core.metrics import (
-    ROUTE_FAMILIARITY_HISTORY_ROWS, observe_route_familiarity, record_familiarity_work_limit,
+    ROUTE_FAMILIARITY_HISTORY_PAIRS, observe_route_familiarity, record_familiarity_work_limit,
     record_route_familiarity_event,
 )
 from backend.app.services.route_familiarity.models import RouteSignature, SimilarityResult
@@ -74,7 +74,6 @@ class RouteFamiliarityService:
         community = await self.repository.community_routes(
             sorted({cell for sig in valid.values() for cell in sig.cells}),
             driver_id, as_of, self.lookback)
-        ROUTE_FAMILIARITY_HISTORY_ROWS.inc(len(personal) + len(community))
         observe_route_familiarity('lookup', perf_counter() - lookup_started)
         record_route_familiarity_event('lookup')
         personal_indexed = [self._index_row(row) for row in personal]
@@ -86,12 +85,14 @@ class RouteFamiliarityService:
         try:
             for key, recommended in valid.items():
                 candidate_cells = set(recommended.cells)
-                personal_results = [
-                    weighted_ordered_overlap(recommended, signature, budget=budget,
-                                             historical_positions=positions)
-                    if candidate_cells.intersection(positions) else SimilarityResult(0.0, 0.0)
-                    for signature, positions in personal_indexed
-                ]
+                personal_results = []
+                for signature, positions in personal_indexed:
+                    ROUTE_FAMILIARITY_HISTORY_PAIRS.inc()
+                    personal_results.append(
+                        weighted_ordered_overlap(recommended, signature, budget=budget,
+                                                 historical_positions=positions)
+                        if candidate_cells.intersection(positions) else SimilarityResult(0.0, 0.0)
+                    )
                 best_result = max(personal_results, key=lambda score: score.adherence) if personal_results else None
                 best = best_result.adherence if best_result else None
                 supporting = sum(score.adherence >= self.minimum_support for score in personal_results)
@@ -100,6 +101,7 @@ class RouteFamiliarityService:
                 driver_best = {}
                 driver_trips = {}
                 for row, (signature, positions) in zip(community, community_indexed):
+                    ROUTE_FAMILIARITY_HISTORY_PAIRS.inc()
                     if not candidate_cells.intersection(positions):
                         continue
                     score = weighted_ordered_overlap(recommended, signature, budget=budget,
