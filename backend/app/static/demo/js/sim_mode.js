@@ -19,7 +19,8 @@ export class SimModeController {
                 leaflet: window.L,
                 h3: window.h3,
                 toggle: document.getElementById('toggle-route-familiarity'),
-                countElement: document.getElementById('route-familiarity-count')
+                countElement: document.getElementById('route-familiarity-count'),
+                supportElement: document.getElementById('route-familiarity-support')
             }) : null;
         this.scenarios = [];
         this.vehicles = [];
@@ -312,6 +313,7 @@ export class SimModeController {
         const recommendPayload = {
             context: {
                 vehicle_id: basePayload.vehicle_id,
+                driver_id: this.activeScenario?.driver_id,
                 timestamp: basePayload.timestamp,
                 current_soc_pct: basePayload.current_soc_pct,
                 estimated_remaining_range_km: basePayload.estimated_remaining_range_km,

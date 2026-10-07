@@ -79,6 +79,7 @@ test('demo loads the pinned local H3 UMD and does not depend on an H3 CDN', asyn
     const version = await readFile(new URL('../../backend/app/static/demo/vendor/h3/VERSION', import.meta.url), 'utf8');
     assert.match(index, /\/demo\/static\/vendor\/h3\/h3-js\.umd\.js/);
     assert.doesNotMatch(index, /unpkg\.com\/h3-js/);
+    assert.match(index, /id="route-familiarity-support"/);
     assert.match(bundle, /cellToBoundary/);
     assert.match(bundle, /getResolution/);
     assert.match(license, /Apache License/);
@@ -112,6 +113,63 @@ test('Simulation Mode connects recommendation cells to the opt-in UI', () => {
         simulation.routeFamiliarityOverlay.setEnabled(true);
         assert.equal(countElement.textContent, 'Showing 1 of 1 route cells (H3-11)');
         assert.equal(layers.length, 1);
+        simulation.routeFamiliarityOverlay.destroy();
+    } finally {
+        if (priorWindow === undefined) delete globalThis.window;
+        else globalThis.window = priorWindow;
+        if (priorDocument === undefined) delete globalThis.document;
+        else globalThis.document = priorDocument;
+    }
+});
+
+test('Simulation Mode sends the selected scenario identity and displays returned support safely', async () => {
+    const priorWindow = globalThis.window;
+    const priorDocument = globalThis.document;
+    const toggle = { checked: false, disabled: true, addEventListener() {} };
+    const countElement = { textContent: '' };
+    const supportElement = { textContent: '' };
+    const layers = [];
+    const map = {
+        getBounds: () => ({ getWest: () => 0, getEast: () => 10, getSouth: () => 0, getNorth: () => 10 }),
+        on() {}, off() {}, removeLayer() {}, clearAll() {}, clearRoutes() {}, renderTripEndpoints() {},
+        renderStations() {}, fitBoundsToActive() {}
+    };
+    map.map = map;
+    globalThis.window = {
+        h3: { isValidCell: cell => cell === '8111', getResolution: () => 11,
+            cellToBoundary: () => [[1, 1], [1, 2], [2, 2]] },
+        L: {
+            layerGroup: () => ({ addTo() { return this; }, clearLayers() {}, addLayer(layer) { layers.push(layer); } }),
+            polygon: coords => ({ coords })
+        }
+    };
+    globalThis.document = { getElementById: id => ({
+        'toggle-route-familiarity': toggle,
+        'route-familiarity-count': countElement,
+        'route-familiarity-support': supportElement
+    })[id] || null };
+    let sent;
+    const scenario = { driver_id: 'D0001' };
+    const result = { has_recommendation: false, familiarity: {
+        resolution: 11, route_cells: ['8111'], personal_trip_count: 2,
+        community_driver_count: null, community_trip_count: null
+    } };
+    const api = {
+        evaluateAndSearchCandidates: async () => ({ candidates: [] }),
+        getRecommendation: async payload => { sent = payload; return result; },
+        computeRoute: async () => null
+    };
+    try {
+        const simulation = new SimModeController(api, map, { onStateUpdate() {} });
+        simulation.setCatalogs([scenario], [{ vehicle_id: 'V0001', vehicle_type: 'EV_CAR' }], []);
+        simulation.activeScenario = scenario;
+        await simulation.runSimulation();
+        assert.equal(sent.context.driver_id, scenario.driver_id);
+        assert.equal('identity_signature' in sent, false, 'the browser does not sign identities');
+        assert.equal(toggle.disabled, false);
+        assert.equal(supportElement.textContent,
+            'Personal support: 2 trips · Community support: suppressed/unavailable');
+        assert.equal(layers.length, 0, 'cells remain opt-in');
         simulation.routeFamiliarityOverlay.destroy();
     } finally {
         if (priorWindow === undefined) delete globalThis.window;
