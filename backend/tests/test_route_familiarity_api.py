@@ -73,9 +73,11 @@ def test_compose_passes_route_familiarity_opt_in_to_both_api_services():
     for service_name in ("api_1", "api_2"):
         match = re.search(rf"(?ms)^  {service_name}:\n(.*?)(?=^  [\w-]+:|\Z)", compose)
         assert match, f"missing Compose service {service_name}"
-        service = match.group(1)
-        assert "ENABLE_ROUTE_FAMILIARITY=${ENABLE_ROUTE_FAMILIARITY:-false}" in service
-        assert "ROUTE_FAMILIARITY_IDENTITY_SECRET=${ROUTE_FAMILIARITY_IDENTITY_SECRET:-}" in service
+        environment = re.search(r"(?m)^    environment:\n((?:      - .*\n?)+)", match.group(1))
+        assert environment, f"missing environment list for {service_name}"
+        entries = environment.group(1)
+        assert re.search(r"(?m)^      - ENABLE_ROUTE_FAMILIARITY=\$\{ENABLE_ROUTE_FAMILIARITY:-false\}$", entries)
+        assert re.search(r"(?m)^      - ROUTE_FAMILIARITY_IDENTITY_SECRET=\$\{ROUTE_FAMILIARITY_IDENTITY_SECRET:-\}$", entries)
 
 
 @pytest.mark.asyncio
