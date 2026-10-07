@@ -25,6 +25,7 @@
 
 - Malformed, non-finite, out-of-range, dateline-crossing, short, long, repeated-cell, and reversed polylines must reject or produce deterministic signatures safely.
 - H3 set overlap must not make a reversed route a full directional match; overlapping-distance math must stay within `[0, recommended_distance]`.
+- Weighted LCS must use sparse exact matching and a 250,000 matching-pair budget per request; budget exhaustion makes all familiarity assessments `UNAVAILABLE` with zero penalty.
 - No history, disabled feature, database outage, and missing route geometry must never add penalty or alter eligibility.
 - Community aggregation must count distinct drivers and keep one high-volume driver from dominating.
 - Overlay must remain responsive at the cell cap, keep all cells at resolution 11, and show truncation clearly.
@@ -96,6 +97,7 @@
 - [ ] Add `ENABLE_ROUTE_FAMILIARITY=false`, 7-day window, maximum penalty 30s, configurable prior/support parameters, and require a 32-byte identity secret when enabled.
 - [ ] Build complete-route signatures only when destination and both leg geometries are present; pass signatures transiently through combined `/recommend`, leaving signatures/assessments/geometry out of candidate evidence and staged APIs.
 - [ ] Use 50 recent personal-route and 500-route community caps (max 5 routes per driver); expose truncation explicitly. Community values are suppressed below five distinct supporting drivers and never affect rank.
+- [ ] Calculate confidence from all retrieved personal history routes (`n / (n + 3)`), not only matching/supporting trips, so non-overlapping history can justify an unfamiliarity penalty while `NO_HISTORY` remains neutral.
 - [ ] Add assessment to eligible features only, keep physical `eta_to_service_complete_s` unchanged, and add the penalty only to `final_cost_s` ordering.
 - [ ] Prove feature-off deterministic ranking equals baseline, no-history penalty is zero, physical/safety/eligibility are immutable, faster-by-more-than-max wins, and near ties may change.
 - [ ] Rerun affected backend suite and commit `feat: rank with bounded route familiarity`.
