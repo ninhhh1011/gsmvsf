@@ -111,18 +111,25 @@ def _polyline(points):
 
 class BoundedHistoryRepository:
     """Production-service harness with one sentinel row beyond each history cap."""
-    def __init__(self, history_size, signature):
+    def __init__(self, history_size, signature, community_driver_count=101):
         self.history_size = history_size
         self.signature = signature
         self.row = {"driver_id": "synthetic-driver", "cells": signature.cells,
                     "cell_distances_m": signature.cell_distances_m,
                     "distance_m": signature.distance_m, "resolution": signature.resolution}
         community_count = max(history_size - 50, 0)
+        base_time = datetime(2026, 1, 1, tzinfo=UTC)
         self.community = [
-            {**self.row, "driver_id": f"synthetic-driver-{index % 100:03d}",
-             "active_rank": index % 100 + 1, "driver_rank": index // 100 + 1}
-            for index in range(min(community_count, 600))
+            {**self.row, "driver_id": f"synthetic-driver-{index % community_driver_count:03d}",
+             "trip_id": f"synthetic-trip-{index:06d}",
+             "completed_at": base_time - timedelta(minutes=index // community_driver_count),
+             "active_rank": index % community_driver_count + 1,
+             "driver_rank": index // community_driver_count + 1}
+            for index in range(min(community_count, community_driver_count * 6))
         ]
+        self.community.sort(key=lambda row: (
+            -row["completed_at"].timestamp(),
+            -int(row["trip_id"].rsplit("-", 1)[1]), row["driver_id"]))
 
     async def personal_routes(self, *_):
         return [self.row] * min(self.history_size, 50)
@@ -138,8 +145,8 @@ def benchmark_database_rows(size, signature, as_of):
         personal = index < 50
         community_index = index - 50
         driver_id = ("phase4-benchmark-personal" if personal else
-                     f"phase4-benchmark-community-{community_index % 100:03d}")
-        age_minutes = 0 if personal else community_index // 100
+                     f"phase4-benchmark-community-{community_index % 101:03d}")
+        age_minutes = 0 if personal else community_index // 101
         rows.append((driver_id, f"phase4-benchmark-trip-{index:06d}",
                      as_of - timedelta(minutes=age_minutes), signature.distance_m,
                      signature.resolution, list(signature.cells), list(signature.cell_distances_m)))
@@ -241,7 +248,8 @@ async def _postgres_measure(database_url, signature):
                 await service.assess_many("phase4-benchmark-personal", candidates, as_of)
             evaluation = await _measure_async(evaluate)
             personal_plan = await conn.fetch("""EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
+                        SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m,
+                               active_rank, driver_rank
                         FROM realtime.route_familiarity_routes
                         WHERE driver_id=$1 AND completed_at >= $2 AND completed_at <= $3
                         ORDER BY completed_at DESC, trip_id DESC LIMIT 51""",
