@@ -1,11 +1,19 @@
 """Tests for metrics instrumentation."""
 import pytest
+from fastapi.testclient import TestClient
 
 from backend.app.core import metrics
+from backend.app.main import create_app
 
 
 class TestMetricsIncrement:
     """Test that metric functions increment counters."""
+
+    def test_http_request_increments_counter(self):
+        initial = metrics.RECOMMENDATION_REQUESTS.labels(status='200', endpoint='/')._value.get()
+        response = TestClient(create_app()).get('/')
+        assert response.status_code == 200
+        assert metrics.RECOMMENDATION_REQUESTS.labels(status='200', endpoint='/')._value.get() == initial + 1
 
     def test_record_request_increments_counter(self):
         """record_request should increment RECOMMENDATION_REQUESTS counter."""

@@ -23,19 +23,15 @@ def client(app):
 class TestSimulateTickAuth:
     """Test simulate-tick endpoint authentication."""
 
-    def test_simulate_tick_without_auth_returns_401(self, client):
+    def test_simulate_tick_without_auth_returns_401(self, client, monkeypatch):
         """POST /api/v1/snapshots/simulate-tick without token returns 401."""
-        # When ingestion token is configured, endpoint should require auth
-        if not settings.snapshot_ingestion_token:
-            pytest.skip("SNAPSHOT_INGESTION_TOKEN not configured")
-
+        monkeypatch.setattr(settings, 'snapshot_ingestion_token', 'test-ingestion-token')
         response = client.post("/api/v1/snapshots/simulate-tick", json={})
         assert response.status_code == 401
 
-    def test_simulate_tick_with_invalid_token_returns_403(self, client):
+    def test_simulate_tick_with_invalid_token_returns_403(self, client, monkeypatch):
         """POST /api/v1/snapshots/simulate-tick with wrong token returns 403."""
-        if not settings.snapshot_ingestion_token:
-            pytest.skip("SNAPSHOT_INGESTION_TOKEN not configured")
+        monkeypatch.setattr(settings, 'snapshot_ingestion_token', 'test-ingestion-token')
 
         response = client.post(
             "/api/v1/snapshots/simulate-tick",
@@ -43,6 +39,11 @@ class TestSimulateTickAuth:
             headers={"X-Ingestion-Token": "invalid-token-12345"}
         )
         assert response.status_code == 403
+
+    def test_simulate_tick_when_token_unset_returns_503(self, client, monkeypatch):
+        monkeypatch.setattr(settings, 'snapshot_ingestion_token', '')
+        response = client.post("/api/v1/snapshots/simulate-tick", json={})
+        assert response.status_code == 503
 
     def test_simulate_tick_with_valid_token_returns_200_or_503(self, client):
         """POST /api/v1/snapshots/simulate-tick with valid token succeeds or 503 if not initialized."""

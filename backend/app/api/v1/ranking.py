@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from backend.app.config import settings
 from backend.app.services.candidate.models import CandidateSearchRequest
 from backend.app.services.demand.models import DemandContext, RequestedServiceType
-from backend.app.services.demand.service import get_demand_service
+from backend.app.dependencies import get_demand_service
 from backend.app.services.ranking.models import CandidateSearchEvidence, RecommendationResult
 from backend.app.services.realtime.location import resolve_current_location
 from backend.app.services.snapshots.models import (
@@ -114,7 +114,8 @@ async def recommend(request: RecommendRequest, request_obj: Request, workflow=De
         context = request.context
 
         location = resolve_current_location(context.driver_id, context.raw_latitude,
-            context.raw_longitude, context.road_segment_id, context.timestamp)
+            context.raw_longitude, context.road_segment_id, context.timestamp,
+            getattr(request_obj.app.state, "driver_state_store", None))
 
         repo = getattr(workflow, 'repository', None)
         road_seg = location.road_segment_id
@@ -158,6 +159,9 @@ async def recommend(request: RecommendRequest, request_obj: Request, workflow=De
                                                  'location_timestamp': location.timestamp})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    finally:
+        from backend.app.core.metrics import observe_recommendation
+        observe_recommendation('request', perf_counter() - started)
 
 
 async def ingest_snapshot(snapshot, response, service):

@@ -34,6 +34,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         if len(self.requests[client_ip]) >= self.requests_per_minute:
             retry_after = 60
+            from backend.app.core.metrics import record_request
+            route = request.scope.get('route')
+            record_request('429', endpoint=getattr(route, 'path', path))
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Rate limit exceeded. Try again later."},
@@ -41,7 +44,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         self.requests[client_ip].append(now)
-        return await call_next(request)
+        response = await call_next(request)
+        from backend.app.core.metrics import record_request
+        route = request.scope.get('route')
+        record_request(str(response.status_code), endpoint=getattr(route, 'path', path))
+        return response
 
 
 def setup_middleware(app):

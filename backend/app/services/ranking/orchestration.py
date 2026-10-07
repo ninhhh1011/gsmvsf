@@ -59,7 +59,7 @@ class RecommendationWorkflow:
         view = await self.resolver.resolve(keys, request_time) if request.energy_request.need_service else {}
         service = CandidateSearchService(self.routing_engine, SnapshotCatalogView(self.catalog, view))
         result = await service.search_candidates(request)
-        # Week 3's internal clock is datetime.utcnow(); normalize at this boundary.
+        # Normalize legacy naive timestamps at this boundary.
         if result.search_timestamp.tzinfo is None:
             result = result.model_copy(update={
                 'search_timestamp': result.search_timestamp.replace(tzinfo=UTC)})
@@ -101,6 +101,8 @@ class RecommendationWorkflow:
                             service_type=result.recommended_service_type)
                 return result
             except CandidateStateChanged:
+                from backend.app.core.metrics import record_candidate_conflict
+                record_candidate_conflict()
                 metrics['candidate_state_conflicts'] += 1
                 if attempt == 1:
                     raise

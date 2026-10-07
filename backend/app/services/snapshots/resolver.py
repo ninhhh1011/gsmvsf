@@ -95,6 +95,10 @@ class SnapshotResolver:
                 missing_ids.append(sid)
                 misses += 1
         payloads = await self.repository.payloads(missing_ids) if missing_ids else {}
+        if misses:
+            from backend.app.core.metrics import record_db_fallback
+            for _ in range(misses):
+                record_db_fallback()
         for key in keys:
             sid = heads[key]
             if sid and key not in selected:
