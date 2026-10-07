@@ -140,6 +140,11 @@ async def test_history_pairs_metric_counts_each_candidate_and_history_pair_witho
     await RouteFamiliarityService(Repository()).assess_many("private", {("s", "x"): sig(["a"])}, NOW)
     assert metric._value.get() == before + 10
 
+    non_overlapping = dict(row, cells=["different"])
+    await RouteFamiliarityService(Repository(personal=[non_overlapping], community=[non_overlapping])).assess_many(
+        "private", {("s", "x"): sig(["a"])}, NOW)
+    assert metric._value.get() == before + 12
+
 
 @pytest.mark.asyncio
 async def test_missing_route_geometry_is_unavailable_without_history_reads(monkeypatch):
