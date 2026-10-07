@@ -8,12 +8,13 @@ Specifically handles unresolved multi-service requests:
 - DRIVER_REQUEST with requested_service_type=ANY -> evaluates all vehicle-allowed service types
 """
 
-from typing import Iterable
+from collections.abc import Iterable
+
 from backend.app.services.candidate.station_catalog import StationRecord
 from backend.app.services.demand.models import (
     EnergyServiceRequest,
-    RequestSource,
     RequestedServiceType,
+    RequestSource,
     ServiceType,
 )
 

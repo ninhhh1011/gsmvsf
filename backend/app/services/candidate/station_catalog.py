@@ -9,15 +9,12 @@ and queue_status.csv.gz.
 from __future__ import annotations
 
 import csv
-import gzip
 import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
 
 import pandas as pd
-
 from backend.app.config import settings
 from backend.app.services.candidate.models import StationOperationalSnapshot
 from backend.app.services.demand.models import ServiceType
@@ -46,14 +43,14 @@ class StationRecord:
     swap_slots: int
 
 
-def _parse_tokens(value: Optional[str]) -> set[str]:
+def _parse_tokens(value: str | None) -> set[str]:
     """Split comma or semicolon separated tokens into clean lowercase or stripped set."""
     if not value or pd.isna(value):
         return set()
     return {x.strip() for x in str(value).replace(",", ";").split(";") if x.strip()}
 
 
-def floor_iso_timestamp(ts: Union[str, datetime], minutes: int = 10) -> str:
+def floor_iso_timestamp(ts: str | datetime, minutes: int = 10) -> str:
     """Floor ISO timestamp to N-minute intervals matching dataset snapshot granularity."""
     return pd.Timestamp(ts).floor(f"{minutes}min").isoformat()
 
@@ -65,19 +62,19 @@ class StationCatalog:
 
     def __init__(
         self,
-        stations_csv_path: Optional[Path] = None,
-        station_status_path: Optional[Path] = None,
-        queue_status_path: Optional[Path] = None,
+        stations_csv_path: Path | None = None,
+        station_status_path: Path | None = None,
+        queue_status_path: Path | None = None,
     ):
         self.stations_csv_path = stations_csv_path or (settings.dataset_path / "stations/stations.csv")
         self.station_status_path = station_status_path or (settings.dataset_path / "stations/station_status.csv.gz")
         self.queue_status_path = queue_status_path or (settings.dataset_path / "queue/queue_status.csv.gz")
 
         self._stations: dict[str, StationRecord] = {}
-        self._status_df: Optional[pd.DataFrame] = None
-        self._queue_df: Optional[pd.DataFrame] = None
-        self._status_idx: Optional[pd.DataFrame] = None
-        self._queue_idx: Optional[pd.DataFrame] = None
+        self._status_df: pd.DataFrame | None = None
+        self._queue_df: pd.DataFrame | None = None
+        self._status_idx: pd.DataFrame | None = None
+        self._queue_idx: pd.DataFrame | None = None
 
         self._load_stations()
 
@@ -134,7 +131,7 @@ class StationCatalog:
         """Return all 30 stations in catalog order."""
         return list(self._stations.values())
 
-    def get_station(self, station_id: str) -> Optional[StationRecord]:
+    def get_station(self, station_id: str) -> StationRecord | None:
         """Retrieve single station by ID."""
         return self._stations.get(station_id)
 
@@ -142,7 +139,7 @@ class StationCatalog:
         self,
         station_id: str,
         service_type: ServiceType,
-        timestamp: Optional[Union[str, datetime]] = None,
+        timestamp: str | datetime | None = None,
     ) -> StationOperationalSnapshot:
         """
         Get point-in-time operational snapshot for a station and service type.

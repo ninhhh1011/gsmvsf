@@ -128,18 +128,19 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
     const sType = recResult.recommended_service_type || topCandidate?.service_type;
     const isSwap = sType === 'BATTERY_SWAP';
 
-    const baseTravelMin = topCandidate.features.base_travel_duration_s != null 
-        ? (topCandidate.features.base_travel_duration_s / 60).toFixed(1) 
-        : (topCandidate.eta_to_station_s / 60).toFixed(1);
-    const trafficAdjSec = topCandidate.features.traffic_adjustment_s || 0;
+    const feats = topCandidate?.features || {};
+    const baseTravelMin = feats.base_travel_duration_s != null 
+        ? (feats.base_travel_duration_s / 60).toFixed(1) 
+        : ((topCandidate?.eta_to_station_s || 0) / 60).toFixed(1);
+    const trafficAdjSec = feats.traffic_adjustment_s || 0;
     const trafficAdjMin = (trafficAdjSec / 60).toFixed(1);
-    const etaStationMin = (topCandidate.eta_to_station_s / 60).toFixed(1);
-    const etaStartMin = (topCandidate.eta_to_service_start_s / 60).toFixed(1);
-    const etaCompleteMin = (topCandidate.eta_to_service_complete_s / 60).toFixed(1);
-    const detourMin = topCandidate.features.detour_duration_s != null ? (topCandidate.features.detour_duration_s / 60).toFixed(1) : '0.0';
-    const detourDistKm = topCandidate.features.detour_distance_m != null ? (topCandidate.features.detour_distance_m / 1000).toFixed(1) : '0.0';
-    const queueWaitMin = (topCandidate.features.effective_queue_wait_s / 60).toFixed(1);
-    const serviceMin = (topCandidate.features.service_duration_s / 60).toFixed(1);
+    const etaStationMin = ((topCandidate?.eta_to_station_s || 0) / 60).toFixed(1);
+    const etaStartMin = ((topCandidate?.eta_to_service_start_s || 0) / 60).toFixed(1);
+    const etaCompleteMin = ((topCandidate?.eta_to_service_complete_s || 0) / 60).toFixed(1);
+    const detourMin = feats.detour_duration_s != null ? (feats.detour_duration_s / 60).toFixed(1) : '0.0';
+    const detourDistKm = feats.detour_distance_m != null ? (feats.detour_distance_m / 1000).toFixed(1) : '0.0';
+    const queueWaitMin = ((feats.effective_queue_wait_s || 0) / 60).toFixed(1);
+    const serviceMin = ((feats.service_duration_s || 0) / 60).toFixed(1);
 
     const isDegraded = recResult.degraded;
     const degradedBadges = (recResult.degraded_reasons || []).map(r => `<span class="badge badge-warning">${r}</span>`).join(' ');

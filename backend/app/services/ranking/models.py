@@ -1,15 +1,19 @@
 """Ranking contracts preserve Week 2/3 models and expose costs in seconds."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Literal
 from uuid import uuid4
-from typing import Literal, Optional
-
-from pydantic import Field, field_validator
 
 from backend.app.services.candidate.models import CandidateSearchResult
 from backend.app.services.demand.models import EnergyServiceRequest, ServiceType
 from backend.app.services.snapshots.models import (
-    Count, FrozenModel, Nonnegative, ResolvedSnapshot, StateError, aware_utc,
+    Count,
+    FrozenModel,
+    Nonnegative,
+    ResolvedSnapshot,
+    StateError,
+    aware_utc,
 )
+from pydantic import Field, field_validator
 
 
 class RankingPolicy(FrozenModel):
@@ -22,15 +26,15 @@ class RankingPolicy(FrozenModel):
 
 class CandidateSearchEvidence(FrozenModel):
     candidate_search_id: str = Field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     request_time: datetime
     energy_request: EnergyServiceRequest
     result: CandidateSearchResult
     snapshot_ids: dict[str, str | None]
     catalog_digest: str
     # Destination coordinates for familiarity calculation
-    destination_lat: Optional[float] = None
-    destination_lng: Optional[float] = None
+    destination_lat: float | None = None
+    destination_lng: float | None = None
 
     _time = field_validator('request_time', 'created_at')(aware_utc)
 

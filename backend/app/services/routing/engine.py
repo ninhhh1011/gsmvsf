@@ -5,32 +5,28 @@ Defines the engine-independent protocol for production and test routing adapters
 """
 
 from typing import Protocol, runtime_checkable
+
 from backend.app.services.routing.models import RouteRequest, RouteResult, RouteStatus
 
 
 class RoutingEngineError(Exception):
     """Base exception for routing engine failures."""
-    pass
 
 
 class RoutingEngineUnavailableError(RoutingEngineError):
     """Routing engine backend is unreachable or unhealthy."""
-    pass
 
 
 class RouteNotFoundError(RoutingEngineError):
     """No viable route between requested points on the road network."""
-    pass
 
 
 class RoutingTimeoutError(RoutingEngineError):
     """Routing engine query timed out."""
-    pass
 
 
 class RoutingInvalidRequestError(RoutingEngineError):
     """Invalid routing coordinates, waypoints, or profile."""
-    pass
 
 
 def raise_for_routing_failure(result: RouteResult) -> None:

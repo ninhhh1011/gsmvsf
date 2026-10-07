@@ -6,14 +6,12 @@ vehicle catalog (dataset_v1/vehicles/vehicle_model_catalog.csv).
 Does NOT use ML. Does NOT use category-level shortcuts (e.g. EV_MOTORBIKE != swap capable).
 """
 
-from pathlib import Path
-from typing import Optional
 import csv
 import logging
+from pathlib import Path
 
 from backend.app.config import settings
 from backend.app.services.demand.models import (
-    ServiceType,
     VehicleCapability,
     VehicleCategory,
 )
@@ -23,12 +21,10 @@ logger = logging.getLogger(__name__)
 
 class UnknownVehicleModelError(ValueError):
     """Raised when an unrecognized vehicle model is encountered."""
-    pass
 
 
 class UnknownVehicleError(ValueError):
     """Raised when an unrecognized vehicle ID is queried."""
-    pass
 
 
 # Static canonical model registry for all 19 official VinFast models
@@ -285,7 +281,7 @@ class VehicleCapabilityResolver:
     Resolver for vehicle models and fleet vehicle instances.
     """
 
-    def __init__(self, dataset_path: Optional[Path] = None):
+    def __init__(self, dataset_path: Path | None = None):
         self._dataset_path = dataset_path or settings.dataset_path
         self._models = dict(CANONICAL_MODEL_CATALOG)
         self._vehicles: dict[str, dict] = {}
@@ -339,7 +335,7 @@ class VehicleCapabilityResolver:
 
         return self.resolve_by_model(model_name)
 
-    def get_vehicle_record(self, vehicle_id: str) -> Optional[dict]:
+    def get_vehicle_record(self, vehicle_id: str) -> dict | None:
         """Return raw vehicle record dict for a given vehicle_id, if known."""
         return self._vehicles.get(vehicle_id)
 
@@ -348,13 +344,21 @@ class VehicleCapabilityResolver:
         cap = self.resolve_by_model(vehicle_model)
         return cap.swap_supported
 
+    def register_model(self, model_name: str, capability: VehicleCapability) -> None:
+        """Register or override a vehicle model capability (supports any EV brand/model)."""
+        self._models[model_name.strip().upper()] = capability
+
+    def register_vehicle(self, vehicle_id: str, vehicle_record: dict) -> None:
+        """Register or override a vehicle record."""
+        self._vehicles[vehicle_id.strip()] = vehicle_record
+
     def list_all_models(self) -> list[str]:
         """Return list of all registered models."""
         return sorted(self._models.keys())
 
 
 # Global singleton instance
-_global_resolver: Optional[VehicleCapabilityResolver] = None
+_global_resolver: VehicleCapabilityResolver | None = None
 
 
 def get_capability_resolver() -> VehicleCapabilityResolver:

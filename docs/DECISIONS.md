@@ -394,3 +394,32 @@ hardening remain Week 6/future scope.
 3. Ensure background singleton tasks (such as the `RealtimeSimulator`) execute on designated replica `api_1` while `api_2` operates purely on request serving to avoid duplicate snapshot generation.
 4. Verify zero-downtime resilience: terminating one API replica results in seamless request forwarding to the healthy replica without dropped client requests.
 
+
+## ADR-020: Production Readiness Overhaul — Dead Code Elimination, Async DB Unification & Frontend Modularization
+
+**Date:** 2026-10-07. **Status:** Approved.
+
+**Context:** External architectural evaluation identified several critical maintainability, testing, and production weaknesses:
+1. Over 1,500 lines of dead code in an unused `route_history` service.
+2. Inconsistent sync/async database execution mixing `psycopg2` and `asyncpg` within async FastAPI handlers.
+3. Abuse of global singletons for state and dependencies.
+4. Hardcoded assumptions for Hanoi and VinFast vehicles, preventing multi-city and multi-brand deployment.
+5. Monolithic `driver_mode.js` (~2,529 lines) with zero automated frontend test coverage.
+6. Undefined variable bugs (`DriverTraceState`, `origin=origin`, `window` in Node.js).
+
+**Decision:**
+1. **Dead Code Elimination:** Completely delete `route_history` service, models, repositories, API endpoints, and associated scripts (>5,600 lines eliminated). Remove all references across configuration, docker-compose, and test suites.
+2. **Unified Database Execution Model:** Standardize all FastAPI async routes on `asyncpg` connection pooling registered via application lifespan (`core/lifespan.py`). Eliminate synchronous blocking `psycopg2` calls in `health.py`. Wrap low-level database errors in domain exceptions (`SegmentResolverUnavailableError`, `SegmentResolverError`) so controllers remain decoupled from the driver.
+3. **Explicit Dependency Injection:** Eliminate hidden global singletons. Wire services and adapters into `request.app.state` during application lifespan. Inject services into routes via explicit FastAPI `Depends()`, supporting clean mocking in unit tests while retaining isolated testing fallbacks.
+4. **Environment-Driven Configuration & Multi-Brand Catalog:** Parameterize city center, bounding box coordinates, and default zoom levels in `config.py` and `.env.example`. Expose `GET /api/v1/config` for frontend bootstrapping. Support dynamic multi-brand EV registration (`register_model`, `register_vehicle`) supporting non-VinFast brands (Tesla, BYD, Hyundai, Dat Bike) and multiple Vietnamese cities (Hanoi, HCMC, Da Nang).
+5. **Modular Frontend Decomposition:** Decompose monolithic `driver_mode.js` into cohesive single-responsibility domain modules:
+   - `domain/vehicle_model.js`: Battery physics, consumption, range calculation, multi-brand specs.
+   - `domain/driver_state.js`: Driver state machine and transition validation.
+   - `domain/navigation_tracker.js`: Route progress tracking, off-route detection, reroute throttling.
+   - `domain/station_evaluator.js`: Station compatibility and candidate filtering.
+   - `ui/cockpit_renderer.js`: Pure HTML card template generation (Available, Offline, Complete).
+   - `ui/drawer_renderer.js`: Station drawer card markup for en-route vs at-destination intents.
+   - `ui/map_picker.js`: Interactive origin/destination coordinate selection state machine.
+6. **Automated Frontend Testing:** Establish 54 pure Node.js automated unit and scenario tests (`node --test tests/frontend/*.mjs`), executable via `npm test` and `make test-frontend`, testing all domain logic without browser DOM overhead.
+
+

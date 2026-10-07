@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 from backend.app.services.candidate.models import CandidateRouteMetrics
 from backend.app.services.routing.engine import RoutingEngine, raise_for_routing_failure
@@ -48,10 +47,10 @@ class MultiLegRouteCalculator:
     async def compute_direct_route(
         self,
         driver_pos: Position,
-        destination_pos: Optional[Position],
-        profile: Optional[VehicleRoutingProfile] = None,
-        constraints: Optional[RouteConstraints] = None,
-    ) -> Optional[RouteResult]:
+        destination_pos: Position | None,
+        profile: VehicleRoutingProfile | None = None,
+        constraints: RouteConstraints | None = None,
+    ) -> RouteResult | None:
         """
         Compute direct driver -> destination route once for the candidate search request.
         """
@@ -67,11 +66,11 @@ class MultiLegRouteCalculator:
         self,
         driver_pos: Position,
         station_pos: Position,
-        destination_pos: Optional[Position] = None,
-        cached_direct_route: Optional[RouteResult] = None,
-        profile: Optional[VehicleRoutingProfile] = None,
-        constraints: Optional[RouteConstraints] = None,
-    ) -> tuple[bool, Optional[CandidateRouteMetrics], Optional[RouteResult]]:
+        destination_pos: Position | None = None,
+        cached_direct_route: RouteResult | None = None,
+        profile: VehicleRoutingProfile | None = None,
+        constraints: RouteConstraints | None = None,
+    ) -> tuple[bool, CandidateRouteMetrics | None, RouteResult | None]:
         """
         Compute complete route metrics for a station candidate.
         Returns:
@@ -151,11 +150,11 @@ class MultiLegRouteCalculator:
         self,
         driver_pos: Position,
         station_positions: dict[str, Position],
-        destination_pos: Optional[Position],
-        profile: Optional[VehicleRoutingProfile] = None,
-        cached_direct_route: Optional[RouteResult] = None,
-        constraints: Optional[RouteConstraints] = None,
-    ) -> dict[str, tuple[bool, Optional[CandidateRouteMetrics], Optional[RouteResult]]]:
+        destination_pos: Position | None,
+        profile: VehicleRoutingProfile | None = None,
+        cached_direct_route: RouteResult | None = None,
+        constraints: RouteConstraints | None = None,
+    ) -> dict[str, tuple[bool, CandidateRouteMetrics | None, RouteResult | None]]:
         """
         Compute route metrics for all stations concurrently with bounded parallelism.
 
@@ -188,7 +187,7 @@ class MultiLegRouteCalculator:
         async def compute_one(
             station_id: str,
             station_pos: Position,
-        ) -> tuple[str, bool, Optional[CandidateRouteMetrics], Optional[RouteResult]]:
+        ) -> tuple[str, bool, CandidateRouteMetrics | None, RouteResult | None]:
             async with semaphore:
                 result = await self.compute_station_metrics(
                     driver_pos=driver_pos,

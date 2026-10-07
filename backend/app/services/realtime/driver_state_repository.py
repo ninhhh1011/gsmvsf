@@ -10,14 +10,15 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
-from typing import Optional
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.app.services.realtime.state import DriverTraceState
 
 import redis.asyncio as redis
-
 from backend.app.config import settings
-
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +51,9 @@ class GPSObservation:
     timestamp: datetime
     latitude: float
     longitude: float
-    speed_kmh: Optional[float] = None
-    heading_deg: Optional[float] = None
-    accuracy_m: Optional[float] = None
+    speed_kmh: float | None = None
+    heading_deg: float | None = None
+    accuracy_m: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -67,7 +68,7 @@ class GPSObservation:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GPSObservation":
+    def from_dict(cls, data: dict) -> GPSObservation:
         ts = data["timestamp"]
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
@@ -87,11 +88,11 @@ class GPSObservation:
 class MatchedState:
     matched_latitude: float
     matched_longitude: float
-    road_segment_id: Optional[str] = None
-    osm_way_id: Optional[int] = None
-    direction: Optional[str] = None
-    confidence: Optional[float] = None
-    route_geometry: Optional[str] = None
+    road_segment_id: str | None = None
+    osm_way_id: int | None = None
+    direction: str | None = None
+    confidence: float | None = None
+    route_geometry: str | None = None
     matched_at: datetime = field(default_factory=datetime.utcnow)
 
     def to_dict(self) -> dict:
@@ -107,7 +108,7 @@ class MatchedState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "MatchedState":
+    def from_dict(cls, data: dict) -> MatchedState:
         matched_at = data.get("matched_at")
         if isinstance(matched_at, str):
             matched_at = datetime.fromisoformat(matched_at.replace("Z", "+00:00"))
@@ -132,16 +133,16 @@ class DriverTraceStateSnapshot:
     """
     driver_id: str
     observations: list[dict] = field(default_factory=list)  # Serialized GPSObservation
-    last_match_time: Optional[str] = None  # ISO format
-    last_matched_state: Optional[dict] = None  # Serialized MatchedState
+    last_match_time: str | None = None  # ISO format
+    last_matched_state: dict | None = None  # Serialized MatchedState
     movement_since_match: float = 0.0
-    last_observation_timestamp: Optional[str] = None  # ISO format
+    last_observation_timestamp: str | None = None  # ISO format
     observations_since_match: int = 0
     consecutive_stationary: int = 0
     total_observations_received: int = 0
     total_match_calls: int = 0
-    last_trigger_reason: Optional[str] = None
-    last_match_latency_ms: Optional[float] = None
+    last_trigger_reason: str | None = None
+    last_match_latency_ms: float | None = None
     current_status: str = "WARMING_UP"
     version: int = 1  # For optimistic concurrency control
     generation: int = 1  # Incremented on reset to invalidate old requests
@@ -152,7 +153,7 @@ class DriverTraceStateSnapshot:
         return json.dumps(asdict(self), default=str)
 
     @classmethod
-    def from_json(cls, raw: str) -> "DriverTraceStateSnapshot":
+    def from_json(cls, raw: str) -> DriverTraceStateSnapshot:
         data = json.loads(raw)
         # Handle missing seen_payloads for old snapshots
         if 'seen_payloads' not in data:
@@ -166,7 +167,7 @@ class DriverTraceStateSnapshot:
         result.extend(obs)
         return result
 
-    def to_matched_state(self) -> Optional[MatchedState]:
+    def to_matched_state(self) -> MatchedState | None:
         if self.last_matched_state:
             return MatchedState.from_dict(self.last_matched_state)
         return None
@@ -184,14 +185,12 @@ class DriverStateRepository(ABC):
     """Abstract interface for driver state persistence."""
 
     @abstractmethod
-    async def get(self, driver_id: str) -> Optional[DriverTraceStateSnapshot]:
+    async def get(self, driver_id: str) -> DriverTraceStateSnapshot | None:
         """Load driver state snapshot."""
-        pass
 
     @abstractmethod
     async def save(self, snapshot: DriverTraceStateSnapshot) -> bool:
         """Save driver state snapshot. Returns True on success."""
-        pass
 
     @abstractmethod
     async def save_with_expected_version(
@@ -205,22 +204,18 @@ class DriverStateRepository(ABC):
 
         Use this for CAS (Compare-And-Swap) pattern to prevent lost updates.
         """
-        pass
 
     @abstractmethod
     async def delete(self, driver_id: str) -> bool:
         """Delete driver state."""
-        pass
 
     @abstractmethod
     async def list_drivers(self) -> list[str]:
         """List all active driver IDs."""
-        pass
 
     @abstractmethod
     async def health_check(self) -> bool:
         """Check if repository is healthy."""
-        pass
 
 
 class InMemoryDriverStateRepository(DriverStateRepository):
@@ -229,7 +224,7 @@ class InMemoryDriverStateRepository(DriverStateRepository):
     def __init__(self):
         self._states: dict[str, DriverTraceStateSnapshot] = {}
 
-    async def get(self, driver_id: str) -> Optional[DriverTraceStateSnapshot]:
+    async def get(self, driver_id: str) -> DriverTraceStateSnapshot | None:
         return self._states.get(driver_id)
 
     async def save(self, snapshot: DriverTraceStateSnapshot) -> bool:
@@ -301,12 +296,12 @@ class RedisDriverStateRepository(DriverStateRepository):
 
     def __init__(
         self,
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
         driver_state_ttl: int = 3600,  # 1 hour
         max_drivers: int = 10000,
     ):
         self._redis_url = redis_url or settings.redis_url
-        self._client: Optional[redis.Redis] = None
+        self._client: redis.Redis | None = None
         self._driver_state_ttl = driver_state_ttl
         self._max_drivers = max_drivers
 
@@ -318,7 +313,7 @@ class RedisDriverStateRepository(DriverStateRepository):
     def _key(self, driver_id: str) -> str:
         return f"{self.KEY_PREFIX}{driver_id}"
 
-    async def get(self, driver_id: str) -> Optional[DriverTraceStateSnapshot]:
+    async def get(self, driver_id: str) -> DriverTraceStateSnapshot | None:
         client = await self._get_client()
         raw = await client.get(self._key(driver_id))
         if raw is None:
@@ -473,7 +468,7 @@ class RedisDriverStateRepository(DriverStateRepository):
 
 
 # Global repository instance
-_driver_state_repo: Optional[DriverStateRepository] = None
+_driver_state_repo: DriverStateRepository | None = None
 
 
 def get_driver_state_repository() -> DriverStateRepository:

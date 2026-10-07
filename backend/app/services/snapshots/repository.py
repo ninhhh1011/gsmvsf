@@ -6,7 +6,6 @@ from pathlib import Path
 from uuid import UUID
 
 import asyncpg
-
 from backend.app.services.ranking.models import CandidateSearchEvidence
 from backend.app.services.snapshots.models import Snapshot, StateError, aware_utc, snapshot_adapter
 

@@ -5,10 +5,8 @@ Converges AUTO_DETECTED demand evaluation and explicit DRIVER_REQUEST
 into a single, canonical EnergyServiceRequest contract for Week 3 consumption.
 """
 
-from datetime import datetime
-from typing import Optional
-import uuid
 import logging
+import uuid
 
 from backend.app.services.demand.auto_detector import AutoDemandDetector
 from backend.app.services.demand.capability import (
@@ -19,10 +17,8 @@ from backend.app.services.demand.driver_requester import DriverRequestProcessor
 from backend.app.services.demand.models import (
     DemandContext,
     EnergyServiceRequest,
-    ReasonCode,
     RequestedServiceType,
     RequestSource,
-    ServiceType,
     VehicleCapability,
 )
 
@@ -36,9 +32,9 @@ class DemandService:
 
     def __init__(
         self,
-        capability_resolver: Optional[VehicleCapabilityResolver] = None,
-        auto_detector: Optional[AutoDemandDetector] = None,
-        driver_requester: Optional[DriverRequestProcessor] = None,
+        capability_resolver: VehicleCapabilityResolver | None = None,
+        auto_detector: AutoDemandDetector | None = None,
+        driver_requester: DriverRequestProcessor | None = None,
     ):
         self._resolver = capability_resolver or get_capability_resolver()
         self._auto_detector = auto_detector or AutoDemandDetector(self._resolver)
@@ -51,7 +47,7 @@ class DemandService:
     def _populate_vehicle_metadata(
         self,
         capability: VehicleCapability,
-        vehicle_record: Optional[dict] = None,
+        vehicle_record: dict | None = None,
     ) -> dict:
         """Extract metadata for EnergyServiceRequest."""
         meta = {
@@ -75,7 +71,7 @@ class DemandService:
     def evaluate_auto_demand(
         self,
         context: DemandContext,
-        service_request_id: Optional[str] = None,
+        service_request_id: str | None = None,
     ) -> EnergyServiceRequest:
         """
         Evaluate vehicle telemetry in AUTO_DETECTED mode and create an EnergyServiceRequest.
@@ -125,7 +121,7 @@ class DemandService:
         self,
         context: DemandContext,
         requested_service: RequestedServiceType,
-        service_request_id: Optional[str] = None,
+        service_request_id: str | None = None,
     ) -> EnergyServiceRequest:
         """
         Process explicit DRIVER_REQUEST and create an EnergyServiceRequest.
@@ -196,11 +192,13 @@ class DemandService:
 
 
 # Global service instance
-_global_service: Optional[DemandService] = None
+_global_service: DemandService | None = None
 
 
-def get_demand_service() -> DemandService:
-    """Get global DemandService instance."""
+def get_demand_service(request: object | None = None) -> DemandService:
+    """Get DemandService instance, resolving from request.app.state if available."""
+    if request and hasattr(request, "app") and getattr(request.app.state, "demand_service", None) is not None:
+        return request.app.state.demand_service
     global _global_service
     if _global_service is None:
         _global_service = DemandService()

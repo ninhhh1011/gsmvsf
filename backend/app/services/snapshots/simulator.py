@@ -9,10 +9,10 @@ pass IngestionService validation rules.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 import logging
 import random
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from backend.app.services.candidate.station_catalog import station_catalog
 from backend.app.services.snapshots.ingestion import IngestionService
@@ -176,14 +176,14 @@ class RealtimeSimulator:
     def __init__(
         self,
         catalog=station_catalog,
-        segment_ids: Optional[list[str]] = None,
-        station_limit: Optional[int] = None,
-        seed: Optional[int] = 42,
+        segment_ids: list[str] | None = None,
+        station_limit: int | None = None,
+        seed: int | None = 42,
     ):
         self.catalog = catalog
         self.rng = random.Random(seed)
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
         # Initialize station states
         all_stations = catalog.get_all_stations()
@@ -200,9 +200,9 @@ class RealtimeSimulator:
             for seg in active_segments
         }
 
-    def generate_tick_snapshots(self, timestamp: Optional[datetime] = None) -> list[Snapshot]:
+    def generate_tick_snapshots(self, timestamp: datetime | None = None) -> list[Snapshot]:
         """Generate a complete set of validated snapshots for current tick."""
-        ts = aware_utc(timestamp or datetime.now(timezone.utc))
+        ts = aware_utc(timestamp or datetime.now(UTC))
         source = "simulator"
         snapshots: list[Snapshot] = []
 
@@ -231,7 +231,7 @@ class RealtimeSimulator:
 
         return snapshots
 
-    async def tick(self, ingestion_service: IngestionService, timestamp: Optional[datetime] = None) -> int:
+    async def tick(self, ingestion_service: IngestionService, timestamp: datetime | None = None) -> int:
         """Execute one simulation tick and ingest snapshots into database and cache."""
         snapshots = self.generate_tick_snapshots(timestamp=timestamp)
         # Ingest all snapshots via canonical ingestion pipeline
@@ -239,7 +239,7 @@ class RealtimeSimulator:
         logger.info(
             "Simulated tick ingested %d operational snapshots at %s",
             created,
-            (timestamp or datetime.now(timezone.utc)).isoformat(),
+            (timestamp or datetime.now(UTC)).isoformat(),
         )
         return created
 

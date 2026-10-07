@@ -1,7 +1,7 @@
 """Build ranking context from persisted evidence without reevaluating eligibility."""
+import json
 from dataclasses import asdict
 from hashlib import sha256
-import json
 from math import isfinite
 
 from backend.app.services.candidate.eligibility import CANDIDATE_MAX_WAIT_MIN
@@ -9,7 +9,11 @@ from backend.app.services.candidate.models import StationOperationalSnapshot
 from backend.app.services.demand.models import ServiceType
 from backend.app.services.ranking.models import CandidateRankingFeatures, CandidateStateChanged
 from backend.app.services.snapshots.models import (
-    QueueSnapshot, ResolvedSnapshot, StateError, StationStateSnapshot, aware_utc,
+    QueueSnapshot,
+    ResolvedSnapshot,
+    StateError,
+    StationStateSnapshot,
+    aware_utc,
 )
 
 

@@ -1,23 +1,32 @@
 {
   "name": "build6week",
   "version": "1.0.0",
-  "description": "Python/FastAPI, PostgreSQL/PostGIS, Redis KV, GraphHopper 11.0 and Docker.",
+  "description": "VinFast EV Energy & Charging Recommendation System - Realtime API & Simulation Cockpit",
   "main": "index.js",
+  "type": "commonjs",
   "directories": {
     "doc": "docs",
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/frontend/*.mjs",
+    "test:frontend": "node --test tests/frontend/*.mjs",
+    "test:e2e": "playwright test"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ninhhh1011/gsmvsf.git"
   },
-  "keywords": [],
+  "keywords": [
+    "ev",
+    "charging",
+    "routing",
+    "graphhopper",
+    "fastapi",
+    "postgis"
+  ],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/ninhhh1011/gsmvsf/issues"
   },

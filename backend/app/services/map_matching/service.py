@@ -1,7 +1,11 @@
 """Shared batch/realtime matching pipeline; no engine-specific business branching."""
 from backend.app.services.graphhopper import resolve_vehicle_category
 from backend.app.services.map_matching.engine import MapMatchingEngine, MapMatchingEngineError
-from backend.app.services.map_matching.models import MapMatchResponse, MatchedObservation, ResolutionStatus
+from backend.app.services.map_matching.models import (
+    MapMatchResponse,
+    MatchedObservation,
+    ResolutionStatus,
+)
 
 
 class MapMatchingService:

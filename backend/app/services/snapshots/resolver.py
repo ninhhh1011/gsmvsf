@@ -1,15 +1,14 @@
 """Pin DB versions once; use Redis only for validated immutable payloads."""
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import perf_counter
-
-from pydantic import ValidationError
-from redis.exceptions import RedisError
 
 from backend.app.core.logging import get_logger
 from backend.app.services.ranking.models import RankingPolicy
 from backend.app.services.snapshots.models import ResolvedSnapshot, StateError, snapshot_adapter
+from pydantic import ValidationError
+from redis.exceptions import RedisError
 
 logger = get_logger(__name__)
 
@@ -60,7 +59,7 @@ class SnapshotCache:
 
     async def populate_latest(self, repository, keys):
         """An empty/expired cache must not turn a historical read into latest state."""
-        heads = await repository.heads(list(keys), datetime.max.replace(tzinfo=timezone.utc))
+        heads = await repository.heads(list(keys), datetime.max.replace(tzinfo=UTC))
         values = await repository.payloads([sid for sid in heads.values() if sid])
         for snapshot in values.values():
             await self.put(snapshot)

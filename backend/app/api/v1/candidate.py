@@ -8,39 +8,47 @@ Provides:
 """
 
 from datetime import datetime
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 
 from backend.app.services.candidate.models import (
     CandidateSearchRequest,
     CandidateSearchResult,
 )
 from backend.app.services.candidate.service import CandidateSearchService
-from backend.app.services.demand.models import DemandContext, EnergyServiceRequest, RequestedServiceType
+from backend.app.services.demand.models import (
+    DemandContext,
+    EnergyServiceRequest,
+    RequestedServiceType,
+)
 from backend.app.services.demand.service import get_demand_service
 from backend.app.services.realtime.location import resolve_current_location
-from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from backend.app.services.routing.engine import (
-    RoutingEngineError, RoutingInvalidRequestError, RoutingTimeoutError,
-    RouteNotFoundError, raise_for_routing_failure,
+    RouteNotFoundError,
+    RoutingEngineError,
+    RoutingInvalidRequestError,
+    RoutingTimeoutError,
+    raise_for_routing_failure,
 )
+from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from backend.app.services.routing.models import RouteRequest, RouteResult, RouteStatus
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
-_candidate_service_instance: Optional[CandidateSearchService] = None
+_candidate_service_instance: CandidateSearchService | None = None
 
 
-def get_candidate_service() -> CandidateSearchService:
-    """Singleton provider for CandidateSearchService with GraphHopper routing."""
+def get_candidate_service(request: Request = None) -> CandidateSearchService:
+    """Resolve CandidateSearchService from request.app.state, with singleton fallback for testing."""
+    if request is not None and hasattr(request, "app") and getattr(request.app.state, "candidate_service", None) is not None:
+        return request.app.state.candidate_service
     global _candidate_service_instance
     if _candidate_service_instance is None:
         _candidate_service_instance = CandidateSearchService(routing_engine=GraphHopperRoutingAdapter())
     return _candidate_service_instance
 
 
-def set_candidate_service(service: Optional[CandidateSearchService]) -> None:
+def set_candidate_service(service: CandidateSearchService | None) -> None:
     """Override singleton for testing."""
     global _candidate_service_instance
     _candidate_service_instance = service
@@ -77,26 +85,26 @@ class EvaluateAndSearchApiRequest(BaseModel):
     Unified payload providing telemetry to evaluate demand and search candidates.
     """
     vehicle_id: str
-    driver_id: Optional[str] = None
-    trip_id: Optional[str] = None
-    timestamp: Optional[datetime] = None
-    current_soc_pct: Optional[float] = Field(None, description="Battery SOC percentage (0-100)")
-    estimated_remaining_range_km: Optional[float] = None
-    remaining_trip_distance_km: Optional[float] = None
-    distance_travelled_km: Optional[float] = None
-    planned_trip_distance_km: Optional[float] = None
-    safety_reserve_km: Optional[float] = None
-    raw_latitude: Optional[float] = None
-    raw_longitude: Optional[float] = None
-    road_segment_id: Optional[str] = None
+    driver_id: str | None = None
+    trip_id: str | None = None
+    timestamp: datetime | None = None
+    current_soc_pct: float | None = Field(None, description="Battery SOC percentage (0-100)")
+    estimated_remaining_range_km: float | None = None
+    remaining_trip_distance_km: float | None = None
+    distance_travelled_km: float | None = None
+    planned_trip_distance_km: float | None = None
+    safety_reserve_km: float | None = None
+    raw_latitude: float | None = None
+    raw_longitude: float | None = None
+    road_segment_id: str | None = None
 
     # Trip destination coordinates for route/detour calculations
-    destination_latitude: Optional[float] = None
-    destination_longitude: Optional[float] = None
-    destination_node_id: Optional[str] = None
+    destination_latitude: float | None = None
+    destination_longitude: float | None = None
+    destination_node_id: str | None = None
 
-    requested_service: Optional[RequestedServiceType] = None
-    max_candidates: Optional[int] = None
+    requested_service: RequestedServiceType | None = None
+    max_candidates: int | None = None
     eligible_only: bool = False
 
 

@@ -1,5 +1,6 @@
 """Demand detection and energy service request services."""
 from backend.app.services.demand.models import (
+    DemandContext,
     EnergyServiceRequest,
     NeedServiceDecision,
     ReasonCode,
@@ -8,7 +9,6 @@ from backend.app.services.demand.models import (
     ServiceType,
     VehicleCapability,
     VehicleCategory,
-    DemandContext,
 )
 from backend.app.services.demand.service import (
     DemandService,
@@ -17,16 +17,16 @@ from backend.app.services.demand.service import (
 )
 
 __all__ = [
+    "DemandContext",
+    "DemandService",
     "EnergyServiceRequest",
     "NeedServiceDecision",
     "ReasonCode",
-    "RequestedServiceType",
     "RequestSource",
+    "RequestedServiceType",
     "ServiceType",
     "VehicleCapability",
     "VehicleCategory",
-    "DemandContext",
-    "DemandService",
     "get_demand_service",
     "reset_demand_service",
 ]

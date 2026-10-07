@@ -1,43 +1,56 @@
 """Liveness and readiness of the sole production engine and segment database."""
 import asyncio
-from contextlib import closing
+
+import asyncpg
 import httpx
-import psycopg2
-from fastapi import APIRouter, HTTPException
 from backend.app.config import settings
 from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
+from fastapi import APIRouter, HTTPException, Request
+from redis.asyncio import Redis
 
 router = APIRouter()
 
-def _database_ready():
-    try:
-        with closing(psycopg2.connect(settings.database_url_sync, connect_timeout=3)) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT EXISTS(SELECT 1 FROM road_segments LIMIT 1)")
-                return cur.fetchone()[0]
-    except psycopg2.Error:
-        return False
 
-
-def _redis_ready():
-    """Check Redis connectivity for driver state and snapshot cache."""
+async def _database_ready(pool: asyncpg.Pool | None = None) -> bool:
+    """Asynchronously check PostgreSQL/PostGIS connectivity."""
     try:
-        import redis
-        r = redis.from_url(settings.redis_url, socket_connect_timeout=3)
-        r.ping()
-        r.close()
-        return True
+        if pool is not None:
+            async with pool.acquire() as conn:
+                return bool(await conn.fetchval("SELECT EXISTS(SELECT 1 FROM road_segments LIMIT 1)"))
+        dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+        conn = await asyncpg.connect(dsn, timeout=3.0)
+        try:
+            return bool(await conn.fetchval("SELECT EXISTS(SELECT 1 FROM road_segments LIMIT 1)"))
+        finally:
+            await conn.close()
     except Exception:
         return False
 
 
-async def dependencies_ready():
-    """Check all required dependencies for recommendation service."""
+async def _redis_ready(redis_client: Redis | None = None) -> bool:
+    """Asynchronously check Redis connectivity for driver state and snapshot cache."""
+    try:
+        if redis_client is not None:
+            return bool(await redis_client.ping())
+        r = Redis.from_url(settings.redis_url, socket_connect_timeout=3.0, socket_timeout=3.0)
+        try:
+            return bool(await r.ping())
+        finally:
+            await r.aclose()
+    except Exception:
+        return False
+
+
+async def dependencies_ready(request: Request | None = None):
+    """Check all required dependencies for recommendation service asynchronously."""
+    pool = getattr(request.app.state, "db_pool", None) if request and hasattr(request, "app") else None
+    redis_client = getattr(request.app.state, "redis", None) if request and hasattr(request, "app") else None
+
     async with httpx.AsyncClient(timeout=5) as client:
         routing, database, redis_state = await asyncio.gather(
             GraphHopperRoutingAdapter(client=client, timeout_seconds=5).is_healthy(),
-            asyncio.to_thread(_database_ready),
-            asyncio.to_thread(_redis_ready),
+            _database_ready(pool),
+            _redis_ready(redis_client),
         )
     return {
         "graphhopper": routing,

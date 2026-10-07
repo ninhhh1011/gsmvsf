@@ -68,7 +68,13 @@ Equivalent helpers include `make setup`, `make validate-data`, `make prepare-map
 builds/starts GraphHopper; no legacy preprocessing tools are required.
 
 ```bash
+# Run backend tests
 python -m pytest backend/tests -q --basetemp=runtime/migration/pytest
+# Run frontend domain tests (headless, zero-DOM overhead)
+npm test
+# Or using Make targets:
+make test-all
+make lint
 python scripts/smoke_test.py
 python scripts/smoke_test_week3.py
 python scripts/benchmark_week3.py --iterations 20
@@ -84,12 +90,14 @@ is written under `runtime/migration`.
 
 | Endpoint | Purpose |
 |---|---|
+| `GET /api/v1/config` | Environment, city center, and bounding box metadata |
 | `POST /api/v1/map-match` | Batch GPS matching through GraphHopper and PostGIS resolution |
 | `POST /api/v1/drivers/{driver_id}/location` | Realtime GPS ingestion and matching |
-| `POST /api/v1/demand` | Week 2 demand evaluation |
+| `POST /api/v1/demand` | Demand evaluation based on battery state and destination |
 | `POST /api/v1/candidate-search` | Evaluate every station/service alternative |
 | `POST /api/v1/candidate-search/evaluate` | Demand evaluation followed by candidate search |
 | `POST /api/v1/route` | Domain route request, including optional via points |
+| `POST /api/v1/recommend` | Snapshot-aware candidate ranking and station recommendation |
 
 Routing uses the vehicle category, never a global default profile or an overriding
 profile hint. Engine failures return 503, timeouts 504, invalid routing requests

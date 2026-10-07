@@ -1,6 +1,6 @@
 """Prometheus metrics endpoint."""
-from fastapi import APIRouter
 from backend.app.core.metrics import metrics_endpoint
+from fastapi import APIRouter
 
 router = APIRouter()
 
