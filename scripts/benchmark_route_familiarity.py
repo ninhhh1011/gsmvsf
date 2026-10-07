@@ -110,7 +110,7 @@ def _polyline(points):
 
 
 class BoundedHistoryRepository:
-    """Production-service harness with one sentinel row beyond each history cap."""
+    """Production harness; sentinel rows appear only when history exceeds a cap."""
     def __init__(self, history_size, signature, community_driver_count=101):
         self.history_size = history_size
         self.signature = signature
@@ -326,6 +326,11 @@ async def _postgres_measure(database_url, signature):
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
+        if cleanup_errors:
+            raise RuntimeError(
+                f"route familiarity benchmark failed for {database_name}; "
+                f"measurement_error={type(error).__name__}: {error}; cleanup_errors={cleanup_errors}"
+            ) from error
         raise
     finally:
         if conn:

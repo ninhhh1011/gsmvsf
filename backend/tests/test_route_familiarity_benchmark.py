@@ -217,6 +217,39 @@ async def test_unavailable_disposable_connection_is_not_measured_and_is_cleaned(
     assert report["disposable_database_dropped"]
 
 
+@pytest.mark.asyncio
+async def test_failed_cleanup_names_database_and_chains_measurement_error(monkeypatch):
+    import asyncpg
+
+    class FakeConnection:
+        async def execute(self, sql, *args):
+            if sql.startswith("TRUNCATE"):
+                raise RuntimeError("measurement query failed")
+
+        async def close(self):
+            pass
+
+    class FakeAdmin:
+        async def execute(self, sql):
+            if sql.startswith("DROP DATABASE"):
+                raise OSError("drop failed")
+
+        async def close(self):
+            pass
+
+    admin = FakeAdmin()
+
+    async def connect(dsn, timeout):
+        return admin if dsn.endswith("/postgres") else FakeConnection()
+
+    monkeypatch.setattr(asyncpg, "connect", connect)
+    with pytest.raises(RuntimeError, match=r"route_familiarity_bench_.*cleanup_errors=\['OSError'\]") as error:
+        await _postgres_measure("postgresql://postgres:postgres@127.0.0.1:5432/ev", RouteSignature(
+            ("8b415d8c9a00fff",), (1.0,), 1.0, 11))
+    assert isinstance(error.value.__cause__, RuntimeError)
+    assert "measurement query failed" in str(error.value.__cause__)
+
+
 def test_benchmark_exact_community_cap_does_not_mark_history_truncated():
     repository = BoundedHistoryRepository(
         551, RouteSignature(("cell",), (1.0,), 1.0, 11), community_driver_count=100)
