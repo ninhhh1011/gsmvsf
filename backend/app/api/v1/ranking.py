@@ -1,5 +1,6 @@
 """Synchronous Week 4 APIs; operational writes use a separate internal token."""
 import hmac
+import hashlib
 import logging
 from datetime import UTC, datetime
 from time import perf_counter
@@ -23,6 +24,14 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def verify_driver_identity(driver_id: str, signature: str | None, secret: str) -> bool:
+    """Verify the trusted gateway's lowercase HMAC-SHA256 over the exact driver ID."""
+    if signature is None or len(signature) != 64 or any(c not in '0123456789abcdef' for c in signature):
+        return False
+    expected = hmac.new(secret.encode(), driver_id.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
 
 
 def get_workflow(request: Request):
@@ -101,17 +110,25 @@ async def search_for_ranking(request: CandidateSearchRequest, workflow=Depends(g
         raise HTTPException(422, str(exc)) from exc
 
 
-@router.post('/ranking', response_model=RecommendationResult)
+@router.post('/ranking', response_model=RecommendationResult, response_model_exclude_none=True)
 async def rank(request: RankRequest, workflow=Depends(get_workflow)):
     evidence = await workflow.repository.get_search(request.candidate_search_id)
     return await workflow.ranking.recommend(evidence, request.request_time, request.top_n)
 
 
 @router.post('/recommend', response_model=RecommendationResult)
-async def recommend(request: RecommendRequest, request_obj: Request, workflow=Depends(get_workflow)):
+async def recommend(request: RecommendRequest, request_obj: Request,
+                    x_driver_identity_signature: str | None = Header(None),
+                    workflow=Depends(get_workflow)):
     started = perf_counter()
     try:
         context = request.context
+        if settings.enable_route_familiarity:
+            if not context.driver_id or x_driver_identity_signature is None:
+                raise HTTPException(401, 'Driver identity signature required')
+            if not verify_driver_identity(context.driver_id, x_driver_identity_signature,
+                                          settings.route_familiarity_identity_secret):
+                raise HTTPException(403, 'Invalid driver identity signature')
 
         location = resolve_current_location(context.driver_id, context.raw_latitude,
             context.raw_longitude, context.road_segment_id, context.timestamp,

@@ -9,6 +9,14 @@ from backend.app.main import create_app
 class TestMetricsIncrement:
     """Test that metric functions increment counters."""
 
+    def test_route_familiarity_event_counter_increments(self):
+        initial = metrics.ROUTE_FAMILIARITY_EVENTS.labels(
+            stage='evaluation', outcome='completed')._value.get()
+        metrics.record_route_familiarity_event('evaluation')
+        after = metrics.ROUTE_FAMILIARITY_EVENTS.labels(
+            stage='evaluation', outcome='completed')._value.get()
+        assert after == initial + 1
+
     def test_http_request_increments_counter(self):
         initial = metrics.RECOMMENDATION_REQUESTS.labels(status='200', endpoint='/')._value.get()
         response = TestClient(create_app()).get('/')

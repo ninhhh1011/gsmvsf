@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.config import Settings
-from backend.app.core.metrics import ROUTE_FAMILIARITY_WORK_LIMITS
+from backend.app.core.metrics import ROUTE_FAMILIARITY_EVENTS, ROUTE_FAMILIARITY_WORK_LIMITS
 from backend.app.services.route_familiarity.models import RouteSignature
 from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
@@ -37,11 +37,13 @@ async def test_no_history_has_zero_penalty_and_bounded_two_queries():
                  for i in range(5)]
     repo = Repository(community=community)
     service = RouteFamiliarityService(repo)
+    before = ROUTE_FAMILIARITY_EVENTS.labels(stage="no_history", outcome="completed")._value.get()
     result = await service.assess_many("driver", {("station", "CHARGING"): sig(["a", "b"])}, NOW)
     assessment = result[("station", "CHARGING")]
     assert assessment.status == "NO_HISTORY"
     assert assessment.penalty_s == 0
     assert assessment.community_driver_count == 5
+    assert ROUTE_FAMILIARITY_EVENTS.labels(stage="no_history", outcome="completed")._value.get() == before + 1
     assert repo.calls == [
         ("personal", ("driver", NOW, timedelta(days=7))),
         ("community", (["a", "b"], "driver", NOW, timedelta(days=7))),

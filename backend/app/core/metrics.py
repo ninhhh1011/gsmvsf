@@ -27,6 +27,15 @@ ROUTE_FAMILIARITY_WORK_LIMITS = Counter(
     'Route familiarity evaluations rejected by the matching-pair budget'
 )
 
+ROUTE_FAMILIARITY_EVENTS = Counter(
+    'ev_route_familiarity_events_total', 'Route familiarity work by bounded stage and outcome',
+    ['stage', 'outcome']
+)
+ROUTE_FAMILIARITY_LATENCY = Histogram(
+    'ev_route_familiarity_latency_seconds', 'Route familiarity work duration by bounded stage',
+    ['stage'], buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]
+)
+
 
 DB_FALLBACKS = Counter(
     'ev_db_fallback_total',
@@ -145,6 +154,15 @@ def record_candidate_conflict():
 
 def record_familiarity_work_limit():
     ROUTE_FAMILIARITY_WORK_LIMITS.inc()
+
+
+def record_route_familiarity_event(stage: str, outcome: str = 'completed'):
+    """Stage/outcome values are fixed call-site literals, never request data."""
+    ROUTE_FAMILIARITY_EVENTS.labels(stage=stage, outcome=outcome).inc()
+
+
+def observe_route_familiarity(stage: str, duration_seconds: float):
+    ROUTE_FAMILIARITY_LATENCY.labels(stage=stage).observe(duration_seconds)
 
 
 def record_db_fallback():

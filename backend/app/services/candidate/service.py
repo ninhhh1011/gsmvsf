@@ -248,12 +248,21 @@ class CandidateSearchService:
                 leg1, leg2 = route_result[2:4]
                 if (leg1 is not None and leg2 is not None and leg1.geometry and leg2.geometry and
                         leg2.status.value == "SUCCESS"):
+                    from backend.app.core.metrics import (
+                        observe_route_familiarity, record_route_familiarity_event,
+                    )
                     from backend.app.services.route_familiarity.signature import create_route_signature
+                    from time import perf_counter
+                    signature_started = perf_counter()
                     try:
                         _signature_sink[key] = create_route_signature(
                             [leg1.geometry, leg2.geometry])
+                        record_route_familiarity_event('signature')
                     except ValueError:
+                        record_route_familiarity_event('signature', 'unavailable')
                         pass  # Invalid or over-limit recommended geometry is unavailable.
+                    finally:
+                        observe_route_familiarity('signature', perf_counter() - signature_started)
 
         # Count eligible candidates
         eligible_count = sum(1 for c in evaluated_candidates if c.eligible)

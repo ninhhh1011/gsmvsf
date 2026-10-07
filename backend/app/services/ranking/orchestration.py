@@ -111,9 +111,11 @@ class RecommendationWorkflow:
                 try:
                     if getattr(self.ranking, 'familiarity_enabled', False):
                         result = await self.ranking.recommend(evidence, top_n=top_n,
-                                                              candidate_signatures=output.signatures)
+                                                              candidate_signatures=output.signatures,
+                                                              include_familiarity=True)
                     else:
-                        result = await self.ranking.recommend(evidence, top_n=top_n)
+                        result = await self.ranking.recommend(evidence, top_n=top_n,
+                                                              include_familiarity=True)
                 finally:
                     metrics['timings_ms']['ranking'] += (perf_counter() - stage_started) * 1000
                 logger.info('recommendation_workflow', latency_ms=round((perf_counter()-started)*1000, 3),
