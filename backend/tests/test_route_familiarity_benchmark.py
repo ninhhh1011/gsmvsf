@@ -186,9 +186,11 @@ async def test_measurement_failure_after_create_cleans_database_and_reraises(mon
         return admin if dsn.endswith("/postgres") else FakeConnection()
 
     monkeypatch.setattr(asyncpg, "connect", connect)
-    with pytest.raises(RuntimeError, match="measurement query failed"):
+    with pytest.raises(RuntimeError, match="measurement query failed") as error:
         await _postgres_measure("postgresql://postgres:postgres@127.0.0.1:5432/ev", RouteSignature(
             ("8b415d8c9a00fff",), (1.0,), 1.0, 11))
+    assert str(error.value) == "measurement query failed"
+    assert error.value.__cause__ is None
     assert any(command.startswith('DROP DATABASE IF EXISTS "route_familiarity_bench_')
                for command in commands)
 
@@ -248,6 +250,39 @@ async def test_failed_cleanup_names_database_and_chains_measurement_error(monkey
             ("8b415d8c9a00fff",), (1.0,), 1.0, 11))
     assert isinstance(error.value.__cause__, RuntimeError)
     assert "measurement query failed" in str(error.value.__cause__)
+
+
+@pytest.mark.asyncio
+async def test_failed_setup_cleanup_names_database_and_chains_setup_error(monkeypatch):
+    import asyncpg
+
+    class FakeConnection:
+        async def execute(self, sql, *args):
+            if "CREATE TABLE" in sql:
+                raise RuntimeError("schema install failed")
+
+        async def close(self):
+            pass
+
+    class FakeAdmin:
+        async def execute(self, sql):
+            if sql.startswith("DROP DATABASE"):
+                raise OSError("drop failed")
+
+        async def close(self):
+            pass
+
+    admin = FakeAdmin()
+
+    async def connect(dsn, timeout):
+        return admin if dsn.endswith("/postgres") else FakeConnection()
+
+    monkeypatch.setattr(asyncpg, "connect", connect)
+    with pytest.raises(RuntimeError, match=r"route_familiarity_bench_.*cleanup_errors=\['OSError'\]") as error:
+        await _postgres_measure("postgresql://postgres:postgres@127.0.0.1:5432/ev", RouteSignature(
+            ("8b415d8c9a00fff",), (1.0,), 1.0, 11))
+    assert isinstance(error.value.__cause__, RuntimeError)
+    assert "schema install failed" in str(error.value.__cause__)
 
 
 def test_benchmark_exact_community_cap_does_not_mark_history_truncated():

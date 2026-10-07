@@ -220,6 +220,11 @@ async def _postgres_measure(database_url, signature):
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
         if created and connected:
+            if cleanup_errors:
+                raise RuntimeError(
+                    f"route familiarity benchmark failed for {database_name}; "
+                    f"setup_error={type(error).__name__}: {error}; cleanup_errors={cleanup_errors}"
+                ) from error
             raise
         return {"status": "not_measured", "reason": type(error).__name__,
                 **database_lifecycle_report(database_name, created, dropped, cleanup_errors)}
