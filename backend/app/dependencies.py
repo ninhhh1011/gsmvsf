@@ -9,7 +9,6 @@ from fastapi import HTTPException, Request
 from backend.app.services.ranking.orchestration import RecommendationWorkflow
 from backend.app.services.snapshots.ingestion import IngestionService
 from backend.app.services.snapshots.resolver import SnapshotResolver
-from backend.app.services.route_familiarity.ingestion import RouteHistoryIngestion
 
 
 def _require_state(state_key: str, request: Request):
@@ -72,14 +71,6 @@ def get_snapshot_resolver(request: Request) -> SnapshotResolver:
 def get_snapshot_ingestion(request: Request) -> IngestionService:
     """IngestionService instance from lifespan."""
     return _require_state("snapshot_ingestion", request)
-
-
-def get_route_history_ingestion(request: Request) -> RouteHistoryIngestion:
-    value = getattr(request.app.state, "route_history_ingestion", None)
-    if value is None:
-        from backend.app.services.snapshots.models import StateError
-        raise StateError("Route history ingestion unavailable", "ROUTE_HISTORY_UNAVAILABLE", 503)
-    return value
 
 
 def get_recommendation_workflow(request: Request) -> RecommendationWorkflow:
