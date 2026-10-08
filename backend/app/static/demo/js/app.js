@@ -58,9 +58,7 @@ class DemoApp {
             this.simMode = new SimModeController(this.api, this.map, {
                 onModeChange: active => {
                     if (active) {
-                        this.driverMode.pauseTrip();
-                        this.driverMode.cancelAllPicking();
-                        this.driverMode.closeStationsDrawer();
+                        this.driverMode.suspendForDebug();
                     } else {
                         this.driverMode.restoreMapState();
                         this.driverMode.renderCurrentStateUI();

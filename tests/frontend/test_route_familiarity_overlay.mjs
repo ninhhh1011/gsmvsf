@@ -202,6 +202,62 @@ test('leaving Debug discards a pending simulation recommendation before it can u
     }
 });
 
+test('a failed late Debug diversion cannot publish inspector output or move the Driver viewport', async () => {
+    const state = simulationFixture();
+    let rejectDiversion, routeStarted;
+    const started = new Promise(resolve => { routeStarted = resolve; });
+    const diversion = new Promise((resolve, reject) => { rejectDiversion = reject; });
+    let routeCalls = 0;
+    const updates = [];
+    let viewportChanges = 0;
+    state.map.fitBoundsToActive = () => { viewportChanges++; };
+    const simulation = new SimModeController({
+        evaluateAndSearchCandidates: async () => ({ candidates: [] }),
+        getRecommendation: async () => ({ has_recommendation: true,
+            recommended_station_id: 'S001', ranked_candidates: [{ station_id: 'S001' }] }),
+        computeRoute: () => {
+            if (++routeCalls === 1) return Promise.resolve(null);
+            routeStarted();
+            return diversion;
+        }
+    }, state.map, { onStateUpdate: value => updates.push(value) });
+    simulation.setCatalogs([], [{ vehicle_id: 'V0001', vehicle_type: 'EV_CAR' }],
+        [{ station_id: 'S001', latitude: 21.01, longitude: 105.82 }]);
+    try {
+        simulation.init();
+        simulation.setActive(true);
+        const running = simulation.runSimulation();
+        await started;
+        simulation.setActive(false);
+        rejectDiversion(new Error('routing unavailable'));
+        await running;
+        assert.equal(updates.length, 0);
+        assert.equal(viewportChanges, 0);
+    } finally {
+        simulation.routeFamiliarityOverlay.destroy();
+        state.restore();
+    }
+});
+
+test('Debug vehicle options include every vehicle referenced by the canonical demo scenarios', async () => {
+    const vehicles = JSON.parse(await readFile(new URL('../../backend/app/static/demo/data/vehicles.json', import.meta.url), 'utf8'));
+    const scenarios = JSON.parse(await readFile(new URL('../../backend/app/static/demo/data/scenarios.json', import.meta.url), 'utf8'));
+    const priorDocument = globalThis.document;
+    const select = { innerHTML: '' };
+    globalThis.document = { getElementById: id => id === 'sim-vehicle-select' ? select : null };
+    try {
+        const simulation = new SimModeController({}, {});
+        simulation.setCatalogs(scenarios, vehicles, []);
+        simulation.renderVehicleSelect();
+        for (const scenario of scenarios) {
+            assert.ok(select.innerHTML.includes(`value="${scenario.vehicle_id}"`), `${scenario.id}: ${scenario.vehicle_id} selectable`);
+        }
+    } finally {
+        if (priorDocument === undefined) delete globalThis.document;
+        else globalThis.document = priorDocument;
+    }
+});
+
 test('overlay is disabled until opted in and rejects non-resolution-11 or malformed cells', () => {
     const { overlay, added, toggle } = fixture();
     assert.equal(toggle.disabled, true);

@@ -231,8 +231,7 @@ export class SimModeController {
         const select = document.getElementById('sim-vehicle-select');
         if (!select) return;
 
-        // Group unique vehicle models
-        select.innerHTML = this.vehicles.slice(0, 15).map(v => `
+        select.innerHTML = this.vehicles.map(v => `
             <option value="${escapeHtml(v.vehicle_id)}">
                 ${escapeHtml(v.vehicle_model)} (${v.vehicle_type === 'EV_CAR' ? 'Car' : 'Motorbike'}, Usable: ${escapeHtml(v.usable_capacity_kwh || '-')} kWh)
             </option>
@@ -437,12 +436,14 @@ export class SimModeController {
                         leg1Result = await this.api.computeRoute(this.origin, stPos, {
                             vehicle_category: vehicle.vehicle_type
                         });
+                        if (this.generation !== currentGen) return;
                         leg2Result = await this.api.computeRoute(stPos, this.destination, {
                             vehicle_category: vehicle.vehicle_type
                         });
                         if (this.generation !== currentGen) return;
                         this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry, top5Candidates);
                     } catch (routeErr) {
+                        if (this.generation !== currentGen) return;
                         console.warn('Diversion route error:', routeErr);
                     }
                 }
