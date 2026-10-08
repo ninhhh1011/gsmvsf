@@ -226,12 +226,13 @@ async def _postgres_measure(database_url, signature):
         return {"status": "not_measured", "reason": "DATABASE_URL is empty"}
     database_name = f"route_familiarity_bench_{uuid4().hex}"
     admin = conn = None
-    created = dropped = False
+    creation_attempted = created = dropped = False
     try:
         import asyncpg
         parsed = urlsplit(database_url.replace("postgresql+asyncpg://", "postgresql://"))
         admin_dsn = urlunsplit((parsed.scheme, parsed.netloc, "/postgres", parsed.query, ""))
         admin = await asyncpg.connect(admin_dsn, timeout=3)
+        creation_attempted = True
         await admin.execute(f'CREATE DATABASE "{database_name}"')
         created = True
         dsn = urlunsplit((parsed.scheme, parsed.netloc, f"/{database_name}", parsed.query, ""))
@@ -248,7 +249,7 @@ async def _postgres_measure(database_url, signature):
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
             conn = None
-        if created and admin:
+        if creation_attempted and admin:
             try:
                 await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
                 dropped = True

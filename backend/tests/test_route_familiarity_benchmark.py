@@ -246,7 +246,7 @@ async def test_measurement_failure_after_create_cleans_database_and_reraises(mon
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("cancel_at", ["connect", "schema", "measurement"])
+@pytest.mark.parametrize("cancel_at", ["create", "connect", "schema", "measurement"])
 @pytest.mark.parametrize("drop_fails", [False, True])
 async def test_cancellation_after_create_cleans_database_and_propagates(
         monkeypatch, cancel_at, drop_fails):
@@ -259,6 +259,8 @@ async def test_cancellation_after_create_cleans_database_and_propagates(
 
     async def admin_execute(sql):
         commands.append(sql)
+        if cancel_at == "create" and sql.startswith("CREATE DATABASE"):
+            await wait_for_cancellation()
         if drop_fails and sql.startswith("DROP DATABASE"):
             raise OSError("drop failed")
 
@@ -293,10 +295,34 @@ async def test_cancellation_after_create_cleans_database_and_propagates(
     assert commands[0].startswith('CREATE DATABASE "route_familiarity_bench_')
     assert commands[1:] == [commands[0].replace("CREATE DATABASE", "DROP DATABASE IF EXISTS")]
     admin.close.assert_awaited_once()
-    assert conn.close.await_count == (0 if cancel_at == "connect" else 1)
+    assert conn.close.await_count == (0 if cancel_at in {"create", "connect"} else 1)
     if drop_fails:
         assert commands[0].split('"')[1] in error.value.__notes__[0]
         assert "OSError" in error.value.__notes__[0]
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_database_creation_is_cleaned_without_reporting_created(monkeypatch):
+    import asyncpg
+
+    commands = []
+    admin = AsyncMock()
+
+    async def execute(sql):
+        commands.append(sql)
+        if sql.startswith("CREATE DATABASE"):
+            raise ConnectionError("create response lost")
+
+    admin.execute.side_effect = execute
+    monkeypatch.setattr(asyncpg, "connect", AsyncMock(return_value=admin))
+    report = await _postgres_measure("postgresql://postgres:postgres@127.0.0.1:5432/ev",
+        RouteSignature(("8b415d8c9a00fff",), (1.0,), 1.0, 11))
+
+    assert report["status"] == "not_measured"
+    assert report["disposable_database_created"] is False
+    assert report["disposable_database_dropped"] is True
+    assert report["cleanup_succeeded"] is True
+    assert commands[1:] == [commands[0].replace("CREATE DATABASE", "DROP DATABASE IF EXISTS")]
 
 
 @pytest.mark.asyncio
