@@ -143,3 +143,45 @@ test('Debug suspension rejects a late failed custom Driver route without drawing
     await running;
     assert.equal(map.scene, 'DEBUG');
 });
+
+test('successful Driver station navigation completes without a dead button reference', async () => {
+    const { driver } = driverFixture({ computeRoute: async () => ({ geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@', distance_m: 300 }) });
+    driver.state = DriverState.TRIP_ASSIGNED;
+    driver.stations = [{ station_id: 'S001', latitude: 21.01, longitude: 105.82 }];
+    await assert.doesNotReject(driver.navigateViaStationId('S001'));
+    assert.equal(driver._selectedStationId, 'S001');
+    assert.equal(driver.lastRecommendedStationId, 'S001');
+    assert.ok(driver.fullRouteCoords.length > 1);
+});
+
+test('a trajectory load canceled by Debug returns to idle and the Driver Play action retries loading', async t => {
+    for (const name of ['log', 'group', 'groupEnd', 'warn']) t.mock.method(console, name, () => {});
+    const firstLoad = deferred();
+    let loadCalls = 0;
+    const { driver, map, trip, enterDebug } = driverFixture({
+        getTrajectory: () => ++loadCalls === 1 ? firstLoad.promise : Promise.resolve([
+            { latitude: 21.01, longitude: 105.81, timestamp: '2026-09-01T07:00:00Z' },
+            { latitude: 21.02, longitude: 105.82, timestamp: '2026-09-01T07:01:00Z' }
+        ]),
+        ingestDriverLocation: async () => ({ status: 'GPS_ACCEPTED', raw_position: { latitude: 21.01, longitude: 105.81 } })
+    });
+    const starting = driver.startTrip();
+    assert.equal(driver.replay.state, ReplayState.LOADING);
+    const indexAtSwitch = driver.replay.currentIndex;
+    enterDebug();
+    assert.equal(driver.replay.state, ReplayState.IDLE, 'canceled loading is honest and retryable');
+    assert.equal(driver.replay.observations.length, 0, 'no invented ready observations');
+    assert.equal(driver.currentTrip, trip);
+    assert.equal(driver.replay.currentIndex, indexAtSwitch);
+    firstLoad.resolve([{ latitude: 22, longitude: 106, timestamp: '2026-09-01T07:00:00Z' }]);
+    await starting;
+    assert.equal(map.scene, 'DEBUG');
+    assert.equal(driver.replay.state, ReplayState.IDLE);
+    assert.equal(driver.replay.observations.length, 0);
+    await driver.playTrip();
+    assert.equal(loadCalls, 2);
+    assert.equal(driver.currentTrip, trip);
+    assert.ok(driver.replay.currentIndex >= 1, 'retry confirms progress with actual reloaded observations');
+    assert.equal(driver.replay.observations[0].latitude, 21.01);
+    driver.pauseTrip();
+});

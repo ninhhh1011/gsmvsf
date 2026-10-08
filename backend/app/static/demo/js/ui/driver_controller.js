@@ -880,6 +880,7 @@ export class DriverModeController {
 
     playTrip() {
         if (this.state !== DriverState.TRIP_ACTIVE) return;
+        if (this.replay.state === ReplayState.IDLE) return this.startTrip();
         this.replay.play();
     }
 
@@ -891,6 +892,7 @@ export class DriverModeController {
         this.generation++;
         this.replay.generation++;
         this.pauseTrip();
+        if (this.replay.state === ReplayState.LOADING) this.replay.setState(ReplayState.IDLE);
         this.cancelAllPicking();
         this.closeStationsDrawer();
         this.closeCostBreakdownModal();
@@ -1060,19 +1062,9 @@ export class DriverModeController {
             // Highlight station marker on map
             this.map.renderStations(this.stations, st.station_id, st.service_type || 'FAST_CHARGING', null, this.lastRecommendation?.ranked_candidates);
 
-            if (navBtn) {
-                navBtn.textContent = '✓ Đã chọn tuyến ghé trạm';
-                navBtn.style.background = '#10b981';
-                navBtn.style.color = '#ffffff';
-                navBtn.disabled = false;
-            }
         } catch (err) {
             if (this.generation !== currentGen) return;
             console.warn('Navigation to station failed:', err);
-            if (navBtn) {
-                navBtn.textContent = 'Chỉ đường qua trạm';
-                navBtn.disabled = false;
-            }
         }
     }
 
