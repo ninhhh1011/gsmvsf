@@ -540,6 +540,9 @@ export class DriverModeController {
         if (this.generation !== currentGen) return;
         this.renderTripActiveUI();
 
+        // Start auto-refresh timer for recommendations
+        this.startRecommendRefresh();
+
         // Auto-step first observation
         await this.replay.step();
 
@@ -964,11 +967,9 @@ export class DriverModeController {
     _hideRecommendationPanel() { this.bindings.hideRecommendationPanel(); }
 
     _notifyTop5Updated(result) {
-        if (!result || !result.candidates) return;
-        // Update map markers with top 5 candidates
-        if (this.map?.updateStationMarkers) {
-            this.map.updateStationMarkers(result.candidates);
-        }
+        // Top 5 result is shared via _top5Result property
+        // Map markers are updated via renderStations() in _evaluateAtCurrentPosition()
+        // This callback exists for extensibility if needed in the future
     }
 
     startRecommendRefresh() {
@@ -1058,6 +1059,7 @@ export class DriverModeController {
         this._navigationLocked = false;
         this._selectedStationId = null;
         this._hideRecommendationPanel();
+        this.stopRecommendRefresh();
 
         this.session.driver_id = null;
         this.session.vehicle_id = null;
