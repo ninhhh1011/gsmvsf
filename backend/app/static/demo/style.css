@@ -1,5 +1,7 @@
 /* VinFast / Green Mobility EV Recommendation Demo Design System */
 
+[hidden] { display: none !important; }
+
 :root {
     --bg-main: #f8fafc;
     --bg-card: #ffffff;
@@ -1819,6 +1821,7 @@ body {
 
 .route-familiarity-toggle input { accent-color: #8b5cf6; }
 .route-familiarity-count { color: #ddd6fe; }
+.sim-familiarity-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .btn-outline-secondary {
     background: #ffffff;

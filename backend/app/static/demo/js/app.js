@@ -55,7 +55,18 @@ class DemoApp {
             window.driverMode = this.driverMode;
 
             // Initialize Simulation Mode Controller
-            this.simMode = new SimModeController(this.api, this.map);
+            this.simMode = new SimModeController(this.api, this.map, {
+                onModeChange: active => {
+                    if (active) {
+                        this.driverMode.pauseTrip();
+                        this.driverMode.cancelAllPicking();
+                        this.driverMode.closeStationsDrawer();
+                    } else {
+                        this.driverMode.restoreMapState();
+                        this.driverMode.renderCurrentStateUI();
+                    }
+                }
+            });
             this.simMode.setCatalogs(this.scenarios, this.vehicles, this.stations);
             this.simMode.init();
             window.simMode = this.simMode;

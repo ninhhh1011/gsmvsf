@@ -56,7 +56,7 @@ docker compose up -d --build db graphhopper redis
 python scripts/load_road_network.py
 python -B scripts/load_week4_snapshots.py
 # Configure SNAPSHOT_INGESTION_TOKEN in .env for internal state ingestion.
-docker compose up -d --build api
+docker compose up -d --build api_1 api_2
 ```
 
 `load_road_network.py` loads canonical directed road segments into PostGIS for

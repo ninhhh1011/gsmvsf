@@ -194,6 +194,19 @@ export class DriverModeController {
         }
     }
 
+    restoreMapState() {
+        this.map.clearAll();
+        if (this.stations.length) this.map.renderStations(this.stations,
+            this.lastRecommendation?.recommended_station_id, this.lastRecommendation?.recommended_service_type);
+        this._renderEndpointsWithDrag(this.currentTrip?.origin || this.customOrigin,
+            this.currentTrip?.destination || this.customDestination);
+        this.map.renderDirectRoute(this.fullRouteCoords);
+        if (this.lastDiversionLeg1?.geometry) this.map.renderRecommendationRoute(
+            this.lastDiversionLeg1.geometry, this.lastDiversionLeg2?.geometry);
+        if (this.postTripRoute?.geometry) this.map.renderPostTripRoute(this.postTripRoute.geometry);
+        this.map.renderDriver(this.currentPos, this.matchedPos, this.currentObservation?.heading_deg);
+    }
+
     selectVehicleModel(modelKey) {
         const spec = VINFAST_MODEL_SPECS[modelKey] || VINFAST_MODEL_SPECS['VF_3'];
         const matchedVehicle = this.vehicles.find(v => v.vehicle_model === spec.vehicle_model) || {

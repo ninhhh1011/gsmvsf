@@ -21,6 +21,7 @@ export class RouteFamiliarityOverlay {
         this.requestFrame = requestFrame;
         this.cancelFrame = cancelFrame;
         this.layer = leaflet.layerGroup().addTo(map);
+        this.active = true;
         this.enabled = false;
         this.route = { resolution: null, route_cells: [] };
         this.frame = null;
@@ -36,7 +37,7 @@ export class RouteFamiliarityOverlay {
         this.route = route && typeof route === 'object' ? route : { resolution: null, route_cells: [] };
         const hasCells = this.route.resolution === RESOLUTION && Array.isArray(this.route.route_cells) &&
             this.route.route_cells.some(cell => this.isResolution11Cell(cell));
-        if (this.toggle) this.toggle.disabled = !hasCells;
+        if (this.toggle) this.toggle.disabled = !hasCells || !this.active;
         if (!hasCells) this.setEnabled(false);
         const personal = Number.isInteger(this.route.personal_trip_count) ? this.route.personal_trip_count : null;
         const communityDrivers = Number.isInteger(this.route.community_driver_count) ? this.route.community_driver_count : null;
@@ -60,9 +61,15 @@ export class RouteFamiliarityOverlay {
     }
 
     setEnabled(enabled) {
-        this.enabled = Boolean(enabled);
+        this.enabled = Boolean(enabled) && this.active;
         if (this.toggle) this.toggle.checked = this.enabled;
         this.render();
+    }
+
+    setActive(active) {
+        this.active = Boolean(active);
+        if (!this.active) this.setEnabled(false);
+        this.setRoute(this.route);
     }
 
     setCount(text) {
@@ -79,7 +86,7 @@ export class RouteFamiliarityOverlay {
 
     render() {
         this.cancelRender();
-        if (!this.enabled) {
+        if (!this.active || !this.enabled) {
             this.setCount('Route cells hidden');
             return;
         }

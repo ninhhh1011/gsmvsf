@@ -71,6 +71,10 @@
 
         <!-- Actions -->
         <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
+            <nav class="mode-switcher" aria-label="Demo mode">
+                <button id="btn-mode-driver" class="mode-tab-btn active" aria-pressed="true">Driver</button>
+                <button id="btn-mode-sim" class="mode-tab-btn" aria-pressed="false">Simulation / Debug</button>
+            </nav>
             <!-- Driver status badge in header for clear status reading -->
             <span id="driver-status-badge" class="status-badge badge-available">SẴN SÀNG <span class="sr-only">AVAILABLE</span></span>
         </div>
@@ -84,7 +88,7 @@
             <div id="map"></div>
 
             <!-- Floating Map Actions: Find Station & Custom Origin / Destination -->
-            <div class="map-floating-controls">
+            <div id="driver-map-controls" class="map-floating-controls">
                 <button id="btn-open-stations-drawer" class="btn btn-fab-station" title="Tìm trạm sạc xung quanh">
                     ⚡ Tìm trạm sạc
                 </button>
@@ -94,12 +98,6 @@
                 <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
                     🏁 Đổi điểm đến (B)
                 </button>
-                <label class="route-familiarity-toggle" title="Simulation / Debug: explain the selected recommendation route">
-                    <input id="toggle-route-familiarity" type="checkbox" disabled>
-                    H3 route cells
-                </label>
-                <span id="route-familiarity-count" class="route-familiarity-count" aria-live="polite">Route cells hidden</span>
-                <span id="route-familiarity-support" class="route-familiarity-count" aria-live="polite">Personal support: unavailable · Community support: suppressed/unavailable</span>
             </div>
 
             <!-- Map Picker Instruction Toast Banner (hidden by default) -->
@@ -164,6 +162,36 @@
                 <!-- Initial content rendered via JS -->
             </div>
         </div>
+
+        <aside id="sim-view-container" class="floating-sim-panel sim-mode-container" hidden aria-label="Simulation / Debug">
+            <h3>Simulation / Debug</h3>
+            <div id="sim-scenarios-container"></div>
+            <div id="sim-scenario-desc"></div>
+            <div class="form-group">
+                <label for="sim-vehicle-select">Vehicle</label>
+                <select id="sim-vehicle-select" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label for="sim-soc-slider">SOC: <span id="sim-soc-val">15%</span></label>
+                <input id="sim-soc-slider" type="range" min="0" max="100" step="1" value="15">
+                <span id="sim-est-range-val">25.0 km</span>
+            </div>
+            <div class="form-group">
+                <label for="sim-timestamp">Request time (UTC)</label>
+                <input id="sim-timestamp" class="form-control" type="text" value="2026-09-01T07:00:00Z">
+            </div>
+            <button id="btn-run-sim" class="btn btn-primary">FIND BEST STATION</button>
+            <div class="sim-familiarity-controls">
+                <label class="route-familiarity-toggle" title="Explain the selected recommendation route">
+                    <input id="toggle-route-familiarity" type="checkbox" disabled>
+                    H3 route cells
+                </label>
+                <span id="route-familiarity-count" class="route-familiarity-count" aria-live="polite">Route cells hidden</span>
+                <span id="route-familiarity-support" class="route-familiarity-count" aria-live="polite">Personal support: unavailable · Community support: suppressed/unavailable</span>
+            </div>
+            <div id="sim-pipeline-container"></div>
+            <div id="sim-recommendation-container"></div>
+        </aside>
 
 
         <!-- Cost Breakdown Modal (Driver Cockpit) -->

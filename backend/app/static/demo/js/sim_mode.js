@@ -7,12 +7,14 @@
 
 import { renderPipelineLatency, renderCandidateTable, renderRecommendationCard, renderEnergyWarningBanner, renderConflictAlert } from './components.js';
 import { RouteFamiliarityOverlay } from './ui/route_familiarity_overlay.js';
+import { escapeHtml } from './domain/route-display.js';
 
 export class SimModeController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
         this.map = mapEngine;
         this.options = options;
+        this.active = false;
         this.routeFamiliarityOverlay = typeof document !== 'undefined' && typeof window !== 'undefined' &&
             window.h3 && mapEngine?.map ? new RouteFamiliarityOverlay({
                 map: mapEngine.map,
@@ -22,6 +24,7 @@ export class SimModeController {
                 countElement: document.getElementById('route-familiarity-count'),
                 supportElement: document.getElementById('route-familiarity-support')
             }) : null;
+        this.routeFamiliarityOverlay?.setActive(false);
         this.scenarios = [];
         this.vehicles = [];
         this.stations = [];
@@ -55,6 +58,7 @@ export class SimModeController {
 
     init() {
         this.bindEvents();
+        this.setActive(false);
         this.renderScenarioQuickSelect();
         this.renderVehicleSelect();
 
@@ -68,6 +72,31 @@ export class SimModeController {
                 this.setPickingMode(null);
             }
         });
+    }
+
+    setActive(active) {
+        const changed = this.active !== Boolean(active);
+        this.active = Boolean(active);
+        this.generation++;
+        this.routeFamiliarityOverlay?.setActive(this.active);
+        for (const id of ['driver-view-container', 'driver-map-controls', 'driver-status-badge']) {
+            const element = document.getElementById(id);
+            if (element) element.hidden = this.active;
+        }
+        const panel = document.getElementById('sim-view-container');
+        if (panel) panel.hidden = !this.active;
+        for (const [id, selected] of [['btn-mode-driver', !this.active], ['btn-mode-sim', this.active]]) {
+            const button = document.getElementById(id);
+            button?.classList.toggle('active', selected);
+            button?.setAttribute('aria-pressed', String(selected));
+        }
+        if (!this.active) this.setPickingMode(null);
+        const runButton = document.getElementById('btn-run-sim');
+        if (runButton) {
+            runButton.disabled = false;
+            runButton.textContent = 'FIND BEST STATION';
+        }
+        if (changed) this.options.onModeChange?.(this.active);
     }
 
     setPickingMode(mode) {
@@ -110,6 +139,8 @@ export class SimModeController {
     }
 
     bindEvents() {
+        document.getElementById('btn-mode-driver')?.addEventListener('click', () => this.setActive(false));
+        document.getElementById('btn-mode-sim')?.addEventListener('click', () => this.setActive(true));
         // Run simulation button
         document.getElementById('btn-run-sim')?.addEventListener('click', () => this.runSimulation());
 
@@ -182,9 +213,9 @@ export class SimModeController {
         if (!container) return;
 
         container.innerHTML = this.scenarios.map(sc => `
-            <button class="scenario-pill-btn" data-scenario-id="${sc.id}">
-                <span class="pill-tag tag-${sc.tag.toLowerCase()}">${sc.tag}</span>
-                <span class="pill-title">${sc.title}</span>
+            <button class="scenario-pill-btn" data-scenario-id="${escapeHtml(sc.id)}">
+                <span class="pill-tag tag-${escapeHtml(String(sc.tag || '').toLowerCase())}">${escapeHtml(sc.tag)}</span>
+                <span class="pill-title">${escapeHtml(sc.title)}</span>
             </button>
         `).join('');
 
@@ -202,8 +233,8 @@ export class SimModeController {
 
         // Group unique vehicle models
         select.innerHTML = this.vehicles.slice(0, 15).map(v => `
-            <option value="${v.vehicle_id}">
-                ${v.vehicle_model} (${v.vehicle_type === 'EV_CAR' ? 'Car' : 'Motorbike'}, Usable: ${v.usable_capacity_kwh || '-'} kWh)
+            <option value="${escapeHtml(v.vehicle_id)}">
+                ${escapeHtml(v.vehicle_model)} (${v.vehicle_type === 'EV_CAR' ? 'Car' : 'Motorbike'}, Usable: ${escapeHtml(v.usable_capacity_kwh || '-')} kWh)
             </option>
         `).join('');
     }
@@ -251,12 +282,12 @@ export class SimModeController {
         if (descElem) {
             descElem.innerHTML = `
                 <div class="active-scenario-banner">
-                    <strong>${sc.title}</strong>
-                    <p>${sc.description}</p>
+                    <strong>${escapeHtml(sc.title)}</strong>
+                    <p>${escapeHtml(sc.description)}</p>
                     ${sc.timestamp_t1 && sc.timestamp_t2 ? `
                         <div class="scenario-timeline mt-2">
-                            <span>Step 1: <button id="btn-sc-step1" class="btn btn-xs btn-outline">Time T1 (${sc.timestamp_t1.substring(11, 16)})</button></span>
-                            <span>Step 2: <button id="btn-sc-step2" class="btn btn-xs btn-outline">Time T2 (${sc.timestamp_t2.substring(11, 16)})</button></span>
+                            <span>Step 1: <button id="btn-sc-step1" class="btn btn-xs btn-outline">Time T1 (${escapeHtml(String(sc.timestamp_t1).substring(11, 16))})</button></span>
+                            <span>Step 2: <button id="btn-sc-step2" class="btn btn-xs btn-outline">Time T2 (${escapeHtml(String(sc.timestamp_t2).substring(11, 16))})</button></span>
                         </div>
                     ` : ''}
                 </div>
@@ -280,6 +311,7 @@ export class SimModeController {
     }
 
     async runSimulation() {
+        if (!this.active) return;
         this.generation++;
         const currentGen = this.generation;
 
