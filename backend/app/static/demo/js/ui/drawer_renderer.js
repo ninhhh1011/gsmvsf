@@ -5,7 +5,7 @@
  */
 
 import { straightLineDistanceKm } from '../domain/vehicle_model.js';
-import { escapeHtml } from '../domain/route-display.js';
+import { escapeHtml, formatDistanceKm, formatDuration } from '../domain/route-display.js';
 
 /**
  * Render a single station card for the drawer list.
@@ -253,4 +253,77 @@ export function renderDrawerStationsListHTML(stations = [], options = {}) {
             isSelectedPostTrip
         });
     }).join('');
+}
+
+/**
+ * Render a station tooltip showing full metrics.
+ * Pure rendering - no API calls on hover.
+ * @param {Object} candidate - Station candidate with features.
+ * @param {Array} stationCatalog - Station catalog for name lookup.
+ * @returns {string} HTML string for tooltip.
+ */
+export function renderStationTooltipHTML(candidate, stationCatalog = []) {
+    const station = stationCatalog.find(s => s.station_id === candidate.station_id);
+    const feats = candidate.features || {};
+
+    const wait = feats.effective_queue_wait_s !== null && feats.effective_queue_wait_s !== undefined
+        ? formatDuration(feats.effective_queue_wait_s)
+        : 'Chưa có dữ liệu';
+
+    const capacity = feats.available_capacity !== null && feats.available_capacity !== undefined
+        ? feats.available_capacity
+        : '—';
+
+    const distToStationKm = feats.distance_to_station_m != null
+        ? formatDistanceKm(feats.distance_to_station_m / 1000)
+        : '—';
+    const etaToStation = feats.eta_to_station_s != null
+        ? formatDuration(feats.eta_to_station_s)
+        : '—';
+    const distStationToDest = feats.distance_station_to_dest_m != null
+        ? formatDistanceKm(feats.distance_station_to_dest_m / 1000)
+        : '—';
+    const durStationToDest = feats.duration_station_to_dest_s != null
+        ? formatDuration(feats.duration_station_to_dest_s)
+        : '—';
+    const detourDist = feats.detour_distance_m != null
+        ? formatDistanceKm(feats.detour_distance_m / 1000)
+        : '—';
+    const totalEta = candidate.eta_to_destination_via_station_s != null
+        ? formatDuration(candidate.eta_to_destination_via_station_s)
+        : '—';
+
+    const serviceLabel = candidate.service_type === 'BATTERY_SWAP' ? 'Đổi pin' : 'Sạc';
+    const serviceDur = feats.service_duration_s != null
+        ? formatDuration(feats.service_duration_s)
+        : '—';
+
+    const freshClass = candidate.freshness?.station === 'STALE' || feats.station_state?.freshness === 'STALE'
+        ? 'tooltip-freshness-stale'
+        : 'tooltip-freshness-fresh';
+
+    return `
+        <div class="station-tooltip" data-station-id="${escapeHtml(candidate.station_id)}">
+            <div class="tooltip-header">
+                #${candidate.rank} ${escapeHtml(station?.name || candidate.station_id)}
+                <span class="service-badge">${serviceLabel}</span>
+            </div>
+            <div class="tooltip-metrics">
+                <div>Xe → trạm: ${distToStationKm} · ${etaToStation}</div>
+                <div>Chờ: ${wait} · ${serviceLabel}: ${serviceDur}</div>
+                <div>Trạm → B: ${distStationToDest} · ${durStationToDest}</div>
+                <div>Đi vòng: +${detourDist}</div>
+                <div class="tooltip-total">Tổng: ${totalEta}</div>
+                <div>Trống: ${capacity} vị trí</div>
+            </div>
+            <div class="${freshClass}">
+                ${candidate.freshness?.station === 'STALE' || feats.station_state?.freshness === 'STALE'
+                    ? '⚠️ Dữ liệu cũ'
+                    : '✓ Dữ liệu tươi'}
+            </div>
+            ${candidate.eligible
+                ? '<button class="btn-ghe-tram">Ghé trạm này</button>'
+                : '<div class="tooltip-ineligible">Không phù hợp</div>'}
+        </div>
+    `;
 }

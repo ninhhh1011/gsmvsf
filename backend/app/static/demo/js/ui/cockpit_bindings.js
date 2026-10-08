@@ -24,6 +24,7 @@ export function createCockpitBindings(root = globalThis.document) {
         slider?.addEventListener('input', event => callbacks.setSoc(parseFloat(event.target.value), false));
         slider?.addEventListener('change', event => callbacks.setSoc(parseFloat(event.target.value), true));
         each('.btn-quick-soc', btn => btn.addEventListener('click', event => callbacks.setSoc(parseFloat(event.currentTarget.dataset.soc), true)));
+        each('.btn-quick-speed', btn => btn.addEventListener('click', event => callbacks.setSpeed?.(parseInt(event.currentTarget.dataset.speed, 10))));
     }
 
     return {
@@ -145,6 +146,18 @@ export function createCockpitBindings(root = globalThis.document) {
             for (const [selector, callback] of [['.btn-nav-drawer-station', callbacks.navigate], ['.btn-nav-post-trip-station', callbacks.setPostTrip], ['.btn-zoom-station', callbacks.zoom]]) {
                 list.querySelectorAll(selector).forEach(button => button.addEventListener('click', event => { event.stopPropagation(); callback(event.currentTarget.dataset); }));
             }
+            // Tooltip hover/click bindings - 0 API calls on hover
+            each('.station-drawer-card[data-station-id]', card => {
+                card.addEventListener('mouseenter', event => {
+                    if (callbacks.showTooltip) callbacks.showTooltip(event.currentTarget.dataset.stationId);
+                });
+                card.addEventListener('mouseleave', () => {
+                    if (callbacks.hideTooltip) callbacks.hideTooltip();
+                });
+                card.addEventListener('click', event => {
+                    if (callbacks.selectStationForTooltip) callbacks.selectStationForTooltip(event.currentTarget.dataset.stationId);
+                });
+            });
         },
         openCostBreakdown(html) { const modal = get('cost-breakdown-modal'), body = get('cost-modal-body'); if (!modal || !body) return false; body.innerHTML = html; modal.style.display = 'flex'; return true; },
         bindCostModalClose(callback) { listen('btn-close-cost-modal', 'click', callback, { once: true }); listen('cost-modal-backdrop', 'click', callback, { once: true }); },
