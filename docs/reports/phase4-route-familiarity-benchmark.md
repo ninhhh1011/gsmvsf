@@ -53,7 +53,9 @@ PostgreSQL inventory check confirmed zero leftover UUID benchmark databases.
 | 100,000 | 1.950 / 2.292 | 655.785 / 1892.086 | 635.231 / 1027.366 | 51 / 606 | 50 / 500 | 101 / 6 |
 
 Personal and community query timings measure the actual repository methods
-separately, including connection acquisition and row decoding. Each stage has
+separately, including the repository acquire wrapper, asyncpg roundtrip, and row
+decoding. The wrapper borrows an open connection, so real asyncpg pool checkout
+and wait time are excluded. Each stage has
 its own one warmup and five measured calls using the same seeded rows,
 request `as_of`, seven-day lookback, driver, and route cells. The retained
 lookup-pair measurement runs both queries sequentially in a separate sample
