@@ -246,6 +246,60 @@ async def test_measurement_failure_after_create_cleans_database_and_reraises(mon
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_at", ["connect", "schema", "measurement"])
+@pytest.mark.parametrize("drop_fails", [False, True])
+async def test_cancellation_after_create_cleans_database_and_propagates(
+        monkeypatch, cancel_at, drop_fails):
+    import asyncpg
+
+    commands = []
+    cancellation_point = asyncio.Event()
+    admin = AsyncMock()
+    conn = AsyncMock()
+
+    async def admin_execute(sql):
+        commands.append(sql)
+        if drop_fails and sql.startswith("DROP DATABASE"):
+            raise OSError("drop failed")
+
+    admin.execute.side_effect = admin_execute
+
+    async def wait_for_cancellation():
+        cancellation_point.set()
+        await asyncio.Future()
+
+    async def execute(sql, *args):
+        if (cancel_at == "schema" and "CREATE TABLE" in sql or
+                cancel_at == "measurement" and sql.startswith("TRUNCATE")):
+            await wait_for_cancellation()
+
+    async def connect(dsn, timeout):
+        if dsn.endswith("/postgres"):
+            return admin
+        if cancel_at == "connect":
+            await wait_for_cancellation()
+        return conn
+
+    conn.execute.side_effect = execute
+    monkeypatch.setattr(asyncpg, "connect", connect)
+    task = asyncio.create_task(_postgres_measure(
+        "postgresql://postgres:postgres@127.0.0.1:5432/ev",
+        RouteSignature(("8b415d8c9a00fff",), (1.0,), 1.0, 11)))
+    await asyncio.wait_for(cancellation_point.wait(), timeout=1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError) as error:
+        await task
+
+    assert commands[0].startswith('CREATE DATABASE "route_familiarity_bench_')
+    assert commands[1:] == [commands[0].replace("CREATE DATABASE", "DROP DATABASE IF EXISTS")]
+    admin.close.assert_awaited_once()
+    assert conn.close.await_count == (0 if cancel_at == "connect" else 1)
+    if drop_fails:
+        assert commands[0].split('"')[1] in error.value.__notes__[0]
+        assert "OSError" in error.value.__notes__[0]
+
+
+@pytest.mark.asyncio
 async def test_unavailable_disposable_connection_is_not_measured_and_is_cleaned(monkeypatch):
     import asyncpg
 

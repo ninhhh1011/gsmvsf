@@ -239,7 +239,7 @@ async def _postgres_measure(database_url, signature):
         schema = (Path(__file__).resolve().parents[1] /
                   "backend/app/services/route_familiarity/schema.sql").read_text(encoding="utf-8")
         await conn.execute(schema)
-    except Exception as error:  # External database availability is optional for the local harness.
+    except (Exception, asyncio.CancelledError) as error:  # External database availability is optional.
         connected = conn is not None
         cleanup_errors = []
         if conn:
@@ -260,6 +260,10 @@ async def _postgres_measure(database_url, signature):
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
+        if isinstance(error, asyncio.CancelledError):
+            if cleanup_errors:
+                error.add_note(f"benchmark cleanup failed for {database_name}: {cleanup_errors}")
+            raise
         if created and connected:
             if cleanup_errors:
                 raise RuntimeError(
@@ -327,7 +331,7 @@ async def _postgres_measure(database_url, signature):
                 "application_database_written": False,
                 "disposable_database_writes_committed": True,
                 **database_lifecycle_report(database_name, created, dropped, [])}
-    except Exception as error:
+    except (Exception, asyncio.CancelledError) as error:
         cleanup_errors = []
         if conn:
             try:
@@ -347,6 +351,10 @@ async def _postgres_measure(database_url, signature):
             except Exception as cleanup_error:
                 cleanup_errors.append(type(cleanup_error).__name__)
             admin = None
+        if isinstance(error, asyncio.CancelledError):
+            if cleanup_errors:
+                error.add_note(f"benchmark cleanup failed for {database_name}: {cleanup_errors}")
+            raise
         if cleanup_errors:
             raise RuntimeError(
                 f"route familiarity benchmark failed for {database_name}; "
