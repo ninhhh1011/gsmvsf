@@ -12,7 +12,8 @@ function deferred() {
 
 function driverFixture(api) {
     const map = {
-        scene: 'DRIVER', renderDriver() { this.scene = 'DRIVER'; }, renderStations() { this.scene = 'DRIVER'; },
+        scene: 'DRIVER', renderDriver() { this.scene = 'DRIVER'; },
+        renderStations(stations, recommended) { this.scene = 'DRIVER'; this.highlightedStation = recommended; },
         clearAll() { this.scene = 'EMPTY'; }, clearRecommendationRoute() { this.scene = 'DRIVER'; },
         renderRecommendationRoute() { this.scene = 'DRIVER'; }, renderDirectRoute() { this.scene = 'DRIVER'; },
         renderTripEndpoints() { this.scene = 'DRIVER'; }, highlightStation() { this.scene = 'DRIVER'; },
@@ -152,6 +153,57 @@ test('successful Driver station navigation completes without a dead button refer
     assert.equal(driver._selectedStationId, 'S001');
     assert.equal(driver.lastRecommendedStationId, 'S001');
     assert.ok(driver.fullRouteCoords.length > 1);
+});
+
+for (const entrypoint of ['_selectStationAndNavigate', 'navigateViaStationId']) {
+    for (const locked of [false, true]) test(`canceling ${entrypoint} preserves ${locked ? 'locked' : 'unlocked'} committed navigation`, async () => {
+        const route = deferred();
+        const { driver, map, enterDebug } = driverFixture({ computeRoute: () => route.promise });
+        driver.stations = [{ station_id: 'S001', latitude: 21.01, longitude: 105.82 },
+            { station_id: 'S002', latitude: 21.03, longitude: 105.83 }];
+        const previousRoute = [[21.01, 105.81], [21.02, 105.82]];
+        driver.fullRouteCoords = previousRoute;
+        driver._navigationLocked = locked;
+        driver._selectedStationId = locked ? 'S001' : null;
+        const running = driver[entrypoint]('S002');
+        enterDebug();
+        assert.equal(driver._navigationLocked, locked, 'a pending choice is not a committed lock');
+        assert.equal(driver._selectedStationId, locked ? 'S001' : null);
+        route.resolve({ geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@', distance_m: 300 });
+        await running;
+        assert.equal(driver.fullRouteCoords, previousRoute);
+        driver.restoreMapState();
+        assert.equal(map.highlightedStation, locked ? 'S001' : undefined);
+        assert.equal(driver._navigationLocked, locked, 'recommendation eligibility still follows the prior committed selection');
+    });
+}
+
+test('failed station routing preserves an unlocked route and leaves recommendations enabled', async t => {
+    t.mock.method(console, 'warn', () => {});
+    let recommendationCalls = 0;
+    const { driver } = driverFixture({
+        computeRoute: async () => { throw new Error('routing unavailable'); },
+        getRecommendation: async () => { recommendationCalls++; return { has_recommendation: false }; }
+    });
+    driver.stations = [{ station_id: 'S001', latitude: 21.01, longitude: 105.82 }];
+    const previousRoute = [[21.01, 105.81], [21.02, 105.82]];
+    driver.fullRouteCoords = previousRoute;
+    await driver.navigateViaStationId('S001');
+    assert.equal(driver._navigationLocked, false);
+    assert.equal(driver._selectedStationId, null);
+    assert.equal(driver.fullRouteCoords, previousRoute);
+    for (const name of ['log', 'group', 'groupEnd']) t.mock.method(console, name, () => {});
+    await driver._evaluateAtCurrentPosition();
+    assert.equal(recommendationCalls, 1);
+});
+
+for (const geometry of [null, '']) test(`station routing with ${geometry === null ? 'missing' : 'empty'} geometry does not commit a selection`, async () => {
+    const { driver, map } = driverFixture({ computeRoute: async () => ({ geometry, distance_m: 0 }) });
+    driver.stations = [{ station_id: 'S001', latitude: 21.01, longitude: 105.82 }];
+    await driver.navigateViaStationId('S001');
+    assert.equal(driver._navigationLocked, false);
+    assert.equal(driver._selectedStationId, null);
+    assert.equal(map.highlightedStation, undefined);
 });
 
 test('a trajectory load canceled by Debug returns to idle and the Driver Play action retries loading', async t => {

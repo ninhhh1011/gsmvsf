@@ -861,13 +861,10 @@ export class DriverModeController {
 
     _hideRecommendationPanel() { this.bindings.hideRecommendationPanel(); }
 
-    _selectStationAndNavigate(stationId) {
-        // Khoá navigation
-        this._navigationLocked = true;
-        this._selectedStationId = stationId;
-
-        // Gọi navigateViaStationId với station đã chọn
-        this.navigateViaStationId(stationId);
+    async _selectStationAndNavigate(stationId) {
+        const currentGen = this.generation;
+        await this.navigateViaStationId(stationId);
+        if (this.generation !== currentGen) return;
         this.renderTripActiveUI();
     }
 
@@ -969,7 +966,7 @@ export class DriverModeController {
         if (!this.lastRecommendation?.has_recommendation || !this.lastRecommendation.ranked_candidates?.length) return;
         const top = this.lastRecommendation.ranked_candidates[0];
         this._hideRecommendationPanel();
-        this._selectStationAndNavigate(top.station_id);
+        return this._selectStationAndNavigate(top.station_id);
     }
 
     async navigateViaStationId(stationId) {
@@ -977,8 +974,6 @@ export class DriverModeController {
         if (!st) return;
         const currentGen = this.generation;
 
-        this._navigationLocked = true;
-        this._selectedStationId = stationId;
         this._hideRecommendationPanel();
         this.closeStationsDrawer();
 
@@ -1000,62 +995,66 @@ export class DriverModeController {
                 const leg2 = await this.api.computeRoute(stationPos, this.currentTrip.destination, { vehicle_category: vCat });
                 if (this.generation !== currentGen) return;
 
-                if (leg1?.geometry) {
-                    this.lastRecommendedStationId = st.station_id;
-                    this.lastDiversionLeg1 = leg1;
-                    const top5Candidates = (this.lastRecommendation?.ranked_candidates || []).slice(0, 5).map((c, idx) => {
-                        const stMatch = this.stations?.find(s => s.station_id === c.station_id);
-                        return {
-                            ...c,
-                            rank: c.rank ?? (idx + 1),
-                            station_id: c.station_id,
-                            latitude: c.latitude ?? stMatch?.latitude,
-                            longitude: c.longitude ?? stMatch?.longitude,
-                        };
-                    }).filter(c => c.latitude != null && c.longitude != null);
-                    this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry, top5Candidates);
-                    this.map.fitBoundsToActive();
+                if (!leg1?.geometry || !leg2?.geometry) return;
+                const coords1 = decodePolyline(leg1.geometry);
+                const coords2 = decodePolyline(leg2.geometry);
+                if (!coords1.length || !coords2.length) return;
+                const combined = [...coords1, ...coords2];
+                this._navigationLocked = true;
+                this._selectedStationId = stationId;
+                this.fullRouteCoords = combined;
+                this.directRouteGeometry = combined;
+                this.lastPassedSegmentIndex = 0;
+                this.lastRecommendedStationId = st.station_id;
+                this.lastDiversionLeg1 = leg1;
+                this.lastDiversionLeg2 = leg2;
+                const top5Candidates = (this.lastRecommendation?.ranked_candidates || []).slice(0, 5).map((c, idx) => {
+                    const stMatch = this.stations?.find(s => s.station_id === c.station_id);
+                    return {
+                        ...c,
+                        rank: c.rank ?? (idx + 1),
+                        station_id: c.station_id,
+                        latitude: c.latitude ?? stMatch?.latitude,
+                        longitude: c.longitude ?? stMatch?.longitude,
+                    };
+                }).filter(c => c.latitude != null && c.longitude != null);
+                this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry, top5Candidates);
+                this.map.fitBoundsToActive();
 
-                    // Combine Leg 1 and Leg 2 for full diversion driving
-                    const coords1 = decodePolyline(leg1.geometry);
-                    const coords2 = leg2?.geometry ? decodePolyline(leg2.geometry) : [];
-                    const combined = [...coords1, ...coords2];
-                    this.fullRouteCoords = combined;
-                    this.directRouteGeometry = combined;
-                    this.lastPassedSegmentIndex = 0;
+                const totalDistM = (leg1.distance_m || 0) + (leg2?.distance_m || 0);
+                this.remainingTripDistanceKm = parseFloat((totalDistM / 1000).toFixed(2));
 
-                    const totalDistM = (leg1.distance_m || 0) + (leg2?.distance_m || 0);
-                    this.remainingTripDistanceKm = parseFloat((totalDistM / 1000).toFixed(2));
-
-                    // Load combined diversion into replay so vehicle drives via station!
-                    if (this.state === DriverState.TRIP_ACTIVE) {
-                        await this.replay.loadFromPolyline(combined);
-                        if (this.generation !== currentGen) return;
-                    }
+                // Load combined diversion into replay so vehicle drives via station!
+                if (this.state === DriverState.TRIP_ACTIVE) {
+                    await this.replay.loadFromPolyline(combined);
+                    if (this.generation !== currentGen) return;
                 }
             } else {
                 // Direct route to station (free drive)
                 const route = await this.api.computeRoute(currentPos, stationPos, { vehicle_category: vCat });
                 if (this.generation !== currentGen) return;
-                if (route?.geometry) {
-                    const coords = decodePolyline(route.geometry);
-                    this.fullRouteCoords = coords;
-                    this.directRouteGeometry = coords;
-                    this.map.clearAll();
-                    this.map.renderTripEndpoints(currentPos, stationPos);
-                    this.map.renderDirectRoute(coords);
-                    this.map.fitBoundsToActive(coords);
-                    this.currentTrip = {
-                        trip_id: `NAVI_${st.station_id}`,
-                        origin: currentPos,
-                        destination: stationPos,
-                        planned_distance_m: route.distance_m
-                    };
-                    this.remainingTripDistanceKm = parseFloat((route.distance_m / 1000).toFixed(2));
-                    if (this.state === DriverState.AVAILABLE) {
-                        this.setState(DriverState.TRIP_ASSIGNED);
-                        this.renderTripAssignedUI();
-                    }
+                if (!route?.geometry) return;
+                const coords = decodePolyline(route.geometry);
+                if (!coords.length) return;
+                this._navigationLocked = true;
+                this._selectedStationId = stationId;
+                this.lastRecommendedStationId = st.station_id;
+                this.fullRouteCoords = coords;
+                this.directRouteGeometry = coords;
+                this.map.clearAll();
+                this.map.renderTripEndpoints(currentPos, stationPos);
+                this.map.renderDirectRoute(coords);
+                this.map.fitBoundsToActive(coords);
+                this.currentTrip = {
+                    trip_id: `NAVI_${st.station_id}`,
+                    origin: currentPos,
+                    destination: stationPos,
+                    planned_distance_m: route.distance_m
+                };
+                this.remainingTripDistanceKm = parseFloat((route.distance_m / 1000).toFixed(2));
+                if (this.state === DriverState.AVAILABLE) {
+                    this.setState(DriverState.TRIP_ASSIGNED);
+                    this.renderTripAssignedUI();
                 }
             }
 
