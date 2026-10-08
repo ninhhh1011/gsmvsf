@@ -1072,7 +1072,6 @@ export class DriverModeController {
         if (!st) return;
         const currentGen = this.generation;
 
-        this.postTripStation = st;
         this.closeStationsDrawer();
 
         const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
@@ -1083,6 +1082,8 @@ export class DriverModeController {
             // Compute onward route from Destination B to Station
             const routeBToSt = await this.api.computeRoute(dest, stationPos, { vehicle_category: vCat });
             if (this.generation !== currentGen) return;
+            if (!routeBToSt?.geometry || !decodePolyline(routeBToSt.geometry).length) return;
+            this.postTripStation = st;
             this.postTripRoute = routeBToSt;
 
             // Render direct route A -> B, plus onward connection B -> Station
