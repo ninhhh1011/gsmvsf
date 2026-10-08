@@ -26,6 +26,12 @@ test('Driver return clears Simulation map content and redraws its existing navig
         assert.equal(map.layers.recommendRoute.layers.size, 0, 'Simulation diversion is removed');
         assert.equal(map.layers.directRoute.layers.size, 2);
         assert.deepEqual([...map.layers.directRoute.layers][1].coords, navigationRoute);
+        driver._navigationLocked = true;
+        driver.lastDiversionLeg1 = { geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' };
+        driver.lastDiversionLeg2 = { geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' };
+        driver.restoreMapState();
+        assert.equal(map.layers.recommendRoute.layers.size, 0, 'locked navigation ignores stale diversion caches');
+        assert.deepEqual([...map.layers.directRoute.layers][1].coords, navigationRoute);
     } finally {
         if (priorLeaflet === undefined) delete globalThis.L;
         else globalThis.L = priorLeaflet;

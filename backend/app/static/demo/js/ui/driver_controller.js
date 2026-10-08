@@ -197,11 +197,12 @@ export class DriverModeController {
     restoreMapState() {
         this.map.clearAll();
         if (this.stations.length) this.map.renderStations(this.stations,
-            this.lastRecommendation?.recommended_station_id, this.lastRecommendation?.recommended_service_type);
+            this._selectedStationId || this.lastRecommendation?.recommended_station_id,
+            this.lastRecommendation?.recommended_service_type);
         this._renderEndpointsWithDrag(this.currentTrip?.origin || this.customOrigin,
             this.currentTrip?.destination || this.customDestination);
         this.map.renderDirectRoute(this.fullRouteCoords);
-        if (this.lastDiversionLeg1?.geometry) this.map.renderRecommendationRoute(
+        if (!this._navigationLocked && this.lastDiversionLeg1?.geometry) this.map.renderRecommendationRoute(
             this.lastDiversionLeg1.geometry, this.lastDiversionLeg2?.geometry);
         if (this.postTripRoute?.geometry) this.map.renderPostTripRoute(this.postTripRoute.geometry);
         this.map.renderDriver(this.currentPos, this.matchedPos, this.currentObservation?.heading_deg);
