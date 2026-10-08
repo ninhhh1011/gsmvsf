@@ -207,9 +207,7 @@ export function renderDrawerStationCard(st, options = {}) {
                 <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
                     Xem vị trí
                 </button>
-                <button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${escapeHtml(st.station_id)}">
-                    🔀 Dẫn đường ghé trạm
-                </button>
+                ${ranked?.eligible !== false ? `<button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${escapeHtml(st.station_id)}">🔀 Dẫn đường ghé trạm</button>` : ''}
             </div>
         `;
     }

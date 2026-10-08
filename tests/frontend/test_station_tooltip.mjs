@@ -115,8 +115,8 @@ test('offline station card shows no "Ghé trạm" navigation button', () => {
     });
 
     // Offline/ineligible stations should not show the "Ghé trạm" or "Dẫn đường ghé trạm" button
-    assert.ok(!html.includes('Dẫn đường ghé trạm') || !html.includes('Ghé trạm'),
-        'Offline station should not show "Dẫn đường ghé trạm" button');
+    assert.ok(!html.includes('Dẫn đường ghé trạm') && !html.includes('Ghé trạm'),
+        'Offline station should not show "Dẫn đường ghé trạm" or "Ghé trạm" button');
 });
 
 test('station card with ranked candidate shows full metrics breakdown', () => {

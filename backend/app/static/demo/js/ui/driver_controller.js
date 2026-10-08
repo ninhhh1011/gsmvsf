@@ -243,8 +243,11 @@ export class DriverModeController {
             this._h3Overlay.clear();
             this._h3Overlay.setEnabled(false);
             this._h3Enabled = false;
-            const toggle = document.getElementById('toggle-route-familiarity');
-            if (toggle) toggle.checked = false;
+            // Uncheck the toggle if in browser environment
+            if (typeof document !== 'undefined') {
+                const toggle = document.getElementById('toggle-route-familiarity');
+                if (toggle) toggle.checked = false;
+            }
         }
     }
 
@@ -646,6 +649,7 @@ export class DriverModeController {
                     });
 
                     this.directRouteGeometry = remainingCoords;
+                    this._clearH3OnRouteChange();
                     this.map.updateDirectRoute?.(remainingCoords);
 
                     const remainingMeters = computePolylineDistanceMeters(remainingCoords);
@@ -1176,6 +1180,7 @@ export class DriverModeController {
                 this.lastRecommendedStationId = st.station_id;
                 this.fullRouteCoords = coords;
                 this.directRouteGeometry = coords;
+                this._clearH3OnRouteChange();
                 this.map.clearAll();
                 this.map.renderTripEndpoints(currentPos, stationPos);
                 this.map.renderDirectRoute(coords);

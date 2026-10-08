@@ -138,6 +138,116 @@ export class RouteFamiliarityOverlay {
         }
     }
 
+    /**
+     * Render H3 cells computed from geometry (display-only, no backend calls).
+     * @param {string[]} cells - Array of H3 cell IDs
+     */
+    renderFromCells(cells) {
+        if (!this.active || !this.enabled || !Array.isArray(cells) || cells.length === 0) {
+            this.setCount('Route cells hidden');
+            return;
+        }
+        this.cancelRender();
+
+        const bounds = this.map.getBounds();
+        const west = bounds.getWest();
+        const east = bounds.getEast();
+        const south = bounds.getSouth();
+        const north = bounds.getNorth();
+        const visible = [];
+
+        for (const cell of cells) {
+            if (!this.isResolution11Cell(cell)) continue;
+            let boundary;
+            try {
+                boundary = this.h3.cellToBoundary(cell);
+            } catch {
+                continue;
+            }
+            if (!Array.isArray(boundary) || boundary.length < 3 || boundary.some(point =>
+                !Array.isArray(point) || point.length < 2 || !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) continue;
+            const lats = boundary.map(point => point[0]);
+            const lngs = boundary.map(point => point[1]);
+            if (Math.max(...lats) < south || Math.min(...lats) > north ||
+                Math.max(...lngs) < west || Math.min(...lngs) > east) continue;
+            visible.push(boundary.map(([lat, lng]) => [lat, lng]));
+        }
+
+        const capped = visible.slice(0, this.maxCells);
+        this.polygons = capped.map(coords => this.L.polygon(coords, {
+            color: '#7c3aed', fillColor: '#a78bfa', fillOpacity: 0.35, weight: 1,
+            interactive: false
+        }));
+        this.setCount(`Showing ${capped.length} of ${visible.length} route cells (H3-11)`);
+        this.renderBatch();
+    }
+
+    /**
+     * Clear the H3 overlay.
+     */
+    clear() {
+        this.cancelRender();
+        this.setCount('Route cells hidden');
+    }
+
+    /**
+     * Compute H3-11 cells from route geometry coordinates.
+     * Samples every ~100m along the route and caps at 500 cells.
+     * @param {Array<[number, number]>|null} geometryCoords - Array of [lat, lng] pairs
+     * @param {number} resolution - H3 resolution (default 11)
+     * @returns {string[]} Array of H3 cell IDs
+     */
+    computeH3CellsFromGeometry(geometryCoords, resolution = 11) {
+        if (!geometryCoords || !Array.isArray(geometryCoords) || geometryCoords.length < 2) {
+            return [];
+        }
+        const cells = new Set();
+
+        // Approximate distance between two lat/lng points in meters
+        const approxDistMeters = (lat1, lng1, lat2, lng2) => {
+            const R = 6371000; // Earth radius in meters
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        };
+
+        for (let i = 0; i < geometryCoords.length - 1; i++) {
+            const [lat1, lng1] = geometryCoords[i];
+            const [lat2, lng2] = geometryCoords[i + 1];
+
+            if (!Number.isFinite(lat1) || !Number.isFinite(lng1) ||
+                !Number.isFinite(lat2) || !Number.isFinite(lng2)) {
+                continue;
+            }
+
+            const segDist = approxDistMeters(lat1, lng1, lat2, lng2);
+            const numSamples = Math.max(1, Math.ceil(segDist / 100));
+
+            for (let s = 0; s <= numSamples; s++) {
+                const t = s / numSamples;
+                const lat = lat1 + (lat2 - lat1) * t;
+                const lng = lng1 + (lng2 - lng1) * t;
+
+                try {
+                    const cell = this.h3.latLngToCell(lat, lng, resolution);
+                    if (cell) cells.add(cell);
+                } catch {
+                    // Skip invalid cells
+                }
+
+                if (cells.size >= 500) break;
+            }
+            if (cells.size >= 500) break;
+        }
+
+        return Array.from(cells);
+    }
+
     destroy() {
         this.cancelRender();
         this.map.off('moveend', this.onMoveEnd);
