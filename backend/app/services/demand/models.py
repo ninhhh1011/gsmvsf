@@ -9,7 +9,7 @@ Contains:
 - Common EnergyServiceRequest contract for Week 3 convergence
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -152,7 +152,7 @@ class DemandContext(BaseModel):
     vehicle_id: str
     driver_id: str | None = None
     trip_id: str | None = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     current_soc_pct: float | None = None
     estimated_remaining_range_km: float | None = None
     remaining_trip_distance_km: float | None = None

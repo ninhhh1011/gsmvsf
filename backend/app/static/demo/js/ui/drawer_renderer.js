@@ -5,6 +5,7 @@
  */
 
 import { straightLineDistanceKm } from '../domain/vehicle_model.js';
+import { escapeHtml } from '../domain/route-display.js';
 
 /**
  * Render a single station card for the drawer list.
@@ -116,7 +117,7 @@ export function renderDrawerStationCard(st, options = {}) {
         }
         slots = cand.operational?.available_service_slots ?? totalSlots;
         if (!cand.eligible && cand.reason) {
-            statusBadge = `<span class="badge badge-danger" style="font-size:10px;">${cand.reason}</span>`;
+            statusBadge = `<span class="badge badge-danger" style="font-size:10px;">${escapeHtml(cand.reason)}</span>`;
         }
     }
 
@@ -168,7 +169,7 @@ export function renderDrawerStationCard(st, options = {}) {
                 <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
                     Xem vị trí
                 </button>
-                <button class="btn btn-primary btn-sm btn-nav-post-trip-station" data-station-id="${st.station_id}" style="background:${isSelectedPostTrip ? '#059669' : '#0f172a'}; border-color:${isSelectedPostTrip ? '#059669' : '#0f172a'};">
+                <button class="btn btn-primary btn-sm btn-nav-post-trip-station" data-station-id="${escapeHtml(st.station_id)}" style="background:${isSelectedPostTrip ? '#059669' : '#0f172a'}; border-color:${isSelectedPostTrip ? '#059669' : '#0f172a'};">
                     ${isSelectedPostTrip ? '✓ Đang chọn sạc sau khi tới B' : '🏁 Đến B rồi sạc tại đây'}
                 </button>
             </div>
@@ -206,7 +207,7 @@ export function renderDrawerStationCard(st, options = {}) {
                 <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
                     Xem vị trí
                 </button>
-                <button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${st.station_id}">
+                <button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${escapeHtml(st.station_id)}">
                     🔀 Dẫn đường ghé trạm
                 </button>
             </div>
@@ -214,15 +215,15 @@ export function renderDrawerStationCard(st, options = {}) {
     }
 
     return `
-        <div class="station-drawer-card ${isRec ? 'is-recommended' : ''}" data-station-id="${st.station_id}">
+        <div class="station-drawer-card ${isRec ? 'is-recommended' : ''}" data-station-id="${escapeHtml(st.station_id)}">
             <div class="station-card-top">
                 <div>
                     <div style="display:flex; align-items:center; gap:6px;">
-                        <span class="station-card-name">Trạm ${st.station_id}</span>
+                        <span class="station-card-name">Trạm ${escapeHtml(st.station_id)}</span>
                         ${statusBadge}
                     </div>
                     <div style="font-size:12px; color:#64748b; margin-top:2px;">
-                        ${st.name || `Trạm năng lượng ${st.station_id}`}
+                        ${escapeHtml(st.name || `Trạm năng lượng ${st.station_id}`)}
                     </div>
                 </div>
                 ${typeBadge}

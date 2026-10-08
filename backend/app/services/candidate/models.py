@@ -7,7 +7,7 @@ Maintains strict separation from Week 4 Ranking:
 - Contains NO ranking score, NO rank position, and NO best-station recommendation.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from backend.app.services.demand.models import EnergyServiceRequest, ServiceType
@@ -143,7 +143,7 @@ class CandidateSearchResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     service_request_id: str
-    search_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    search_timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     search_status: str = "SUCCESS"  # SUCCESS, NO_SERVICE_NEEDED, INVALID_REQUEST, ERROR
     total_candidates_evaluated: int
     eligible_count: int

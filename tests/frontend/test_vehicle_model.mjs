@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
     straightLineDistanceKm,
     EARTH_RADIUS_KM,
-    DEFAULT_MODEL_SPECS,
+    FALLBACK_MODEL_SPECS,
     MODEL_SPECS,
     VINFAST_MODEL_SPECS,
     registerVehicleModel,

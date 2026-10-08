@@ -24,7 +24,7 @@ class MapMatchingService:
         for obs, point in zip(observations, points):
             segment = None
             if point.matched and self._segment_resolver is not None:
-                segment = self._segment_resolver.resolve_matched(
+                segment = await self._segment_resolver.resolve_matched(
                     point.location[1], point.location[0], point.osm_way_id, point.bearing)
             ambiguous = point.matched and (point.bearing is None or
                 (segment is not None and segment.status.value == "AMBIGUOUS"))

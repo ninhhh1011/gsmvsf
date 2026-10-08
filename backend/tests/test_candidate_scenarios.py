@@ -18,7 +18,7 @@ Validates the representative scenarios required by project scope and acceptance 
 14. FARTHER_BUT_FASTER
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 import pytest
 
 from backend.app.services.candidate.models import (
@@ -135,7 +135,7 @@ async def test_scenario_04_charge_only_bike_swap_not_allowed(mock_service):
         vehicle_id="V0045",
         vehicle_model="FELIZ_S",
         vehicle_type="EV_MOTORBIKE",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.DRIVER_REQUEST,
         requested_service_type=RequestedServiceType.BATTERY_SWAP,
         need_service=True,

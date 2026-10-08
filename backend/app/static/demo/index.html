@@ -6,9 +6,6 @@
     <title>VinFast EV — Điều Hướng & Đề Xuất Năng Lượng (Driver Cockpit)</title>
     <!-- Leaflet 1.9.4 Local CSS -->
     <link rel="stylesheet" href="/demo/static/vendor/leaflet/leaflet.css" />
-    <!-- H3-js Hexagonal Spatial Indexing (vendored locally) -->
-    <!-- TODO: Download https://unpkg.com/h3-js@4.3.1/dist/h3.js to js/vendor/h3.js -->
-    <script src="/demo/static/js/vendor/h3.js"></script>
     <!-- App Design System Stylesheet -->
     <link rel="stylesheet" href="/demo/static/style.css" />
 </head>
@@ -74,6 +71,10 @@
 
         <!-- Actions -->
         <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
+            <nav class="mode-switcher" aria-label="Demo mode">
+                <button id="btn-mode-driver" class="mode-tab-btn active" aria-pressed="true">Driver</button>
+                <button id="btn-mode-sim" class="mode-tab-btn" aria-pressed="false">Simulation / Debug</button>
+            </nav>
             <!-- Driver status badge in header for clear status reading -->
             <span id="driver-status-badge" class="status-badge badge-available">SẴN SÀNG <span class="sr-only">AVAILABLE</span></span>
         </div>
@@ -87,7 +88,7 @@
             <div id="map"></div>
 
             <!-- Floating Map Actions: Find Station & Custom Origin / Destination -->
-            <div class="map-floating-controls">
+            <div id="driver-map-controls" class="map-floating-controls">
                 <button id="btn-open-stations-drawer" class="btn btn-fab-station" title="Tìm trạm sạc xung quanh">
                     ⚡ Tìm trạm sạc
                 </button>
@@ -96,9 +97,6 @@
                 </button>
                 <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
                     🏁 Đổi điểm đến (B)
-                </button>
-                <button id="btn-h3-overlay" class="btn btn-fab-h3 btn-outline-secondary" title="Hiện Familiar Routes (H3 Hex Overlay)">
-                    🔷 H3 Overlay
                 </button>
             </div>
 
@@ -153,19 +151,7 @@
                     <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.25); font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600;" title="Thời gian kẹt xe và độ trễ giao thông được tự động tính vào Cost và đề xuất trạm">🚦 Tự động tính tắc đường</span>
                     <label for="cockpit-vehicle-select" class="text-xs text-muted" style="font-size: 11px; margin: 0;">Mẫu xe:</label>
                     <select id="cockpit-vehicle-select" class="form-control form-control-sm" style="background: #1e293b; color: #38bdf8; border: 1px solid #334155; font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight: 600; cursor: pointer;" title="Đổi mẫu xe VinFast">
-                        <option value="VF_3">VF 3 (17.2 kWh · 95 Wh/km)</option>
-                        <option value="VF_5">VF 5 (34.3 kWh · 125 Wh/km)</option>
-                        <option value="VF_6">VF 6 (54.8 kWh · 145 Wh/km)</option>
-                        <option value="VF_7_ECO">VF 7 Eco (54.8 kWh · 155 Wh/km)</option>
-                        <option value="VF_7_PLUS">VF 7 Plus (69.3 kWh · 170 Wh/km)</option>
-                        <option value="VF_8">VF 8 (80.7 kWh · 195 Wh/km)</option>
-                        <option value="VF_9">VF 9 (113.2 kWh · 235 Wh/km)</option>
-                        <option value="VF_E34">VF e34 (38.6 kWh · 135 Wh/km)</option>
-                        <option value="EVO200">Evo200 [Xe máy] (3.2 kWh · 40 Wh/km)</option>
-                        <option value="FELIZ_S">Feliz S [Xe máy] (3.2 kWh · 42 Wh/km)</option>
-                        <option value="KLARA_S_2022">Klara S [Xe máy] (3.2 kWh · 45 Wh/km)</option>
-                        <option value="EVO">Evo [Pin đổi] (2.8 kWh · 38 Wh/km)</option>
-                        <option value="FELIZ_II">Feliz II [Pin đổi] (2.8 kWh · 40 Wh/km)</option>
+                        <option value="VF_3">Loading models...</option>
                     </select>
                     <span class="status-indicator-dot online"></span>
                 </div>
@@ -176,6 +162,36 @@
                 <!-- Initial content rendered via JS -->
             </div>
         </div>
+
+        <aside id="sim-view-container" class="floating-sim-panel sim-mode-container" hidden aria-label="Simulation / Debug">
+            <h3>Simulation / Debug</h3>
+            <div id="sim-scenarios-container"></div>
+            <div id="sim-scenario-desc"></div>
+            <div class="form-group">
+                <label for="sim-vehicle-select">Vehicle</label>
+                <select id="sim-vehicle-select" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label for="sim-soc-slider">SOC: <span id="sim-soc-val">15%</span></label>
+                <input id="sim-soc-slider" type="range" min="0" max="100" step="1" value="15">
+                <span id="sim-est-range-val">25.0 km</span>
+            </div>
+            <div class="form-group">
+                <label for="sim-timestamp">Request time (UTC)</label>
+                <input id="sim-timestamp" class="form-control" type="text" value="2026-09-01T07:00:00Z">
+            </div>
+            <button id="btn-run-sim" class="btn btn-primary">FIND BEST STATION</button>
+            <div class="sim-familiarity-controls">
+                <label class="route-familiarity-toggle" title="Explain the selected recommendation route">
+                    <input id="toggle-route-familiarity" type="checkbox" disabled>
+                    H3 route cells
+                </label>
+                <span id="route-familiarity-count" class="route-familiarity-count" aria-live="polite">Route cells hidden</span>
+                <span id="route-familiarity-support" class="route-familiarity-count" aria-live="polite">Personal support: unavailable · Community support: suppressed/unavailable</span>
+            </div>
+            <div id="sim-pipeline-container"></div>
+            <div id="sim-recommendation-container"></div>
+        </aside>
 
 
         <!-- Cost Breakdown Modal (Driver Cockpit) -->
@@ -196,6 +212,7 @@
     </main>
 
     <script src="/demo/static/vendor/leaflet/leaflet.js"></script>
+    <script src="/demo/static/vendor/h3/h3-js.umd.js"></script>
     <script type="module" src="/demo/static/js/app.js"></script>
 </body>
 </html>

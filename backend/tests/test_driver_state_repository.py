@@ -1,6 +1,6 @@
 """Tests for driver state repository and manager."""
 import pytest
-from datetime import datetime
+from datetime import UTC, datetime
 
 from backend.app.services.realtime.driver_state_repository import (
     InMemoryDriverStateRepository,
@@ -20,12 +20,12 @@ async def test_in_memory_repository_save_and_get():
             {
                 "observation_id": "obs1",
                 "driver_id": "D001",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "latitude": 21.0,
                 "longitude": 105.8,
             }
         ],
-        last_match_time=datetime.utcnow().isoformat(),
+        last_match_time=datetime.now(UTC).isoformat(),
         last_matched_state={
             "matched_latitude": 21.001,
             "matched_longitude": 105.801,
@@ -106,7 +106,7 @@ async def test_gps_observation_roundtrip():
     obs = GPSObservation(
         observation_id="obs1",
         driver_id="D001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         latitude=21.0,
         longitude=105.8,
         speed_kmh=30.0,

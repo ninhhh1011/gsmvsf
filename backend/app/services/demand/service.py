@@ -9,10 +9,7 @@ import logging
 import uuid
 
 from backend.app.services.demand.auto_detector import AutoDemandDetector
-from backend.app.services.demand.capability import (
-    VehicleCapabilityResolver,
-    get_capability_resolver,
-)
+from backend.app.services.demand.capability import VehicleCapabilityResolver
 from backend.app.services.demand.driver_requester import DriverRequestProcessor
 from backend.app.services.demand.models import (
     DemandContext,
@@ -32,11 +29,11 @@ class DemandService:
 
     def __init__(
         self,
-        capability_resolver: VehicleCapabilityResolver | None = None,
+        capability_resolver: VehicleCapabilityResolver,
         auto_detector: AutoDemandDetector | None = None,
         driver_requester: DriverRequestProcessor | None = None,
     ):
-        self._resolver = capability_resolver or get_capability_resolver()
+        self._resolver = capability_resolver
         self._auto_detector = auto_detector or AutoDemandDetector(self._resolver)
         self._driver_requester = driver_requester or DriverRequestProcessor(self._resolver)
 
@@ -117,6 +114,7 @@ class DemandService:
         )
         return request
 
+
     def process_driver_request(
         self,
         context: DemandContext,
@@ -191,21 +189,6 @@ class DemandService:
         return request
 
 
-# Global service instance
-_global_service: DemandService | None = None
-
-
-def get_demand_service(request: object | None = None) -> DemandService:
-    """Get DemandService instance, resolving from request.app.state if available."""
-    if request and hasattr(request, "app") and getattr(request.app.state, "demand_service", None) is not None:
-        return request.app.state.demand_service
-    global _global_service
-    if _global_service is None:
-        _global_service = DemandService()
-    return _global_service
-
-
-def reset_demand_service():
-    """Reset global DemandService for testing."""
-    global _global_service
-    _global_service = None
+def create_demand_service() -> DemandService:
+    """Create a standalone service for offline evaluation and unit tests."""
+    return DemandService(VehicleCapabilityResolver())

@@ -382,9 +382,11 @@ hardening remain Week 6/future scope.
 3. Demonstrate dynamic recommendation cost variance where station rankings evolve between timestamps $T_0$ and $T_1$ based on live operational changes.
 
 
-## ADR-019: Multi-Replica API & Nginx Upstream Load Balancing
+## ADR-019: Multi-Replica API & Nginx Upstream Load Balancing (Superseded)
 
-**Date:** 2026-09-29. **Status:** Approved.
+**Date:** 2026-09-29. **Status:** Historical proposal; deployment claims are not verified.
+
+The deployed Compose topology runs two API containers on one host. The data plane remains single-node. This ADR does not establish host-level failover, zero-downtime resilience, or a production SLA.
 
 **Context:** A single API container was a single point of failure (SPOF) for the application tier. High concurrency could exhaust process worker threads, and an API restart interrupted incoming client traffic.
 
@@ -421,5 +423,18 @@ hardening remain Week 6/future scope.
    - `ui/drawer_renderer.js`: Station drawer card markup for en-route vs at-destination intents.
    - `ui/map_picker.js`: Interactive origin/destination coordinate selection state machine.
 6. **Automated Frontend Testing:** Establish 54 pure Node.js automated unit and scenario tests (`node --test tests/frontend/*.mjs`), executable via `npm test` and `make test-frontend`, testing all domain logic without browser DOM overhead.
+
+
+## ADR-021: Route Familiarity v2 as an Opt-in Explanation and Ranking Tie-breaker
+
+**Date:** 2026-10-07. **Status:** Approved for Phase 4 implementation.
+
+**Context:** Route history and familiarity were removed in ADR-020 because the previous code mixed synchronous database access into async requests, used hidden globals, and did not apply its placeholder similarity to ranking. The product requirement for personal and community route familiarity remains.
+
+**Decision:** Rebuild the capability with ordered, distance-weighted H3 Resolution 11 signatures, asyncpg persistence, protected trusted-producer ingestion, and an opt-in `ENABLE_ROUTE_FAMILIARITY=false` default. Personal familiarity may add only a configurable nonnegative penalty capped at 30 seconds after eligibility and physical service-completion costs are established. Community evidence is explanatory only. No familiarity input changes eligibility, physical ETA, queue/service semantics, or the existing 409 retry. No personal-history read API or raw route logging is added. A local H3 v4 browser bundle may render resolution-11 explanation cells.
+
+The current `/recommend` boundary does not authenticate end users. When enabled, V2 therefore requires a configured identity HMAC secret and a trusted gateway signature over the request's exact driver ID; requests without a valid signature are rejected before history access. Ingestion remains restricted to a trusted producer token. Event-time queries must exclude route records completed after the evaluated request time. History lookup and route-signature sizes are bounded and truncation is explicit. This ADR authorizes Phase 4 only and does not authorize Week 6 infrastructure or unrelated work.
+
+Operations remain limited to the current single-host topology: API replicas on one host share one single-node data plane. Route familiarity schema changes are explicit; `make migrate-route-familiarity` applies the additive table/index DDL and `make rollback-route-familiarity` drops that table and its history. The opt-in local benchmark measures production signature/similarity/evaluation code at bounded logical data sizes. For PostgreSQL evidence it creates and drops a UUID-named disposable database, seeds only synthetic rows there, and records the actual asyncpg repository query plans; the configured application database is never written by the benchmark.
 
 

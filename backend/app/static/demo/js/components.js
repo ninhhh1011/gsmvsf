@@ -6,6 +6,7 @@
  */
 
 import { ApiError } from './api.js';
+import { escapeHtml } from './domain/route-display.js';
 
 export function classifyEnergyWarning(energyContext) {
     if (!energyContext) {
@@ -66,7 +67,7 @@ export function renderEnergyWarningBanner(energyContext) {
         'LOW_SOC': 'Mức pin thấp',
         'INSUFFICIENT_POST_DESTINATION_RESERVE': 'Dự phòng thấp'
     };
-    const friendlyReason = reasonLabels[warning.reasonCode] || warning.reasonCode;
+    const friendlyReason = escapeHtml(reasonLabels[warning.reasonCode] || warning.reasonCode);
 
     let iconSvg = '';
     if (warning.level === 'SAFE') {
@@ -98,7 +99,7 @@ export function renderEnergyWarningBanner(energyContext) {
                     <span class="sr-only">${warning.testToken || warning.title}</span>
                     <span class="badge-code">
                         ${friendlyReason}
-                        <span class="sr-only">${warning.reasonCode}</span>
+                        <span class="sr-only">${escapeHtml(warning.reasonCode)}</span>
                     </span>
                 </div>
                 <div class="banner-desc">${warning.message}</div>
@@ -116,7 +117,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
                 </div>
                 <div class="card-body">
                     <p class="muted-text">
-                        ${recResult?.reason || 'Pin hiện tại đủ cho hành trình hoặc không có trạm khả dụng.'}
+                        ${escapeHtml(recResult?.reason || 'Pin hiện tại đủ cho hành trình hoặc không có trạm khả dụng.')}
                     </p>
                 </div>
             </div>
@@ -124,7 +125,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
     }
 
     const topCandidate = recResult.ranked_candidates[0];
-    const stId = recResult.recommended_station_id || topCandidate?.station_id;
+    const stId = escapeHtml(recResult.recommended_station_id || topCandidate?.station_id || '');
     const sType = recResult.recommended_service_type || topCandidate?.service_type;
     const isSwap = sType === 'BATTERY_SWAP';
 
@@ -143,7 +144,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
     const serviceMin = ((feats.service_duration_s || 0) / 60).toFixed(1);
 
     const isDegraded = recResult.degraded;
-    const degradedBadges = (recResult.degraded_reasons || []).map(r => `<span class="badge badge-warning">${r}</span>`).join(' ');
+    const degradedBadges = (recResult.degraded_reasons || []).map(r => `<span class="badge badge-warning">${escapeHtml(r)}</span>`).join(' ');
 
     const stationFresh = topCandidate.features.station_state?.freshness || 'FRESH';
     const queueFresh = topCandidate.features.queue_state?.freshness || 'FRESH';
@@ -420,9 +421,9 @@ export function renderCandidateTable(candidates, rankedCandidates = []) {
         return `
             <tr class="${isTop ? 'row-top-rec' : ''} ${!isEligible ? 'row-ineligible' : ''}">
                 <td><span class="rank-badge ${isTop ? 'rank-1' : ''}">${rankNum}</span></td>
-                <td><strong>${c.station_id}</strong></td>
+                <td><strong>${escapeHtml(c.station_id)}</strong></td>
                 <td><span class="badge ${c.service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${c.service_type === 'BATTERY_SWAP' ? 'ĐỔI PIN' : 'SẠC PIN'}</span></td>
-                <td>${isEligible ? `<span class="badge badge-success">PHÙ HỢP</span>` : `<span class="badge badge-danger">${c.reason || 'KHÔNG PHÙ HỢP'}</span>`}</td>
+                <td>${isEligible ? `<span class="badge badge-success">PHÙ HỢP</span>` : `<span class="badge badge-danger">${escapeHtml(c.reason || 'KHÔNG PHÙ HỢP')}</span>`}</td>
                 <td>${travelText}</td>
                 <td>${queueText}</td>
                 <td>${detourText}</td>

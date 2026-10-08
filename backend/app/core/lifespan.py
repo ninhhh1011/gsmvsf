@@ -6,7 +6,9 @@ import asyncpg
 import httpx
 from backend.app.config import settings
 from backend.app.core.logging import configure_logging, get_logger
-from backend.app.services import graphhopper
+from backend.app.services.realtime.driver_state_manager import DriverStateManager
+from backend.app.services.realtime.driver_state_repository import RedisDriverStateRepository
+from backend.app.services.realtime.state import DriverStateStore
 from fastapi import FastAPI
 from redis.asyncio import Redis
 from redis.backoff import NoBackoff
@@ -20,7 +22,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application lifecycle."""
     configure_logging()
     logger.info("application_startup", version="0.1.0")
-    # ponytail: one application per process, matching existing service singletons.
     async with httpx.AsyncClient(timeout=60.0) as client, asyncpg.create_pool(
         settings.database_url.replace('postgresql+asyncpg://', 'postgresql://'),
         min_size=0, max_size=10, timeout=settings.snapshot_db_timeout_s,
@@ -31,18 +32,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         socket_timeout=settings.snapshot_cache_timeout_s,
         retry=Retry(NoBackoff(), 0),
     ) as redis:
-        graphhopper.http_client = client
         from backend.app.services.ranking.models import RankingPolicy
         from backend.app.services.ranking.orchestration import RecommendationWorkflow
         from backend.app.services.snapshots.ingestion import IngestionService
         from backend.app.services.snapshots.repository import SnapshotRepository
         from backend.app.services.snapshots.resolver import SnapshotCache, SnapshotResolver
         app.state.db_pool = pool
+        app.state.route_history_repository = None
+        app.state.route_history_ingestion = None
+        if settings.enable_route_familiarity:
+            from backend.app.services.route_familiarity.repository import RouteHistoryRepository
+            from backend.app.services.route_familiarity.ingestion import RouteHistoryIngestion
+            app.state.route_history_repository = RouteHistoryRepository(pool)
+            app.state.route_history_ingestion = RouteHistoryIngestion(app.state.route_history_repository)
         app.state.redis = redis
         app.state.http_client = client
+        app.state.driver_state_repository = RedisDriverStateRepository(client=redis)
+        app.state.driver_state_manager = DriverStateManager(repository=app.state.driver_state_repository)
+        app.state.driver_state_store = DriverStateStore()
 
-        from backend.app.api.v1.candidate import set_candidate_service
         from backend.app.services.candidate.service import CandidateSearchService
+        from backend.app.services.demand.capability import VehicleCapabilityResolver
         from backend.app.services.demand.service import DemandService
         from backend.app.services.map_matching.graphhopper_adapter import (
             GraphHopperMapMatchingAdapter,
@@ -55,16 +65,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             GraphHopperRoutingAdapter,
         )
 
+        capability_resolver = VehicleCapabilityResolver()
         routing_adapter = GraphHopperRoutingAdapter(client=client)
         app.state.routing_adapter = routing_adapter
-        app.state.candidate_service = CandidateSearchService(routing_engine=routing_adapter)
-        app.state.demand_service = DemandService()
-        app.state.segment_resolver = RouteConstrainedSegmentResolver(settings.database_url_sync)
+        app.state.capability_resolver = capability_resolver
+        app.state.candidate_service = CandidateSearchService(
+            routing_engine=routing_adapter, capability_resolver=capability_resolver)
+        app.state.demand_service = DemandService(capability_resolver=capability_resolver)
+        app.state.segment_resolver = RouteConstrainedSegmentResolver(pool)
         app.state.map_matching_service = MapMatchingService(
-            GraphHopperMapMatchingAdapter(base_url=settings.graphhopper_base_url),
+            GraphHopperMapMatchingAdapter(base_url=settings.graphhopper_base_url, client=client),
             app.state.segment_resolver,
         )
-        set_candidate_service(app.state.candidate_service)
 
         repository = SnapshotRepository(pool, timeout_s=settings.snapshot_db_timeout_s)
         policy = RankingPolicy(missing_queue_wait_s=settings.missing_queue_wait_s,
@@ -74,8 +86,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         resolver = SnapshotResolver(repository, cache, policy)
         app.state.snapshot_resolver = resolver
         app.state.snapshot_ingestion = IngestionService(repository, cache=cache)
+        familiarity_evaluator = None
+        if settings.enable_route_familiarity:
+            from backend.app.services.route_familiarity.service import RouteFamiliarityService
+            familiarity_evaluator = RouteFamiliarityService(app.state.route_history_repository)
         app.state.recommendation_workflow = RecommendationWorkflow(repository, resolver,
-            routing_adapter, policy=policy)
+            routing_adapter, policy=policy, familiarity_evaluator=familiarity_evaluator)
         from backend.app.services.snapshots.simulator import RealtimeSimulator
         simulator = RealtimeSimulator()
         app.state.realtime_simulator = simulator
@@ -89,15 +105,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.realtime_simulator = None
             app.state.recommendation_workflow = None
             app.state.snapshot_ingestion = None
+            app.state.route_history_ingestion = None
+            app.state.route_history_repository = None
             app.state.candidate_service = None
             app.state.demand_service = None
+            app.state.capability_resolver = None
             app.state.map_matching_service = None
-            if getattr(app.state, "segment_resolver", None) is not None:
-                app.state.segment_resolver.close()
             app.state.segment_resolver = None
             app.state.db_pool = None
             app.state.redis = None
             app.state.http_client = None
-            graphhopper.http_client = None
-            set_candidate_service(None)
+            app.state.driver_state_manager = None
+            app.state.driver_state_repository = None
+            app.state.driver_state_store = None
     logger.info("application_shutdown")

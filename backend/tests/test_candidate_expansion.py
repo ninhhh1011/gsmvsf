@@ -2,7 +2,7 @@
 Tests for candidate expansion engine.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 import pytest
 
 from backend.app.services.candidate.expansion import (
@@ -46,7 +46,7 @@ def test_car_expansion(sample_stations):
     req = EnergyServiceRequest(
         service_request_id="REQ-CAR",
         vehicle_id="V001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.AUTO_DETECTED,
         need_service=True,
         allowed_service_types=[ServiceType.CHARGING],
@@ -67,7 +67,7 @@ def test_swap_bike_unresolved_expansion(sample_stations):
     req = EnergyServiceRequest(
         service_request_id="REQ-SWAP-UNRESOLVED",
         vehicle_id="V002",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.AUTO_DETECTED,
         need_service=True,
         allowed_service_types=[ServiceType.CHARGING, ServiceType.BATTERY_SWAP],
@@ -93,7 +93,7 @@ def test_driver_request_any_expansion(sample_stations):
     req = EnergyServiceRequest(
         service_request_id="REQ-DRIVER-ANY",
         vehicle_id="V002",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.DRIVER_REQUEST,
         requested_service_type=RequestedServiceType.ANY,
         need_service=True,

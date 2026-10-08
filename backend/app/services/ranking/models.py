@@ -14,6 +14,7 @@ from backend.app.services.snapshots.models import (
     aware_utc,
 )
 from pydantic import Field, field_validator
+from backend.app.services.route_familiarity.constants import H3_ROUTE_RESOLUTION
 
 
 class RankingPolicy(FrozenModel):
@@ -74,6 +75,25 @@ class RankedCandidate(FrozenModel):
     final_cost_s: Nonnegative
     eta_to_destination_via_station_s: Nonnegative | None = None
     penalty_components_s: dict[str, float] = Field(default_factory=dict)
+    familiarity: 'FamiliarityExplanation | None' = None
+
+
+class FamiliarityExplanation(FrozenModel):
+    status: Literal['DISABLED', 'UNAVAILABLE', 'NO_HISTORY', 'AVAILABLE']
+    resolution: int = H3_ROUTE_RESOLUTION
+    personal_adherence: float | None = Field(None, ge=0, le=1)
+    personal_adherence_pct: float | None = Field(None, ge=0, le=100)
+    personal_trip_count: int | None = Field(None, ge=0)
+    personal_history_trip_count: int | None = Field(None, ge=0)
+    community_adherence: float | None = Field(None, ge=0, le=1)
+    community_trip_count: int | None = Field(None, ge=0)
+    community_driver_count: int | None = Field(None, ge=0)
+    confidence: float = Field(0, ge=0, le=1)
+    recommended_distance_m: float | None = Field(None, ge=0)
+    shared_distance_m: float | None = Field(None, ge=0)
+    penalty_s: float = Field(0, ge=0)
+    history_truncated: bool = False
+    route_cells: list[str] = Field(default_factory=list)
 
 
 class RecommendationResult(FrozenModel):
@@ -88,6 +108,7 @@ class RecommendationResult(FrozenModel):
     # Historical familiarity evidence
     familiarity_enabled: bool = False
     familiarity_status: str | None = None  # MATCHED, NO_HISTORY, DISABLED
+    familiarity: FamiliarityExplanation | None = None
     route_adherence: float | None = None  # 0-1
     family_support: float | None = None  # 0-1
     family_id: str | None = None

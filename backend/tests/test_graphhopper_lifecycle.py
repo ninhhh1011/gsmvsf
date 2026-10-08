@@ -6,9 +6,10 @@ from backend.app.services.map_matching.graphhopper_adapter import GraphHopperMap
 
 @pytest.mark.asyncio
 async def test_adapters_share_and_close_lifespan_client():
-    async with lifespan(create_app()):
-        route = GraphHopperRoutingAdapter()
-        match = GraphHopperMapMatchingAdapter()
+    application = create_app()
+    async with lifespan(application):
+        route = application.state.candidate_service.routing_engine
+        match = application.state.map_matching_service.engine
         assert route._client is not None
         assert route._client is match._client
         assert not route._client.is_closed

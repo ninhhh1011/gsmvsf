@@ -2,12 +2,7 @@
 import csv
 from functools import lru_cache
 
-import httpx
 from backend.app.config import settings
-
-# One event-loop-local client owned by application lifespan.
-http_client: httpx.AsyncClient | None = None
-
 
 def profile_for_vehicle(category: str | None) -> str:
     try:

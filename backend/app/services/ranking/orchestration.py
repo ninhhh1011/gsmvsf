@@ -1,5 +1,6 @@
 """Request workflow; only this layer may retry Candidate Search on a conflict."""
 from datetime import UTC
+from dataclasses import dataclass
 from math import isfinite
 from time import perf_counter
 
@@ -12,6 +13,12 @@ from backend.app.services.ranking.service import RankingService
 from backend.app.services.snapshots.models import StateError, aware_utc
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class _SearchOutput:
+    evidence: CandidateSearchEvidence
+    signatures: dict
 
 
 class SnapshotCatalogView:
@@ -30,12 +37,14 @@ class SnapshotCatalogView:
 
 
 class RecommendationWorkflow:
-    def __init__(self, repository, resolver, routing_engine, catalog=station_catalog, policy=None):
+    def __init__(self, repository, resolver, routing_engine, catalog=station_catalog, policy=None,
+                 familiarity_evaluator=None):
         self.repository, self.resolver, self.routing_engine = repository, resolver, routing_engine
         self.catalog = catalog
-        self.ranking = RankingService(resolver, catalog=catalog, policy=policy)
+        self.ranking = RankingService(resolver, catalog=catalog, policy=policy,
+                                      familiarity_evaluator=familiarity_evaluator)
 
-    async def search(self, request):
+    async def _search(self, request, *, collect_signatures=False):
         request_time = aware_utc(request.energy_request.timestamp)
         energy = request.energy_request
         if (request.destination_latitude is None) != (request.destination_longitude is None):
@@ -58,8 +67,9 @@ class RecommendationWorkflow:
         keys = [f'{kind}:{s.station_id}' for s in stations for kind in ('station', 'queue')]
         view = await self.resolver.resolve(keys, request_time) if request.energy_request.need_service else {}
         service = CandidateSearchService(self.routing_engine, SnapshotCatalogView(self.catalog, view))
-        result = await service.search_candidates(request)
-        # Week 3's internal clock is datetime.utcnow(); normalize at this boundary.
+        signatures = {} if collect_signatures else None
+        result = await service.search_candidates(request, _signature_sink=signatures)
+        # Normalize legacy naive timestamps at this boundary.
         if result.search_timestamp.tzinfo is None:
             result = result.model_copy(update={
                 'search_timestamp': result.search_timestamp.replace(tzinfo=UTC)})
@@ -71,7 +81,10 @@ class RecommendationWorkflow:
             destination_lat=request.destination_latitude,
             destination_lng=request.destination_longitude)
         await self.repository.save_search(evidence)
-        return evidence
+        return _SearchOutput(evidence, signatures or {}) if collect_signatures else evidence
+
+    async def search(self, request):
+        return await self._search(request)
 
     async def recommend(self, request, top_n=None, metrics=None):
         started = perf_counter()
@@ -84,14 +97,25 @@ class RecommendationWorkflow:
             metrics['candidate_search_calls'] += 1
             stage_started = perf_counter()
             try:
-                evidence = await self.search(request)
+                if getattr(self.ranking, 'familiarity_enabled', False):
+                    output = await self._search(request, collect_signatures=True)
+                    evidence = output.evidence
+                else:
+                    evidence = await self.search(request)
+                    output = None
             finally:
                 metrics['timings_ms']['candidate_search'] += (perf_counter() - stage_started) * 1000
             try:
                 metrics['ranking_calls'] += 1
                 stage_started = perf_counter()
                 try:
-                    result = await self.ranking.recommend(evidence, top_n=top_n)
+                    if getattr(self.ranking, 'familiarity_enabled', False):
+                        result = await self.ranking.recommend(evidence, top_n=top_n,
+                                                              candidate_signatures=output.signatures,
+                                                              include_familiarity=True)
+                    else:
+                        result = await self.ranking.recommend(evidence, top_n=top_n,
+                                                              include_familiarity=True)
                 finally:
                     metrics['timings_ms']['ranking'] += (perf_counter() - stage_started) * 1000
                 logger.info('recommendation_workflow', latency_ms=round((perf_counter()-started)*1000, 3),
@@ -101,6 +125,8 @@ class RecommendationWorkflow:
                             service_type=result.recommended_service_type)
                 return result
             except CandidateStateChanged:
+                from backend.app.core.metrics import record_candidate_conflict
+                record_candidate_conflict()
                 metrics['candidate_state_conflicts'] += 1
                 if attempt == 1:
                     raise

@@ -13,6 +13,9 @@ from backend.app.services.demand.models import (
     RequestSource,
     ServiceType,
 )
+from backend.app.services.demand.capability import VehicleCapabilityResolver
+from backend.app.services.demand.service import DemandService
+from backend.app.services.realtime.driver_state_manager import DriverStateManager
 from backend.app.services.realtime.state import reset_state_store
 from backend.app.services.realtime.driver_state_manager import (
     reset_driver_state_manager,
@@ -23,7 +26,14 @@ from backend.app.services.realtime.driver_state_manager import (
 
 @pytest.fixture
 def app():
-    return create_app()
+    application = create_app()
+    resolver = VehicleCapabilityResolver()
+    application.state.capability_resolver = resolver
+    application.state.demand_service = DemandService(resolver)
+    application.state.driver_state_manager = DriverStateManager.for_local()
+    from backend.app.services.realtime.state import DriverStateStore
+    application.state.driver_state_store = DriverStateStore()
+    return application
 
 
 @pytest.fixture(autouse=True)
@@ -154,9 +164,12 @@ async def test_week1_realtime_state_integration():
     # Set up local-only driver state manager for testing
     reset_state_store()
     reset_driver_state_manager()
-    set_driver_state_manager(DriverStateManager.for_local())
-
     app = create_app()
+    app.state.capability_resolver = VehicleCapabilityResolver()
+    app.state.demand_service = DemandService(app.state.capability_resolver)
+    app.state.driver_state_manager = DriverStateManager.for_local()
+    from backend.app.services.realtime.state import DriverStateStore
+    app.state.driver_state_store = DriverStateStore()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         driver_id = "D0001"

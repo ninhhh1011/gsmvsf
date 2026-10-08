@@ -53,10 +53,10 @@ async def test_recommendation_consumes_selected_vehicle_and_dynamic_soc():
     import httpx
 
     from backend.app.services.ranking.models import RecommendationResult, RankingPolicy
-    from backend.app.services.demand.service import get_demand_service
+    from backend.app.services.demand.service import create_demand_service
     from backend.app.services.demand.models import DemandContext
 
-    demand_service = get_demand_service()
+    demand_service = create_demand_service()
     energy_ctx = demand_service.evaluate_auto_demand(DemandContext(vehicle_id="V0001", current_soc_pct=18.0))
 
     expected_result = RecommendationResult(

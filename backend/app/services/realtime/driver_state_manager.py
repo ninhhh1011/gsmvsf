@@ -13,6 +13,7 @@ API instances have different views of the same driver's state.
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 from datetime import datetime
 
 from backend.app.services.realtime.driver_state_repository import (
@@ -20,7 +21,6 @@ from backend.app.services.realtime.driver_state_repository import (
     DriverTraceStateSnapshot,
     InMemoryDriverStateRepository,
     RedisDriverStateRepository,
-    get_driver_state_repository,
 )
 from backend.app.services.realtime.state import (
     DriverTraceState,
@@ -137,11 +137,6 @@ class DriverStateManager:
 
     def _get_repo(self) -> DriverStateRepository | None:
         """Get the configured repository."""
-        if self._repository is None:
-            try:
-                return get_driver_state_repository()
-            except Exception:
-                return None
         return self._repository
 
     def _is_redis(self) -> bool:
@@ -511,34 +506,14 @@ class DriverStateManager:
         return await repo.list_drivers()
 
 
-# Global manager instance
-_driver_state_manager: DriverStateManager | None = None
-
-
-def get_driver_state_manager() -> DriverStateManager:
-    """Get the global driver state manager."""
-    global _driver_state_manager
-    if _driver_state_manager is None:
-        # Default: detect from configuration
-        try:
-            repo = get_driver_state_repository()
-            if isinstance(repo, InMemoryDriverStateRepository):
-                _driver_state_manager = DriverStateManager.for_local()
-            else:
-                _driver_state_manager = DriverStateManager.for_production()
-        except Exception:
-            # Fallback to local if Redis not configured
-            _driver_state_manager = DriverStateManager.for_local()
-    return _driver_state_manager
+_test_manager: ContextVar[DriverStateManager | None] = ContextVar('test_driver_state_manager', default=None)
 
 
 def set_driver_state_manager(manager: DriverStateManager) -> None:
-    """Set the global driver state manager (for testing)."""
-    global _driver_state_manager
-    _driver_state_manager = manager
+    _test_manager.set(manager)
 
 
 def reset_driver_state_manager() -> None:
-    """Reset global driver state manager (for testing)."""
-    global _driver_state_manager
-    _driver_state_manager = None
+    _test_manager.set(None)
+
+

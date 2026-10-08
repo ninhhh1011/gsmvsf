@@ -6,12 +6,25 @@
  */
 
 import { renderPipelineLatency, renderCandidateTable, renderRecommendationCard, renderEnergyWarningBanner, renderConflictAlert } from './components.js';
+import { RouteFamiliarityOverlay } from './ui/route_familiarity_overlay.js';
+import { escapeHtml } from './domain/route-display.js';
 
 export class SimModeController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
         this.map = mapEngine;
         this.options = options;
+        this.active = false;
+        this.routeFamiliarityOverlay = typeof document !== 'undefined' && typeof window !== 'undefined' &&
+            window.h3 && mapEngine?.map ? new RouteFamiliarityOverlay({
+                map: mapEngine.map,
+                leaflet: window.L,
+                h3: window.h3,
+                toggle: document.getElementById('toggle-route-familiarity'),
+                countElement: document.getElementById('route-familiarity-count'),
+                supportElement: document.getElementById('route-familiarity-support')
+            }) : null;
+        this.routeFamiliarityOverlay?.setActive(false);
         this.scenarios = [];
         this.vehicles = [];
         this.stations = [];
@@ -35,9 +48,6 @@ export class SimModeController {
         this.lastCandidateResult = null;
         this.generation = 1;
 
-        // H3 Overlay toggle
-        this.h3OverlayEnabled = false;
-        this.h3ToggleBtn = null;
     }
 
     setCatalogs(scenarios, vehicles, stations) {
@@ -48,9 +58,9 @@ export class SimModeController {
 
     init() {
         this.bindEvents();
+        this.setActive(false);
         this.renderScenarioQuickSelect();
         this.renderVehicleSelect();
-        this.initH3Controls();
 
         // Bind map click handler for coordinate picking
         this.map.onMapClick((coords) => {
@@ -64,98 +74,29 @@ export class SimModeController {
         });
     }
 
-    initH3Controls() {
-        const btnMap = document.getElementById('btn-h3-overlay');
-        const btnHeader = document.getElementById('btn-h3-overlay-header');
-
-        if (btnMap) {
-            this.h3ToggleBtn = btnMap;
-            btnMap.onclick = () => this.toggleH3Overlay();
+    setActive(active) {
+        const changed = this.active !== Boolean(active);
+        this.active = Boolean(active);
+        this.generation++;
+        this.routeFamiliarityOverlay?.setActive(this.active);
+        for (const id of ['driver-view-container', 'driver-map-controls', 'driver-status-badge']) {
+            const element = document.getElementById(id);
+            if (element) element.hidden = this.active;
         }
-        if (btnHeader) {
-            btnHeader.onclick = () => this.toggleH3Overlay();
+        const panel = document.getElementById('sim-view-container');
+        if (panel) panel.hidden = !this.active;
+        for (const [id, selected] of [['btn-mode-driver', !this.active], ['btn-mode-sim', this.active]]) {
+            const button = document.getElementById(id);
+            button?.classList.toggle('active', selected);
+            button?.setAttribute('aria-pressed', String(selected));
         }
-    }
-
-    toggleH3Overlay() {
-        this.h3OverlayEnabled = !this.h3OverlayEnabled;
-
-        const syncBtn = (btn) => {
-            if (!btn) return;
-            if (this.h3OverlayEnabled) {
-                btn.classList.add('active', 'btn-primary');
-                btn.classList.remove('btn-outline-secondary');
-                btn.textContent = '🔷 Ẩn H3';
-            } else {
-                btn.classList.remove('active', 'btn-primary');
-                btn.classList.add('btn-outline-secondary');
-                btn.textContent = '🔷 H3 Overlay';
-            }
-        };
-
-        syncBtn(document.getElementById('btn-h3-overlay'));
-        syncBtn(document.getElementById('btn-h3-overlay-header'));
-
-        if (this.h3OverlayEnabled) {
-            // Get current route coordinates
-            const coords = this.getCurrentRouteCoords();
-            if (coords && coords.length > 0) {
-                this.map.renderFamiliarityHeatmap(coords, 8);
-            } else {
-                console.warn('[SimMode] No route coordinates for H3 overlay');
-            }
-        } else {
-            this.map.clearH3Overlay();
+        if (!this.active) this.setPickingMode(null);
+        const runButton = document.getElementById('btn-run-sim');
+        if (runButton) {
+            runButton.disabled = false;
+            runButton.textContent = 'FIND BEST STATION';
         }
-    }
-
-    /**
-     * Get current route coordinates from map/layer.
-     * Uses the direct route polyline if available.
-     */
-    getCurrentRouteCoords() {
-        // Try to get from map's direct route layer
-        if (this.map && this.map.layers && this.map.layers.directRoute) {
-            const layers = this.map.layers.directRoute.getLayers();
-            if (layers && layers.length > 0) {
-                const lastLayer = layers[layers.length - 1];
-                if (typeof lastLayer.getLatLngs === 'function') {
-                    const latLngs = lastLayer.getLatLngs();
-                    const flat = Array.isArray(latLngs[0]) ? latLngs.flat() : latLngs;
-                    return flat.map(ll => [ll.lat, ll.lng]);
-                }
-            }
-        }
-        // Fallback: driverMode fullRouteCoords or directRouteGeometry
-        if (window.driverMode?.fullRouteCoords?.length > 0) {
-            return window.driverMode.fullRouteCoords;
-        }
-        if (window.driverMode?.directRouteGeometry?.length > 0) {
-            return window.driverMode.directRouteGeometry;
-        }
-        // Fallback: check recommendRoute layer if directRoute is empty
-        if (this.map && this.map.layers && this.map.layers.recommendRoute) {
-            const layers = this.map.layers.recommendRoute.getLayers();
-            for (const l of layers) {
-                if (typeof l.getLatLngs === 'function') {
-                    const latLngs = l.getLatLngs();
-                    const flat = Array.isArray(latLngs[0]) ? latLngs.flat() : latLngs;
-                    if (flat.length > 0) {
-                        return flat.map(ll => [ll.lat, ll.lng]);
-                    }
-                }
-            }
-        }
-        // Fallback: use current driverMode custom endpoints or sim mode endpoints
-        const orig = window.driverMode?.customOrigin || this.origin || { latitude: 20.9849, longitude: 105.7935 };
-        const dest = window.driverMode?.customDestination || this.destination || { latitude: 21.0285, longitude: 105.8542 };
-        if (orig && dest) {
-            return [
-                [orig.latitude, orig.longitude],
-                [dest.latitude, dest.longitude]
-            ];
-        }
-        return [];
+        if (changed) this.options.onModeChange?.(this.active);
     }
 
     setPickingMode(mode) {
@@ -198,6 +139,8 @@ export class SimModeController {
     }
 
     bindEvents() {
+        document.getElementById('btn-mode-driver')?.addEventListener('click', () => this.setActive(false));
+        document.getElementById('btn-mode-sim')?.addEventListener('click', () => this.setActive(true));
         // Run simulation button
         document.getElementById('btn-run-sim')?.addEventListener('click', () => this.runSimulation());
 
@@ -270,9 +213,9 @@ export class SimModeController {
         if (!container) return;
 
         container.innerHTML = this.scenarios.map(sc => `
-            <button class="scenario-pill-btn" data-scenario-id="${sc.id}">
-                <span class="pill-tag tag-${sc.tag.toLowerCase()}">${sc.tag}</span>
-                <span class="pill-title">${sc.title}</span>
+            <button class="scenario-pill-btn" data-scenario-id="${escapeHtml(sc.id)}">
+                <span class="pill-tag tag-${escapeHtml(String(sc.tag || '').toLowerCase())}">${escapeHtml(sc.tag)}</span>
+                <span class="pill-title">${escapeHtml(sc.title)}</span>
             </button>
         `).join('');
 
@@ -288,10 +231,9 @@ export class SimModeController {
         const select = document.getElementById('sim-vehicle-select');
         if (!select) return;
 
-        // Group unique vehicle models
-        select.innerHTML = this.vehicles.slice(0, 15).map(v => `
-            <option value="${v.vehicle_id}">
-                ${v.vehicle_model} (${v.vehicle_type === 'EV_CAR' ? 'Car' : 'Motorbike'}, Usable: ${v.usable_capacity_kwh || '-'} kWh)
+        select.innerHTML = this.vehicles.map(v => `
+            <option value="${escapeHtml(v.vehicle_id)}">
+                ${escapeHtml(v.vehicle_model)} (${v.vehicle_type === 'EV_CAR' ? 'Car' : 'Motorbike'}, Usable: ${escapeHtml(v.usable_capacity_kwh || '-')} kWh)
             </option>
         `).join('');
     }
@@ -339,12 +281,12 @@ export class SimModeController {
         if (descElem) {
             descElem.innerHTML = `
                 <div class="active-scenario-banner">
-                    <strong>${sc.title}</strong>
-                    <p>${sc.description}</p>
+                    <strong>${escapeHtml(sc.title)}</strong>
+                    <p>${escapeHtml(sc.description)}</p>
                     ${sc.timestamp_t1 && sc.timestamp_t2 ? `
                         <div class="scenario-timeline mt-2">
-                            <span>Step 1: <button id="btn-sc-step1" class="btn btn-xs btn-outline">Time T1 (${sc.timestamp_t1.substring(11, 16)})</button></span>
-                            <span>Step 2: <button id="btn-sc-step2" class="btn btn-xs btn-outline">Time T2 (${sc.timestamp_t2.substring(11, 16)})</button></span>
+                            <span>Step 1: <button id="btn-sc-step1" class="btn btn-xs btn-outline">Time T1 (${escapeHtml(String(sc.timestamp_t1).substring(11, 16))})</button></span>
+                            <span>Step 2: <button id="btn-sc-step2" class="btn btn-xs btn-outline">Time T2 (${escapeHtml(String(sc.timestamp_t2).substring(11, 16))})</button></span>
                         </div>
                     ` : ''}
                 </div>
@@ -368,6 +310,7 @@ export class SimModeController {
     }
 
     async runSimulation() {
+        if (!this.active) return;
         this.generation++;
         const currentGen = this.generation;
 
@@ -401,6 +344,7 @@ export class SimModeController {
         const recommendPayload = {
             context: {
                 vehicle_id: basePayload.vehicle_id,
+                driver_id: this.activeScenario?.driver_id,
                 timestamp: basePayload.timestamp,
                 current_soc_pct: basePayload.current_soc_pct,
                 estimated_remaining_range_km: basePayload.estimated_remaining_range_km,
@@ -434,6 +378,7 @@ export class SimModeController {
 
             this.lastCandidateResult = candResult;
             this.lastRecommendation = recResult;
+            this.routeFamiliarityOverlay?.setRoute(recResult?.familiarity);
 
             // Handle 409 Conflict if returned
             if (recResult?.error && recResult.error.isConflict) {
@@ -452,12 +397,6 @@ export class SimModeController {
                 this.map.renderDirectRoute(routeResult.geometry);
             }
 
-            if (this.h3OverlayEnabled) {
-                const coords = this.getCurrentRouteCoords();
-                if (coords.length > 0) {
-                    this.map.renderFamiliarityHeatmap(coords, 8);
-                }
-            }
 
             const candidatesList = candResult.candidates || [];
             const recStationId = recResult?.has_recommendation ? recResult.recommended_station_id : null;
@@ -497,12 +436,14 @@ export class SimModeController {
                         leg1Result = await this.api.computeRoute(this.origin, stPos, {
                             vehicle_category: vehicle.vehicle_type
                         });
+                        if (this.generation !== currentGen) return;
                         leg2Result = await this.api.computeRoute(stPos, this.destination, {
                             vehicle_category: vehicle.vehicle_type
                         });
                         if (this.generation !== currentGen) return;
                         this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry, top5Candidates);
                     } catch (routeErr) {
+                        if (this.generation !== currentGen) return;
                         console.warn('Diversion route error:', routeErr);
                     }
                 }
@@ -538,9 +479,6 @@ export class SimModeController {
             if (this.generation !== currentGen) return;
             console.error('Simulation execution failed:', err);
             this.map.clearRoutes();
-            if (this.h3OverlayEnabled) {
-                this.map.clearH3Overlay();
-            }
             this.lastRecommendation = null;
             this.renderErrorState(err);
         } finally {

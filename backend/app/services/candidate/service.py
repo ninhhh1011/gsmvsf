@@ -24,7 +24,7 @@ CandidateSearchResult
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from backend.app.config import settings
 from backend.app.services.candidate.compatibility import check_station_service_compatibility
@@ -37,7 +37,7 @@ from backend.app.services.candidate.models import (
     EvaluatedCandidate,
 )
 from backend.app.services.candidate.station_catalog import StationCatalog, station_catalog
-from backend.app.services.demand.capability import get_capability_resolver
+from backend.app.services.demand.capability import VehicleCapabilityResolver
 from backend.app.services.demand.models import EnergyServiceRequest, RequestSource, VehicleCategory
 from backend.app.services.routing.engine import RoutingEngine, RoutingInvalidRequestError
 from backend.app.services.routing.models import Position, VehicleRoutingProfile
@@ -56,9 +56,11 @@ class CandidateSearchService:
         routing_engine: RoutingEngine,
         catalog: StationCatalog | None = None,
         max_concurrent_routes: int | None = None,
+        capability_resolver: VehicleCapabilityResolver | None = None,
     ):
         self.routing_engine = routing_engine
         self.catalog = catalog or station_catalog
+        self.capability_resolver = capability_resolver or VehicleCapabilityResolver()
         self.route_calculator = MultiLegRouteCalculator(
             self.routing_engine,
             max_concurrent_routes=max_concurrent_routes or settings.max_concurrent_routes,
@@ -68,6 +70,8 @@ class CandidateSearchService:
         self,
         request: CandidateSearchRequest,
         eligible_only: bool = False,
+        *,
+        _signature_sink: dict | None = None,
     ) -> CandidateSearchResult:
         """
         Execute full candidate search pipeline for an incoming CandidateSearchRequest.
@@ -126,7 +130,7 @@ class CandidateSearchService:
 
         # 5. Resolve vehicle capability
         vehicle_cap = None
-        resolver = get_capability_resolver()
+        resolver = self.capability_resolver
         if esr.vehicle_model:
             try:
                 vehicle_cap = resolver.resolve_by_model(esr.vehicle_model)
@@ -181,6 +185,7 @@ class CandidateSearchService:
             profile=vehicle_profile,
             cached_direct_route=cached_direct,
             constraints=request.constraints,
+            include_leg_results=_signature_sink is not None,
         )
 
         # 9. Evaluate all candidate pairs using pre-computed routes
@@ -202,7 +207,8 @@ class CandidateSearchService:
             )
 
             # Use pre-computed route
-            is_reach, route_metrics, _ = station_routes.get(station.station_id, (False, None, None))
+            route_result = station_routes.get(station.station_id, (False, None, None))
+            is_reach, route_metrics = route_result[:2]
 
             net_dist_m = route_metrics.distance_to_station_m if (is_reach and route_metrics) else None
 
@@ -235,6 +241,28 @@ class CandidateSearchService:
                 route_metrics=route_metrics,
             )
             evaluated_candidates.append(candidate)
+            if candidate.eligible and _signature_sink is not None:
+                key = (station.station_id, service_type.value)
+                _signature_sink[key] = None
+            if candidate.eligible and _signature_sink is not None and dest_pos is not None:
+                leg1, leg2 = route_result[2:4]
+                if (leg1 is not None and leg2 is not None and leg1.geometry and leg2.geometry and
+                        leg2.status.value == "SUCCESS"):
+                    from backend.app.core.metrics import (
+                        observe_route_familiarity, record_route_familiarity_event,
+                    )
+                    from backend.app.services.route_familiarity.signature import create_route_signature
+                    from time import perf_counter
+                    signature_started = perf_counter()
+                    try:
+                        _signature_sink[key] = create_route_signature(
+                            [leg1.geometry, leg2.geometry])
+                        record_route_familiarity_event('signature')
+                    except ValueError:
+                        record_route_familiarity_event('signature', 'unavailable')
+                        pass  # Invalid or over-limit recommended geometry is unavailable.
+                    finally:
+                        observe_route_familiarity('signature', perf_counter() - signature_started)
 
         # Count eligible candidates
         eligible_count = sum(1 for c in evaluated_candidates if c.eligible)
@@ -257,7 +285,7 @@ class CandidateSearchService:
 
         return CandidateSearchResult(
             service_request_id=req_id,
-            search_timestamp=datetime.utcnow(),
+            search_timestamp=datetime.now(UTC),
             search_status="SUCCESS",
             total_candidates_evaluated=len(evaluated_candidates),
             eligible_count=eligible_count,

@@ -70,7 +70,8 @@ class MultiLegRouteCalculator:
         cached_direct_route: RouteResult | None = None,
         profile: VehicleRoutingProfile | None = None,
         constraints: RouteConstraints | None = None,
-    ) -> tuple[bool, CandidateRouteMetrics | None, RouteResult | None]:
+        include_leg_results: bool = False,
+    ) -> tuple:
         """
         Compute complete route metrics for a station candidate.
         Returns:
@@ -83,7 +84,7 @@ class MultiLegRouteCalculator:
 
         if res_leg1.status != RouteStatus.SUCCESS:
             # Station unreachable from current driver position
-            return (False, None, res_leg1)
+            return (False, None, res_leg1, None) if include_leg_results else (False, None, res_leg1)
 
         leg1_dist = res_leg1.distance_m
         leg1_dur = res_leg1.duration_s
@@ -95,7 +96,7 @@ class MultiLegRouteCalculator:
                 duration_to_station_s=round(leg1_dur, 1),
                 eta_to_station_s=round(leg1_dur, 1),
             )
-            return (True, metrics, res_leg1)
+            return (True, metrics, res_leg1, None) if include_leg_results else (True, metrics, res_leg1)
 
         # Leg 2: Station -> Destination
         req_leg2 = RouteRequest(origin=station_pos, destination=destination_pos, profile=profile, constraints=constraints)
@@ -136,7 +137,7 @@ class MultiLegRouteCalculator:
                 detour_duration_s=round(detour_dur, 1) if direct_available else None,
                 eta_to_station_s=round(leg1_dur, 1),
             )
-            return (True, metrics, res_leg1)
+            return (True, metrics, res_leg1, res_leg2) if include_leg_results else (True, metrics, res_leg1)
 
         # No onward road route: the station remains reachable, with station-leg metrics only.
         metrics = CandidateRouteMetrics(
@@ -144,7 +145,7 @@ class MultiLegRouteCalculator:
             duration_to_station_s=round(leg1_dur, 1),
             eta_to_station_s=round(leg1_dur, 1),
         )
-        return (True, metrics, res_leg1)
+        return (True, metrics, res_leg1, res_leg2) if include_leg_results else (True, metrics, res_leg1)
 
     async def compute_all_station_metrics_concurrent(
         self,
@@ -154,7 +155,8 @@ class MultiLegRouteCalculator:
         profile: VehicleRoutingProfile | None = None,
         cached_direct_route: RouteResult | None = None,
         constraints: RouteConstraints | None = None,
-    ) -> dict[str, tuple[bool, CandidateRouteMetrics | None, RouteResult | None]]:
+        include_leg_results: bool = False,
+    ) -> dict[str, tuple]:
         """
         Compute route metrics for all stations concurrently with bounded parallelism.
 
@@ -187,7 +189,7 @@ class MultiLegRouteCalculator:
         async def compute_one(
             station_id: str,
             station_pos: Position,
-        ) -> tuple[str, bool, CandidateRouteMetrics | None, RouteResult | None]:
+        ) -> tuple:
             async with semaphore:
                 result = await self.compute_station_metrics(
                     driver_pos=driver_pos,
@@ -196,6 +198,7 @@ class MultiLegRouteCalculator:
                     cached_direct_route=cached_direct_route,
                     profile=profile,
                     constraints=constraints,
+                    include_leg_results=include_leg_results,
                 )
                 return (station_id, *result)
 
@@ -206,7 +209,4 @@ class MultiLegRouteCalculator:
 
         results = await asyncio.gather(*tasks)
 
-        return {
-            station_id: (reachable, metrics, leg1)
-            for station_id, reachable, metrics, leg1 in results
-        }
+        return {station_id: values for station_id, *values in results}

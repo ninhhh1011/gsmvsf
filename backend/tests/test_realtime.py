@@ -1,7 +1,7 @@
 """Tests for realtime map matching."""
 
 import pytest
-from datetime import datetime, timedelta, timedelta
+from datetime import UTC, datetime, timedelta, timedelta
 from backend.app.services.realtime.state import (
     DriverTraceState,
     DriverStateStore,
@@ -329,7 +329,7 @@ class TestTriggers:
         state = DriverTraceState(driver_id="D001")
         state.movement_since_match = 30.0
 
-        should, reason = trigger.should_trigger(datetime.utcnow(), state)
+        should, reason = trigger.should_trigger(datetime.now(UTC), state)
         assert not should
         assert "NOT_DIST" in reason
 
@@ -339,7 +339,7 @@ class TestTriggers:
         state = DriverTraceState(driver_id="D001")
         state.movement_since_match = 75.0
 
-        should, reason = trigger.should_trigger(datetime.utcnow(), state)
+        should, reason = trigger.should_trigger(datetime.now(UTC), state)
         assert should
         assert "DIST" in reason
 

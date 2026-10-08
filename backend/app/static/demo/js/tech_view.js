@@ -8,6 +8,8 @@
  * - Clear distinction of HEALTHY, DEGRADED, UNAVAILABLE, and UNKNOWN health states.
  */
 
+import { escapeHtml } from './domain/route-display.js';
+
 /**
  * Classify system health across FastAPI, GraphHopper, PostGIS, and Redis.
  * Strictly avoids marking UNKNOWN as HEALTHY.
@@ -643,7 +645,7 @@ export class TechViewController {
 
             return `
                 <tr class="${c.eligible ? 'row-eligible' : 'row-rejected'}">
-                    <td><strong>${c.station_id}</strong></td>
+                    <td><strong>${escapeHtml(c.station_id)}</strong></td>
                     <td><span class="badge ${c.service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${c.service_type === 'BATTERY_SWAP' ? 'SWAP' : 'CHARGE'}</span></td>
                     <td><span class="badge ${c.eligible ? 'badge-success' : 'badge-danger'}">${c.eligible ? 'ELIGIBLE' : 'REJECTED'}</span></td>
                     <td><code>${c.reason || 'N/A'}</code></td>
@@ -724,7 +726,7 @@ export class TechViewController {
         const rows = rankData.candidates.map(c => `
             <tr class="${c.rank === 1 ? 'row-top-rec' : ''}">
                 <td><span class="rank-badge ${c.rank === 1 ? 'rank-1' : ''}">${c.rank}</span></td>
-                <td><strong>${c.station_id}</strong></td>
+                <td><strong>${escapeHtml(c.station_id)}</strong></td>
                 <td><span class="badge ${c.service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${c.service_type}</span></td>
                 <td>${c.eta_to_station_min} phút</td>
                 <td>${c.queue_wait_min} phút</td>
@@ -775,7 +777,7 @@ export class TechViewController {
         elem.innerHTML = `
             <div class="tech-keyval-grid">
                 <div class="kv-item"><span class="kv-label">Has Recommendation:</span><span class="kv-val"><span class="badge ${rec.has_recommendation ? 'badge-success' : 'badge-secondary'}">${rec.has_recommendation ? 'YES' : 'NO'}</span></span></div>
-                <div class="kv-item"><span class="kv-label">Recommended Station:</span><span class="kv-val"><strong>${rec.recommended_station_id || 'None'}</strong></span></div>
+                <div class="kv-item"><span class="kv-label">Recommended Station:</span><span class="kv-val"><strong>${escapeHtml(rec.recommended_station_id || 'None')}</strong></span></div>
                 <div class="kv-item"><span class="kv-label">Recommended Service:</span><span class="kv-val"><span class="badge ${rec.recommended_service_type === 'BATTERY_SWAP' ? 'badge-purple' : 'badge-teal'}">${rec.recommended_service_type || 'None'}</span></span></div>
                 <div class="kv-item"><span class="kv-label">Eligible Candidate Count:</span><span class="kv-val"><strong>${rec.eligible_count}</strong></span></div>
                 <div class="kv-item"><span class="kv-label">Location Source:</span><span class="kv-val"><code>${rec.location_source}</code></span></div>

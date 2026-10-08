@@ -23,7 +23,10 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ev_recommendation
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    # Bind to localhost only for security:
+    # Prevents external hosts from connecting directly to PostgreSQL.
+    # Only containers on the same Docker network can access via service name 'db'.
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -37,7 +40,7 @@ services:
     build: ./runtime/graphhopper
     container_name: ev_graphhopper
     ports:
-      - "8989:8989"
+      - "127.0.0.1:8989:8989"
     volumes:
       - ./runtime/graphhopper:/data
       - ./dataset_v1/map/raw/hanoi-patched.osm.pbf:/osm/hanoi-patched.osm.pbf:ro
@@ -63,10 +66,12 @@ services:
       - LOG_LEVEL=INFO
       - REDIS_URL=redis://redis:6379/0
       - SNAPSHOT_INGESTION_TOKEN=${SNAPSHOT_INGESTION_TOKEN:-}
+      - ENABLE_ROUTE_FAMILIARITY=${ENABLE_ROUTE_FAMILIARITY:-false}
+      - ROUTE_FAMILIARITY_IDENTITY_SECRET=${ROUTE_FAMILIARITY_IDENTITY_SECRET:-}
       - ENABLE_REALTIME_SIMULATOR=${ENABLE_REALTIME_SIMULATOR:-true}
       - REALTIME_SIMULATOR_INTERVAL_S=${REALTIME_SIMULATOR_INTERVAL_S:-30}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./dataset_v1:/app/dataset_v1:ro
     healthcheck:
@@ -96,10 +101,12 @@ services:
       - LOG_LEVEL=INFO
       - REDIS_URL=redis://redis:6379/0
       - SNAPSHOT_INGESTION_TOKEN=${SNAPSHOT_INGESTION_TOKEN:-}
+      - ENABLE_ROUTE_FAMILIARITY=${ENABLE_ROUTE_FAMILIARITY:-false}
+      - ROUTE_FAMILIARITY_IDENTITY_SECRET=${ROUTE_FAMILIARITY_IDENTITY_SECRET:-}
       - ENABLE_REALTIME_SIMULATOR=false
       - REALTIME_SIMULATOR_INTERVAL_S=${REALTIME_SIMULATOR_INTERVAL_S:-30}
     ports:
-      - "8002:8000"
+      - "127.0.0.1:8002:8000"
     volumes:
       - ./dataset_v1:/app/dataset_v1:ro
     healthcheck:
@@ -120,7 +127,7 @@ services:
       dockerfile: frontend/Dockerfile
     container_name: ev_frontend
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     volumes:
       - ./backend/app/static/demo:/usr/share/nginx/html:ro
     healthcheck:

@@ -10,8 +10,9 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -93,7 +94,7 @@ class MatchedState:
     direction: str | None = None
     confidence: float | None = None
     route_geometry: str | None = None
-    matched_at: datetime = field(default_factory=datetime.utcnow)
+    matched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         return {
@@ -120,7 +121,7 @@ class MatchedState:
             direction=data.get("direction"),
             confidence=data.get("confidence"),
             route_geometry=data.get("route_geometry"),
-            matched_at=matched_at or datetime.utcnow(),
+            matched_at=matched_at or datetime.now(UTC),
         )
 
 
@@ -223,6 +224,7 @@ class InMemoryDriverStateRepository(DriverStateRepository):
 
     def __init__(self):
         self._states: dict[str, DriverTraceStateSnapshot] = {}
+        self._local_states = {}
 
     async def get(self, driver_id: str) -> DriverTraceStateSnapshot | None:
         return self._states.get(driver_id)
@@ -253,32 +255,25 @@ class InMemoryDriverStateRepository(DriverStateRepository):
         return True, snapshot.version
 
     async def delete(self, driver_id: str) -> bool:
+        self._local_states.pop(driver_id, None)
         if driver_id in self._states:
             del self._states[driver_id]
             return True
         return False
 
     async def list_drivers(self) -> list[str]:
-        return list(self._states.keys())
+        return list(dict.fromkeys([*self._states, *self._local_states]))
 
     async def health_check(self) -> bool:
         return True
 
     async def get_or_create_local(self, driver_id: str):
-        """
-        Get or create driver state using the global in-memory store.
-
-        This is used when InMemoryDriverStateRepository is the configured store.
-        """
-        from backend.app.services.realtime.state import get_state_store
-        local = get_state_store()
-        return local.get_or_create(driver_id)
+        from backend.app.services.realtime.state import DriverTraceState
+        return self._local_states.setdefault(driver_id, DriverTraceState(driver_id=driver_id))
 
     async def save_local(self, state: DriverTraceState) -> None:
-        """Save state to the global in-memory store."""
-        from backend.app.services.realtime.state import get_state_store
-        local = get_state_store()
-        local._states[state.driver_id] = state
+        """Save state in this repository instance."""
+        self._local_states[state.driver_id] = state
 
 
 class RedisDriverStateRepository(DriverStateRepository):
@@ -299,9 +294,10 @@ class RedisDriverStateRepository(DriverStateRepository):
         redis_url: str | None = None,
         driver_state_ttl: int = 3600,  # 1 hour
         max_drivers: int = 10000,
+        client: redis.Redis | None = None,
     ):
         self._redis_url = redis_url or settings.redis_url
-        self._client: redis.Redis | None = None
+        self._client = client
         self._driver_state_ttl = driver_state_ttl
         self._max_drivers = max_drivers
 
@@ -467,26 +463,14 @@ class RedisDriverStateRepository(DriverStateRepository):
             self._client = None
 
 
-# Global repository instance
-_driver_state_repo: DriverStateRepository | None = None
+_test_repository: ContextVar[DriverStateRepository | None] = ContextVar('test_driver_state_repository', default=None)
 
 
-def get_driver_state_repository() -> DriverStateRepository:
-    """Get the global driver state repository instance."""
-    global _driver_state_repo
-    if _driver_state_repo is None:
-        # Default to Redis in production, can be overridden for testing
-        _driver_state_repo = RedisDriverStateRepository()
-    return _driver_state_repo
+def set_driver_state_repository(repo: DriverStateRepository) -> None:
+    _test_repository.set(repo)
 
 
-def set_driver_state_repository(repo: DriverStateRepository):
-    """Set the global driver state repository (for testing)."""
-    global _driver_state_repo
-    _driver_state_repo = repo
+def reset_driver_state_repository() -> None:
+    _test_repository.set(None)
 
 
-def reset_driver_state_repository():
-    """Reset global repository (for testing)."""
-    global _driver_state_repo
-    _driver_state_repo = None
