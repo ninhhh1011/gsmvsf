@@ -8,10 +8,11 @@ detour. Week 4 adds request-time ranking and recommendation from persisted
 traffic, station and queue snapshots, with Redis as a validated payload cache.
 Week 5 connects current driver location to the same recommendation endpoint and
 adds finite causal replay, evaluation and a measured local latency baseline.
-The [Week 5 report](docs/WEEK_5.md) records current acceptance evidence;
-the [Week 4 report](docs/WEEK_4.md) preserves its frozen baseline;
-the [migration report](docs/GRAPHHOPPER_MIGRATION_REPORT.md) preserves the prior
-GraphHopper baseline. Production readiness remains NOT READY.
+The [architecture](docs/ARCHITECTURE.md) and [operations guide](docs/OPERATIONS.md)
+describe the current runtime and deployment limits. The
+[phase tracker](docs/PHASE_TRACKER.md) records Phase 0–3 verification; historical
+Week 4 and Week 5 freeze milestones are recorded in [AGENTS.md](AGENTS.md).
+The deployment remains limited to one host and a single-node data plane.
 
 ## Current runtime
 
@@ -35,7 +36,7 @@ The motorcycle model excludes motorways, penalizes trunk roads, and caps modeled
 speed at 60 km/h. This is a project routing assumption, not a legal-speed claim.
 It still uses GraphHopper's `car_access`: `motorcar=no` therefore also excludes
 motorcycles, including on the patched bridge. Independent motorcycle access
-semantics are not implemented. See [routing strategy](docs/ROUTING_STRATEGY.md).
+semantics are not implemented. See [routing and matching](docs/ARCHITECTURE.md#routing-and-matching).
 
 ## Setup and operation
 
@@ -132,7 +133,8 @@ shared HTTP client. Initial fixture/catalog loading and HTTP API overhead are
 excluded; these are not production endpoint latency or concurrency guarantees.
 Evidence: `runtime/migration/graphhopper-week3-benchmark.json` and
 `runtime/migration/graphhopper-routing-smoke.json`. Details and historical results
-are in [Week 3](docs/WEEK_3.md).
+describe the historical migration baseline; see the
+[current runtime architecture](docs/ARCHITECTURE.md) for the supported system.
 
 A separate deployed HTTP API run measured 20 candidate-search requests at each
 concurrency level, including serialization and station search with the application
@@ -177,7 +179,7 @@ historical evidence, superseded for current operation by this document and
 [ADR-010](docs/DECISIONS.md#adr-010-graphhopper-as-the-sole-routing-and-matching-runtime).
 Start further work with [AGENTS.md](AGENTS.md),
 [PROJECT_SCOPE](docs/PROJECT_SCOPE.md), [ACCEPTANCE_CRITERIA](docs/ACCEPTANCE_CRITERIA.md),
-and the [migration execution plan](docs/GRAPHHOPPER_FULL_MIGRATION_PLAN.md).
+and the [routing decisions](docs/DECISIONS.md#adr-010-graphhopper-as-the-sole-routing-and-matching-runtime).
 
 ## Week 4 snapshot ranking
 
@@ -191,8 +193,9 @@ can repeat Candidate Search once. Ranking never silently drops invalid candidate
 Internal `/api/v1/internal/snapshots/{traffic,station,queue}` endpoints require
 `X-Ingestion-Token`. Exact retry is safe; PostgreSQL retains history and Redis
 cannot regress to an older latest state. Traffic/queue are project snapshots,
-not external production live feeds. See [Week 4](docs/WEEK_4.md) for assumptions,
-missing/stale handling, ETA definitions, setup, evaluation and performance.
+not external production live feeds. See
+[ADR-013](docs/DECISIONS.md#adr-013-week-4-snapshot-persistence-and-eligibility-ownership)
+for snapshot persistence, freshness and eligibility ownership.
 
 ```bash
 python -B scripts/load_week4_snapshots.py
@@ -216,14 +219,16 @@ then explicit location-unavailable failure when service is needed. Zero coordina
 remain explicit. Responses expose location provenance, stage timings and bounded
 workflow call/conflict counts. Week 3 eligibility and Week 4 ranking stay unchanged.
 
-The passing finite causal replay covers 30 trajectories and 308 recommendations;
-the full backend suite has 347 passing tests. Latency was measured at concurrency
-1/5/10 with 20 requests each and no invented SLA. [WEEK_5](docs/WEEK_5.md) contains
-exact replay scope, evaluation denominators, failures, latency and reproduction
-instructions. Historical replay requires an empty isolated PostgreSQL schema,
+Historical Week 5 acceptance covered 30 trajectories and 308 recommendations,
+with 347 passing backend tests, as recorded in [AGENTS.md](AGENTS.md).
+Latency was measured at concurrency 1/5/10 with 20 requests each and no invented
+SLA. See [ADR-014](docs/DECISIONS.md#adr-014-week-5-request-driven-refresh-and-causal-evaluation)
+for the request-driven refresh and causal evaluation contract.
+Historical replay requires an empty isolated PostgreSQL schema,
 fresh driver state and a unique `SNAPSHOT_CACHE_PREFIX`; do not preload full future
-snapshot history. Reports are checked in under `docs/reports/week5-*.json`, while
-large predictions/logs and local secrets stay in ignored `runtime/week5/`.
+snapshot history. The historical Week 5 reports are absent from the current
+documentation tree. Large predictions/logs and local secrets stay in ignored
+`runtime/week5/`.
 
 Week 5 is request-driven, with no recommendation daemon or push/streaming system.
 Production tuning and lifecycle persistence remain Week 6/future work.
