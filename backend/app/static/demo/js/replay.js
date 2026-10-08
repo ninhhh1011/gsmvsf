@@ -246,12 +246,19 @@ export class TrajectoryReplayController {
         if (this.generation !== currentGen) return;
 
         this.observations = syntheticObs;
+        // If was playing, keep playing after loading new route
+        const wasPlaying = this.state === ReplayState.PLAYING;
         this.setState(ReplayState.READY);
         this.updateProgressUI();
 
         const statusElem = getElem('replay-status');
         if (statusElem) {
             statusElem.textContent = `Lộ trình mô phỏng: ${this.observations.length} điểm quan sát`;
+        }
+
+        // Auto-resume playback if was playing before (seamless route change)
+        if (wasPlaying) {
+            this.play();
         }
     }
 
