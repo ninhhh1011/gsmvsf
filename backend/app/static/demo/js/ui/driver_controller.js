@@ -133,6 +133,7 @@ export class DriverModeController {
         // Navigation lock — khoá route khi user đã chọn trạm
         this._navigationLocked = false;
         this._selectedStationId = null;   // station_id user đã chọn
+        this.routeRevision = 0;           // Revision token to prevent stale async overwrites
 
         // Proactive Station Search & Destination Picking
         this.isPickingDestination = false;
@@ -488,7 +489,7 @@ export class DriverModeController {
     // ─── Step Handling ──────────────────────────────────────────────────
 
     async _onReplayStep(stepData) {
-        const { locResp, observation } = stepData || {};
+        const { locResp, observation, isComplete } = stepData || {};
         if (this.state !== DriverState.TRIP_ACTIVE) return;
         const currentGen = this.generation;
 
@@ -577,7 +578,7 @@ export class DriverModeController {
                     });
 
                     this.directRouteGeometry = remainingCoords;
-                    this.map.updateDirectRoute(remainingCoords);
+                    this.map.updateDirectRoute?.(remainingCoords);
 
                     const remainingMeters = computePolylineDistanceMeters(remainingCoords);
                     this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
@@ -591,10 +592,10 @@ export class DriverModeController {
                 );
             }
 
-            if (this.replay.isReplayComplete()) {
+            if (isComplete || this.replay.isReplayComplete()) {
                 this.setState(DriverState.TRIP_COMPLETE);
                 this.remainingTripDistanceKm = 0.0;
-                this.map.updateDirectRoute([]);
+                this.map.updateDirectRoute?.([]);
                 await this._evaluateAtCurrentPosition();
                 if (this.generation !== currentGen) return;
                 this.renderTripCompleteUI();
@@ -617,14 +618,15 @@ export class DriverModeController {
                 }
             }
 
-            // Periodic recommendation evaluation (every 2.5s or 50m of movement)
+            // Periodic recommendation evaluation (strictly throttled to >= 5.0s wall-time, 12/min budget)
             const nowMs = Date.now();
             const distSinceLastEval = this.lastEvalPos ? straightLineDistanceKm(
                 this.lastEvalPos.latitude, this.lastEvalPos.longitude,
                 this.currentPos.latitude, this.currentPos.longitude
             ) : 999;
+            const timeSinceLastEvalMs = this.lastEvalTimestamp ? (nowMs - this.lastEvalTimestamp) : Infinity;
 
-            if (!this.lastEvalTimestamp || (nowMs - this.lastEvalTimestamp > 2500) || (distSinceLastEval > 0.05)) {
+            if (timeSinceLastEvalMs >= 5000 && (!this.lastEvalTimestamp || distSinceLastEval >= 0.05)) {
                 this.lastEvalTimestamp = nowMs;
                 this.lastEvalPos = { ...this.currentPos };
                 await this._evaluateAtCurrentPosition();
@@ -654,7 +656,7 @@ export class DriverModeController {
                     this.fullRouteCoords = coords;
                     this.lastPassedSegmentIndex = 0;
                     this.directRouteGeometry = coords;
-                    this.map.updateDirectRoute(coords);
+                    this.map.updateDirectRoute?.(coords);
                 }
             }
         } catch (err) {
@@ -684,6 +686,7 @@ export class DriverModeController {
         this._isEvaluating = true;
 
         const currentGen = this.generation;
+        const evalRev = ++this.routeRevision;
         const driverId = this.session.driver_id || 'UNASSIGNED';
         const timestamp = (this.currentObservation?.timestamp)
             ? this.currentObservation.timestamp
@@ -740,7 +743,10 @@ export class DriverModeController {
                     : null
             });
             console.groupEnd();
-            if (this.generation !== currentGen) return;
+            if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) {
+                this._isEvaluating = false;
+                return;
+            }
 
             this.lastRecommendation = rec;
 
@@ -777,12 +783,12 @@ export class DriverModeController {
                         leg1Result = await this.api.computeRoute(this.currentPos, stPos, {
                             vehicle_category: this.currentVehicle.vehicle_type
                         });
-                        if (this.generation !== currentGen) return;
+                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) return;
                         leg2Result = await this.api.computeRoute(stPos, this.currentTrip.destination, {
                             vehicle_category: this.currentVehicle.vehicle_type
                         });
-                        if (this.generation !== currentGen) return;
-                        if (this.generation === currentGen) {
+                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) return;
+                        if (this.generation === currentGen && this.routeRevision === evalRev && !this._navigationLocked) {
                             this.lastRecommendedStationId = top.station_id;
                             this.lastDiversionLeg1 = leg1Result;
                             this.lastDiversionLeg2 = leg2Result;
@@ -791,7 +797,7 @@ export class DriverModeController {
                             }
                         }
                     } catch (routeErr) {
-                        if (this.generation !== currentGen) return;
+                        if (this.generation !== currentGen || this.routeRevision !== evalRev) return;
                         console.warn('Recommendation diversion route error:', routeErr);
                     }
                 }
@@ -973,6 +979,7 @@ export class DriverModeController {
         const st = this.stations.find(s => s.station_id === stationId);
         if (!st) return;
         const currentGen = this.generation;
+        const navRev = ++this.routeRevision;
 
         this._hideRecommendationPanel();
         this.closeStationsDrawer();
@@ -991,9 +998,9 @@ export class DriverModeController {
             if (this.currentTrip?.destination) {
                 // Route via station: Leg 1 (Vehicle -> Station) + Leg 2 (Station -> Destination)
                 const leg1 = await this.api.computeRoute(currentPos, stationPos, { vehicle_category: vCat });
-                if (this.generation !== currentGen) return;
+                if (this.generation !== currentGen || this.routeRevision !== navRev) return;
                 const leg2 = await this.api.computeRoute(stationPos, this.currentTrip.destination, { vehicle_category: vCat });
-                if (this.generation !== currentGen) return;
+                if (this.generation !== currentGen || this.routeRevision !== navRev) return;
 
                 if (!leg1?.geometry || !leg2?.geometry) return;
                 const coords1 = decodePolyline(leg1.geometry);
@@ -1027,12 +1034,12 @@ export class DriverModeController {
                 // Load combined diversion into replay so vehicle drives via station!
                 if (this.state === DriverState.TRIP_ACTIVE) {
                     await this.replay.loadFromPolyline(combined);
-                    if (this.generation !== currentGen) return;
+                    if (this.generation !== currentGen || this.routeRevision !== navRev) return;
                 }
             } else {
                 // Direct route to station (free drive)
                 const route = await this.api.computeRoute(currentPos, stationPos, { vehicle_category: vCat });
-                if (this.generation !== currentGen) return;
+                if (this.generation !== currentGen || this.routeRevision !== navRev) return;
                 if (!route?.geometry) return;
                 const coords = decodePolyline(route.geometry);
                 if (!coords.length) return;
@@ -1071,6 +1078,7 @@ export class DriverModeController {
         const st = this.stations.find(s => s.station_id === stId);
         if (!st) return;
         const currentGen = this.generation;
+        const postTripRev = ++this.routeRevision;
 
         this.closeStationsDrawer();
 
@@ -1081,7 +1089,7 @@ export class DriverModeController {
         try {
             // Compute onward route from Destination B to Station
             const routeBToSt = await this.api.computeRoute(dest, stationPos, { vehicle_category: vCat });
-            if (this.generation !== currentGen) return;
+            if (this.generation !== currentGen || this.routeRevision !== postTripRev) return;
             if (!routeBToSt?.geometry || !decodePolyline(routeBToSt.geometry).length) return;
             this.postTripStation = st;
             this.postTripRoute = routeBToSt;
@@ -1469,7 +1477,8 @@ export class DriverModeController {
             cancelPostTrip: () => this.cancelPostTripStation(),
             viewCostBreakdown: () => { if (this.lastRecommendation?.ranked_candidates?.length) this.openCostBreakdownModal(this.lastRecommendation.ranked_candidates[0]); },
             completeTrip: () => { this.setState(DriverState.TRIP_COMPLETE); this.renderTripCompleteUI(); },
-            setSoc: (value, evaluate) => this.setBatterySoc(value, evaluate)
+            setSoc: (value, evaluate) => this.setBatterySoc(value, evaluate),
+            setSpeed: (speed) => this.setSimulationSpeed(speed)
         };
         this.bindings.renderActive(renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, replayControls }), {
             distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm,
@@ -1488,6 +1497,12 @@ export class DriverModeController {
     }
 
     closeCostBreakdownModal() { this.bindings.closeCostBreakdown(); }
+
+    setSimulationSpeed(speed) {
+        if (!speed) return;
+        this.replay.setSpeedMultiplier(speed);
+        this.renderTripActiveUI();
+    }
 
     renderTripCompleteUI() {
         this._navigationLocked = false;
