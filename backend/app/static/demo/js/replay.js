@@ -110,6 +110,11 @@ export class TrajectoryReplayController {
             clearTimeout(this.stepTimer);
             this.stepTimer = null;
         }
+
+        // Capture playing state BEFORE incrementing generation
+        const wasPlaying = this.state === ReplayState.PLAYING;
+        const resumeAfterLoad = wasPlaying;
+
         this.generation++;
         const currentGen = this.generation;
 
@@ -130,6 +135,11 @@ export class TrajectoryReplayController {
 
             if (statusElem) {
                 statusElem.textContent = `Loaded ${this.observations.length} observations (${trajectoryId})`;
+            }
+
+            // Auto-resume playback if was playing before
+            if (resumeAfterLoad) {
+                this.play();
             }
 
             // Plot all points faintly on map
@@ -168,6 +178,11 @@ export class TrajectoryReplayController {
             clearTimeout(this.stepTimer);
             this.stepTimer = null;
         }
+
+        // Capture playing state BEFORE incrementing generation
+        const wasPlaying = this.state === ReplayState.PLAYING;
+        const resumeAfterLoad = wasPlaying;
+
         this.generation++;
         const currentGen = this.generation;
 
@@ -246,8 +261,6 @@ export class TrajectoryReplayController {
         if (this.generation !== currentGen) return;
 
         this.observations = syntheticObs;
-        // If was playing, keep playing after loading new route
-        const wasPlaying = this.state === ReplayState.PLAYING;
         this.setState(ReplayState.READY);
         this.updateProgressUI();
 
@@ -257,7 +270,7 @@ export class TrajectoryReplayController {
         }
 
         // Auto-resume playback if was playing before (seamless route change)
-        if (wasPlaying) {
+        if (resumeAfterLoad) {
             this.play();
         }
     }
