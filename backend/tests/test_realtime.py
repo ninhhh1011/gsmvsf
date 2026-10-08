@@ -8,6 +8,8 @@ from backend.app.services.realtime.state import (
     GPSObservation,
     MatchedState,
     haversine_distance,
+)
+from backend.app.core.constants import (
     DEFAULT_GAP_THRESHOLD_SECONDS,
     DEFAULT_STATIONARY_THRESHOLD,
     DEFAULT_STATIONARY_DISTANCE_M,

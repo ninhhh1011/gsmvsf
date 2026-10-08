@@ -231,16 +231,19 @@ class DriverTraceState:
                 return gap_reset, gap_reason
 
         # Check for gap (session reset)
+        # Note: movement_since_match is NOT reset on gap to handle short stops (traffic, lights).
+        # After a gap, the trigger will fire once movement + pre-gap movement exceeds threshold.
         last_ts = self.last_observation_timestamp
         if last_ts:
             last_ts_normalized = ensure_utc(last_ts)
             gap_seconds = (normalized_ts - last_ts_normalized).total_seconds()
             if gap_seconds > DEFAULT_GAP_THRESHOLD_SECONDS:
-                # Reset state
+                # Reset state but preserve movement_since_match
                 self.observations.clear()
                 self.last_match_time = None
                 self.last_matched_state = None
-                self.movement_since_match = 0.0
+                # movement_since_match is intentionally NOT reset to 0
+                # This allows trigger to fire if pre-gap movement + post-gap movement > threshold
                 self.observations_since_match = 0
                 self.consecutive_stationary = 0
                 gap_reset = True
