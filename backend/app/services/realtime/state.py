@@ -10,15 +10,17 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-# Constants from benchmark policy
-DEFAULT_CONTEXT_WINDOW_SECONDS = 30.0
-DEFAULT_MAX_CONTEXT_POINTS = 50
-DEFAULT_GAP_THRESHOLD_SECONDS = 60.0
-DEFAULT_STATIONARY_THRESHOLD = 3  # consecutive observations
-DEFAULT_STATIONARY_DISTANCE_M = 5.0  # movement below this = stationary
-
-# Dedup retention limits
-MAX_SEEN_IDS = 10000  # Maximum dedup entries before cleanup
+from backend.app.core.constants import (
+    DEFAULT_CONTEXT_WINDOW_SECONDS,
+    DEFAULT_MAX_CONTEXT_POINTS,
+    DEFAULT_GAP_THRESHOLD_SECONDS,
+    DEFAULT_STATIONARY_THRESHOLD,
+    DEFAULT_STATIONARY_DISTANCE_M,
+    EARTH_RADIUS_M,
+    MAX_DEDUP_ENTRIES,
+    MAX_OBSERVATIONS_PER_DRIVER,
+    MAX_ACTIVE_DRIVERS,
+)
 
 
 def canonical_payload_hash(obs: "GPSObservation") -> str:
@@ -54,7 +56,7 @@ def canonical_payload_hash(obs: "GPSObservation") -> str:
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two points in meters."""
     import math
-    R = 6371000  # Earth radius in meters
+    R = EARTH_RADIUS_M
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
@@ -163,7 +165,9 @@ class DriverTraceState:
     Maintains a bounded window of recent GPS observations and match state.
     """
     driver_id: str
-    observations: deque[GPSObservation] = field(default_factory=lambda: deque(maxlen=1000))
+    observations: deque[GPSObservation] = field(
+        default_factory=lambda: deque(maxlen=MAX_OBSERVATIONS_PER_DRIVER)
+    )
     last_match_time: datetime | None = None
     last_matched_state: MatchedState | None = None
     movement_since_match: float = 0.0
@@ -181,9 +185,9 @@ class DriverTraceState:
 
     def _cleanup_dedup(self):
         """Cleanup old dedup entries if over limit."""
-        if len(self.seen_observation_ids) > MAX_SEEN_IDS:
+        if len(self.seen_observation_ids) > MAX_DEDUP_ENTRIES:
             # Keep only most recent half
-            ids_to_remove = len(self.seen_observation_ids) - (MAX_SEEN_IDS // 2)
+            ids_to_remove = len(self.seen_observation_ids) - (MAX_DEDUP_ENTRIES // 2)
             # Remove oldest entries (set order not guaranteed, so just remove arbitrary)
             for _ in range(ids_to_remove):
                 if self.seen_observation_ids:
@@ -363,7 +367,7 @@ class DriverStateStore:
     Can be replaced with Redis/PostgreSQL for production.
     """
 
-    def __init__(self, max_drivers: int = 10000):
+    def __init__(self, max_drivers: int = MAX_ACTIVE_DRIVERS):
         self._states: dict[str, DriverTraceState] = {}
         self._max_drivers = max_drivers
 

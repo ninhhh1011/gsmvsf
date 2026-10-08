@@ -8,11 +8,13 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from backend.app.core.constants import REQUESTS_PER_MINUTE, HTTP_TOO_MANY_REQUESTS
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Rate limiter with in-memory sliding window. Redis-based limiting can be added as future enhancement."""
 
-    def __init__(self, app, requests_per_minute: int = 100):
+    def __init__(self, app, requests_per_minute: int = REQUESTS_PER_MINUTE):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self.requests = defaultdict(list)
@@ -38,7 +40,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             route = request.scope.get('route')
             record_request('429', endpoint=getattr(route, 'path', path))
             return JSONResponse(
-                status_code=429,
+                status_code=HTTP_TOO_MANY_REQUESTS,
                 content={"detail": "Rate limit exceeded. Try again later."},
                 headers={"Retry-After": str(retry_after)}
             )
@@ -58,5 +60,5 @@ def setup_middleware(app):
     # Rate limiting - applies to all /api/v1/ endpoints including /drivers/
     app.add_middleware(
         RateLimitMiddleware,
-        requests_per_minute=100
+        requests_per_minute=REQUESTS_PER_MINUTE
     )

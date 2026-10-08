@@ -24,18 +24,23 @@ from backend.app.config import settings
 logger = logging.getLogger(__name__)
 
 
-# Constants matching state.py
-DEFAULT_CONTEXT_WINDOW_SECONDS = 30.0
-DEFAULT_MAX_CONTEXT_POINTS = 50
-DEFAULT_GAP_THRESHOLD_SECONDS = 60.0
-DEFAULT_STATIONARY_THRESHOLD = 3
-DEFAULT_STATIONARY_DISTANCE_M = 5.0
+from backend.app.core.constants import (
+    DEFAULT_CONTEXT_WINDOW_SECONDS,
+    DEFAULT_MAX_CONTEXT_POINTS,
+    DEFAULT_GAP_THRESHOLD_SECONDS,
+    DEFAULT_STATIONARY_THRESHOLD,
+    DEFAULT_STATIONARY_DISTANCE_M,
+    EARTH_RADIUS_M,
+    MAX_ACTIVE_DRIVERS,
+    MAX_OBSERVATIONS_PER_DRIVER,
+    DRIVER_STATE_TTL_SECONDS,
+)
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two points in meters."""
     import math
-    R = 6371000
+    R = EARTH_RADIUS_M
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
@@ -164,7 +169,7 @@ class DriverTraceStateSnapshot:
     def to_observations_deque(self) -> deque[GPSObservation]:
         """Reconstruct the observations deque."""
         obs = [GPSObservation.from_dict(d) for d in self.observations]
-        result = deque(maxlen=1000)
+        result = deque(maxlen=MAX_OBSERVATIONS_PER_DRIVER)
         result.extend(obs)
         return result
 
@@ -292,8 +297,8 @@ class RedisDriverStateRepository(DriverStateRepository):
     def __init__(
         self,
         redis_url: str | None = None,
-        driver_state_ttl: int = 3600,  # 1 hour
-        max_drivers: int = 10000,
+        driver_state_ttl: int = DRIVER_STATE_TTL_SECONDS,
+        max_drivers: int = MAX_ACTIVE_DRIVERS,
         client: redis.Redis | None = None,
     ):
         self._redis_url = redis_url or settings.redis_url
