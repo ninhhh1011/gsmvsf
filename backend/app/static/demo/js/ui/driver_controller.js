@@ -70,6 +70,7 @@ import { renderDrawerStationsListHTML } from './drawer_renderer.js';
 import { renderDriverRecommendation, renderRecommendationPanelHTML } from './driver_recommendation_renderer.js';
 import { MapPicker } from './map_picker.js';
 import { createCockpitBindings } from './cockpit_bindings.js';
+import { RouteFamiliarityOverlay } from './route_familiarity_overlay.js';
 
 export class DriverModeController {
     constructor(apiClient, mapEngine, options = {}) {
@@ -135,6 +136,14 @@ export class DriverModeController {
         this._selectedStationId = null;   // station_id user đã chọn
         this.routeRevision = 0;           // Revision token to prevent stale async overwrites
 
+        // Top 5 recommendation result sharing
+        this._top5Result = null;
+        this._top5Revision = 0;
+
+        // Auto-refresh timer for recommendations
+        this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000;
+        this._recommendTimer = null;
+
         // Proactive Station Search & Destination Picking
         this.isPickingDestination = false;
         this.currentStationsFilter = 'ALL';
@@ -159,6 +168,11 @@ export class DriverModeController {
             session: this.session
         });
 
+        // H3 Display-Only Overlay
+        this._h3Overlay = null;
+        this._h3Enabled = false;
+        this._h3Initialized = false;
+
         this.onStateChange = options.onStateChange || (() => {});
     }
 
@@ -179,6 +193,59 @@ export class DriverModeController {
         this.renderAvailableUI();
         this.bindGlobalControls();
         this.bindings.setVehicleSelection(this.currentVehicle?.vehicle_model || 'VF_3');
+        this.initH3Overlay();
+    }
+
+    initH3Overlay() {
+        if (this._h3Initialized) return;
+        this._h3Initialized = true;
+
+        // H3 overlay only available in browser with h3 library
+        if (typeof window === 'undefined' || !window.h3 || !this.map?.map) return;
+
+        const toggle = document.getElementById('toggle-route-familiarity');
+        const countElement = document.getElementById('route-familiarity-count');
+        const supportElement = document.getElementById('route-familiarity-support');
+
+        if (toggle) {
+            this._h3Overlay = new RouteFamiliarityOverlay({
+                map: this.map.map,
+                leaflet: window.L,
+                h3: window.h3,
+                toggle,
+                countElement,
+                supportElement
+            });
+            // Bind toggle handler
+            toggle.addEventListener('change', () => this.onToggleH3());
+        }
+    }
+
+    onToggleH3() {
+        if (!this._h3Overlay) return;
+        this._h3Enabled = !this._h3Enabled;
+        if (this._h3Enabled) {
+            const cells = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry);
+            this._h3Overlay.setEnabled(true);
+            this._h3Overlay.renderFromCells(cells);
+        } else {
+            this._h3Overlay.setEnabled(false);
+            this._h3Overlay.clear();
+        }
+    }
+
+    /**
+     * Clear H3 overlay when route changes.
+     * Called by route update methods.
+     */
+    _clearH3OnRouteChange() {
+        if (this._h3Enabled && this._h3Overlay) {
+            this._h3Overlay.clear();
+            this._h3Overlay.setEnabled(false);
+            this._h3Enabled = false;
+            const toggle = document.getElementById('toggle-route-familiarity');
+            if (toggle) toggle.checked = false;
+        }
     }
 
     renderCurrentStateUI() {
@@ -409,6 +476,7 @@ export class DriverModeController {
             if (coords && coords.length > 0) {
                 this.fullRouteCoords = coords;
                 this.directRouteGeometry = coords;
+                this._clearH3OnRouteChange();
                 this.map.renderDirectRoute(coords);
                 this.map.fitBoundsToActive(coords);
             } else {
@@ -656,6 +724,7 @@ export class DriverModeController {
                     this.fullRouteCoords = coords;
                     this.lastPassedSegmentIndex = 0;
                     this.directRouteGeometry = coords;
+                    this._clearH3OnRouteChange();
                     this.map.updateDirectRoute?.(coords);
                 }
             }
@@ -749,6 +818,29 @@ export class DriverModeController {
             }
 
             this.lastRecommendation = rec;
+
+            // Update _top5Result with revision guard
+            const responseRevision = this.routeRevision;
+            const top5Candidates = (rec.ranked_candidates || []).slice(0, 5).map((c, idx) => {
+                const stMatch = this.stations?.find(s => s.station_id === c.station_id);
+                return {
+                    ...c,
+                    rank: c.rank ?? (idx + 1),
+                    station_id: c.station_id,
+                    latitude: c.latitude ?? stMatch?.latitude,
+                    longitude: c.longitude ?? stMatch?.longitude,
+                };
+            }).filter(c => c.latitude != null && c.longitude != null);
+
+            if (responseRevision === this.routeRevision) {
+                this._top5Revision++;
+                this._top5Result = {
+                    has_recommendation: rec.has_recommendation,
+                    candidates: top5Candidates,
+                    energy_context: rec.energy_context
+                };
+                this._notifyTop5Updated(this._top5Result);
+            }
 
             // Nếu đang khoá navigation → skip hoàn toàn, KHÔNG re-evaluate
             if (this._navigationLocked) {
@@ -866,6 +958,41 @@ export class DriverModeController {
     }
 
     _hideRecommendationPanel() { this.bindings.hideRecommendationPanel(); }
+
+    _notifyTop5Updated(result) {
+        if (!result || !result.candidates) return;
+        // Update map markers with top 5 candidates
+        if (this.map?.updateStationMarkers) {
+            this.map.updateStationMarkers(result.candidates);
+        }
+    }
+
+    startRecommendRefresh() {
+        this.stopRecommendRefresh();
+        this._recommendTimer = setInterval(
+            () => this._refreshRecommendation(),
+            this._recommendRefreshInterval
+        );
+    }
+
+    stopRecommendRefresh() {
+        if (this._recommendTimer) {
+            clearInterval(this._recommendTimer);
+            this._recommendTimer = null;
+        }
+    }
+
+    async _refreshRecommendation() {
+        if (this.state !== DriverState.TRIP_ACTIVE) {
+            this.stopRecommendRefresh();
+            return;
+        }
+        if (this._navigationLocked) {
+            // Don't refresh while user is navigating to a station
+            return;
+        }
+        await this._evaluateAtCurrentPosition();
+    }
 
     async _selectStationAndNavigate(stationId) {
         const currentGen = this.generation;
@@ -1011,6 +1138,7 @@ export class DriverModeController {
                 this._selectedStationId = stationId;
                 this.fullRouteCoords = combined;
                 this.directRouteGeometry = combined;
+                this._clearH3OnRouteChange();
                 this.lastPassedSegmentIndex = 0;
                 this.lastRecommendedStationId = st.station_id;
                 this.lastDiversionLeg1 = leg1;
@@ -1404,6 +1532,7 @@ export class DriverModeController {
                 const coords = decodePolyline(routeResult.geometry);
                 this.fullRouteCoords = coords;
                 this.directRouteGeometry = coords;
+                this._clearH3OnRouteChange();
                 this.map.clearAll();
                 this._renderEndpointsWithDrag(origin, dest);
                 this.map.renderDirectRoute(coords);
