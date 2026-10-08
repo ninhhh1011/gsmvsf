@@ -422,3 +422,76 @@ def test_benchmark_exact_community_cap_does_not_mark_history_truncated():
         list(repository.signature.cells), "benchmark-driver", repository.as_of, timedelta(days=7)))
     assert len(rows) == 500
     assert not any(row["driver_rank"] > 5 or row["active_rank"] > 100 for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_database_benchmark_times_personal_and_community_queries_separately(monkeypatch):
+    import asyncpg
+    from backend.app.services.route_familiarity.repository import (
+        COMMUNITY_ROUTES_QUERY, PERSONAL_ROUTES_QUERY,
+    )
+    from scripts import benchmark_route_familiarity as benchmark
+
+    clock = [0.0]
+    queries = []
+    signature = RouteSignature(("8b415d8c9a00fff",), (1.0,), 1.0, 11)
+
+    class Connection:
+        async def execute(self, sql, *args):
+            pass
+
+        async def executemany(self, sql, rows):
+            fields = ("driver_id", "trip_id", "completed_at", "distance_m",
+                      "resolution", "cells", "cell_distances_m")
+            self.rows = [dict(zip(fields, row)) for row in rows]
+            self.as_of = self.rows[0]["completed_at"]
+
+        async def fetchval(self, sql):
+            return len(self.rows)
+
+        async def fetch(self, sql, *args):
+            if sql.startswith("EXPLAIN"):
+                return [{"QUERY PLAN": "controlled connection plan"}]
+            assert args[:3] == ("phase4-benchmark-personal",
+                                self.as_of - timedelta(days=7), self.as_of)
+            queries.append(sql)
+            if sql == PERSONAL_ROUTES_QUERY:
+                clock[0] += 0.002
+                return self.rows[:51]
+            assert sql == COMMUNITY_ROUTES_QUERY
+            assert args[3] == list(signature.cells)
+            clock[0] += 0.007
+            return [{**row, "active_rank": index, "driver_rank": 1}
+                    for index, row in enumerate(self.rows[51:], 1)]
+
+        async def close(self):
+            pass
+
+    conn = Connection()
+    admin = AsyncMock()
+
+    async def connect(dsn, timeout):
+        return admin if dsn.endswith("/postgres") else conn
+
+    monkeypatch.setattr(asyncpg, "connect", connect)
+    monkeypatch.setattr(benchmark, "HISTORY_SIZES", (150,))
+    monkeypatch.setattr(benchmark, "SAMPLES", 3)
+    monkeypatch.setattr(benchmark, "WARMUPS", 1)
+    monkeypatch.setattr(benchmark, "perf_counter", lambda: clock[0])
+
+    report = await _postgres_measure("postgresql://postgres:postgres@127.0.0.1:5432/ev", signature)
+
+    assert report["status"] == "measured"
+    result = report["per_size"][0]
+    assert result["personal_query"] == {
+        "samples": 3, "warmups": 1, "p50_ms": 2.0, "p95_ms": 2.0,
+    }
+    assert result["community_query"] == {
+        "samples": 3, "warmups": 1, "p50_ms": 7.0, "p95_ms": 7.0,
+    }
+    assert result["repository_query_pair"]["p50_ms"] == 9.0
+    assert result["repository_rows_returned"]["personal"] == 51
+    assert result["repository_rows_returned"]["community"] == 99
+    # Pair, individual, row-count, and evaluation lookups all use the real repository.
+    assert queries.count(PERSONAL_ROUTES_QUERY) == 13
+    assert queries.count(COMMUNITY_ROUTES_QUERY) == 13

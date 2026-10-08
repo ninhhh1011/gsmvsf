@@ -110,7 +110,9 @@ async def search_for_ranking(request: CandidateSearchRequest, workflow=Depends(g
         raise HTTPException(422, str(exc)) from exc
 
 
-@router.post('/ranking', response_model=RecommendationResult, response_model_exclude_none=True)
+@router.post('/ranking', response_model=RecommendationResult,
+             response_model_exclude={'familiarity': True,
+                                     'ranked_candidates': {'__all__': {'familiarity'}}})
 async def rank(request: RankRequest, workflow=Depends(get_workflow)):
     evidence = await workflow.repository.get_search(request.candidate_search_id)
     return await workflow.ranking.recommend(evidence, request.request_time, request.top_n)

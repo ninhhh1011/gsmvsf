@@ -9,9 +9,9 @@ H3 Resolution 11, Python 3.14, and local PostgreSQL. Times are milliseconds.
 
 | Logical history rows | Evaluator p50 / p95 | Rows fetched (personal / community) | Rows scored (personal / community) | Community drivers fetched |
 |---:|---:|---:|---:|---:|
-| 150 | 59.468 / 65.060 | 51 / 99 | 50 / 99 | 99 |
-| 10,000 | 256.569 / 286.775 | 51 / 606 | 50 / 500 | 101 |
-| 100,000 | 496.179 / 675.905 | 51 / 606 | 50 / 500 | 101 |
+| 150 | 96.916 / 115.395 | 51 / 99 | 50 / 99 | 99 |
+| 10,000 | 244.823 / 261.663 | 51 / 606 | 50 / 500 | 101 |
+| 100,000 | 366.402 / 457.560 | 51 / 606 | 50 / 500 | 101 |
 
 The evaluator calls the production `RouteFamiliarityService` and weighted
 similarity implementation. Both the in-memory and PostgreSQL measurements use
@@ -28,13 +28,13 @@ microbenchmark, not an API latency SLA.
 
 | Production operation | p50 / p95 |
 |---|---:|
-| `create_route_signature` | 0.108 / 0.116 |
-| `weighted_ordered_overlap` | 0.016 / 0.027 |
+| `create_route_signature` | 0.112 / 0.134 |
+| `weighted_ordered_overlap` | 0.016 / 0.028 |
 
 ## PostgreSQL repository queries
 
 The benchmark creates disposable database
-`route_familiarity_bench_1b5585e3625b41239650d2914edcb578` on the configured
+`route_familiarity_bench_48205120b8774d49a51b1fef6b5924c8` on the configured
 PostgreSQL server, applies the route-history schema, seeds synthetic rows, times
 the real asyncpg `personal_routes` and `community_routes` methods, captures
 `EXPLAIN (ANALYZE, BUFFERS)`, and drops the database. The configured application
@@ -44,15 +44,24 @@ dropped. JSON lifecycle flags: `disposable_database_created: true`,
 `disposable_database_writes_committed: true`,
 `disposable_database_dropped: true`, `cleanup_succeeded: true`, and
 `application_database_written: false`; `cleanup_errors` is empty. The
-orchestrator independently confirmed zero leftover UUID benchmark databases.
+PostgreSQL inventory check confirmed zero leftover UUID benchmark databases.
 
-| Rows in disposable DB | Lookup pair p50 / p95 | Rows fetched (personal / community) | Rows scored (personal / community) | Community drivers / max fetched per driver |
-|---:|---:|---:|---:|---:|
-| 150 | 6.343 / 6.582 | 51 / 99 | 50 / 99 | 99 / 1 |
-| 10,000 | 55.713 / 60.493 | 51 / 606 | 50 / 500 | 101 / 6 |
-| 100,000 | 687.832 / 876.290 | 51 / 606 | 50 / 500 | 101 / 6 |
+| Rows in disposable DB | Personal query p50 / p95 | Community query p50 / p95 | Lookup pair p50 / p95 | Rows fetched (personal / community) | Rows scored (personal / community) | Community drivers / max fetched per driver |
+|---:|---:|---:|---:|---:|---:|---:|
+| 150 | 1.108 / 2.036 | 2.241 / 3.995 | 5.419 / 6.200 | 51 / 99 | 50 / 99 | 99 / 1 |
+| 10,000 | 1.970 / 2.221 | 54.809 / 64.686 | 48.148 / 66.211 | 51 / 606 | 50 / 500 | 101 / 6 |
+| 100,000 | 1.950 / 2.292 | 655.785 / 1892.086 | 635.231 / 1027.366 | 51 / 606 | 50 / 500 | 101 / 6 |
 
-Community query plan execution was 1.199 ms, 40.081 ms, and 255.508 ms
+Personal and community query timings measure the actual repository methods
+separately, including connection acquisition and row decoding. Each stage has
+its own one warmup and five measured calls using the same seeded rows,
+request `as_of`, seven-day lookback, driver, and route cells. The retained
+lookup-pair measurement runs both queries sequentially in a separate sample
+series; its percentiles are not the sum of the individual percentiles. These
+measurements ran on the local active development environment and do not isolate
+concurrent host activity.
+
+Community query plan execution was 1.098 ms, 42.700 ms, and 528.378 ms
 respectively (Seq Scan for 150/10,000 rows; parallel scan at 100,000 rows).
 
 The actual personal and community truncation flags were true/false for the
@@ -61,9 +70,9 @@ run measured production evaluation backed by the real repository:
 
 | PostgreSQL history rows | Full evaluation, 30 candidates, p50 / p95 |
 |---:|---:|
-| 150 | 193.017 / 207.157 ms |
-| 10,000 | 682.636 / 774.646 ms |
-| 100,000 | 1230.875 / 2930.565 ms |
+| 150 | 135.049 / 150.027 ms |
+| 10,000 | 491.359 / 578.743 ms |
+| 100,000 | 1162.858 / 1385.446 ms |
 
 Full plans, including buffers, row counts, and planning/execution time, are in
 [phase4-route-familiarity-benchmark.json](phase4-route-familiarity-benchmark.json).

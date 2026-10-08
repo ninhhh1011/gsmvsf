@@ -127,8 +127,7 @@ class RankingService:
             ranked_candidates=ranked[:top_n], eligible_count=len(ranked), policy=self.policy,
             familiarity_enabled=familiarity_evaluated,
             familiarity_status=(selected_assessment.status if selected_assessment else
-                                'UNAVAILABLE' if familiarity_evaluated and best else
-                                'DISABLED' if include_familiarity and not familiarity_evaluated else None),
+                                'UNAVAILABLE' if familiarity_evaluated and best else None),
             familiarity=(_explanation(selected_assessment,
                 cells=selected_signature.cells if selected_signature is not None else ())
                 if include_familiarity and best else None),

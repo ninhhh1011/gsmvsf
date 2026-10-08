@@ -287,15 +287,20 @@ async def _postgres_measure(database_url, signature):
                         benchmark_database_rows(size, db_signature, as_of))
             actual = await conn.fetchval("SELECT count(*) FROM realtime.route_familiarity_routes")
             await conn.execute("ANALYZE realtime.route_familiarity_routes")
+            async def personal_lookup():
+                return await repository.personal_routes(
+                    "phase4-benchmark-personal", as_of, timedelta(days=7))
+            async def community_lookup():
+                return await repository.community_routes(
+                    list(db_signature.cells), "phase4-benchmark-personal", as_of, timedelta(days=7))
             async def lookup():
-                await repository.personal_routes("phase4-benchmark-personal", as_of, timedelta(days=7))
-                await repository.community_routes(list(db_signature.cells), "phase4-benchmark-personal",
-                                                  as_of, timedelta(days=7))
+                await personal_lookup()
+                await community_lookup()
             timings = await _measure_async(lookup)
-            personal_rows = await repository.personal_routes(
-                "phase4-benchmark-personal", as_of, timedelta(days=7))
-            community_rows = await repository.community_routes(
-                list(db_signature.cells), "phase4-benchmark-personal", as_of, timedelta(days=7))
+            personal_timings = await _measure_async(personal_lookup)
+            community_timings = await _measure_async(community_lookup)
+            personal_rows = await personal_lookup()
+            community_rows = await community_lookup()
             community_per_driver = Counter(row["driver_id"] for row in community_rows)
             community_scored = [row for row in community_rows
                                 if row["active_rank"] <= 100 and row["driver_rank"] <= 5][:500]
@@ -311,6 +316,7 @@ async def _postgres_measure(database_url, signature):
             community_plan = await conn.fetch(COMMUNITY_EXPLAIN_QUERY,
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of, list(db_signature.cells))
             per_size.append({"history_rows": actual, "repository_query_pair": timings,
+                "personal_query": personal_timings, "community_query": community_timings,
                 "repository_rows_returned": {"personal": len(personal_rows),
                     "community": len(community_rows),
                     "community_distinct_drivers": len(community_per_driver),
