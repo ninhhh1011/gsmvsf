@@ -7,12 +7,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/pyproject.toml .
-
-# Install from pyproject.toml (not requirements.txt which is auto-generated)
-RUN pip install --no-cache-dir -e .
+COPY README.md .
 
 # Copy application code
 COPY backend/app/ ./backend/app/
+
+# Install from pyproject.toml (not requirements.txt which is auto-generated)
+RUN pip install --no-cache-dir -e .
 
 ENV PYTHONPATH=/app
 ENV LOG_LEVEL=INFO

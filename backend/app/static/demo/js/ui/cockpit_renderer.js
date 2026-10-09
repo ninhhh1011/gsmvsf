@@ -367,6 +367,14 @@ export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, po
                         <button id="btn-driver-replay-pause" class="${pauseBtnClass}">⏸ Tạm dừng</button>
                         <button id="btn-driver-replay-step" class="btn btn-outline btn-sm flex-1">⏭ Từng bước</button>
                     </div>
+                    <div class="speed-controls" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 4px 8px; background: rgba(15, 23, 42, 0.4); border-radius: 6px; border: 1px solid rgba(51, 65, 85, 0.5);">
+                        <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Tốc độ:</span>
+                        <div style="display: flex; gap: 4px;">
+                            <button type="button" class="btn btn-xs ${(controller.replay?.speedMultiplier === 1) ? 'btn-primary' : 'btn-outline'} btn-quick-speed" data-speed="1" style="padding: 2px 8px; font-size: 11px;">1x</button>
+                            <button type="button" class="btn btn-xs ${(!controller.replay?.speedMultiplier || controller.replay?.speedMultiplier === 5) ? 'btn-primary' : 'btn-outline'} btn-quick-speed" data-speed="5" style="padding: 2px 8px; font-size: 11px;">5x</button>
+                            <button type="button" class="btn btn-xs ${(controller.replay?.speedMultiplier === 10) ? 'btn-primary' : 'btn-outline'} btn-quick-speed" data-speed="10" style="padding: 2px 8px; font-size: 11px;">10x</button>
+                        </div>
+                    </div>
                     <button id="btn-change-station" class="btn btn-sm btn-outline-secondary" style="margin-top: 6px; width: 100%; display: ${controller._navigationLocked ? 'block' : 'none'};">
                         🔄 Đổi trạm sạc khác
                     </button>

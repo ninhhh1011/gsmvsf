@@ -25,6 +25,8 @@ export function createCockpitBindings(root = globalThis.document) {
         slider?.addEventListener('change', event => callbacks.setSoc(parseFloat(event.target.value), true));
         each('.btn-quick-soc', btn => btn.addEventListener('click', event => callbacks.setSoc(parseFloat(event.currentTarget.dataset.soc), true)));
         each('.btn-quick-speed', btn => btn.addEventListener('click', event => callbacks.setSpeed?.(parseInt(event.currentTarget.dataset.speed, 10))));
+        const speedSelect = get('select-replay-speed');
+        if (speedSelect) speedSelect.addEventListener('change', event => callbacks.setSpeed?.(parseInt(event.target.value, 10)));
     }
 
     return {

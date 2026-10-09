@@ -52,6 +52,9 @@ export class TrajectoryReplayController {
         // State Machine
         this.state = ReplayState.IDLE;
         this.generation = 1;
+        this.playbackToken = 0;
+        this._cancelSleep = null;
+        this.lastAcceptedTimestampMs = 0;
         this.isStepInProgress = false;
         this.stepTimer = null;
 
@@ -84,6 +87,25 @@ export class TrajectoryReplayController {
         this.state = newState;
         this.updateControlsUI();
         this.onStateChange(this.state);
+    }
+
+    _sleep(ms, token) {
+        return new Promise(resolve => {
+            let timerId = null;
+            const cleanup = () => {
+                if (timerId) clearTimeout(timerId);
+                if (this._cancelSleep === cancelFn) this._cancelSleep = null;
+            };
+            const cancelFn = () => {
+                cleanup();
+                resolve(false);
+            };
+            this._cancelSleep = cancelFn;
+            timerId = setTimeout(() => {
+                cleanup();
+                resolve(this.playbackToken === token);
+            }, ms);
+        });
     }
 
     bindEvents() {
@@ -198,7 +220,8 @@ export class TrajectoryReplayController {
 
         // Step distance along route: vehicle travels at speedKmh
         const speedMs = speedKmh / 3.6;
-        const intervalSec = 1.5;
+        const multiplier = Math.max(1, Math.min(10, this.speedMultiplier || 1));
+        const intervalSec = 1.5 * multiplier;
         const stepDistMeters = Math.max(12, speedMs * intervalSec);
 
         // Calculate total route distance first to place baseTime safely in the past
@@ -208,7 +231,12 @@ export class TrajectoryReplayController {
         }
         const totalEstimatedSteps = Math.max(points.length, Math.ceil(totalDistMeters / stepDistMeters) + 10);
         const totalDurationMs = totalEstimatedSteps * intervalSec * 1000;
-        const baseTime = Date.now() - totalDurationMs - 120000;
+        let baseTime;
+        if (this.lastAcceptedTimestampMs > 0) {
+            baseTime = this.lastAcceptedTimestampMs + 1000;
+        } else {
+            baseTime = Date.now() - totalDurationMs - 120000;
+        }
 
         const syntheticObs = [];
         let obsIndex = 0;
@@ -324,6 +352,16 @@ export class TrajectoryReplayController {
                 return false;
             }
 
+            // Reject stale observation status (data integrity guard)
+            if (locResp.status === 'STALE_OBSERVATION') {
+                const staleErr = new Error('STALE_OBSERVATION: Timestamp rejected by backend realtime tracker');
+                staleErr.isStale = true;
+                throw staleErr;
+            }
+
+            // Record monotonic accepted timestamp
+            this.lastAcceptedTimestampMs = new Date(obsTimestamp).getTime();
+
             // Update map with real response
             const rawPos = { latitude: obs.latitude, longitude: obs.longitude };
             const matchedPos = locResp.matched_position ? {
@@ -345,12 +383,14 @@ export class TrajectoryReplayController {
             }
 
             // Downstream handler (DriverModeController recommendation evaluation)
+            const isLastObservation = (targetIndex + 1 >= this.observations.length);
             if (this.onStep) {
                 try {
                     await this.onStep({
                         observation: obs,
                         locResp,
                         currentIndex: targetIndex + 1,
+                        isComplete: isLastObservation,
                         generation: currentGen
                     });
                 } catch (stepErr) {
@@ -375,6 +415,10 @@ export class TrajectoryReplayController {
             return true;
         } catch (err) {
             if (this.generation !== currentGen) return false;
+            if (isAutoStep) {
+                // Let playback loop manage transient backoff and retry budget
+                throw err;
+            }
             console.error('Replay step error:', err);
             this.setState(ReplayState.ERROR);
             const statusElem = getElem('replay-status');
@@ -395,49 +439,76 @@ export class TrajectoryReplayController {
         }
 
         this.setState(ReplayState.PLAYING);
-        this._runPlaybackLoop();
+        const token = ++this.playbackToken;
+        this._runPlaybackLoop(token);
     }
 
-    async _runPlaybackLoop() {
+    async _runPlaybackLoop(token) {
         const loopGen = this.generation;
+        let consecutiveRetries = 0;
 
-        while (this.state === ReplayState.PLAYING && this.generation === loopGen) {
+        while (this.state === ReplayState.PLAYING && this.generation === loopGen && this.playbackToken === token) {
             if (this.currentIndex >= this.observations.length) {
                 this.setState(ReplayState.COMPLETE);
                 break;
             }
 
-            const stepSucceeded = await this.step(true);
+            try {
+                await this.step(true);
+                consecutiveRetries = 0; // Reset retries on success
+            } catch (err) {
+                if (this.state !== ReplayState.PLAYING || this.generation !== loopGen || this.playbackToken !== token) {
+                    break;
+                }
 
-            if (this.state !== ReplayState.PLAYING || this.generation !== loopGen) {
+                const isTransient = err.isRateLimited || err.isEngineUnavailable || err.status === 429 ||
+                                    err.status === 503 || err.status === 504 || err.code === 'NETWORK_ERROR' ||
+                                    err.code === 'TIMEOUT' || (err.status >= 500 && err.status < 600);
+
+                if (isTransient && consecutiveRetries < 3) {
+                    consecutiveRetries++;
+                    const cooldownMs = (err.retryAfter ? (err.retryAfter * 1000) : null) ||
+                                       Math.min(10000, 1500 * Math.pow(2, consecutiveRetries - 1));
+                    console.warn(`[Replay] Transient error (${err.message}) at index ${this.currentIndex}. Retrying ${consecutiveRetries}/3 in ${cooldownMs}ms...`);
+                    const ok = await this._sleep(cooldownMs, token);
+                    if (!ok) break;
+                    continue;
+                } else {
+                    // Non-transient or exhausted retry budget
+                    console.error(`[Replay] Step error (${err.message}). Retries exhausted or non-retriable.`);
+                    this.setState(ReplayState.ERROR);
+                    const statusElem = getElem('replay-status');
+                    if (statusElem) statusElem.textContent = `Error: ${err.message}`;
+                    break;
+                }
+            }
+
+            if (this.state !== ReplayState.PLAYING || this.generation !== loopGen || this.playbackToken !== token) {
                 break;
             }
 
-            if (!stepSucceeded) {
-                console.warn(`[Replay] Step at index ${this.currentIndex} encountered an error, waiting before retry...`);
-                await new Promise(resolve => {
-                    this.stepTimer = setTimeout(resolve, 500);
-                });
-                this.stepTimer = null;
-                // If in error state during autoplay, advance index so vehicle keeps progressing
-                if (this.state === ReplayState.ERROR && this.generation === loopGen) {
-                    this.currentIndex = Math.min(this.observations.length, this.currentIndex + 1);
-                    this.setState(ReplayState.PLAYING);
-                }
-                continue;
-            }
-
-            // Delay before scheduling next step
-            const baseDelayMs = 500;
-            const delay = Math.max(30, Math.round(baseDelayMs / this.speedMultiplier));
-            await new Promise(resolve => {
-                this.stepTimer = setTimeout(resolve, delay);
-            });
-            this.stepTimer = null;
+            // Normal pacing between steps:
+            // High multiplier (>= 10, e.g. tests): fast floor for automated tests.
+            // Fast simulation (5x - 9x): 800ms delay (~75 req/min total, safely within 100 req/min quota).
+            // Moderate simulation (2x - 4x): 1000ms delay (~60 req/min).
+            // Realtime (< 2x): 1200ms delay (~50 req/min).
+            const delay = this.speedMultiplier >= 10
+                ? Math.max(30, Math.round(500 / this.speedMultiplier))
+                : (this.speedMultiplier >= 5 ? 800 : (this.speedMultiplier >= 2 ? 1000 : 1200));
+            const ok = await this._sleep(delay, token);
+            if (!ok) break;
         }
     }
 
+    setSpeedMultiplier(multiplier) {
+        this.speedMultiplier = Math.max(1, parseInt(multiplier, 10) || 1);
+    }
+
     pause() {
+        this.playbackToken++;
+        if (this._cancelSleep) {
+            this._cancelSleep();
+        }
         if (this.stepTimer) {
             clearTimeout(this.stepTimer);
             this.stepTimer = null;
@@ -448,14 +519,19 @@ export class TrajectoryReplayController {
     }
 
     reset() {
-        // Invalidate generation immediately
+        // Invalidate generation and playback token immediately
         this.generation++;
+        this.playbackToken++;
+        if (this._cancelSleep) {
+            this._cancelSleep();
+        }
         if (this.stepTimer) {
             clearTimeout(this.stepTimer);
             this.stepTimer = null;
         }
         this.isStepInProgress = false;
         this.currentIndex = 0;
+        this.lastAcceptedTimestampMs = 0;
 
         // Reset backend realtime state
         this.api.resetDriverLocation(this.driverId).catch(() => {});

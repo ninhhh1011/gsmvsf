@@ -6,12 +6,14 @@
  */
 
 export class ApiError extends Error {
-    constructor(message, status, code = null, detail = null) {
+    constructor(message, status, code = null, detail = null, retryAfter = null) {
         super(message);
         this.name = 'ApiError';
         this.status = status;
         this.code = code;
         this.detail = detail;
+        this.retryAfter = retryAfter;
+        this.isRateLimited = status === 429;
         this.isConflict = status === 409;
         this.isEngineUnavailable = status === 503;
         this.isLocationUnavailable = code === 'LOCATION_UNAVAILABLE';
@@ -71,7 +73,9 @@ export class ApiClient {
                     if (data.message) message = data.message;
                 }
 
-                throw new ApiError(message, response.status, code, detail);
+                const retryAfterHeader = response.headers?.get ? response.headers.get('retry-after') : null;
+                const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+                throw new ApiError(message, response.status, code, detail, retryAfter);
             }
 
             return data;
