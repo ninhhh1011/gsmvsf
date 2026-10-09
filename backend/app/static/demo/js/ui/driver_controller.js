@@ -131,7 +131,7 @@ export class DriverModeController {
         this.lastDiversionLeg1 = null;
         this.lastDiversionLeg2 = null;
 
-        // Navigation lock — khoá route khi user đã chọn trạm
+        // Navigation lock — route locked when user selects a station
         this._navigationLocked = false;
         this._selectedStationId = null;   // station_id user đã chọn
         this.routeRevision = 0;           // Revision token to prevent stale async overwrites
@@ -140,14 +140,14 @@ export class DriverModeController {
         this._top5Result = null;
         this._top5Revision = 0;
 
-        // Auto-refresh timer for recommendations
+        // Recommendation auto-refresh timer
         this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000;
         this._recommendTimer = null;
 
-        // Proactive Station Search & Destination Picking
+        // Station Search & Destination Picking
         this.isPickingDestination = false;
         this.currentStationsFilter = 'ALL';
-        this.chargingIntent = 'EN_ROUTE'; // 'EN_ROUTE' (A -> Station -> B) | 'AT_DESTINATION' (B -> Station)
+        this.chargingIntent = 'EN_ROUTE'; // 'EN_ROUTE' | 'AT_DESTINATION'
         this.customOrigin = { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
         this.customDestination = { latitude: 21.0285, longitude: 105.8542, node_id: "DEST_B" };
         this.postTripStation = null;
@@ -200,7 +200,6 @@ export class DriverModeController {
         if (this._h3Initialized) return;
         this._h3Initialized = true;
 
-        // H3 overlay only available in browser with h3 library
         if (typeof window === 'undefined' || !window.h3 || !this.map?.map) return;
 
         const toggle = document.getElementById('toggle-route-familiarity');
@@ -216,7 +215,6 @@ export class DriverModeController {
                 countElement,
                 supportElement
             });
-            // Bind toggle handler
             toggle.addEventListener('change', () => this.onToggleH3());
         }
     }
@@ -429,8 +427,7 @@ export class DriverModeController {
         this.map.clearAll();
         this._renderEndpointsWithDrag(trip.origin, trip.destination);
 
-        // Sample corridor inflection waypoints via Ramer-Douglas-Peucker (250m tolerance)
-        // This preserves key turnarounds while eliminating GPS sensor jitter and side-alley detours
+        // Sample corridor via RDP simplification
         let viaPoints = [];
         try {
             const trajId = this._tripToTrajectory(trip.trip_id);
@@ -445,7 +442,7 @@ export class DriverModeController {
                 }
             }
         } catch (e) {
-            // Trajectory unmapped or mock route, proceed without via
+            // No via points on trajectory failure
         }
 
         if (this.generation !== currentGen) return;
@@ -535,15 +532,15 @@ export class DriverModeController {
 
         if (this.generation !== currentGen) return;
 
-        // Initial recommendation & render UI
+        // Initial recommendation request
         await this._evaluateAtCurrentPosition();
         if (this.generation !== currentGen) return;
         this.renderTripActiveUI();
 
-        // Start auto-refresh timer for recommendations
+        // Start recommendation auto-refresh
         this.startRecommendRefresh();
 
-        // Auto-step first observation
+        // Auto-step first GPS observation
         await this.replay.step();
 
         if (this.generation !== currentGen) return;
@@ -626,7 +623,7 @@ export class DriverModeController {
             if (this.fullRouteCoords && this.fullRouteCoords.length > 1 && probePos) {
                 const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
 
-                // Anti-spam off-route check (> 35m for 3 consecutive samples, with 5s cooldown)
+                // Anti-spam off-route check
                 const OFF_ROUTE_THRESHOLD_METERS = 35.0;
                 const REROUTE_COOLDOWN_MS = 5000;
                 const now = Date.now();
@@ -677,9 +674,7 @@ export class DriverModeController {
                 return;
             }
 
-            // Kiểm tra đã đến trạm chưa
             if (this._navigationLocked && this._selectedStationId && this.currentPos) {
-                // Tính khoảng cách đến station đã chọn
                 const selectedStation = this.stations.find(s => s.station_id === this._selectedStationId);
                 if (selectedStation) {
                     const distKm = straightLineDistanceKm(
@@ -693,7 +688,7 @@ export class DriverModeController {
                 }
             }
 
-            // Periodic recommendation evaluation (strictly throttled to >= 5.0s wall-time, 12/min budget)
+            // Throttled recommendation evaluation
             const nowMs = Date.now();
             const distSinceLastEval = this.lastEvalPos ? straightLineDistanceKm(
                 this.lastEvalPos.latitude, this.lastEvalPos.longitude,
@@ -745,15 +740,14 @@ export class DriverModeController {
     async _evaluateAtCurrentPosition() {
         if (!this.currentVehicle || !this.currentPos || this._isEvaluating) return;
 
-        // Vẫn kiểm tra nguy hiểm DÙ ĐANG KHOÁ
+        // Check danger even when locked
         const isDangerous = this.estimatedRangeKm < 5;
         if (isDangerous && this._navigationLocked) {
-            // Hiện cảnh báo nhưng KHÔNG tự động unlock
-            // User phải tự bấm "Đổi trạm"
+            // Show warning but don't auto-unlock
             console.warn('[DriverMode] ⚠️ Range < 5km! User should change station.');
         }
 
-        // Skip nếu đang khoá navigation
+        // Skip when navigation is locked
         if (this._navigationLocked) {
             this._isEvaluating = false;
             return;
@@ -770,16 +764,6 @@ export class DriverModeController {
 
         const rawLat = this.currentObservation ? this.currentObservation.latitude : this.currentPos.latitude;
         const rawLng = this.currentObservation ? this.currentObservation.longitude : this.currentPos.longitude;
-
-        // Debug: Log ETA calculation inputs
-        console.group('[DRIVER MODE] ETA Debug');
-        console.log('Current Position (A):', { lat: rawLat, lng: rawLng });
-        console.log('Trip Destination (B):', this.currentTrip?.destination);
-        console.log('Trip Origin (trip origin):', this.currentTrip?.origin);
-        console.log('Vehicle:', this.currentVehicle?.vehicle_id, this.currentVehicle?.vehicle_type);
-        console.log('SOC:', this.currentSocPct + '%', 'Range:', this.estimatedRangeKm + 'km');
-        console.log('Remaining Trip Distance:', this.remainingTripDistanceKm + 'km');
-        console.log('Observation timestamp:', timestamp);
 
         const payload = {
             context: {
@@ -802,23 +786,10 @@ export class DriverModeController {
             avoid_congestion: !!this.avoidCongestion,
             top_n: 5
         };
-        console.log('Request payload:', JSON.stringify(payload, null, 2));
 
         try {
             const rec = await this.api.getRecommendation(payload);
 
-            console.log('Recommendation Response:', {
-                has_recommendation: rec?.has_recommendation,
-                recommended_station: rec?.recommended_station_id,
-                eta_to_station_s: rec?.ranked_candidates?.[0]?.eta_to_station_s,
-                eta_to_station_min: rec?.ranked_candidates?.[0]
-                    ? (rec.ranked_candidates[0].eta_to_station_s / 60).toFixed(1)
-                    : null,
-                eta_to_complete_min: rec?.ranked_candidates?.[0]
-                    ? (rec.ranked_candidates[0].eta_to_service_complete_s / 60).toFixed(1)
-                    : null
-            });
-            console.groupEnd();
             if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) {
                 this._isEvaluating = false;
                 return;
@@ -849,7 +820,6 @@ export class DriverModeController {
                 this._notifyTop5Updated(this._top5Result);
             }
 
-            // Nếu đang khoá navigation → skip hoàn toàn, KHÔNG re-evaluate
             if (this._navigationLocked) {
                 this._isEvaluating = false;
                 return;
@@ -859,22 +829,9 @@ export class DriverModeController {
             let leg2Result = null;
 
             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
-                // Sổ panel chọn trạm (gọi hàm mới ở Bước 3)
                 this._showRecommendationPanel(rec.ranked_candidates);
-
-                // Vẫn vẽ route cho top 1 nhưng KHÔNG khoá
                 const top = rec.ranked_candidates[0];
-                const top5Candidates = (rec.ranked_candidates || []).slice(0, 5).map((c, idx) => {
-                    const stMatch = this.stations?.find(s => s.station_id === c.station_id);
-                    return {
-                        ...c,
-                        rank: c.rank ?? (idx + 1),
-                        station_id: c.station_id,
-                        latitude: c.latitude ?? stMatch?.latitude,
-                        longitude: c.longitude ?? stMatch?.longitude,
-                    };
-                }).filter(c => c.latitude != null && c.longitude != null);
-
+                const top5Candidates = top5Candidates; // reuse from line 808
                 const st = this.stations.find(s => s.station_id === top.station_id);
                 if (st && this.currentTrip?.destination) {
                     const stPos = { latitude: st.latitude, longitude: st.longitude };
@@ -967,9 +924,7 @@ export class DriverModeController {
     _hideRecommendationPanel() { this.bindings.hideRecommendationPanel(); }
 
     _notifyTop5Updated(result) {
-        // Top 5 result is shared via _top5Result property
-        // Map markers are updated via renderStations() in _evaluateAtCurrentPosition()
-        // This callback exists for extensibility if needed in the future
+        // Top 5 shared via _top5Result; markers via renderStations()
     }
 
     startRecommendRefresh() {
@@ -993,7 +948,7 @@ export class DriverModeController {
             return;
         }
         if (this._navigationLocked) {
-            // Don't refresh while user is navigating to a station
+            // Skip refresh during active navigation
             return;
         }
         await this._evaluateAtCurrentPosition();
@@ -1092,9 +1047,9 @@ export class DriverModeController {
         if (!this._navigationLocked) return;
         this._navigationLocked = false;
         this._selectedStationId = null;
-        // Ẩn panel nếu đang mở
+        // Hide recommendation panel
         this._hideRecommendationPanel();
-        // Re-trigger evaluate
+        // Re-trigger evaluation
         this.lastEvalTimestamp = 0; // force re-evaluate
         this._evaluateAtCurrentPosition().catch(() => {});
         this._onReplayStep({}).catch(() => {});
@@ -1129,7 +1084,7 @@ export class DriverModeController {
 
         try {
             if (this.currentTrip?.destination) {
-                // Route via station: Leg 1 (Vehicle -> Station) + Leg 2 (Station -> Destination)
+                // Route via station: Leg 1 + Leg 2
                 const leg1 = await this.api.computeRoute(currentPos, stationPos, { vehicle_category: vCat });
                 if (this.generation !== currentGen || this.routeRevision !== navRev) return;
                 const leg2 = await this.api.computeRoute(stationPos, this.currentTrip.destination, { vehicle_category: vCat });
@@ -1165,7 +1120,7 @@ export class DriverModeController {
                 const totalDistM = (leg1.distance_m || 0) + (leg2?.distance_m || 0);
                 this.remainingTripDistanceKm = parseFloat((totalDistM / 1000).toFixed(2));
 
-                // Load combined diversion into replay so vehicle drives via station!
+                // Load combined diversion into replay
                 if (this.state === DriverState.TRIP_ACTIVE) {
                     await this.replay.loadFromPolyline(combined);
                     if (this.generation !== currentGen || this.routeRevision !== navRev) return;
@@ -1200,7 +1155,6 @@ export class DriverModeController {
                 }
             }
 
-            // Highlight station marker on map
             this.map.renderStations(this.stations, st.station_id, st.service_type || 'FAST_CHARGING', null, this.lastRecommendation?.ranked_candidates);
 
         } catch (err) {
@@ -1222,14 +1176,14 @@ export class DriverModeController {
         const stationPos = { latitude: st.latitude, longitude: st.longitude };
 
         try {
-            // Compute onward route from Destination B to Station
+            // Compute route from Destination B to Station
             const routeBToSt = await this.api.computeRoute(dest, stationPos, { vehicle_category: vCat });
             if (this.generation !== currentGen || this.routeRevision !== postTripRev) return;
             if (!routeBToSt?.geometry || !decodePolyline(routeBToSt.geometry).length) return;
             this.postTripStation = st;
             this.postTripRoute = routeBToSt;
 
-            // Render direct route A -> B, plus onward connection B -> Station
+            // Render A -> B direct, plus B -> Station onward
             if (this.fullRouteCoords) {
                 this.map.renderDirectRoute(this.fullRouteCoords);
             }
@@ -1237,10 +1191,10 @@ export class DriverModeController {
                 this.map.renderPostTripRoute(routeBToSt.geometry);
             }
 
-            // Highlight chosen station marker
+            // Highlight selected station marker
             this.map.highlightStation(st.station_id);
 
-            // Re-render UI to show post-trip charging badge/notification
+            // Refresh UI for post-trip charging
             if (this.state === DriverState.TRIP_ACTIVE) {
                 this.renderTripActiveUI();
             } else if (this.state === DriverState.TRIP_ASSIGNED) {
@@ -1427,7 +1381,7 @@ export class DriverModeController {
 
         // Sort stations based on active intent
         if (isAtDest) {
-            // AT_DESTINATION: Sort by backend post-trip rank if available, otherwise by distance to B
+            // AT_DESTINATION: sort by rank, then distance to B
             filtered.sort((a, b) => {
                 if (a.station_id === topRecId) return -1;
                 if (b.station_id === topRecId) return 1;
@@ -1441,7 +1395,7 @@ export class DriverModeController {
                 return distA - distB;
             });
         } else {
-            // EN_ROUTE: Top recommendation first, then by rank if available, then by distance from vehicle
+            // EN_ROUTE: sort by rank, then by distance from vehicle
             filtered.sort((a, b) => {
                 if (a.station_id === topRecId) return -1;
                 if (b.station_id === topRecId) return 1;
@@ -1545,6 +1499,11 @@ export class DriverModeController {
                 this.map.renderDirectRoute(coords);
                 this.map.fitBoundsToActive(coords);
                 this.map.renderStations(this.stations);
+
+                // Initialize synthetic GPS replay from route geometry
+                if (coords && coords.length > 1) {
+                    await this.replay.loadFromPolyline(coords);
+                }
 
                 const plannedKm = routeResult.distance_m ? parseFloat((routeResult.distance_m / 1000).toFixed(2)) : 5.0;
                 this.remainingTripDistanceKm = plannedKm;
