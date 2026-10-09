@@ -221,8 +221,11 @@ export class DriverModeController {
 
     onToggleH3() {
         if (!this._h3Overlay) return;
-        this._h3Enabled = !this._h3Enabled;
-        if (this._h3Enabled) {
+        // Always read from checkbox — avoids sync drift when _clearH3OnRouteChange also modifies state
+        const toggle = document.getElementById('toggle-route-familiarity');
+        const wantEnabled = toggle?.checked ?? false;
+        this._h3Enabled = wantEnabled;
+        if (wantEnabled) {
             const cells = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry);
             this._h3Overlay.setEnabled(true);
             this._h3Overlay.renderFromCells(cells);
@@ -620,42 +623,47 @@ export class DriverModeController {
 
             // Update remaining route & distance
             const probePos = this.matchedPos || this.currentPos;
-            if (this.fullRouteCoords && this.fullRouteCoords.length > 1 && probePos) {
-                const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
+            // Bug 4 fix: guard against null/undefined probePos (e.g. when loadFromPolyline reset currentIndex)
+            // Bug 3 fix: NaN guard prevents route from being incorrectly cleared when off-route
+            if (!probePos || !this.fullRouteCoords || this.fullRouteCoords.length < 2) return;
+            const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
+            if (!progress || isNaN(progress.distanceMeters)) return;
 
-                // Anti-spam off-route check
-                const OFF_ROUTE_THRESHOLD_METERS = 35.0;
-                const REROUTE_COOLDOWN_MS = 5000;
-                const now = Date.now();
+            // Anti-spam off-route check
+            const OFF_ROUTE_THRESHOLD_METERS = 35.0;
+            const REROUTE_COOLDOWN_MS = 5000;
+            const now = Date.now();
 
-                if (progress.distanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
-                    this.offRouteConsecutiveSamples++;
-                    if (this.offRouteConsecutiveSamples >= 3 && (now - this.lastRerouteTimestamp) > REROUTE_COOLDOWN_MS) {
-                        this.lastRerouteTimestamp = now;
-                        this.offRouteConsecutiveSamples = 0;
-                        await this._triggerReroute(probePos);
-                        if (this.generation !== currentGen) return;
-                    }
-                } else {
+            if (progress.distanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
+                this.offRouteConsecutiveSamples++;
+                if (this.offRouteConsecutiveSamples >= 3 && (now - this.lastRerouteTimestamp) > REROUTE_COOLDOWN_MS) {
+                    this.lastRerouteTimestamp = now;
                     this.offRouteConsecutiveSamples = 0;
+                    await this._triggerReroute(probePos);
+                    if (this.generation !== currentGen) return;
                 }
+            } else {
+                this.offRouteConsecutiveSamples = 0;
+            }
 
-                // Route slicing: shrink route ahead of the car
-                if (this.fullRouteCoords && this.fullRouteCoords.length > 1) {
-                    this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
-                    const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
-                        segmentIndex: this.lastPassedSegmentIndex,
-                        projPoint: progress.projPoint
-                    });
+            // Route slicing: shrink route ahead of the car (Bug 3 fix: skip when in diversion — _navigationLocked)
+            if (!this._navigationLocked && this.fullRouteCoords && this.fullRouteCoords.length > 1) {
+                this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
+                const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
+                    segmentIndex: this.lastPassedSegmentIndex,
+                    projPoint: progress.projPoint
+                });
 
-                    this.directRouteGeometry = remainingCoords;
-                    this._clearH3OnRouteChange();
-                    this.map.updateDirectRoute?.(remainingCoords);
+                this.directRouteGeometry = remainingCoords;
+                this._clearH3OnRouteChange();
+                this.map.updateDirectRoute?.(remainingCoords);
 
-                    const remainingMeters = computePolylineDistanceMeters(remainingCoords);
-                    this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
-                }
-            } else if (this.currentPos && this.currentTrip?.destination) {
+                const remainingMeters = computePolylineDistanceMeters(remainingCoords);
+                this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
+            }
+
+            // Straight-line fallback when no route coords
+            if (this.currentPos && this.currentTrip?.destination) {
                 this.remainingTripDistanceKm = straightLineDistanceKm(
                     this.currentPos.latitude,
                     this.currentPos.longitude,

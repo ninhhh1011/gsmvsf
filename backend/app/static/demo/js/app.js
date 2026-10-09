@@ -50,6 +50,8 @@ class DemoApp {
             });
             this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios, this.vehicleCatalog);
             await this.driverMode.init();
+            // Initialize H3 overlay (was previously initialized by Simulation mode controller)
+            this.driverMode.initH3Overlay();
             window.driverMode = this.driverMode;
 
             // Link app.replay to driverMode.replay to maintain single replay instance
