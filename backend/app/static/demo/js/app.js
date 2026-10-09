@@ -6,7 +6,6 @@ import { ApiClient } from './api.js';
 import { DemoMap } from './map.js';
 import { DriverModeController } from './driver_mode.js';
 import { TrajectoryReplayController } from './replay.js';
-import { SimModeController } from './sim_mode.js';
 import { fetchVehicleCatalog } from './domain/vehicle-catalog.js';
 import { FALLBACK_MODEL_SPECS } from './domain/vehicle_model.js';
 
@@ -15,7 +14,6 @@ class DemoApp {
         this.api = new ApiClient();
         this.map = null;
         this.driverMode = null;
-        this.simMode = null;
         this.replay = null;
 
         // Shared session context across all controllers
@@ -53,21 +51,6 @@ class DemoApp {
             this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios, this.vehicleCatalog);
             await this.driverMode.init();
             window.driverMode = this.driverMode;
-
-            // Initialize Simulation Mode Controller
-            this.simMode = new SimModeController(this.api, this.map, {
-                onModeChange: active => {
-                    if (active) {
-                        this.driverMode.suspendForDebug();
-                    } else {
-                        this.driverMode.restoreMapState();
-                        this.driverMode.renderCurrentStateUI();
-                    }
-                }
-            });
-            this.simMode.setCatalogs(this.scenarios, this.vehicles, this.stations);
-            this.simMode.init();
-            window.simMode = this.simMode;
 
             // Link app.replay to driverMode.replay to maintain single replay instance
             this.replay = this.driverMode.replay;
@@ -138,16 +121,17 @@ class DemoApp {
         if (scResult.status === 'fulfilled') {
             this.scenarios = scResult.value || [];
         } else {
-            errors.push(`Scenarios: ${scResult.reason?.message || 'load failed'}`);
+            console.warn(`[App] Scenarios unavailable: ${scResult.reason?.message || 'load failed'} — continuing without scenarios`);
             this.scenarios = [];
         }
         if (trResult.status === 'fulfilled') {
             this.trips = trResult.value || [];
         } else {
-            errors.push(`Trips: ${trResult.reason?.message || 'load failed'}`);
+            console.warn(`[App] Trips unavailable: ${trResult.reason?.message || 'load failed'} — continuing without trips`);
             this.trips = [];
         }
 
+        // Only throw if stations (critical) or vehicles fail; scenarios/trips degrade gracefully
         if (errors.length > 0) {
             const msg = `Catalog load failed: ${errors.join('; ')}`;
             console.error(msg);
