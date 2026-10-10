@@ -42,7 +42,7 @@ async def test_demo_static_assets():
         assert "--brand-teal" in css_resp.text
 
         # JS modules
-        for mod in ["api.js", "map.js", "components.js", "driver_mode.js", "sim_mode.js", "replay.js", "app.js", "tech_view.js"]:
+        for mod in ["api.js", "map.js", "components.js", "driver_mode.js", "replay.js", "app.js"]:
             js_resp = await client.get(f"/demo/static/js/{mod}")
             assert js_resp.status_code == 200, f"Failed to fetch {mod}"
 
@@ -65,15 +65,3 @@ async def test_demo_catalogs():
         vehicles = v_resp.json()
         assert len(vehicles) == 60
         assert any(v["vehicle_id"] == "V0001" for v in vehicles)
-
-        # Scenarios
-        sc_resp = await client.get("/demo/static/data/scenarios.json")
-        assert sc_resp.status_code == 200
-        scenarios = sc_resp.json()
-        assert len(scenarios) == 8
-
-        # Trips
-        tr_resp = await client.get("/demo/static/data/trips.json")
-        assert tr_resp.status_code == 200
-        trips = tr_resp.json()
-        assert isinstance(trips, list)

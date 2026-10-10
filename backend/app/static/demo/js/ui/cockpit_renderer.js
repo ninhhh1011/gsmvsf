@@ -323,6 +323,12 @@ export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, po
                              style="width: ${battery.batteryWidth}; height: 100%;"></div>
                     </div>
 
+                    <!-- Powertrain Motor Capability vs Instantaneous Draw -->
+                    <div class="powertrain-strip">
+                        <span style="color: #94a3b8;">Động cơ (Max): <strong style="color: #38bdf8;">${controller.maxMotorPowerKw || (controller.currentVehicle?.max_motor_power_kw || 30)} kW</strong></span>
+                        <span style="color: #94a3b8;">Đang tiêu thụ: <strong id="hud-val-instant-power" style="color: #34d399;">${controller.instantaneousPowerKw || 1.5} kW</strong></span>
+                    </div>
+
                     <!-- Interactive Battery SOC Adjuster -->
                     <div class="cockpit-soc-control" style="margin-top: 10px; padding: 8px 10px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 8px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">

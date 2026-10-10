@@ -215,5 +215,15 @@ export class ApiClient {
             })
         });
     }
+
+    /**
+     * Compare proposed route against driver route using backend H3 engine.
+     */
+    async compareRoutes(payload) {
+        return this._request('/api/v1/routing/compare-routes', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+    }
 }
 

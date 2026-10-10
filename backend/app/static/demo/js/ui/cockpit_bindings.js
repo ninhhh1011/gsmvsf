@@ -175,6 +175,69 @@ export function createCockpitBindings(root = globalThis.document) {
                 item.addEventListener('click', event => callbacks.selectStation(event.currentTarget.dataset.stationId));
             });
         },
-        hideRecommendationPanel() { get('recommendation-panel')?.remove(); }
+        hideRecommendationPanel() { get('recommendation-panel')?.remove(); },
+        bindH3Toggle(onToggle) {
+            listen('toggle-route-familiarity', 'change', onToggle);
+        },
+        getH3Toggle() {
+            return get('toggle-route-familiarity');
+        },
+        getH3CountElement() {
+            return get('route-familiarity-count');
+        },
+        getH3SupportElement() {
+            return get('route-familiarity-support');
+        },
+        setH3Checked(checked) {
+            const el = get('toggle-route-familiarity');
+            if (el) el.checked = Boolean(checked);
+        },
+        showH3Toast(message) {
+            let toast = get('h3-notification-toast');
+            if (!toast && root?.body) {
+                toast = root.createElement('div');
+                toast.id = 'h3-notification-toast';
+                toast.className = 'h3-notification-toast';
+                root.body.appendChild(toast);
+            }
+            if (toast) {
+                toast.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => toast?.classList.remove('show'), 3000);
+            }
+        },
+        bindH3ResCycle(onCycle) {
+            listen('btn-h3-res-badge', 'click', onCycle);
+        },
+        getH3ResBadge() {
+            return get('btn-h3-res-badge');
+        },
+        setH3ResBadgeText(text) {
+            const el = get('btn-h3-res-badge');
+            if (el) el.textContent = text;
+        },
+        setH3ResBadgeVisible(visible) {
+            const el = get('btn-h3-res-badge');
+            if (el) el.style.display = visible ? 'inline-flex' : 'none';
+        },
+        updateH3ComparisonBanner({ visible, proposedText, actualText, sharedDistText, cellCountText }) {
+            const banner = get('h3-comparison-banner');
+            if (!banner) return;
+            banner.style.display = visible ? 'inline-flex' : 'none';
+            if (visible) {
+                const propEl = get('h3-pct-proposed-badge');
+                if (propEl && proposedText != null) propEl.textContent = proposedText;
+                const actEl = get('h3-pct-actual-badge');
+                if (actEl && actualText != null) actEl.textContent = actualText;
+                const distEl = get('h3-shared-dist-badge');
+                if (distEl && sharedDistText != null) distEl.textContent = sharedDistText;
+                const countEl = get('h3-cells-count-badge');
+                if (countEl && cellCountText != null) countEl.textContent = cellCountText;
+            }
+        },
+        updateInstantaneousPower(powerText) {
+            const el = get('hud-val-instant-power');
+            if (el && powerText != null) el.textContent = powerText;
+        }
     };
 }

@@ -296,3 +296,51 @@ test('isResolution11Cell correctly identifies H3-11 cells', () => {
 
     overlay.destroy();
 });
+
+test('overlay retains cells on re-render / map moveend (zoom and pan persistence)', () => {
+    const { overlay, added } = createOverlayFixture();
+
+    const geometry = [[21.0, 105.8], [21.01, 105.85]];
+    const cells = overlay.computeH3CellsFromGeometry(geometry);
+    overlay.renderFromCells(cells);
+
+    const countBefore = added.length;
+    assert.ok(countBefore > 0, 'should have rendered cells initially');
+
+    // Simulate map move/zoom firing onMoveEnd -> render()
+    overlay.render();
+
+    assert.equal(added.length, countBefore, 'cells must NOT be wiped out when map moves or zooms');
+    overlay.destroy();
+});
+
+test('cell metadata classifies charging safety tiers based on station proximity', () => {
+    const stations = [
+        { station_id: 'S1', name: 'Trạm Gần', latitude: 21.08, longitude: 105.88, service_type: 'FAST_CHARGING' }
+    ];
+    const { overlay } = createOverlayFixture();
+    overlay.setStations(stations);
+
+    const nearCells = overlay.computeH3CellsFromGeometry([[21.0, 105.8], [21.005, 105.805]]);
+    overlay.renderFromCells(nearCells, stations);
+
+    const meta = overlay.cellMetadata.get(nearCells[0]);
+    assert.ok(meta, 'cell metadata should exist');
+    assert.equal(meta.tier, 'SAFE', 'cell near station should be SAFE');
+    assert.equal(meta.color, '#10b981', 'SAFE tier color should be emerald green');
+
+    overlay.destroy();
+});
+
+test('onToggleH3 guards against missing route geometry', () => {
+    const { controller, toggle } = createDriverControllerFixture();
+    controller.directRouteGeometry = null;
+
+    toggle.checked = true;
+    controller.onToggleH3();
+
+    assert.equal(controller._h3Enabled, false, 'H3 should not be enabled without route');
+    assert.equal(toggle.checked, false, 'toggle checkbox should be reset to false');
+
+    controller._h3Overlay?.destroy();
+});

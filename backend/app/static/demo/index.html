@@ -98,6 +98,16 @@
                     <input id="toggle-route-familiarity" type="checkbox">
                     ⬡ H3
                 </label>
+                <button id="btn-h3-res-badge" class="btn btn-fab-h3-res" title="Chuyển đổi độ phân giải H3: 9 (~174m) -> 10 (~66m) -> 8 (~461m)" style="display: none;">
+                    ⬡ Res 9
+                </button>
+                <div id="h3-comparison-banner" class="h3-comparison-banner" style="display: none;">
+                    <span class="comparison-title" style="font-weight: 700; color: #38bdf8;">⬡ So sánh 2 tuyến:</span>
+                    <span id="h3-pct-proposed-badge" class="badge-overlap-prop" title="Tỷ lệ trùng trên tuyến đề xuất">Đề xuất: 0%</span>
+                    <span id="h3-pct-actual-badge" class="badge-overlap-act" title="Tỷ lệ trùng trên tuyến thực tế">Thực đi: 0%</span>
+                    <span id="h3-shared-dist-badge" class="badge-overlap-dist" title="Chiều dài đoạn đi chung">Chung: 0.0 km</span>
+                    <span id="h3-cells-count-badge" class="legend-count">0 ô</span>
+                </div>
             </div>
 
             <!-- Map Picker Instruction Toast Banner (hidden by default) -->

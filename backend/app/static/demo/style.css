@@ -1823,6 +1823,166 @@ body {
 .route-familiarity-count { color: #ddd6fe; }
 .sim-familiarity-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* H3 Corridor HUD Legend */
+.h3-corridor-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 30px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    font-size: 11px;
+    color: #f8fafc;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+}
+
+.h3-corridor-legend .legend-title {
+    font-weight: 700;
+    color: #38bdf8;
+    margin-right: 2px;
+}
+
+.h3-corridor-legend .legend-pill {
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.h3-corridor-legend .legend-pill.safe {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.h3-corridor-legend .legend-pill.caution {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.h3-corridor-legend .legend-pill.alert {
+    background: rgba(244, 63, 94, 0.2);
+    color: #fb7185;
+    border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.h3-corridor-legend .legend-count {
+    color: #94a3b8;
+    font-weight: 600;
+    margin-left: 2px;
+    padding-left: 6px;
+    border-left: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* H3 Resolution Cycle Button */
+.btn-fab-h3-res {
+    background: #1e293b;
+    color: #38bdf8;
+    border: 1.5px solid #0284c7;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    transition: all 0.2s ease;
+}
+
+.btn-fab-h3-res:hover {
+    background: #0f172a;
+    border-color: #38bdf8;
+    color: #7dd3fc;
+    transform: translateY(-1px);
+}
+
+/* H3 Dual Route Comparison Banner */
+.h3-comparison-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 30px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    font-size: 11px;
+    color: #f8fafc;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+}
+
+.badge-overlap-prop {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.badge-overlap-act {
+    background: rgba(14, 165, 233, 0.2);
+    color: #38bdf8;
+    border: 1px solid rgba(14, 165, 233, 0.4);
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.badge-overlap-dist {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.powertrain-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    padding: 4px 8px;
+    background: rgba(15, 23, 42, 0.45);
+    border-radius: 6px;
+    font-size: 11px;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+/* Toast for H3 Notifications */
+.h3-notification-toast {
+    position: fixed;
+    top: 75px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-15px);
+    background: rgba(15, 23, 42, 0.95);
+    color: #f8fafc;
+    border: 1px solid #38bdf8;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 2000;
+    pointer-events: none;
+    opacity: 0;
+    transition: all 0.25s ease;
+}
+
+.h3-notification-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
 .btn-outline-secondary {
     background: #ffffff;
     color: #475569;

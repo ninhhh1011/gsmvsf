@@ -34,7 +34,8 @@ export {
     registerVehicleModel,
     getVehicleModelSpec,
     calculateEstimatedRangeKm,
-    calculateSocDepletion
+    calculateSocDepletion,
+    calculateInstantaneousPowerKw
 } from '../domain/vehicle_model.js';
 
 import { DriverState, getDriverStateLabel, getDriverStateBadgeClass } from '../domain/driver_state.js';
@@ -44,7 +45,8 @@ import {
     VINFAST_MODEL_SPECS,
     getVehicleModelSpec,
     calculateEstimatedRangeKm,
-    calculateSocDepletion
+    calculateSocDepletion,
+    calculateInstantaneousPowerKw
 } from '../domain/vehicle_model.js';
 import { isPositionOffRoute, shouldTriggerReroute } from '../domain/navigation_tracker.js';
 import { isStationCompatibleWithVehicle, filterStations } from '../domain/station_evaluator.js';
@@ -91,88 +93,37 @@ export class DriverModeController {
             trip_id: null,
             trajectory_id: null
         };
-
-        this.generation = 1;
-        this.trips = [];
-        this.vehicles = [];
-        this.stations = [];
-        this.scenarios = [];
-        this.vehicleCatalog = [];
-
-        // State machine
-        this.state = DriverState.AVAILABLE;
-        this.currentTrip = null;
-        this.currentVehicle = null;
-        this.userSelectedVehicleModel = null;
-
-        // Energy state
-        this.currentSocPct = 85.0;
-        this.estimatedRangeKm = 153.6;
-        this.safetyReserveKm = 2.0;
-        this.totalDistanceTravelledKm = 0.0;
-        this.lastMovementPos = null;
-
-        // Position state
-        this.currentPos = null;
-        this.matchedPos = null;
-        this.currentObservation = null;
-
-        // Progress & route tracking
-        this.remainingTripDistanceKm = 0.0;
-        this.directRouteGeometry = null;
-        this.fullRouteCoords = null;
-        this.lastPassedSegmentIndex = 0;
-        this.offRouteConsecutiveSamples = 0;
-        this.lastRerouteTimestamp = 0;
-
-        // Recommendation & diversion route caching
-        this.lastRecommendation = null;
-        this.lastRecommendedStationId = null;
-        this.lastDiversionLeg1 = null;
-        this.lastDiversionLeg2 = null;
-
-        // Navigation lock — route locked when user selects a station
-        this._navigationLocked = false;
-        this._selectedStationId = null;   // station_id user đã chọn
-        this.routeRevision = 0;           // Revision token to prevent stale async overwrites
-
-        // Top 5 recommendation result sharing
-        this._top5Result = null;
-        this._top5Revision = 0;
-
-        // Recommendation auto-refresh timer
-        this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000;
-        this._recommendTimer = null;
-
-        // Station Search & Destination Picking
-        this.isPickingDestination = false;
-        this.currentStationsFilter = 'ALL';
-        this.chargingIntent = 'EN_ROUTE'; // 'EN_ROUTE' | 'AT_DESTINATION'
+        this.generation = 1; this.trips = []; this.vehicles = []; this.stations = []; this.scenarios = []; this.vehicleCatalog = [];
+        this.state = DriverState.AVAILABLE; this.currentTrip = null; this.currentVehicle = null; this.userSelectedVehicleModel = null;
+        this.currentSocPct = 85.0; this.estimatedRangeKm = 153.6; this.safetyReserveKm = 2.0; this.totalDistanceTravelledKm = 0.0; this.lastMovementPos = null;
+        this.currentPos = null; this.matchedPos = null; this.currentObservation = null;
+        this.remainingTripDistanceKm = 0.0; this.directRouteGeometry = null; this.fullRouteCoords = null; this.lastPassedSegmentIndex = 0;
+        this.offRouteConsecutiveSamples = 0; this.lastRerouteTimestamp = 0;
+        this.lastRecommendation = null; this.lastRecommendedStationId = null; this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
+        this._navigationLocked = false; this._selectedStationId = null; this.routeRevision = 0;
+        this._top5Result = null; this._top5Revision = 0;
+        this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000; this._recommendTimer = null;
+        this.isPickingDestination = false; this.currentStationsFilter = 'ALL'; this.chargingIntent = 'EN_ROUTE';
         this.customOrigin = { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
         this.customDestination = { latitude: 21.0285, longitude: 105.8542, node_id: "DEST_B" };
-        this.postTripStation = null;
-        this.postTripRoute = null;
-        this.postTripRecommendation = null;
-        this.postTripCandidateDetails = null;
-        this._onMapPickClick = null;
-        this.avoidCongestion = true;
-
-        this._isEvaluating = false;
-        this.lastEvalPos = null;
-        this.lastEvalTimestamp = 0;
-
+        this.postTripStation = null; this.postTripRoute = null; this.postTripRecommendation = null; this.postTripCandidateDetails = null;
+        this._onMapPickClick = null; this.avoidCongestion = true; this._isEvaluating = false; this.lastEvalPos = null; this.lastEvalTimestamp = 0;
         // Trajectory Replay Controller
         this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
             onStep: async (stepData) => await this._onReplayStep(stepData),
             onStateChange: () => this.renderTripActiveUI(),
             session: this.session
         });
-
-        // H3 Display-Only Overlay
+        // Powertrain motor capability vs instantaneous consumption
+        this.maxMotorPowerKw = 30.0;
+        this.instantaneousPowerKw = 1.5;
+        // H3 Multi-Resolution & Direction-Aware Route Comparison
+        this.h3Resolution = 9;
+        this.actualTrajectoryCoords = null;
+        this.latestRouteComparison = null;
         this._h3Overlay = null;
         this._h3Enabled = false;
         this._h3Initialized = false;
-
         this.onStateChange = options.onStateChange || (() => {});
     }
 
@@ -196,42 +147,113 @@ export class DriverModeController {
         this.initH3Overlay();
     }
 
-    initH3Overlay() {
+    initH3Overlay({ leaflet = globalThis.L, h3 = globalThis.h3 } = {}) {
         if (this._h3Initialized) return;
         this._h3Initialized = true;
+        const h3Lib = h3 || globalThis.h3;
+        if (!h3Lib || !this.map?.map) return;
 
-        if (typeof window === 'undefined' || !window.h3 || !this.map?.map) return;
-
-        const toggle = document.getElementById('toggle-route-familiarity');
-        const countElement = document.getElementById('route-familiarity-count');
-        const supportElement = document.getElementById('route-familiarity-support');
-
+        const toggle = this.bindings?.getH3Toggle?.();
         if (toggle) {
             this._h3Overlay = new RouteFamiliarityOverlay({
                 map: this.map.map,
-                leaflet: window.L,
-                h3: window.h3,
+                leaflet: leaflet || globalThis.L,
+                h3: h3Lib,
                 toggle,
-                countElement,
-                supportElement
+                countElement: this.bindings?.getH3CountElement?.(),
+                supportElement: this.bindings?.getH3SupportElement?.(),
+                stations: this.stations,
+                resolution: this.h3Resolution
             });
-            toggle.addEventListener('change', () => this.onToggleH3());
+            this.bindings?.bindH3Toggle?.(() => this.onToggleH3());
+            this.bindings?.bindH3ResCycle?.(() => this.cycleH3Resolution());
+            this.bindings?.setH3ResBadgeText?.(`⬡ Res ${this.h3Resolution}`);
         }
     }
 
-    onToggleH3() {
+    async cycleH3Resolution() {
+        // Discrete selector cycling 9 -> 10 -> 8 -> 9
+        const nextResMap = { 9: 10, 10: 8, 8: 9 };
+        this.h3Resolution = nextResMap[this.h3Resolution] || 9;
+        this.bindings?.setH3ResBadgeText?.(`⬡ Res ${this.h3Resolution}`);
+        this._h3Overlay?.setResolution(this.h3Resolution);
+
+        if (this._h3Enabled) {
+            await this.refreshRouteComparison();
+        }
+    }
+
+    async onToggleH3() {
         if (!this._h3Overlay) return;
-        // Always read from checkbox — avoids sync drift when _clearH3OnRouteChange also modifies state
-        const toggle = document.getElementById('toggle-route-familiarity');
+        const toggle = this.bindings?.getH3Toggle?.();
         const wantEnabled = toggle?.checked ?? false;
-        this._h3Enabled = wantEnabled;
+
         if (wantEnabled) {
-            const cells = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry);
-            this._h3Overlay.setEnabled(true);
-            this._h3Overlay.renderFromCells(cells);
+            if (!this.directRouteGeometry || !Array.isArray(this.directRouteGeometry) || this.directRouteGeometry.length < 2) {
+                this.bindings?.setH3Checked?.(false);
+                this._h3Enabled = false;
+                this._h3Overlay.setEnabled(false);
+                this.bindings?.showH3Toast?.('📍 Vui lòng chọn điểm đến hoặc tìm đường trước khi bật lớp H3');
+                return;
+            }
+            this._h3Enabled = true;
+            this.bindings?.setH3ResBadgeVisible?.(true);
+            await this.refreshRouteComparison();
         } else {
+            this._h3Enabled = false;
             this._h3Overlay.setEnabled(false);
             this._h3Overlay.clear();
+            this.bindings?.updateH3ComparisonBanner?.({ visible: false });
+        }
+    }
+
+    async refreshRouteComparison() {
+        if (!this.directRouteGeometry || !Array.isArray(this.directRouteGeometry) || this.directRouteGeometry.length < 2) {
+            return;
+        }
+
+        // If Route B (actual driver trajectory) is available, run direction- and sequence-aware comparison
+        if (this.actualTrajectoryCoords && Array.isArray(this.actualTrajectoryCoords) && this.actualTrajectoryCoords.length > 1) {
+            try {
+                const asOfTime = this.currentObservation?.timestamp || '2026-09-01T08:00:00Z';
+                const comp = await this.api.compareRoutes({
+                    route_a_coords: this.directRouteGeometry,
+                    route_b_coords: this.actualTrajectoryCoords,
+                    resolution: this.h3Resolution,
+                    as_of_time: asOfTime
+                });
+                this.latestRouteComparison = comp;
+
+                // Update Cockpit comparison banner with dual metrics
+                const pProp = comp.pct_overlap_proposed ?? 0;
+                const pAct = comp.pct_overlap_actual ?? 0;
+                const sDist = comp.shared_distance_km ?? 0;
+                const cCount = comp.shared_cell_ids?.length ?? 0;
+                this.bindings?.updateH3ComparisonBanner?.({
+                    visible: true,
+                    proposedText: `Đề xuất: ${pProp.toFixed(1)}%`,
+                    actualText: `Thực đi: ${pAct.toFixed(1)}%`,
+                    sharedDistText: `Chung: ${sDist.toFixed(1)} km`,
+                    cellCountText: `${cCount} ô`
+                });
+
+                // Render Route A cells with confirmed shared cells highlighted
+                if (this._h3Overlay) {
+                    const cellsA = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry, this.h3Resolution);
+                    this._h3Overlay.renderFromCells(cellsA, comp.shared_cell_ids || []);
+                }
+                return;
+            } catch (err) {
+                console.warn('[DriverMode] Route comparison API error, falling back to local corridor:', err);
+            }
+        }
+
+        // Single-route corridor overlay (no Route B yet)
+        if (this._h3Overlay) {
+            const cells = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry, this.h3Resolution);
+            this._h3Overlay.setStations(this.stations);
+            this._h3Overlay.renderFromCells(cells, this.stations);
+            this.bindings?.updateH3ComparisonBanner?.({ visible: false });
         }
     }
 
@@ -244,11 +266,8 @@ export class DriverModeController {
             this._h3Overlay.clear();
             this._h3Overlay.setEnabled(false);
             this._h3Enabled = false;
-            // Uncheck the toggle if in browser environment
-            if (typeof document !== 'undefined') {
-                const toggle = document.getElementById('toggle-route-familiarity');
-                if (toggle) toggle.checked = false;
-            }
+            this.bindings?.setH3Checked?.(false);
+            this.bindings?.updateH3ComparisonBanner?.({ visible: false });
         }
     }
 
@@ -292,6 +311,8 @@ export class DriverModeController {
             swap_supported: spec.swap_supported
         };
 
+        const maxMotor = spec.max_motor_power_kw || 30.0;
+        this.maxMotorPowerKw = maxMotor;
         this.userSelectedVehicleModel = spec.vehicle_model;
         this.currentVehicle = {
             ...matchedVehicle,
@@ -299,6 +320,10 @@ export class DriverModeController {
             vehicle_type: spec.vehicle_type,
             usable_capacity_kwh: spec.usable_kwh,
             consumption_wh_per_km: spec.consumption_wh_km,
+            max_motor_power_kw: maxMotor,
+            curb_weight_kg: spec.curb_weight_kg,
+            drag_coefficient: spec.drag_coefficient,
+            frontal_area_m2: spec.frontal_area_m2,
             charging_supported: spec.charging_supported,
             swap_supported: spec.swap_supported
         };
@@ -357,18 +382,8 @@ export class DriverModeController {
     }
 
     _getScenarioDescription(scenarioId) {
-        const descriptions = {
-            'NORMAL_TRIP': 'Chuyến đi thông thường',
-            'NO_SERVICE_NEEDED': 'Pin đủ - Không cần sạc',
-            'LOW_SOC': 'Pin thấp - Cần sạc gấp',
-            'NEED_CHARGING': 'Cần sạc pin',
-            'QUEUE_REALTIME_CHANGE': 'Hàng đợi biến động',
-            'TRAFFIC_REALTIME_CHANGE': 'Giao thông ùn tắc',
-            'STATION_STATUS_CHANGE': 'Trạm đổi trạng thái',
-            'FARTHER_BUT_FASTER': 'Xa hơn nhưng nhanh hơn',
-            'NEED_SWAP': 'Cần đổi pin'
-        };
-        return descriptions[scenarioId] || scenarioId;
+        const map = { NORMAL_TRIP: 'Chuyến đi thông thường', NO_SERVICE_NEEDED: 'Pin đủ - Không cần sạc', LOW_SOC: 'Pin thấp - Cần sạc gấp', NEED_CHARGING: 'Cần sạc pin', QUEUE_REALTIME_CHANGE: 'Hàng đợi biến động', TRAFFIC_REALTIME_CHANGE: 'Giao thông ùn tắc', STATION_STATUS_CHANGE: 'Trạm đổi trạng thái', FARTHER_BUT_FASTER: 'Xa hơn nhưng nhanh hơn', NEED_SWAP: 'Cần đổi pin' };
+        return map[scenarioId] || scenarioId;
     }
 
     // ─── Trip Assignment ────────────────────────────────────────────────
@@ -422,54 +437,37 @@ export class DriverModeController {
         this.lastRecommendedStationId = null;
         this.lastDiversionLeg1 = null;
         this.lastDiversionLeg2 = null;
-
-        const plannedKm = trip.planned_distance_m ? (trip.planned_distance_m / 1000) : 0.0;
-        this.remainingTripDistanceKm = plannedKm;
-
-        // Clear map and render direct endpoints
+        this.remainingTripDistanceKm = trip.planned_distance_m ? (trip.planned_distance_m / 1000) : 0.0;
         this.map.clearAll();
         this._renderEndpointsWithDrag(trip.origin, trip.destination);
 
-        // Sample corridor via RDP simplification
-        let viaPoints = [];
+        // Load actual GPS trajectory if available (Route B ground-truth observations)
+        this.actualTrajectoryCoords = null;
         try {
             const trajId = this._tripToTrajectory(trip.trip_id);
-            const obs = await this.api.getTrajectory(trajId);
-            if (obs && Array.isArray(obs) && obs.length > 5) {
-                const simplified = simplifyTrajectoryRDP(obs, 250);
-                if (simplified.length > 2) {
-                    viaPoints = simplified.slice(1, -1).map(p => ({
-                        latitude: p.latitude,
-                        longitude: p.longitude
-                    }));
+            if (trajId) {
+                const obs = await this.api.getTrajectory(trajId);
+                if (obs && Array.isArray(obs) && obs.length > 1) {
+                    this.actualTrajectoryCoords = obs.map(p => [p.latitude, p.longitude]);
                 }
             }
         } catch (e) {
-            // No via points on trajectory failure
+            this.actualTrajectoryCoords = null;
         }
 
         if (this.generation !== currentGen) return;
 
+        // Unconstrained Route A: GraphHopper proposed route (no artificial viaPoints forcing)
         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
         let routeResult = null;
         try {
             routeResult = await this.api.computeRoute(
                 trip.origin,
                 trip.destination,
-                { vehicle_category: vCat },
-                viaPoints
+                { vehicle_category: vCat }
             );
         } catch (err) {
-            console.warn('Corridor route computation failed, falling back to direct route:', err);
-            try {
-                routeResult = await this.api.computeRoute(
-                    trip.origin,
-                    trip.destination,
-                    { vehicle_category: vCat }
-                );
-            } catch (directErr) {
-                console.warn('Direct route computation error:', directErr);
-            }
+            console.warn('Unconstrained direct route computation error:', err);
         }
 
         if (this.generation !== currentGen) return;
@@ -506,22 +504,22 @@ export class DriverModeController {
 
         this.generation++;
         const currentGen = this.generation;
-
         this.session.driver_id = `driver_${Date.now().toString(36)}`;
         this.session.vehicle_id = this.currentVehicle?.vehicle_id;
         this.session.vehicle_category = this.currentVehicle?.vehicle_type;
         this.session.trip_id = this.currentTrip.trip_id;
-
         this.setState(DriverState.TRIP_ACTIVE);
         this.lastMovementPos = null;
         this.totalDistanceTravelledKm = 0.0;
-
         const trajId = this._tripToTrajectory(this.currentTrip.trip_id);
         this.session.trajectory_id = trajId || 'SIMULATED';
 
         if (trajId) {
             try {
                 await this.replay.loadTrajectory(trajId);
+                if (this.replay.observations?.length > 0) {
+                    this.actualTrajectoryCoords = this.replay.observations.map(o => [o.latitude, o.longitude]);
+                }
             } catch (err) {
                 if (this.generation !== currentGen) return;
                 console.warn(`Dataset trajectory ${trajId} load failed, falling back to polyline simulation:`, err);
@@ -534,6 +532,10 @@ export class DriverModeController {
         }
 
         if (this.generation !== currentGen) return;
+
+        if (this._h3Enabled) {
+            await this.refreshRouteComparison();
+        }
 
         // Initial recommendation request
         await this._evaluateAtCurrentPosition();
@@ -621,45 +623,47 @@ export class DriverModeController {
                 this.lastMovementPos = { ...this.currentPos };
             }
 
+            const speedKmh = observation?.speed_kmh ?? 0;
+            this.instantaneousPowerKw = calculateInstantaneousPowerKw(this.currentVehicle, speedKmh);
+            this.bindings?.updateInstantaneousPower?.(`${this.instantaneousPowerKw.toFixed(1)} kW`);
+
             // Update remaining route & distance
             const probePos = this.matchedPos || this.currentPos;
-            // Bug 4 fix: guard against null/undefined probePos (e.g. when loadFromPolyline reset currentIndex)
-            // Bug 3 fix: NaN guard prevents route from being incorrectly cleared when off-route
-            if (!probePos || !this.fullRouteCoords || this.fullRouteCoords.length < 2) return;
-            const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
-            if (!progress || isNaN(progress.distanceMeters)) return;
+            if (probePos && this.fullRouteCoords && this.fullRouteCoords.length >= 2) {
+                const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
+                if (progress && !isNaN(progress.distanceMeters)) {
+                    // Anti-spam off-route check
+                    const OFF_ROUTE_THRESHOLD_METERS = 35.0;
+                    const REROUTE_COOLDOWN_MS = 5000;
+                    const now = Date.now();
 
-            // Anti-spam off-route check
-            const OFF_ROUTE_THRESHOLD_METERS = 35.0;
-            const REROUTE_COOLDOWN_MS = 5000;
-            const now = Date.now();
+                    if (progress.distanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
+                        this.offRouteConsecutiveSamples++;
+                        if (this.offRouteConsecutiveSamples >= 3 && (now - this.lastRerouteTimestamp) > REROUTE_COOLDOWN_MS) {
+                            this.lastRerouteTimestamp = now;
+                            this.offRouteConsecutiveSamples = 0;
+                            await this._triggerReroute(probePos);
+                            if (this.generation !== currentGen) return;
+                        }
+                    } else {
+                        this.offRouteConsecutiveSamples = 0;
+                    }
 
-            if (progress.distanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
-                this.offRouteConsecutiveSamples++;
-                if (this.offRouteConsecutiveSamples >= 3 && (now - this.lastRerouteTimestamp) > REROUTE_COOLDOWN_MS) {
-                    this.lastRerouteTimestamp = now;
-                    this.offRouteConsecutiveSamples = 0;
-                    await this._triggerReroute(probePos);
-                    if (this.generation !== currentGen) return;
+                    // Route slicing: shrink route ahead of the car (skip when in diversion)
+                    if (!this._navigationLocked && this.fullRouteCoords.length > 1) {
+                        this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
+                        const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
+                            segmentIndex: this.lastPassedSegmentIndex,
+                            projPoint: progress.projPoint
+                        });
+
+                        this.directRouteGeometry = remainingCoords;
+                        this.map.updateDirectRoute?.(remainingCoords);
+
+                        const remainingMeters = computePolylineDistanceMeters(remainingCoords);
+                        this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
+                    }
                 }
-            } else {
-                this.offRouteConsecutiveSamples = 0;
-            }
-
-            // Route slicing: shrink route ahead of the car (Bug 3 fix: skip when in diversion — _navigationLocked)
-            if (!this._navigationLocked && this.fullRouteCoords && this.fullRouteCoords.length > 1) {
-                this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
-                const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
-                    segmentIndex: this.lastPassedSegmentIndex,
-                    projPoint: progress.projPoint
-                });
-
-                this.directRouteGeometry = remainingCoords;
-                this._clearH3OnRouteChange();
-                this.map.updateDirectRoute?.(remainingCoords);
-
-                const remainingMeters = computePolylineDistanceMeters(remainingCoords);
-                this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
             }
 
             // Straight-line fallback when no route coords
@@ -839,7 +843,6 @@ export class DriverModeController {
             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
                 this._showRecommendationPanel(rec.ranked_candidates);
                 const top = rec.ranked_candidates[0];
-                const top5Candidates = top5Candidates; // reuse from line 808
                 const st = this.stations.find(s => s.station_id === top.station_id);
                 if (st && this.currentTrip?.destination) {
                     const stPos = { latitude: st.latitude, longitude: st.longitude };
@@ -1007,42 +1010,23 @@ export class DriverModeController {
         this.currentTrip = null;
         this.currentPos = null;
         this.matchedPos = null;
-        this.currentObservation = null;
-        this.lastRecommendation = null;
-        this.directRouteGeometry = null;
-        this.fullRouteCoords = null;
-        this.lastPassedSegmentIndex = 0;
-        this.offRouteConsecutiveSamples = 0;
-        this.lastRerouteTimestamp = 0;
-        this.lastRecommendedStationId = null;
-        this.lastDiversionLeg1 = null;
-        this.lastDiversionLeg2 = null;
-        this.remainingTripDistanceKm = 0.0;
-
-        this._navigationLocked = false;
-        this._selectedStationId = null;
-        this._hideRecommendationPanel();
+        this.currentObservation = null; this.lastRecommendation = null;
+        this.directRouteGeometry = null; this.fullRouteCoords = null;
+        this.lastPassedSegmentIndex = 0; this.offRouteConsecutiveSamples = 0;
+        this.lastRerouteTimestamp = 0; this.lastRecommendedStationId = null;
+        this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
+        this.remainingTripDistanceKm = 0.0; this._navigationLocked = false;
+        this._selectedStationId = null; this._hideRecommendationPanel();
         this.stopRecommendRefresh();
-
-        this.session.driver_id = null;
-        this.session.vehicle_id = null;
-        this.session.vehicle_category = null;
-        this.session.trip_id = null;
+        this.session.driver_id = null; this.session.vehicle_id = null;
+        this.session.vehicle_category = null; this.session.trip_id = null;
         this.session.trajectory_id = null;
-
         this.setState(DriverState.AVAILABLE);
         this.renderAvailableUI();
     }
 
-    goOffline() {
-        this.setState(DriverState.OFFLINE);
-        this.renderOfflineUI();
-    }
-
-    goOnline() {
-        this.setState(DriverState.AVAILABLE);
-        this.renderAvailableUI();
-    }
+    goOffline() { this.setState(DriverState.OFFLINE); this.renderOfflineUI(); }
+    goOnline() { this.setState(DriverState.AVAILABLE); this.renderAvailableUI(); }
 
     cancelTrip() {
         this._navigationLocked = false;
@@ -1445,27 +1429,11 @@ export class DriverModeController {
         });
     }
 
-    startPickCustomOrigin() {
-        this.mapPicker.setMapController(this.map);
-        this.mapPicker.startPickOrigin();
-    }
-
-    cancelPickCustomOrigin() {
-        this.mapPicker.cancelPickOrigin();
-    }
-
-    startPickCustomDestination() {
-        this.mapPicker.setMapController(this.map);
-        this.mapPicker.startPickDestination();
-    }
-
-    cancelPickCustomDestination() {
-        this.mapPicker.cancelPickDestination();
-    }
-
-    cancelAllPicking() {
-        this.mapPicker.cancelAll();
-    }
+    startPickCustomOrigin() { this.mapPicker.setMapController(this.map); this.mapPicker.startPickOrigin(); }
+    cancelPickCustomOrigin() { this.mapPicker.cancelPickOrigin(); }
+    startPickCustomDestination() { this.mapPicker.setMapController(this.map); this.mapPicker.startPickDestination(); }
+    cancelPickCustomDestination() { this.mapPicker.cancelPickDestination(); }
+    cancelAllPicking() { this.mapPicker.cancelAll(); }
 
     async setCustomOrigin(orig) {
         if (!orig) return;
