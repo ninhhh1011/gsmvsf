@@ -14,7 +14,6 @@ from backend.app.services.snapshots.models import (
     aware_utc,
 )
 from pydantic import Field, field_validator
-from backend.app.services.route_familiarity.constants import H3_ROUTE_RESOLUTION
 
 
 class RankingPolicy(FrozenModel):
@@ -80,7 +79,7 @@ class RankedCandidate(FrozenModel):
 
 class FamiliarityExplanation(FrozenModel):
     status: Literal['DISABLED', 'UNAVAILABLE', 'NO_HISTORY', 'AVAILABLE']
-    resolution: int = H3_ROUTE_RESOLUTION
+    resolution: int = 9
     personal_adherence: float | None = Field(None, ge=0, le=1)
     personal_adherence_pct: float | None = Field(None, ge=0, le=100)
     personal_trip_count: int | None = Field(None, ge=0)

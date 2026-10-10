@@ -1,18 +1,9 @@
 """
-Vehicle Powertrain Catalog with verified brochure specifications.
+Project powertrain parameters with per-field provenance.
 
-Sources:
-- VF 3: VinFast Official Technical Brochure 2024 (Max Motor Power: 30 kW, Curb Weight: 857 kg)
-- VF 5 Plus: VinFast Official Technical Specs (Max Motor Power: 100 kW, Curb Weight: 1360 kg)
-- VF 6: VinFast Official Technical Specs (Max Motor Power: 150 kW, Curb Weight: 1800 kg)
-- VF 7 Plus: VinFast Official Technical Specs (Max Motor Power: 260 kW, Curb Weight: 2100 kg)
-- VF 8: VinFast Official Technical Specs (Max Motor Power: 300 kW, Curb Weight: 2600 kg)
-- VF 9: VinFast Official Technical Specs (Max Motor Power: 300 kW, Curb Weight: 2880 kg)
-- Evo200: VinFast E-Scooter Technical Specs (Nominal Power: 1.5 kW, Peak: 2.5 kW, Curb Weight: 100 kg)
-
-Aerodynamic drag coefficients (Cd) and rolling resistance coefficients (Crr)
-without direct public wind-tunnel certification are explicitly classified as
-CALIBRATED_ASSUMPTION.
+Only the VF 3 motor maximum has verified evidence in this implementation.
+All other retained parameters are assumptions, not calibrated measurements.
+Legacy source identifiers do not certify every parameter in a specification.
 """
 from dataclasses import dataclass
 
@@ -50,7 +41,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.65,
         auxiliary_base_kw=1.5,
         spec_source="VINFAST_OFFICIAL_BROCHURE_2024",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "VF_5": PowertrainSpec(
         vehicle_model="VF_5",
@@ -66,7 +57,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.70,
         auxiliary_base_kw=1.8,
         spec_source="VINFAST_OFFICIAL_SPECS_2023",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "HERIO_GREEN": PowertrainSpec(
         vehicle_model="HERIO_GREEN",
@@ -82,7 +73,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.70,
         auxiliary_base_kw=1.8,
         spec_source="VINFAST_OFFICIAL_SPECS_2023",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "VF_6": PowertrainSpec(
         vehicle_model="VF_6",
@@ -98,7 +89,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.72,
         auxiliary_base_kw=2.0,
         spec_source="VINFAST_OFFICIAL_SPECS_2023",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "VF_7_ECO": PowertrainSpec(
         vehicle_model="VF_7_ECO",
@@ -114,7 +105,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.72,
         auxiliary_base_kw=2.0,
         spec_source="VINFAST_OFFICIAL_SPECS_2023",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "VF_7_PLUS": PowertrainSpec(
         vehicle_model="VF_7_PLUS",
@@ -130,7 +121,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.75,
         auxiliary_base_kw=2.2,
         spec_source="VINFAST_OFFICIAL_SPECS_2023",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "VF_8": PowertrainSpec(
         vehicle_model="VF_8",
@@ -146,7 +137,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.75,
         auxiliary_base_kw=2.5,
         spec_source="VINFAST_OFFICIAL_SPECS_2022",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "VF_9": PowertrainSpec(
         vehicle_model="VF_9",
@@ -162,7 +153,7 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.75,
         auxiliary_base_kw=2.8,
         spec_source="VINFAST_OFFICIAL_SPECS_2022",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
     "EVO200": PowertrainSpec(
         vehicle_model="EVO200",
@@ -178,15 +169,33 @@ POWERTRAIN_CATALOG: dict[str, PowertrainSpec] = {
         regen_efficiency=0.50,
         auxiliary_base_kw=0.08,
         spec_source="VINFAST_OFFICIAL_SPECS_2022",
-        parameters_status="OFFICIAL_VERIFIED",
+        parameters_status="PROJECT_ASSUMPTION",
     ),
 }
 
 
 def get_powertrain_spec(vehicle_model: str) -> PowertrainSpec:
-    """Return verified powertrain specifications for vehicle model."""
+    """Return supported model parameters; never substitute another model."""
     clean_model = vehicle_model.upper().replace("-", "_").strip()
     if clean_model in POWERTRAIN_CATALOG:
         return POWERTRAIN_CATALOG[clean_model]
-    # Default fallback to VF 3
-    return POWERTRAIN_CATALOG["VF_3"]
+    raise ValueError(f"Unsupported powertrain model: {vehicle_model}")
+
+
+PHYSICAL_PARAMETER_FIELDS = (
+    "max_motor_power_kw", "nominal_motor_power_kw", "curb_weight_kg",
+    "frontal_area_m2", "drag_coefficient", "rolling_resistance_coeff",
+    "drive_efficiency", "regen_efficiency", "auxiliary_base_kw",
+)
+
+
+def get_parameter_provenance(spec: PowertrainSpec) -> dict[str, dict[str, str]]:
+    """Only the VF 3 motor maximum has verified evidence for this model."""
+    result = {}
+    for field in PHYSICAL_PARAMETER_FIELDS:
+        verified = spec.vehicle_model == "VF_3" and field == "max_motor_power_kw"
+        result[field] = {
+            "status": "OFFICIAL_VERIFIED" if verified else "PROJECT_ASSUMPTION",
+            "source": spec.spec_source if verified else "PROJECT_PHYSICS_MODEL",
+        }
+    return result

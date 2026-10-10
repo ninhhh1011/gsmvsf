@@ -32,7 +32,7 @@ def _explanation(assessment, *, cells=()):
         recommended_distance_m=assessment.recommended_distance_m,
         shared_distance_m=assessment.shared_distance_m,
         penalty_s=assessment.penalty_s, history_truncated=assessment.history_truncated,
-        route_cells=list(cells),
+        route_cells=list(assessment.route_cells) if cells else [],
     )
 
 

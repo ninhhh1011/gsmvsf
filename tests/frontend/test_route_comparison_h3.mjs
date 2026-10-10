@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RouteFamiliarityOverlay } from '../../backend/app/static/demo/js/ui/route_familiarity_overlay.js';
 import { DriverModeController } from '../../backend/app/static/demo/js/ui/driver_controller.js';
-import { calculateInstantaneousPowerKw, FALLBACK_MODEL_SPECS } from '../../backend/app/static/demo/js/domain/vehicle_model.js';
 
 function createMockH3() {
     return {
@@ -189,56 +188,4 @@ test('assignTrip does NOT force viaPoints on Route A and captures actual traject
     assert.ok(controller.actualTrajectoryCoords, 'actualTrajectoryCoords must be populated from GPS dataset');
     assert.equal(controller.actualTrajectoryCoords.length, 2);
     assert.deepEqual(controller.actualTrajectoryCoords[0], [21.02, 105.85]);
-});
-
-test('refreshRouteComparison updates banner with dual metrics from backend API', async () => {
-    let bannerData = null;
-    let comparisonPayload = null;
-    const mockApiClient = {
-        compareRoutes: async (payload) => {
-            comparisonPayload = payload;
-            return {
-                pct_overlap_proposed: 82.5,
-                pct_overlap_actual: 78.0,
-                shared_distance_km: 4.5,
-                shared_cell_ids: ['cell_9_2102_10585']
-            };
-        }
-    };
-
-    const bindings = {
-        updateH3ComparisonBanner: (data) => { bannerData = data; }
-    };
-
-    const controller = new DriverModeController(mockApiClient, {}, { bindings });
-    controller.directRouteGeometry = [[21.02, 105.85], [21.03, 105.86]];
-    controller.actualTrajectoryCoords = [[21.02, 105.85], [21.025, 105.855], [21.03, 105.86]];
-    controller.h3Resolution = 9;
-
-    await controller.refreshRouteComparison();
-
-    assert.ok(comparisonPayload);
-    assert.equal(comparisonPayload.resolution, 9);
-    assert.ok(bannerData);
-    assert.equal(bannerData.visible, true);
-    assert.equal(bannerData.proposedText, 'Đề xuất: 82.5%');
-    assert.equal(bannerData.actualText, 'Thực đi: 78.0%');
-    assert.equal(bannerData.sharedDistText, 'Chung: 4.5 km');
-    assert.equal(bannerData.cellCountText, '1 ô');
-});
-
-test('Instantaneous power separates max motor capability from instant power draw', () => {
-    const vf3Spec = FALLBACK_MODEL_SPECS.VF_3;
-    assert.equal(vf3Spec.max_motor_power_kw, 30.0, 'VF 3 brochure-verified max motor power is 30 kW');
-
-    // Standstill with HVAC on
-    const pIdle = calculateInstantaneousPowerKw(vf3Spec, 0, 0, true);
-    assert.equal(pIdle, 1.5, 'Idle with HVAC should draw auxiliary power ~1.5 kW');
-
-    // Cruising at 50 km/h
-    const pCruise = calculateInstantaneousPowerKw(vf3Spec, 50, 0, true);
-    assert.ok(pCruise > 3.0 && pCruise < 15.0, `Cruising power should be realistic: ${pCruise} kW`);
-
-    // Max motor capability is an upper bound on capability, not constant consumption
-    assert.ok(pCruise < vf3Spec.max_motor_power_kw);
 });

@@ -3,17 +3,21 @@ from dataclasses import dataclass
 from datetime import timedelta
 from time import perf_counter
 
+import h3
+from starlette.concurrency import run_in_threadpool
+
 from backend.app.config import settings
 from backend.app.core.metrics import (
     ROUTE_FAMILIARITY_HISTORY_PAIRS, observe_route_familiarity, record_familiarity_work_limit,
     record_route_familiarity_event,
 )
-from backend.app.services.route_familiarity.models import RouteSignature, SimilarityResult
+from backend.app.services.route_familiarity.models import SimilarityResult
+from backend.app.services.route_familiarity.repository import coordinates_from_row
+from backend.app.services.route_familiarity.route_matcher import prepare_route, compare_prepared_routes
+from backend.app.services.route_familiarity.temporal import get_vietnam_time_window
 from backend.app.services.route_familiarity.similarity import (
     ComparisonBudget,
     SimilarityWorkLimitExceeded,
-    index_route_signature,
-    weighted_ordered_overlap,
 )
 
 
@@ -32,11 +36,7 @@ class FamiliarityAssessment:
     penalty_s: float = 0.0
     history_truncated: bool = False
     degraded_reason: str | None = None
-
-
-def _signature(row) -> RouteSignature:
-    return RouteSignature(tuple(row["cells"]), tuple(row["cell_distances_m"]),
-                          float(row["distance_m"]), int(row["resolution"]))
+    route_cells: tuple[str, ...] = ()
 
 
 class RouteFamiliarityService:
@@ -62,9 +62,9 @@ class RouteFamiliarityService:
             return {}
         evaluation_started = perf_counter()
         record_route_familiarity_event('evaluation')
-        valid = {key: sig for key, sig in candidate_signatures.items() if sig is not None}
+        valid = {key: sig for key, sig in candidate_signatures.items() if sig is not None and sig.coordinates}
         unavailable = {key: FamiliarityAssessment("UNAVAILABLE", degraded_reason="ROUTE_GEOMETRY_UNAVAILABLE")
-                       for key, sig in candidate_signatures.items() if sig is None}
+                       for key, sig in candidate_signatures.items() if sig is None or not sig.coordinates}
         if not valid:
             for assessment in unavailable.values():
                 record_route_familiarity_event('assessment', assessment.status.lower())
@@ -74,7 +74,7 @@ class RouteFamiliarityService:
         lookup_started = perf_counter()
         personal_rows = await self.repository.personal_routes(driver_id, as_of, self.lookback)
         community_rows = await self.repository.community_routes(
-            sorted({cell for sig in valid.values() for cell in sig.cells}),
+            history_query_cells(valid.values()),
             driver_id, as_of, self.lookback)
         personal_truncated = len(personal_rows) > 50
         community_truncated = (len(community_rows) > 500 or
@@ -85,59 +85,84 @@ class RouteFamiliarityService:
                       if row.get("active_rank", 1) <= 100 and row.get("driver_rank", 1) <= 5][:500]
         observe_route_familiarity('lookup', perf_counter() - lookup_started)
         record_route_familiarity_event('lookup')
-        personal_indexed = [self._index_row(row) for row in personal]
-        community_indexed = [self._index_row(row) for row in community]
-        result = unavailable.copy()
         truncated = personal_truncated or community_truncated
+        result = await run_in_threadpool(self._evaluate, valid, personal, community, as_of,
+                                         truncated, unavailable)
+        observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
+        return result
+
+    def _evaluate(self, valid, personal, community, as_of, truncated, unavailable):
+        result = unavailable.copy()
         budget = ComparisonBudget()
         comparison_started = perf_counter()
+        target_window = get_vietnam_time_window(as_of)
+        legacy_personal = any(not coordinates_from_row(row) or not row.get("started_at")
+                              for row in personal)
+        def usable(row):
+            completed = row.get("completed_at")
+            started = row.get("started_at")
+            return (completed is not None and as_of - self.lookback <= completed < as_of
+                    and started is not None and started <= completed
+                    and get_vietnam_time_window(started) == target_window
+                    and bool(coordinates_from_row(row)))
+        personal = [row for row in personal if usable(row)]
+        community = [row for row in community if usable(row)]
         try:
-            for key, recommended in valid.items():
-                candidate_cells = set(recommended.cells)
-                personal_results = []
-                for signature, positions in personal_indexed:
-                    ROUTE_FAMILIARITY_HISTORY_PAIRS.inc()
-                    personal_results.append(
-                        weighted_ordered_overlap(recommended, signature, budget=budget,
-                                                 historical_positions=positions)
-                        if candidate_cells.intersection(positions) else SimilarityResult(0.0, 0.0)
-                    )
-                best_result = max(personal_results, key=lambda score: score.adherence) if personal_results else None
+            point_count = sum(len(sig.coordinates) for sig in valid.values())
+            point_count += sum(len(coordinates_from_row(row)) for row in personal + community)
+            if point_count > 100_000:
+                raise SimilarityWorkLimitExceeded
+            route_cache, score_cache = {}, {}
+            sample_budget = ComparisonBudget(max_pairs=50_000)
+            def prepare(coordinates):
+                if coordinates not in route_cache:
+                    route_cache[coordinates] = prepare_route(coordinates, sample_budget=sample_budget)
+                return route_cache[coordinates]
+            personal_indexed = [prepare(coordinates_from_row(row)) for row in personal]
+            community_indexed = [prepare(coordinates_from_row(row)) for row in community]
+            prepared = {key: prepare(sig.coordinates) for key, sig in valid.items()}
+            def score(recommended, historical):
+                ROUTE_FAMILIARITY_HISTORY_PAIRS.inc()
+                key = id(recommended), id(historical)
+                if key not in score_cache:
+                    metric = compare_prepared_routes(recommended, historical, budget=budget)
+                    score_cache[key] = SimilarityResult(metric.shared_distance_m, metric.shared_pct_on_proposed / 100)
+                return score_cache[key]
+            for key, recommended in prepared.items():
+                personal_results = [score(recommended, route) for route in personal_indexed]
+                best_result = max(personal_results, key=lambda item: item.adherence) if personal_results else None
                 best = best_result.adherence if best_result else None
-                supporting = sum(score.adherence >= self.minimum_support for score in personal_results)
+                supporting = sum(item.adherence >= self.minimum_support for item in personal_results)
                 confidence = len(personal) / (len(personal) + self.confidence_prior) if personal else 0.0
                 penalty = self.max_penalty_s * (1 - best) * confidence if best is not None else 0.0
-                driver_best = {}
-                driver_trips = {}
-                for row, (signature, positions) in zip(community, community_indexed):
-                    ROUTE_FAMILIARITY_HISTORY_PAIRS.inc()
-                    if not candidate_cells.intersection(positions):
-                        continue
-                    score = weighted_ordered_overlap(recommended, signature, budget=budget,
-                                                     historical_positions=positions).adherence
-                    driver = row["driver_id"]
-                    if score >= self.minimum_support:
-                        driver_best[driver] = max(score, driver_best.get(driver, 0.0))
+                driver_best, driver_trips = {}, {}
+                for row, route in zip(community, community_indexed):
+                    adherence = score(recommended, route).adherence
+                    if adherence >= self.minimum_support:
+                        driver = row["driver_id"]
+                        driver_best[driver] = max(adherence, driver_best.get(driver, 0.0))
                         driver_trips[driver] = driver_trips.get(driver, 0) + 1
                 drivers = len(driver_best)
                 visible = drivers >= self.minimum_drivers
-                adherence = ((sum(driver_best.values()) + self.prior_mean * self.prior_strength) /
-                             (drivers + self.prior_strength)) if visible else None
+                community_adherence = ((sum(driver_best.values()) + self.prior_mean * self.prior_strength) /
+                                       (drivers + self.prior_strength)) if visible else None
+                legacy_only = not personal and legacy_personal
                 result[key] = FamiliarityAssessment(
-                    "AVAILABLE" if personal else "NO_HISTORY", best, supporting,
-                    len(personal), adherence,
+                    "UNAVAILABLE" if legacy_only else "AVAILABLE" if personal else "NO_HISTORY",
+                    best, supporting, len(personal), community_adherence,
                     sum(driver_trips.values()) if visible else None, drivers if visible else None,
                     confidence, recommended.distance_m,
                     best_result.shared_route_distance_m if best_result else None,
-                    min(30.0, self.max_penalty_s, max(0.0, penalty)), truncated)
+                    min(30.0, self.max_penalty_s, max(0.0, penalty)), truncated or legacy_personal,
+                    "HISTORY_GEOMETRY_OR_START_UNAVAILABLE" if legacy_only else None,
+                    tuple(sorted(recommended.positions)))
         except SimilarityWorkLimitExceeded:
             record_familiarity_work_limit()
             record_route_familiarity_event('comparison', 'unavailable')
             record_route_familiarity_event('fallback', 'unavailable')
             observe_route_familiarity('comparison', perf_counter() - comparison_started)
-            observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
             return {key: FamiliarityAssessment("UNAVAILABLE", degraded_reason="SIMILARITY_WORK_LIMIT")
-                    for key in candidate_signatures}
+                    for key in valid | unavailable}
         observe_route_familiarity('comparison', perf_counter() - comparison_started)
         record_route_familiarity_event('comparison')
         for assessment in result.values():
@@ -146,10 +171,17 @@ class RouteFamiliarityService:
                 record_route_familiarity_event('no_history')
             if assessment.status == 'UNAVAILABLE':
                 record_route_familiarity_event('fallback', 'unavailable')
-        observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
         return result
 
-    @staticmethod
-    def _index_row(row):
-        signature = _signature(row)
-        return signature, index_route_signature(signature)
+
+def history_query_cells(signatures):
+    cells = set()
+    for signature in signatures:
+        for cell in signature.cells:
+            if h3.is_valid_cell(cell):
+                cells.update(h3.grid_disk(cell, 2))
+            else:
+                cells.add(cell)
+            if len(cells) > 20_000:
+                raise SimilarityWorkLimitExceeded
+    return sorted(cells)

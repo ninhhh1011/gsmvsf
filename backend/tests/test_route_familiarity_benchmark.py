@@ -9,6 +9,7 @@ from scripts.benchmark_route_familiarity import (
     BoundedHistoryRepository,
     benchmark_database_rows,
     benchmark_cases,
+    benchmark_route_signature,
     database_lifecycle_report,
     host_accessible_database_url,
     raise_for_cleanup_failure,
@@ -112,7 +113,7 @@ def test_in_memory_community_fixture_models_101_drivers_and_sentinel_routes():
 
 
 def test_benchmark_active_driver_sentinel_marks_history_truncated():
-    repository = BoundedHistoryRepository(10_000, RouteSignature(("cell",), (1.0,), 1.0, 11))
+    repository = BoundedHistoryRepository(10_000, benchmark_route_signature())
     from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
     repository.community = [row for row in repository.community
@@ -197,7 +198,7 @@ def test_postgres_fixture_has_exact_personal_and_community_distribution():
 
 
 def test_personal_sentinel_is_exposed_as_truncated_but_not_scored():
-    repository = BoundedHistoryRepository(150, RouteSignature(("cell",), (1.0,), 1.0, 11))
+    repository = BoundedHistoryRepository(150, benchmark_route_signature())
     from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
     result = asyncio.run(RouteFamiliarityService(repository).assess_many(
@@ -434,7 +435,7 @@ async def test_database_benchmark_times_personal_and_community_queries_separatel
 
     clock = [0.0]
     queries = []
-    signature = RouteSignature(("8b415d8c9a00fff",), (1.0,), 1.0, 11)
+    signature = benchmark_route_signature()
 
     class Connection:
         async def execute(self, sql, *args):
@@ -442,9 +443,9 @@ async def test_database_benchmark_times_personal_and_community_queries_separatel
 
         async def executemany(self, sql, rows):
             fields = ("driver_id", "trip_id", "completed_at", "distance_m",
-                      "resolution", "cells", "cell_distances_m")
+                      "resolution", "cells", "cell_distances_m", "geometry", "started_at")
             self.rows = [dict(zip(fields, row)) for row in rows]
-            self.as_of = self.rows[0]["completed_at"]
+            self.as_of = self.rows[0]["completed_at"] + timedelta(seconds=1)
 
         async def fetchval(self, sql):
             return len(self.rows)
@@ -459,7 +460,8 @@ async def test_database_benchmark_times_personal_and_community_queries_separatel
                 clock[0] += 0.002
                 return self.rows[:51]
             assert sql == COMMUNITY_ROUTES_QUERY
-            assert args[3] == list(signature.cells)
+            from backend.app.services.route_familiarity.service import history_query_cells
+            assert args[3] in (list(signature.cells), history_query_cells([signature]))
             clock[0] += 0.007
             return [{**row, "active_rank": index, "driver_rank": 1}
                     for index, row in enumerate(self.rows[51:], 1)]

@@ -9,7 +9,7 @@ Time Windows (Project-specific grouping based on Hanoi urban peak hours):
 Strict Causality:
 Only historical trips with completed_at < as_of are considered.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import Sequence
 from zoneinfo import ZoneInfo
@@ -61,6 +61,7 @@ def filter_historical_trips_by_window(
     historical_trips: Sequence[dict],
     as_of: datetime,
     target_window: TimeWindowType | None = None,
+    lookback_days: int = 7,
 ) -> dict:
     """
     Filter historical completed trips enforcing strict causality (completed_at < as_of).
@@ -78,11 +79,14 @@ def filter_historical_trips_by_window(
             continue
         if completed_at.tzinfo is None:
             completed_at = completed_at.replace(tzinfo=timezone.utc)
-        if completed_at < as_of:
+        if as_of - timedelta(days=lookback_days) <= completed_at < as_of:
+            started_at = trip.get("started_at")
+            if started_at and started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
             valid_causal_trips.append({
                 **trip,
                 "completed_at": completed_at,
-                "window": get_vietnam_time_window(completed_at),
+                "window": get_vietnam_time_window(started_at) if started_at else None,
             })
 
     same_window_trips = [t for t in valid_causal_trips if t["window"] == target_window]
@@ -98,6 +102,7 @@ def filter_historical_trips_by_window(
         "same_window_driver_count": len(same_window_drivers),
         "all_window_trip_count": len(valid_causal_trips),
         "all_window_driver_count": len(all_window_drivers),
+        "unknown_start_trip_count": sum(t["window"] is None for t in valid_causal_trips),
         "history_sparse": is_sparse,
         "status_label_vi": status_label,
     }

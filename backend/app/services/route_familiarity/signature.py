@@ -81,8 +81,12 @@ def create_route_signature(polylines: Sequence[str]) -> RouteSignature:
     weights: list[float] = []
     total_distance = 0.0
     vertex_count = 0
+    coordinates = []
     for encoded in polylines:
         points = decode_polyline(encoded)
+        if coordinates and _distance_m(coordinates[-1], points[0]) > 5:
+            raise ValueError("route legs are disconnected")
+        coordinates.extend(points if not coordinates else points[1:])
         vertex_count += len(points)
         if vertex_count > MAX_ROUTE_VERTICES:
             raise ValueError("too many route vertices")
@@ -107,4 +111,5 @@ def create_route_signature(polylines: Sequence[str]) -> RouteSignature:
                         raise ValueError("route exceeds maximum signature cells")
     if total_distance <= 0 or not cells:
         raise ValueError("route must have nonzero length")
-    return RouteSignature(tuple(cells), tuple(weights), total_distance, H3_ROUTE_RESOLUTION)
+    return RouteSignature(tuple(cells), tuple(weights), total_distance, H3_ROUTE_RESOLUTION,
+                          tuple(coordinates))

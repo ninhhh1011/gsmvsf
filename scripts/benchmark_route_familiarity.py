@@ -26,7 +26,7 @@ from backend.app.services.route_familiarity.repository import (
 )
 from backend.app.services.route_familiarity.service import RouteFamiliarityService
 from backend.app.services.route_familiarity.signature import create_route_signature
-from backend.app.services.route_familiarity.similarity import weighted_ordered_overlap
+from backend.app.services.route_familiarity.route_matcher import match_and_compare_routes
 
 HISTORY_SIZES = (150, 10_000, 100_000)
 CANDIDATE_COUNT = 30
@@ -128,10 +128,12 @@ class BoundedHistoryRepository:
     def __init__(self, history_size, signature, community_driver_count=101, as_of=None):
         self.history_size = history_size
         self.signature = signature
-        self.as_of = as_of or datetime.now(UTC)
+        self.as_of = as_of or datetime.now(UTC).replace(hour=6, minute=30, second=0, microsecond=0)
         self.personal = [{
             "driver_id": "benchmark-driver", "trip_id": f"personal-trip-{index:03d}",
-            "completed_at": self.as_of - timedelta(minutes=index),
+            "completed_at": self.as_of - timedelta(minutes=index, seconds=1),
+            "started_at": self.as_of - timedelta(minutes=index, seconds=31),
+            "geometry": signature.coordinates,
             "cells": signature.cells, "cell_distances_m": signature.cell_distances_m,
             "distance_m": signature.distance_m, "resolution": signature.resolution,
         } for index in range(min(history_size, 51))]
@@ -139,7 +141,9 @@ class BoundedHistoryRepository:
         self.community = [{
              "driver_id": f"synthetic-driver-{index % community_driver_count:03d}",
              "trip_id": f"synthetic-trip-{index:06d}",
-             "completed_at": self.as_of - timedelta(minutes=index // community_driver_count),
+             "completed_at": self.as_of - timedelta(minutes=index // community_driver_count, seconds=1),
+             "started_at": self.as_of - timedelta(minutes=index // community_driver_count, seconds=31),
+             "geometry": signature.coordinates,
              "cells": signature.cells, "cell_distances_m": signature.cell_distances_m,
              "distance_m": signature.distance_m, "resolution": signature.resolution,
         } for index in range(min(community_count, community_driver_count * 6))]
@@ -147,7 +151,7 @@ class BoundedHistoryRepository:
     async def personal_routes(self, driver_id, as_of, lookback):
         lower_bound = as_of - lookback
         rows = [row for row in self.personal if row["driver_id"] == driver_id and
-                lower_bound <= row["completed_at"] <= as_of]
+                lower_bound <= row["completed_at"] < as_of]
         rows.sort(key=lambda row: (row["completed_at"], row["trip_id"]), reverse=True)
         return rows[:51]
 
@@ -157,7 +161,7 @@ class BoundedHistoryRepository:
             return []
         lower_bound = as_of - lookback
         rows = [row for row in self.community if row["driver_id"] != exclude_driver_id and
-                lower_bound <= row["completed_at"] <= as_of and wanted_cells.intersection(row["cells"])]
+                lower_bound <= row["completed_at"] < as_of and wanted_cells.intersection(row["cells"])]
         latest = {}
         for row in rows:
             latest[row["driver_id"]] = max(latest.get(row["driver_id"], row["completed_at"]), row["completed_at"])
@@ -184,8 +188,10 @@ def benchmark_database_rows(size, signature, as_of):
                      f"phase4-benchmark-community-{community_index % 101:03d}")
         age_minutes = 0 if personal else community_index // 101
         rows.append((driver_id, f"phase4-benchmark-trip-{index:06d}",
-                     as_of - timedelta(minutes=age_minutes), signature.distance_m,
-                     signature.resolution, list(signature.cells), list(signature.cell_distances_m)))
+                     as_of - timedelta(minutes=age_minutes, seconds=1), signature.distance_m,
+                     signature.resolution, list(signature.cells), list(signature.cell_distances_m),
+                     json.dumps(signature.coordinates) if signature.coordinates else None,
+                     as_of - timedelta(minutes=age_minutes, seconds=31)))
     return rows
 
 
@@ -282,8 +288,8 @@ async def _postgres_measure(database_url, signature):
         for size in HISTORY_SIZES:
             await conn.execute("TRUNCATE realtime.route_familiarity_routes")
             await conn.executemany("""INSERT INTO realtime.route_familiarity_routes
-                        (driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+                        (driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)""",
                         benchmark_database_rows(size, db_signature, as_of))
             actual = await conn.fetchval("SELECT count(*) FROM realtime.route_familiarity_routes")
             await conn.execute("ANALYZE realtime.route_familiarity_routes")
@@ -401,15 +407,13 @@ async def _measure_async(operation):
 async def run(database_url):
     polyline = _polyline(benchmark_route_points())
     signature = create_route_signature([polyline])
-    same_route = RouteSignature(signature.cells, signature.cell_distances_m,
-                                 signature.distance_m, H3_ROUTE_RESOLUTION)
-    report = {"resolution": H3_ROUTE_RESOLUTION,
+    report = {"resolution": 9, "persistence_index_resolution": H3_ROUTE_RESOLUTION,
               "benchmark_route": {"cell_count": len(signature.cells),
                                   "distance_m": round(signature.distance_m, 3)},
               "candidate_fanout": CANDIDATE_COUNT,
               "dataset_sizes": list(HISTORY_SIZES),
               "route_signature": measure(lambda: create_route_signature([polyline])),
-              "similarity": measure(lambda: weighted_ordered_overlap(signature, same_route)),
+              "similarity": measure(lambda: match_and_compare_routes(signature.coordinates, signature.coordinates)),
               "cases": []}
     for case in benchmark_cases():
         report["cases"].append({"history_size": case.history_size,

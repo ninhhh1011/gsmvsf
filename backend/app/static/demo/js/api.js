@@ -219,6 +219,10 @@ export class ApiClient {
     /**
      * Compare proposed route against driver route using backend H3 engine.
      */
+    async computePowerStep(payload) {
+        return this._request('/api/v1/vehicles/power-step', { method: 'POST', body: JSON.stringify(payload) });
+    }
+
     async compareRoutes(payload) {
         return this._request('/api/v1/routing/compare-routes', {
             method: 'POST',

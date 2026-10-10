@@ -1,11 +1,10 @@
 # backend/tests/test_physics_energy_model.py
 """Tests for verified vehicle powertrain specifications and dynamic longitudinal physics."""
 import pytest
-from backend.app.services.energy.powertrain_catalog import get_powertrain_spec, PowertrainSpec
+from backend.app.services.energy.powertrain_catalog import get_powertrain_spec
 from backend.app.services.energy.physics_model import (
     calculate_instantaneous_power,
     simulate_trip_energy,
-    DynamicPowerResult,
 )
 
 def test_vf3_official_specs():
@@ -15,7 +14,7 @@ def test_vf3_official_specs():
     assert spec.curb_weight_kg == 857.0
     assert spec.drag_coefficient == 0.36
     assert spec.spec_source == "VINFAST_OFFICIAL_BROCHURE_2024"
-    assert spec.parameters_status == "OFFICIAL_VERIFIED"
+    assert spec.parameters_status == "PROJECT_ASSUMPTION"
 
 def test_instantaneous_power_stopped_traffic():
     spec = get_powertrain_spec("VF_3")

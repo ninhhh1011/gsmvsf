@@ -40,3 +40,17 @@ All eight locked DoD items pass based on the command results above and the revie
 - Motorcycle `car_access` coverage.
 - Single-node data plane.
 - Candidate fanout latency.
+
+## 2026-10-10 offline comparison and weighting corrections
+
+Implemented on `fix/offline-route-weighting`; this does not start Week 6 infrastructure or activate the deployed opt-in feature. See [current correction evidence](reports/offline-route-weighting-fixes-2026-10-10.md) and ADR-022.
+
+- [x] Corrected directed geometric overlap, neighbor-cell lookup, ordered nonreuse and bounded shared distance.
+- [x] Frozen whole-trip offline proposal/time; canonical Driver/API contracts and stale-response guards.
+- [x] Additive geometry/start history migration, causal queries and bounded geometric ranking penalty integration.
+- [x] Backend-owned interval energy and catalog metadata/provenance; explicit unavailable models.
+- [x] Independent review findings reproduced and fixed; complete backend/frontend suites, lint and validator verified.
+- [x] Real GraphHopper and disposable PostgreSQL migration/history/API checks; canonical hashes unchanged.
+- [ ] Runtime activation/migration of application database and live browser deployment verification (not performed by this code implementation).
+
+Current checks: 561 backend PASS / 12 skipped, 196 frontend PASS, Ruff PASS, validator 152 PASS / 0 FAIL and 22/22 assertions; 63 canonical Dataset files unchanged during verification.

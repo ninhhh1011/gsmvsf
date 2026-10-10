@@ -25,6 +25,7 @@ export async function fetchVehicleCatalog() {
     // Auto-register each catalog entry into MODEL_SPECS for consistency
     for (const item of data) {
         registerVehicleModel(item.id, {
+            ...item,
             name: item.name,
             brand: item.brand,
             battery_kwh: item.battery_kwh,

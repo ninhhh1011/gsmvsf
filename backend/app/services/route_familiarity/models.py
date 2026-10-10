@@ -7,6 +7,7 @@ class RouteSignature:
     cell_distances_m: tuple[float, ...]
     distance_m: float
     resolution: int
+    coordinates: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)

@@ -12,11 +12,27 @@ from backend.app.services.route_familiarity.models import RouteSignature
 from backend.app.services.route_familiarity.service import RouteFamiliarityService
 
 
-NOW = datetime(2026, 10, 7, tzinfo=UTC)
+NOW = datetime(2026, 10, 7, 1, tzinfo=UTC)
 
 
 def sig(cells):
-    return RouteSignature(tuple(cells), tuple(100.0 for _ in cells), 100 * len(cells), 11)
+    coordinates = geometry(cells)
+    return RouteSignature(tuple(cells), tuple(100.0 for _ in cells), 100 * len(cells), 11,
+                          coordinates)
+
+
+def geometry(cells):
+    offset = 0 if cells[0] in ("a", "b", "target") else 0.02
+    points = [(21.0 + offset, 105.8)]
+    for i, cell in enumerate(cells):
+        distance = (100 if cell == "a" else 200) if len(cells) > 10 else (i + 1) * 100
+        points.append((21.0 + offset + distance / 111195, 105.8))
+    return tuple(points)
+
+
+def history_row(**values):
+    return dict(values, geometry=geometry(values["cells"]),
+                started_at=NOW - timedelta(minutes=2), completed_at=NOW - timedelta(minutes=1))
 
 
 class Repository:
@@ -35,7 +51,7 @@ class Repository:
 
 @pytest.mark.asyncio
 async def test_no_history_has_zero_penalty_and_bounded_two_queries():
-    community = [dict(driver_id=f"d{i}", trip_id=f"t{i}", cells=["a", "b"],
+    community = [history_row(driver_id=f"d{i}", trip_id=f"t{i}", cells=["a", "b"],
                       cell_distances_m=[100.0, 100.0], distance_m=200.0, resolution=11)
                  for i in range(5)]
     repo = Repository(community=community)
@@ -55,10 +71,10 @@ async def test_no_history_has_zero_penalty_and_bounded_two_queries():
 
 @pytest.mark.asyncio
 async def test_community_uses_distinct_driver_best_and_suppresses_below_five():
-    rows = [dict(driver_id=f"d{i}", trip_id=f"t{i}", cells=["a", "b"],
+    rows = [history_row(driver_id=f"d{i}", trip_id=f"t{i}", cells=["a", "b"],
                  cell_distances_m=[100.0, 100.0], distance_m=200.0, resolution=11)
             for i in range(4)]
-    repo = Repository(personal=[dict(driver_id="me", trip_id="p", cells=["a", "b"],
+    repo = Repository(personal=[history_row(driver_id="me", trip_id="p", cells=["a", "b"],
                                       cell_distances_m=[100.0, 100.0], distance_m=200.0, resolution=11)],
                       community=rows)
     assessment = (await RouteFamiliarityService(repo).assess_many(
@@ -71,7 +87,7 @@ async def test_community_uses_distinct_driver_best_and_suppresses_below_five():
 
 @pytest.mark.asyncio
 async def test_unmatched_personal_history_still_gives_confidence_and_penalty():
-    repo = Repository(personal=[dict(driver_id="me", trip_id="p", cells=["x"],
+    repo = Repository(personal=[history_row(driver_id="me", trip_id="p", cells=["x"],
                                     cell_distances_m=[100.0], distance_m=100.0, resolution=11)])
     assessment = (await RouteFamiliarityService(repo).assess_many(
         "me", {("s", "x"): sig(["a"])}, NOW))["s", "x"]
@@ -84,9 +100,9 @@ async def test_unmatched_personal_history_still_gives_confidence_and_penalty():
 
 @pytest.mark.asyncio
 async def test_community_smoothing_counts_each_driver_once():
-    personal = [dict(driver_id="me", trip_id="p", cells=["a", "b"],
+    personal = [history_row(driver_id="me", trip_id="p", cells=["a", "b"],
                      cell_distances_m=[100.0, 100.0], distance_m=200.0, resolution=11)]
-    community = [dict(driver_id=f"d{i}", trip_id=f"t{i}-{j}", cells=["a", "b"],
+    community = [history_row(driver_id=f"d{i}", trip_id=f"t{i}-{j}", cells=["a", "b"],
                       cell_distances_m=[100.0, 100.0], distance_m=200.0, resolution=11)
                   for i in range(5) for j in range(2)]
     assessment = (await RouteFamiliarityService(Repository(personal, community)).assess_many(
@@ -99,7 +115,7 @@ async def test_community_smoothing_counts_each_driver_once():
 @pytest.mark.asyncio
 async def test_matching_pair_budget_returns_entire_assessment_unavailable():
     route = sig(["a", "b"] * 400)
-    row = dict(driver_id="me", trip_id="p", cells=list(route.cells),
+    row = history_row(driver_id="me", trip_id="p", cells=list(route.cells),
                cell_distances_m=list(route.cell_distances_m), distance_m=route.distance_m, resolution=11)
     repo = Repository(personal=[row])
     before = ROUTE_FAMILIARITY_WORK_LIMITS._value.get()
@@ -125,7 +141,7 @@ async def test_event_time_and_retrieval_caps_are_passed_to_repository():
 
 @pytest.mark.asyncio
 async def test_history_pairs_metric_counts_each_candidate_and_history_pair_without_labels():
-    row = dict(driver_id="private", trip_id="private-trip", cells=["a"],
+    row = history_row(driver_id="private", trip_id="private-trip", cells=["a"],
                cell_distances_m=[100.0], distance_m=100.0, resolution=11)
     repo = Repository(personal=[row, row], community=[row, row, row])
     metric = ROUTE_FAMILIARITY_HISTORY_PAIRS
@@ -166,6 +182,42 @@ async def test_missing_route_geometry_is_unavailable_without_history_reads(monke
     assert any(stage == "evaluation" and elapsed >= 0 for stage, elapsed in durations)
 
 
+@pytest.mark.asyncio
+async def test_geometric_heading_rejection_drives_capped_penalty():
+    target = sig(["a", "b"])
+    reverse = history_row(driver_id="me", trip_id="reverse", cells=["a", "b"],
+                          cell_distances_m=[100.0, 100.0], distance_m=200.0, resolution=11)
+    reverse["geometry"] = tuple(reversed(target.coordinates))
+    assessment = (await RouteFamiliarityService(Repository(personal=[reverse])).assess_many(
+        "me", {("s", "CHARGING"): target}, NOW))["s", "CHARGING"]
+    assert assessment.personal_adherence == 0
+    assert assessment.penalty_s == pytest.approx(7.5)
+
+
+@pytest.mark.asyncio
+async def test_legacy_cell_history_is_unavailable_without_inventing_geometry():
+    row = dict(driver_id="me", trip_id="legacy", cells=["a"], cell_distances_m=[100.0],
+               distance_m=100.0, resolution=11, completed_at=NOW - timedelta(minutes=1))
+    assessment = (await RouteFamiliarityService(Repository(personal=[row])).assess_many(
+        "me", {("s", "x"): sig(["a"])}, NOW))["s", "x"]
+    assert assessment.status == "UNAVAILABLE"
+    assert assessment.penalty_s == 0
+
+
+@pytest.mark.asyncio
+async def test_sparse_long_history_cannot_expand_beyond_batch_sample_budget():
+    rows = [history_row(driver_id="me", trip_id=f"long-{i}", cells=["a"],
+                        cell_distances_m=[40030.0], distance_m=40030.0, resolution=11)
+            for i in range(15)]
+    for i, row in enumerate(rows):
+        row["geometry"] = ((21, 105.8 + i * .00001), (21.36, 105.8 + i * .00001))
+    assessment = (await RouteFamiliarityService(Repository(personal=rows)).assess_many(
+        "me", {("s", "x"): sig(["a"])}, NOW))["s", "x"]
+    assert assessment.status == "UNAVAILABLE"
+    assert assessment.degraded_reason == "SIMILARITY_WORK_LIMIT"
+    assert assessment.penalty_s == 0
+
+
 def test_feature_is_off_by_default_and_enabled_requires_identity_secret():
     assert Settings(_env_file=None).enable_route_familiarity is False
     with pytest.raises(ValidationError):
@@ -187,7 +239,7 @@ def test_service_rejects_penalty_overrides_outside_contract_cap(override):
 
 @pytest.mark.asyncio
 async def test_final_penalty_remains_capped_even_if_service_override_changes():
-    row = dict(driver_id="d", trip_id="t", cells=["other"], cell_distances_m=[100.0],
+    row = history_row(driver_id="d", trip_id="t", cells=["other"], cell_distances_m=[100.0],
                distance_m=100.0, resolution=11)
     service = RouteFamiliarityService(Repository(personal=[row] * 50), max_penalty_s=30)
     service.max_penalty_s = 100
@@ -197,7 +249,7 @@ async def test_final_penalty_remains_capped_even_if_service_override_changes():
 
 @pytest.mark.asyncio
 async def test_truncation_uses_sentinel_metadata_not_exact_full_result_counts():
-    row = dict(driver_id="d", trip_id="t", cells=["a"], cell_distances_m=[100.0],
+    row = history_row(driver_id="d", trip_id="t", cells=["a"], cell_distances_m=[100.0],
                distance_m=100.0, resolution=11)
     assessment = (await RouteFamiliarityService(Repository(personal=[row] * 50)).assess_many(
         "d", {("s", "x"): sig(["a"])}, NOW))["s", "x"]

@@ -73,3 +73,41 @@ async def test_compare_routes_invalid_resolution_rejected():
         }
         res = await client.post("/api/v1/routing/compare-routes", json=payload)
         assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_compare_routes_returns_backend_cells_and_explicit_unrequested_history():
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/routing/compare-routes", json={
+            "proposed_coordinates": [[21, 105.8], [21.002, 105.8]],
+            "actual_coordinates": [[21, 105.8], [21.002, 105.8]],
+            "vehicle_model": "TESLA_MODEL_3"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["proposed_cells"] and body["actual_cells"]
+        assert body["powertrain_spec"] is None
+        assert body["history_stats"]["status"] == "NOT_REQUESTED"
+        assert body["history_stats"]["same_window_trip_count"] is None
+
+
+@pytest.mark.asyncio
+async def test_history_request_requires_identity_before_repository_access(monkeypatch):
+    from backend.app.api.v1 import route_comparison
+    monkeypatch.setattr(route_comparison.settings, "enable_route_familiarity", True)
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/routing/compare-routes", json={
+            "proposed_coordinates": [[21, 105.8], [21.002, 105.8]],
+            "actual_coordinates": [[21, 105.8], [21.002, 105.8]], "driver_id": "private"})
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_compare_routes_rejects_large_geometry_and_unknown_fields():
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/routing/compare-routes", json={
+            "proposed_coordinates": [[0, 0], [2, 0]],
+            "actual_coordinates": [[0, 0], [2, 0]]})
+        assert response.status_code == 422

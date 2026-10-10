@@ -34,6 +34,7 @@ class DynamicPowerResult:
     grade_power_kw: float
     auxiliary_power_kw: float
     is_regenerating: bool
+    power_status: str
 
 
 def calculate_instantaneous_power(
@@ -45,7 +46,11 @@ def calculate_instantaneous_power(
     hvac_on: bool = True,
 ) -> DynamicPowerResult:
     """Calculate instantaneous battery power draw (kW) from vehicle kinematics."""
-    v_ms = max(0.0, speed_kmh / 3.6)
+    if not all(math.isfinite(value) for value in (speed_kmh, acceleration_ms2, grade_rad, passenger_weight_kg)):
+        raise ValueError("Kinematics must be finite")
+    if speed_kmh < 0 or passenger_weight_kg < 0:
+        raise ValueError("Speed and passenger weight must be nonnegative")
+    v_ms = speed_kmh / 3.6
     total_mass_kg = spec.curb_weight_kg + passenger_weight_kg
 
     # 1. Aerodynamic drag force: F_aero = 0.5 * rho * C_d * A * v^2
@@ -70,8 +75,6 @@ def calculate_instantaneous_power(
     # 5. Transmission & Motor conversion
     if p_mech_wheel_kw >= 0:
         p_traction_kw = p_mech_wheel_kw / max(0.01, spec.drive_efficiency)
-        # Cap at vehicle max motor power
-        p_traction_kw = min(spec.max_motor_power_kw, p_traction_kw)
         is_regen = False
     else:
         # Regenerative braking
@@ -85,6 +88,8 @@ def calculate_instantaneous_power(
     p_aux_kw = spec.auxiliary_base_kw if hvac_on else (spec.auxiliary_base_kw * 0.3)
 
     p_total_kw = p_traction_kw + p_aux_kw
+    if not all(math.isfinite(value) for value in (p_total_kw, p_aero_kw, p_roll_kw, p_accel_kw, p_grade_kw)):
+        raise ValueError("Kinematics exceed numeric model bounds")
 
     return DynamicPowerResult(
         speed_kmh=speed_kmh,
@@ -96,7 +101,29 @@ def calculate_instantaneous_power(
         grade_power_kw=round(p_grade_kw, 3),
         auxiliary_power_kw=round(p_aux_kw, 3),
         is_regenerating=is_regen,
+        power_status="KINEMATICS_EXCEED_CAPABILITY" if p_mech_wheel_kw > spec.max_motor_power_kw else "MODEL_ESTIMATE",
     )
+
+
+def calculate_power_step(
+    spec: PowertrainSpec,
+    speed_kmh: float,
+    previous_speed_kmh: float | None,
+    dt_seconds: float,
+    hvac_on: bool = True,
+) -> tuple[DynamicPowerResult, float]:
+    """End-point power and midpoint energy for an observed linear speed change."""
+    if not math.isfinite(dt_seconds) or not 0 <= dt_seconds <= 3600:
+        raise ValueError("Interval must be finite and between 0 and 3600 seconds")
+    previous_speed = speed_kmh if previous_speed_kmh is None else previous_speed_kmh
+    if not math.isfinite(previous_speed) or previous_speed < 0:
+        raise ValueError("Previous speed must be finite and nonnegative")
+    acceleration = (speed_kmh - previous_speed) / 3.6 / dt_seconds if dt_seconds else 0.0
+    power = calculate_instantaneous_power(spec, speed_kmh, acceleration, hvac_on=hvac_on)
+    interval_power = calculate_instantaneous_power(
+        spec, (speed_kmh + previous_speed) / 2, acceleration, hvac_on=hvac_on
+    )
+    return power, interval_power.total_power_kw * dt_seconds / 3600
 
 
 def simulate_trip_energy(
@@ -110,20 +137,10 @@ def simulate_trip_energy(
     power_samples = []
     for i in range(len(speed_profile_kmh)):
         v_curr = speed_profile_kmh[i]
-        if i == 0:
-            accel = 0.0
-        else:
-            v_prev = speed_profile_kmh[i - 1]
-            accel = ((v_curr - v_prev) / 3.6) / dt_seconds
-
-        res = calculate_instantaneous_power(
-            spec=spec,
-            speed_kmh=v_curr,
-            acceleration_ms2=accel,
-            hvac_on=hvac_on,
+        res, energy_step_kwh = calculate_power_step(
+            spec, v_curr, speed_profile_kmh[i - 1] if i else None, dt_seconds, hvac_on
         )
         power_samples.append(res)
-        energy_step_kwh = (res.total_power_kw * (dt_seconds / 3600.0))
         total_energy_kwh += energy_step_kwh
 
     total_dist_km = sum(v * (dt_seconds / 3600.0) for v in speed_profile_kmh)

@@ -1,5 +1,6 @@
 """Async PostgreSQL persistence for completed route signatures."""
 from datetime import datetime, timedelta
+import json
 
 import asyncpg
 
@@ -8,26 +9,34 @@ from backend.app.services.snapshots.models import StateError
 
 _INSERT = """
 INSERT INTO realtime.route_familiarity_routes
-    (driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+    (driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
 ON CONFLICT (driver_id, trip_id) DO NOTHING
-RETURNING driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
+RETURNING driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at
 """
 _SELECT_ONE = """
-SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
+SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at
 FROM realtime.route_familiarity_routes WHERE driver_id=$1 AND trip_id=$2
 """
+_ADD_EVIDENCE = """
+UPDATE realtime.route_familiarity_routes
+SET geometry = COALESCE(geometry, $3::jsonb), started_at = COALESCE(started_at, $4)
+WHERE driver_id=$1 AND trip_id=$2
+  AND (geometry IS NULL OR $3::jsonb IS NULL OR geometry=$3::jsonb)
+  AND (started_at IS NULL OR $4::timestamptz IS NULL OR started_at=$4)
+RETURNING driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at
+"""
 PERSONAL_ROUTES_QUERY = """
-SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m
+SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at
 FROM realtime.route_familiarity_routes
-WHERE driver_id=$1 AND completed_at >= $2 AND completed_at <= $3
+WHERE driver_id=$1 AND completed_at >= $2 AND completed_at < $3
 ORDER BY completed_at DESC, trip_id DESC LIMIT 51
 """
 COMMUNITY_ROUTES_QUERY = """
 WITH active_drivers AS (
     SELECT driver_id, max(completed_at) AS last_completed_at
     FROM realtime.route_familiarity_routes
-    WHERE driver_id <> $1 AND completed_at >= $2 AND completed_at <= $3
+    WHERE driver_id <> $1 AND completed_at >= $2 AND completed_at < $3
       AND cells && $4::text[]
     GROUP BY driver_id
     ORDER BY last_completed_at DESC, driver_id
@@ -40,9 +49,9 @@ WITH active_drivers AS (
            row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC, r.trip_id DESC) AS driver_rank
     FROM realtime.route_familiarity_routes r
     JOIN ranked_drivers d USING (driver_id)
-    WHERE r.completed_at >= $2 AND r.completed_at <= $3 AND r.cells && $4::text[]
+    WHERE r.completed_at >= $2 AND r.completed_at < $3 AND r.cells && $4::text[]
 )
-SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m,
+SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at,
        active_rank, driver_rank
 FROM bounded WHERE driver_rank <= 6
 ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606
@@ -62,11 +71,13 @@ class RouteHistoryRepository:
             await conn.execute(sql)
 
     async def upsert_route(self, driver_id: str, trip_id: str, completed_at: datetime,
-                           signature: RouteSignature):
+                           signature: RouteSignature, started_at: datetime | None = None):
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(_INSERT, driver_id, trip_id, completed_at,
                                       signature.distance_m, signature.resolution,
-                                      list(signature.cells), list(signature.cell_distances_m))
+                                      list(signature.cells), list(signature.cell_distances_m),
+                                      json.dumps(signature.coordinates) if signature.coordinates else None,
+                                      started_at)
             if row:
                 return row, True
             row = await conn.fetchrow(_SELECT_ONE, driver_id, trip_id)
@@ -76,6 +87,17 @@ class RouteHistoryRepository:
                 tuple(row["cell_distances_m"]) == signature.cell_distances_m)
         if not same:
             raise StateError("Route ingestion conflicts with an existing trip", "ROUTE_CONFLICT", 409)
+        geometry = coordinates_from_row(row)
+        if (geometry and signature.coordinates and geometry != signature.coordinates or
+                row.get("started_at") is not None and started_at is not None and
+                row["started_at"] != started_at):
+            raise StateError("Route ingestion conflicts with an existing trip", "ROUTE_CONFLICT", 409)
+        if (not geometry and signature.coordinates or row.get("started_at") is None and started_at is not None):
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(_ADD_EVIDENCE, driver_id, trip_id,
+                    json.dumps(signature.coordinates) if signature.coordinates else None, started_at)
+            if not row:
+                raise StateError("Route ingestion conflicts with an existing trip", "ROUTE_CONFLICT", 409)
         return row, False
 
     async def personal_routes(self, driver_id: str, as_of: datetime, lookback: timedelta):
@@ -89,3 +111,10 @@ class RouteHistoryRepository:
         async with self.pool.acquire() as conn:
             return await conn.fetch(
                 COMMUNITY_ROUTES_QUERY, exclude_driver_id, as_of - lookback, as_of, cells)
+
+
+def coordinates_from_row(row):
+    geometry = row.get("geometry")
+    if isinstance(geometry, str):
+        geometry = json.loads(geometry)
+    return tuple(tuple(point) for point in geometry) if geometry else ()

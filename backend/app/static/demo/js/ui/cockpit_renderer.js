@@ -325,8 +325,8 @@ export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, po
 
                     <!-- Powertrain Motor Capability vs Instantaneous Draw -->
                     <div class="powertrain-strip">
-                        <span style="color: #94a3b8;">Động cơ (Max): <strong style="color: #38bdf8;">${controller.maxMotorPowerKw || (controller.currentVehicle?.max_motor_power_kw || 30)} kW</strong></span>
-                        <span style="color: #94a3b8;">Đang tiêu thụ: <strong id="hud-val-instant-power" style="color: #34d399;">${controller.instantaneousPowerKw || 1.5} kW</strong></span>
+                        <span style="color: #94a3b8;">Động cơ (Max): <strong style="color: #38bdf8;">${controller.maxMotorPowerKw ?? '—'} kW</strong></span>
+                        <span style="color: #94a3b8;">Công suất (ước tính): <strong id="hud-val-instant-power" style="color: #34d399;">${Number.isFinite(controller.instantaneousPowerKw) ? controller.instantaneousPowerKw.toFixed(1) + ' kW' : '— (không khả dụng)'}${controller.powerStatus === 'KINEMATICS_EXCEED_CAPABILITY' ? ' (vượt khả năng)' : ''}</strong></span>
                     </div>
 
                     <!-- Interactive Battery SOC Adjuster -->

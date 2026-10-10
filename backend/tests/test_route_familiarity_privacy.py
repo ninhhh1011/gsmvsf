@@ -109,7 +109,8 @@ async def test_recommend_returns_private_safe_explanation_and_selected_route_cel
                 personal_history_trip_count=3, community_adherence=None,
                 community_trip_count=None, community_driver_count=None,
                 confidence=0.5, recommended_distance_m=1200,
-                shared_distance_m=900, penalty_s=3.75, history_truncated=False)
+                shared_distance_m=900, penalty_s=3.75, history_truncated=False,
+                route_cells=signatures[key].cells)
                 for key in signatures}
 
     signatures = {("S001", "CHARGING"): SimpleNamespace(cells=("cell-a", "cell-b")),

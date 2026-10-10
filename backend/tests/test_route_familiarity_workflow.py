@@ -197,8 +197,9 @@ async def test_enabled_workflow_signs_both_legs_without_persisting_transient_sig
     assert [decode_polyline(line) for line in lines] == [
         [ORIGIN, STATION_POINTS["S001"]], [STATION_POINTS["S001"], DESTINATION]]
     assert selected.distance_m == pytest.approx(333.585, abs=0.1)
-    assert h3.latlng_to_cell(21.0029, 105.0, 11) in result.familiarity.route_cells
-    assert result.familiarity.route_cells == list(selected.cells)
+    assert h3.latlng_to_cell(21.0029, 105.0, 9) in result.familiarity.route_cells
+    assert result.familiarity.resolution == 9
+    assert all(h3.get_resolution(cell) == 9 for cell in result.familiarity.route_cells)
     assert history.calls[0] == ("personal", "driver", NOW, timedelta(days=7))
     assert len(history.calls) == 2
     saved = await combined.repository.get_search(result.candidate_search_id)
@@ -237,8 +238,10 @@ async def test_enabled_state_conflict_retries_search_and_uses_only_new_route_car
     assert result.candidate_search_id == searches.saved[1]["candidate_search_id"]
     assert result.recommended_station_id == "S002"
     assert built[1].cells != built[2].cells
-    assert result.familiarity.route_cells == list(built[2].cells)
-    assert history.calls[1][1] == sorted(set(built[2].cells))
+    from backend.app.services.route_familiarity.service import history_query_cells
+    from backend.app.services.route_familiarity.route_matcher import prepare_route
+    assert result.familiarity.route_cells == sorted(prepare_route(built[2].coordinates).positions)
+    assert history.calls[1][1] == history_query_cells([built[2]])
     assert len(history.calls) == 2  # Invalidated ranking never read history.
     assert [generation for generation, request in routes.requests
             if request.origin.coordinates_lat_lon == STATION_POINTS["S002"]] == [0, 1]
@@ -252,7 +255,9 @@ async def test_penalized_route_more_than_thirty_seconds_physically_faster_still_
         polyline([STATION_POINTS["S002"], DESTINATION]),
     ])
     history = History([dict(cells=familiar.cells, cell_distances_m=familiar.cell_distances_m,
-                           distance_m=familiar.distance_m, resolution=11)])
+                           distance_m=familiar.distance_m, resolution=11,
+                           geometry=familiar.coordinates, started_at=NOW-timedelta(minutes=10),
+                           completed_at=NOW-timedelta(minutes=1))])
     evaluator = RouteFamiliarityService(history, max_penalty_s=30, confidence_prior_strength=0)
     combined = workflow(evaluator, routes=routes)
     result = await combined.recommend(search_request(app))
@@ -263,3 +268,30 @@ async def test_penalized_route_more_than_thirty_seconds_physically_faster_still_
     assert 0 < faster.familiarity.penalty_s <= 30
     assert faster.final_cost_s == faster.eta_to_service_complete_s + faster.familiarity.penalty_s
     assert faster.final_cost_s < slower.final_cost_s
+
+
+@pytest.mark.asyncio
+async def test_geometric_history_can_change_station_order_without_changing_physical_eta(app):
+    class CloseRoutes(Routes):
+        async def route(self, request):
+            result = await super().route(request)
+            if request.destination.coordinates_lat_lon == STATION_POINTS["S002"]:
+                result = result.model_copy(update={"duration_s": 105})
+            return result
+    familiar = create_route_signature([
+        polyline([ORIGIN, STATION_POINTS["S002"]]),
+        polyline([STATION_POINTS["S002"], DESTINATION])])
+    history = History([dict(driver_id="driver", cells=familiar.cells,
+        cell_distances_m=familiar.cell_distances_m, distance_m=familiar.distance_m, resolution=11,
+        geometry=familiar.coordinates, started_at=NOW-timedelta(minutes=10),
+        completed_at=NOW-timedelta(minutes=1))])
+    request = search_request(app)
+    baseline = await workflow(routes=CloseRoutes()).recommend(request)
+    weighted = await workflow(RouteFamiliarityService(history, confidence_prior_strength=0),
+                              routes=CloseRoutes()).recommend(request)
+    assert baseline.recommended_station_id == "S001"
+    assert weighted.recommended_station_id == "S002"
+    before = {candidate.station_id: candidate for candidate in baseline.ranked_candidates}
+    for candidate in weighted.ranked_candidates:
+        assert candidate.eta_to_service_complete_s == before[candidate.station_id].eta_to_service_complete_s
+        assert 0 <= candidate.familiarity.penalty_s <= 30

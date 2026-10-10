@@ -18,6 +18,9 @@ test('fetchVehicleCatalog fetches and registers catalog from backend', async () 
     const catalogPayload = [
         {
             id: 'VF_3',
+            max_motor_power_kw: 30,
+            curb_weight_kg: 857,
+            parameter_provenance: { curb_weight_kg: 'brochure' },
             name: 'VF 3',
             brand: 'VinFast',
             battery_kwh: 17.15,
@@ -64,6 +67,9 @@ test('fetchVehicleCatalog fetches and registers catalog from backend', async () 
         assert.equal(vf3.usable_kwh, 17.15);
         assert.equal(vf3.consumption_wh_km, 95.0);
         assert.equal(vf3.vehicle_type, 'EV_CAR');
+        assert.equal(vf3.max_motor_power_kw, 30);
+        assert.equal(vf3.curb_weight_kg, 857);
+        assert.deepEqual(vf3.parameter_provenance, { curb_weight_kg: 'brochure' });
 
         const evo = MODEL_SPECS['EVO200'];
         assert.ok(evo, 'EVO200 registered in MODEL_SPECS');

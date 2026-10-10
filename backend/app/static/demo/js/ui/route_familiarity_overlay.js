@@ -179,12 +179,13 @@ export class RouteFamiliarityOverlay {
      * @param {string[]} cells - Array of H3 cell IDs
      * @param {Array|null} [sharedOrStations] - Optional shared cell IDs or stations
      */
-    renderFromCells(cells, sharedOrStations = null) {
+    renderFromCells(cells, sharedOrStations = null, comparison = false) {
         if (!this.active || !Array.isArray(cells) || cells.length === 0) {
             this.clear();
             return;
         }
 
+        this.comparisonMode = comparison || (sharedOrStations?.length > 0 && typeof sharedOrStations[0] === 'string');
         let detRes = this.resolution;
         try {
             if (cells[0] && typeof this.h3?.getResolution === 'function') {
@@ -300,7 +301,7 @@ export class RouteFamiliarityOverlay {
         const activeStations = Array.isArray(stations) && stations.length > 0
             ? stations.filter(s => Number.isFinite(s.latitude) && Number.isFinite(s.longitude))
             : [];
-        const hasComparison = sharedCellsSet && sharedCellsSet.size > 0;
+        const hasComparison = this.comparisonMode;
 
         for (const cell of cells) {
             let centerLat = null;
@@ -352,7 +353,7 @@ export class RouteFamiliarityOverlay {
                     tier = 'SHARED';
                     color = '#10b981'; // Green/Emerald: Confirmed shared corridor
                     fillColor = '#34d399';
-                    label = 'Hành lang trùng khớp (Shared)';
+                    label = 'Ô chứa đoạn chung đã xác minh';
                 } else {
                     tier = 'DIVERGENT';
                     color = '#f59e0b'; // Amber: Divergent / specific to one route
@@ -437,7 +438,7 @@ export class RouteFamiliarityOverlay {
             legend.style.display = show ? 'inline-flex' : 'none';
         }
         if (badge && show) {
-            badge.textContent = `${count} ô`;
+            badge.textContent = this.comparisonMode ? `${this.sharedCellsSet.size} ô có đoạn chung` : `${count} ô`;
         }
     }
 

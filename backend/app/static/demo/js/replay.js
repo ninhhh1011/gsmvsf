@@ -387,7 +387,7 @@ export class TrajectoryReplayController {
             if (this.onStep) {
                 try {
                     await this.onStep({
-                        observation: obs,
+                        observation: { ...obs, timestamp: obsTimestamp },
                         locResp,
                         currentIndex: targetIndex + 1,
                         isComplete: isLastObservation,

@@ -41,6 +41,23 @@ async def test_idempotent_insert_and_conflicting_retry():
 
 
 @pytest.mark.asyncio
+async def test_trusted_retry_can_add_missing_geometry_without_replacing_history():
+    conn = AsyncMock()
+    completed = datetime.now(UTC)
+    started = completed - timedelta(minutes=1)
+    geometry = ((21.0, 105.8), (21.0001, 105.8))
+    legacy = dict(driver_id="d", trip_id="t", completed_at=completed,
+                  distance_m=10.0, resolution=11, cells=["abc"], cell_distances_m=[10.0])
+    upgraded = dict(legacy, geometry=geometry, started_at=started)
+    conn.fetchrow.side_effect = [None, legacy, upgraded]
+    row, created = await RouteHistoryRepository(Pool(conn)).upsert_route(
+        "d", "t", completed, RouteSignature(("abc",), (10.0,), 10.0, 11, geometry), started)
+    assert not created
+    assert row["geometry"] == geometry
+    assert "COALESCE" in conn.fetchrow.await_args_list[-1].args[0]
+
+
+@pytest.mark.asyncio
 async def test_history_queries_are_as_of_and_bounded():
     conn = AsyncMock()
     conn.fetch.return_value = []
@@ -49,7 +66,7 @@ async def test_history_queries_are_as_of_and_bounded():
     await repo.personal_routes("d", as_of, timedelta(days=7))
     await repo.community_routes(["abc"], "d", as_of, timedelta(days=7))
     calls = [call.args[0] for call in conn.fetch.await_args_list]
-    assert all("completed_at <=" in sql for sql in calls)
+    assert all("completed_at < $3" in sql for sql in calls)
     assert "LIMIT 51" in calls[0]
     assert "LIMIT 606" in calls[1]
     assert "ORDER BY completed_at DESC, trip_id DESC" in calls[0]

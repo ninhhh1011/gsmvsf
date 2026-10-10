@@ -21,20 +21,14 @@ if TYPE_CHECKING:
 import redis.asyncio as redis
 from backend.app.config import settings
 
-logger = logging.getLogger(__name__)
-
-
 from backend.app.core.constants import (
-    DEFAULT_CONTEXT_WINDOW_SECONDS,
-    DEFAULT_MAX_CONTEXT_POINTS,
-    DEFAULT_GAP_THRESHOLD_SECONDS,
-    DEFAULT_STATIONARY_THRESHOLD,
-    DEFAULT_STATIONARY_DISTANCE_M,
     EARTH_RADIUS_M,
     MAX_ACTIVE_DRIVERS,
     MAX_OBSERVATIONS_PER_DRIVER,
     DRIVER_STATE_TTL_SECONDS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

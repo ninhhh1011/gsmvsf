@@ -271,6 +271,7 @@ test('a trajectory load canceled by Debug returns to idle and the Driver Play ac
         ]),
         ingestDriverLocation: async () => ({ status: 'GPS_ACCEPTED', raw_position: { latitude: 21.01, longitude: 105.81 } })
     });
+    t.after(() => { driver.pauseTrip(); driver.stopRecommendRefresh(); });
     const starting = driver.startTrip();
     assert.equal(driver.replay.state, ReplayState.LOADING);
     const indexAtSwitch = driver.replay.currentIndex;

@@ -1,0 +1,24 @@
+{
+  "graphhopper": {
+    "status": "SUCCESS",
+    "engine": "graphhopper",
+    "distance_m": 1870.495,
+    "geometry_vertices": 26
+  },
+  "postgresql": {
+    "additive_migration_twice": "PASS",
+    "legacy_upgrade": "PASS",
+    "idempotency": "PASS",
+    "conflicting_geometry": "409",
+    "completion_equal_as_of_excluded": true,
+    "personal_adherence": 1.0,
+    "community_drivers": 5
+  },
+  "new_api": {
+    "unauthenticated_history": 401,
+    "authenticated_comparison": 200,
+    "offline_shared_pct": 100.0,
+    "stationary_energy_kwh": 0.025
+  },
+  "disposable_database_removed": true
+}

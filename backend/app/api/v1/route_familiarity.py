@@ -26,9 +26,15 @@ class CompletedRoute(FrozenModel):
     driver_id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.:-]+$")
     trip_id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.:-]+$")
     completed_at: datetime
+    started_at: datetime | None = None
     polyline: str = Field(min_length=1, max_length=100_000)
 
     _completed_at = field_validator("completed_at")(aware_utc)
+
+    @field_validator("started_at")
+    @classmethod
+    def validate_start(cls, value):
+        return aware_utc(value) if value is not None else None
 
 
 @router.post("/internal/route-familiarity/routes", dependencies=[Depends(authorize_ingestion)])
@@ -50,8 +56,9 @@ async def ingest_completed_route(request: Request, response: Response):
     except (json.JSONDecodeError, ValidationError, UnicodeDecodeError, ValueError):
         raise StateError("Invalid completed route", "INVALID_ROUTE", 422) from None
     try:
-        _, created = await service.ingest(payload.driver_id, payload.trip_id,
-                                          payload.completed_at.astimezone(UTC), payload.polyline)
+        args = (payload.driver_id, payload.trip_id, payload.completed_at.astimezone(UTC), payload.polyline)
+        _, created = (await service.ingest(*args, started_at=payload.started_at)
+                      if payload.started_at is not None else await service.ingest(*args))
     except ValueError:
         raise StateError("Invalid completed route", "INVALID_ROUTE", 422) from None
     except StateError:

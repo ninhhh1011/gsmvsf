@@ -58,11 +58,11 @@ def test_filter_historical_trips_by_window_strict_causality():
     eval_time = datetime(2026, 9, 1, 8, 30, tzinfo=VN_TZ)  # Morning peak
     history_records = [
         # 1. Past trip, same window (Morning peak 07:45) -> INCLUDE
-        {"trip_id": "T1", "driver_id": "D1", "completed_at": datetime(2026, 9, 1, 7, 45, tzinfo=VN_TZ)},
+        {"trip_id": "T1", "driver_id": "D1", "started_at": datetime(2026, 9, 1, 7, 15, tzinfo=VN_TZ), "completed_at": datetime(2026, 9, 1, 7, 45, tzinfo=VN_TZ)},
         # 2. Future trip (completed after eval_time 08:45) -> EXCLUDE (causality)
-        {"trip_id": "T2", "driver_id": "D2", "completed_at": datetime(2026, 9, 1, 8, 45, tzinfo=VN_TZ)},
+        {"trip_id": "T2", "driver_id": "D2", "started_at": datetime(2026, 9, 1, 8, 15, tzinfo=VN_TZ), "completed_at": datetime(2026, 9, 1, 8, 45, tzinfo=VN_TZ)},
         # 3. Past trip, different window (Off-peak 03:00) -> RECORDED in all-hours but NOT same-window
-        {"trip_id": "T3", "driver_id": "D3", "completed_at": datetime(2026, 9, 1, 3, 0, tzinfo=VN_TZ)},
+        {"trip_id": "T3", "driver_id": "D3", "started_at": datetime(2026, 9, 1, 2, 45, tzinfo=VN_TZ), "completed_at": datetime(2026, 9, 1, 3, 0, tzinfo=VN_TZ)},
     ]
 
     stats = filter_historical_trips_by_window(history_records, as_of=eval_time, target_window=TimeWindowType.MORNING_PEAK)
@@ -71,3 +71,23 @@ def test_filter_historical_trips_by_window_strict_causality():
     assert stats["all_window_trip_count"] == 2  # T1 and T3 (T2 excluded due to causality)
     assert stats["history_sparse"] is True  # Only 1 supporting trip in window
     assert stats["status_label_vi"] == "Chưa đủ lịch sử khung giờ"
+
+
+def test_window_uses_start_and_excludes_records_outside_lookback():
+    now = datetime(2026, 9, 10, 8, 30, tzinfo=VN_TZ)
+    rows = [{"driver_id": "d", "started_at": now - timedelta(days=1),
+             "completed_at": (now - timedelta(days=1)).replace(hour=9, minute=10)},
+            {"driver_id": "old", "started_at": now - timedelta(days=10),
+             "completed_at": now - timedelta(days=10)},
+            {"driver_id": "equal", "started_at": now, "completed_at": now}]
+    stats = filter_historical_trips_by_window(rows, now, lookback_days=7)
+    assert stats["same_window_trip_count"] == 1
+    assert stats["all_window_trip_count"] == 1
+
+
+def test_unknown_trip_start_is_not_invented_from_completion():
+    now = datetime(2026, 9, 10, 8, 30, tzinfo=VN_TZ)
+    stats = filter_historical_trips_by_window(
+        [{"driver_id": "d", "completed_at": now - timedelta(hours=1)}], now)
+    assert stats["same_window_trip_count"] == 0
+    assert stats["unknown_start_trip_count"] == 1

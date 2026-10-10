@@ -2,8 +2,15 @@
 
 from typing import Literal
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
+
+from backend.app.services.energy.physics_model import calculate_power_step
+from backend.app.services.energy.powertrain_catalog import (
+    PHYSICAL_PARAMETER_FIELDS,
+    get_parameter_provenance,
+    get_powertrain_spec,
+)
 
 router = APIRouter()
 
@@ -22,6 +29,18 @@ class VehicleCatalogItem(BaseModel):
     vehicle_type: Literal["EV_CAR", "EV_MOTORBIKE"] = Field(
         ..., description="Vehicle category"
     )
+    max_motor_power_kw: float | None = None
+    nominal_motor_power_kw: float | None = None
+    curb_weight_kg: float | None = None
+    frontal_area_m2: float | None = None
+    drag_coefficient: float | None = None
+    rolling_resistance_coeff: float | None = None
+    drive_efficiency: float | None = None
+    regen_efficiency: float | None = None
+    auxiliary_base_kw: float | None = None
+    spec_source: str | None = None
+    parameters_status: str = "UNSUPPORTED_MODEL"
+    parameter_provenance: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 
 # Canonical VinFast vehicle catalog — single source of truth for frontend
@@ -140,6 +159,84 @@ VEHICLE_CATALOG: list[VehicleCatalogItem] = [
         vehicle_type="EV_MOTORBIKE", supported_services=["charging", "battery_swap"]
     ),
 ]
+
+
+for item in VEHICLE_CATALOG:
+    item.parameter_provenance = {
+        field: {"status": "UNAVAILABLE", "source": "UNAVAILABLE"}
+        for field in PHYSICAL_PARAMETER_FIELDS
+    }
+    item.parameter_provenance.update({
+        "battery_kwh": {"status": "CATALOG_VALUE", "source": "VEHICLE_CATALOG"},
+        "efficiency_kwh_per_km": {"status": "PROJECT_ESTIMATE", "source": "VEHICLE_CATALOG"},
+    })
+    try:
+        spec = get_powertrain_spec(item.id)
+    except ValueError:
+        continue
+    for field in PHYSICAL_PARAMETER_FIELDS:
+        setattr(item, field, getattr(spec, field))
+    item.spec_source = "PROJECT_PHYSICS_MODEL"
+    item.parameters_status = spec.parameters_status
+    item.parameter_provenance.update(get_parameter_provenance(spec))
+
+
+class PowerStepRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    vehicle_model: str = Field(min_length=1, max_length=100)
+    speed_kmh: float = Field(ge=0, le=1000)
+    previous_speed_kmh: float | None = Field(default=None, ge=0, le=1000)
+    dt_seconds: float = Field(ge=0, le=3600)
+    current_soc_pct: float = Field(ge=0, le=100)
+
+
+class PowerStepResponse(BaseModel):
+    instantaneous_power_kw: float | None
+    energy_delta_kwh: float | None
+    current_soc_pct: float
+    estimated_range_km: float
+    power_status: Literal["MODEL_ESTIMATE", "KINEMATICS_EXCEED_CAPABILITY", "UNSUPPORTED_MODEL"]
+    power_provenance: dict
+    max_motor_power_kw: float | None
+
+
+@router.post("/vehicles/power-step", response_model=PowerStepResponse)
+async def power_step(payload: PowerStepRequest) -> PowerStepResponse:
+    """Estimate battery power and interval energy; this is not measured telemetry."""
+    model = payload.vehicle_model.upper().replace("-", "_").strip()
+    vehicle = next((item for item in VEHICLE_CATALOG if item.id == model), None)
+    if vehicle is None:
+        raise HTTPException(status_code=422, detail="Unknown vehicle model")
+    power = None
+    energy_delta = None
+    soc = payload.current_soc_pct
+    status = "UNSUPPORTED_MODEL"
+    if vehicle.parameters_status != "UNSUPPORTED_MODEL":
+        spec = get_powertrain_spec(model)
+        try:
+            power, energy_delta = calculate_power_step(
+                spec, payload.speed_kmh, payload.previous_speed_kmh, payload.dt_seconds
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        soc = max(0.0, min(100.0, soc - energy_delta / vehicle.battery_kwh * 100))
+        status = power.power_status
+    return PowerStepResponse(
+        instantaneous_power_kw=power.total_power_kw if power else None,
+        energy_delta_kwh=energy_delta,
+        current_soc_pct=soc,
+        estimated_range_km=vehicle.battery_kwh * soc / 100 / vehicle.efficiency_kwh_per_km,
+        power_status=status,
+        power_provenance={
+            "source": "PROJECT_PHYSICS_MODEL" if power else "UNAVAILABLE",
+            "parameters": vehicle.parameter_provenance,
+            "integration": "LINEAR_SPEED_MIDPOINT" if power else "UNAVAILABLE",
+            "regen_limit": "PROJECT_ASSUMPTION_HALF_MOTOR_MAX" if power else "UNAVAILABLE",
+            "range_source": "PROJECT_ESTIMATE",
+        },
+        max_motor_power_kw=vehicle.max_motor_power_kw,
+    )
 
 
 @router.get("/vehicles/catalog", response_model=list[VehicleCatalogItem])

@@ -1,22 +1,17 @@
-"""
-Direction- and Sequence-Aware Route Matching using Uber H3.
-
-H3 is used as a spatial index to bin candidate corridor segments (Res 8, 9, 10).
-Candidate points are strictly verified for:
-1. Heading consistency: heading difference <= max_heading_diff_deg (default 60 deg).
-2. Spatial proximity: lateral distance <= max_lateral_m (default 45m).
-3. Monotonic sequence ordering.
-
-Returns verified shared distance and dual percentages:
-- shared_pct_on_proposed = (shared_m / proposed_total_m) * 100%
-- shared_pct_on_actual   = (shared_m / actual_total_m) * 100%
-"""
+"""Bounded ordered corridor overlap; H3 is an index, not evidence of a match."""
 import math
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import Sequence
+
 import h3
 
+from backend.app.services.route_familiarity.constants import MAX_ROUTE_DISTANCE_M, MAX_ROUTE_VERTICES
+from backend.app.services.route_familiarity.similarity import ComparisonBudget
+
 _EARTH_RADIUS_M = 6_371_008.8
+_SAMPLE_STEP_M = 10.0
+_MAX_SAMPLES = 10_001
 
 
 @dataclass(frozen=True)
@@ -30,171 +25,187 @@ class RouteComparisonMetrics:
     shared_cells_count: int
     shared_cells: list[str]
     shared_segments: list[list[tuple[float, float]]]
+    proposed_cells: list[str] = field(default_factory=list)
+    actual_cells: list[str] = field(default_factory=list)
 
 
-def _haversine_m(p1: tuple[float, float], p2: tuple[float, float]) -> float:
+@dataclass(frozen=True)
+class RoutePiece:
+    start: tuple[float, float]
+    end: tuple[float, float]
+    offset_m: float
+    length_m: float
+    heading: float
+    cell: str
+
+
+@dataclass(frozen=True)
+class PreparedRoute:
+    pieces: tuple[RoutePiece, ...]
+    distance_m: float
+    resolution: int
+    positions: dict[str, tuple[int, ...]]
+
+
+def _haversine_m(p1, p2):
     lat1, lon1 = map(math.radians, p1)
     lat2, lon2 = map(math.radians, p2)
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
+    dlat, dlon = lat2 - lat1, lon2 - lon1
     a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
     return 2 * _EARTH_RADIUS_M * math.asin(min(1.0, math.sqrt(a)))
 
 
-def _heading_deg(p1: tuple[float, float], p2: tuple[float, float]) -> float:
+def _heading_deg(p1, p2):
     lat1, lon1 = map(math.radians, p1)
     lat2, lon2 = map(math.radians, p2)
     dlon = lon2 - lon1
     y = math.sin(dlon) * math.cos(lat2)
     x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
-    bearing = math.degrees(math.atan2(y, x))
-    return (bearing + 360.0) % 360.0
+    return math.degrees(math.atan2(y, x)) % 360
 
 
-def _heading_diff(h1: float, h2: float) -> float:
-    diff = abs(h1 - h2) % 360.0
-    return 360.0 - diff if diff > 180.0 else diff
+def _heading_diff(h1, h2):
+    return abs((h1 - h2 + 180) % 360 - 180)
 
 
-def _get_step_m_for_resolution(resolution: int) -> float:
-    if resolution <= 8:
-        return 60.0
-    if resolution == 9:
-        return 35.0
-    return 20.0  # res 10 or finer
+def _lerp(a, b, t):
+    delta_lon = (b[1] - a[1] + 180) % 360 - 180
+    return (a[0] + (b[0] - a[0]) * t, (a[1] + delta_lon * t + 180) % 360 - 180)
 
 
-def _discretize_route(coords: Sequence[tuple[float, float]], resolution: int):
-    samples = []
-    total_len = 0.0
-    step_m = _get_step_m_for_resolution(resolution)
-
-    for i in range(len(coords) - 1):
-        p1 = coords[i]
-        p2 = coords[i + 1]
-        dist = _haversine_m(p1, p2)
-        if dist <= 0:
+def prepare_route(coords: Sequence[tuple[float, float]], resolution=9, *, sample_budget=None) -> PreparedRoute:
+    if resolution not in (8, 9, 10):
+        raise ValueError("resolution must be 8, 9 or 10")
+    if len(coords) > MAX_ROUTE_VERTICES:
+        raise ValueError("too many route vertices")
+    points = []
+    for point in coords:
+        if (len(point) != 2 or not all(math.isfinite(v) for v in point) or
+                not -90 <= point[0] <= 90 or not -180 <= point[1] <= 180):
+            raise ValueError("invalid route coordinate")
+        points.append(tuple(point))
+    edges, total = [], 0.0
+    for a, b in zip(points, points[1:]):
+        length = _haversine_m(a, b)
+        if length <= 1e-9:
             continue
-        heading = _heading_deg(p1, p2)
-        steps = max(1, math.ceil(dist / step_m))
-        step_len = dist / steps
-        for s in range(steps):
-            frac = (s + 0.5) / steps
-            lat = p1[0] + (p2[0] - p1[0]) * frac
-            lon = p1[1] + (p2[1] - p1[1]) * frac
-            cell = h3.latlng_to_cell(lat, lon, resolution)
-            samples.append({
-                "lat": lat,
-                "lon": lon,
-                "heading": heading,
-                "cell": cell,
-                "length_m": step_len,
-            })
-            total_len += step_len
-    return samples, total_len
+        edges.append((total, length, a, b))
+        total += length
+        if total > MAX_ROUTE_DISTANCE_M:
+            raise ValueError("route exceeds maximum distance")
+    if not edges:
+        return PreparedRoute((), 0.0, resolution, {})
+    count = math.ceil(total / _SAMPLE_STEP_M)
+    if count > _MAX_SAMPLES:
+        raise ValueError("route exceeds maximum samples")
+    if sample_budget is not None:
+        sample_budget.consume(count)
+    # A global distance grid makes collinear vertex density irrelevant.
+    sampled, edge_index = [], 0
+    for i in range(count + 1):
+        position = min(total, i * _SAMPLE_STEP_M)
+        while edge_index < len(edges) - 1 and position > sum(edges[edge_index][:2]):
+            edge_index += 1
+        offset, length, a, b = edges[edge_index]
+        sampled.append((position, _lerp(a, b, min(1.0, (position - offset) / length))))
+    pieces, positions = [], defaultdict(list)
+    for (offset, a), (end_offset, b) in zip(sampled, sampled[1:]):
+        if _haversine_m(a, b) <= 1e-9:
+            continue
+        cell = h3.latlng_to_cell(*_lerp(a, b, 0.5), resolution)
+        positions[cell].append(len(pieces))
+        pieces.append(RoutePiece(a, b, offset, end_offset - offset, _heading_deg(a, b), cell))
+    return PreparedRoute(tuple(pieces), total, resolution,
+                         {cell: tuple(indexes) for cell, indexes in positions.items()})
 
 
-def match_and_compare_routes(
-    proposed_coords: Sequence[tuple[float, float]],
-    actual_coords: Sequence[tuple[float, float]],
-    resolution: int = 9,
-    max_lateral_m: float = 45.0,
-    max_heading_diff_deg: float = 60.0,
-) -> RouteComparisonMetrics:
-    """
-    Compare two routes via H3 spatial binning with heading and sequence verification.
-    """
-    if len(proposed_coords) < 2 or len(actual_coords) < 2:
-        return RouteComparisonMetrics(
-            proposed_distance_m=0.0,
-            actual_distance_m=0.0,
-            shared_distance_m=0.0,
-            shared_pct_on_proposed=0.0,
-            shared_pct_on_actual=0.0,
-            resolution=resolution,
-            shared_cells_count=0,
-            shared_cells=[],
-            shared_segments=[],
-        )
+def _projected_interval(p: RoutePiece, a: RoutePiece, max_lateral_m):
+    # Project onto the finite directed segment, never onto a sample point.
+    cos_lat = math.cos(math.radians(p.start[0]))
+    def xy(point):
+        delta_lon = (point[1] - p.start[1] + 180) % 360 - 180
+        return ((_EARTH_RADIUS_M * math.radians(delta_lon) * cos_lat),
+                _EARTH_RADIUS_M * math.radians(point[0] - p.start[0]))
+    ax, ay = xy(a.start)
+    bx, by = xy(a.end)
+    px, py = xy(p.end)
+    dx, dy = bx - ax, by - ay
+    squared = dx * dx + dy * dy
+    if squared <= 1e-12:
+        return None
+    u0 = (-ax * dx - ay * dy) / squared
+    du = (px * dx + py * dy) / squared
+    if du <= 1e-12:
+        return None
+    lo, hi = max(0.0, -u0 / du), min(1.0, (1 - u0) / du)
+    root = math.sqrt(squared)
+    lateral0 = (-ax * dy + ay * dx) / root
+    lateral_delta = (px * dy - py * dx) / root
+    if abs(lateral_delta) > 1e-12:
+        bounds = sorted(((-max_lateral_m - lateral0) / lateral_delta,
+                         (max_lateral_m - lateral0) / lateral_delta))
+        lo, hi = max(lo, bounds[0]), min(hi, bounds[1])
+    elif abs(lateral0) > max_lateral_m:
+        return None
+    if hi - lo <= 1e-9:
+        return None
+    return lo, hi, u0, du, abs(lateral0 + lateral_delta * (lo + hi) / 2)
 
-    prop_samples, prop_total_m = _discretize_route(proposed_coords, resolution)
-    act_samples, act_total_m = _discretize_route(actual_coords, resolution)
 
-    if prop_total_m <= 0 or act_total_m <= 0:
-        return RouteComparisonMetrics(
-            proposed_distance_m=round(prop_total_m, 1),
-            actual_distance_m=round(act_total_m, 1),
-            shared_distance_m=0.0,
-            shared_pct_on_proposed=0.0,
-            shared_pct_on_actual=0.0,
-            resolution=resolution,
-            shared_cells_count=0,
-            shared_cells=[],
-            shared_segments=[],
-        )
-
-    # Index actual route samples by H3 cell
-    cell_to_act_indices: dict[str, list[int]] = {}
-    for idx, sample in enumerate(act_samples):
-        cell_to_act_indices.setdefault(sample["cell"], []).append(idx)
-
-    shared_m = 0.0
-    shared_cells: set[str] = set()
-    matched_prop_samples: list[dict] = []
-    last_act_matched_idx = -1
-
-    for p_idx, p_sample in enumerate(prop_samples):
-        candidate_indices = cell_to_act_indices.get(p_sample["cell"], [])
-        best_match_idx = None
-        min_dist = max_lateral_m
-
-        for a_idx in candidate_indices:
-            # Monotonic sequence constraint with minor tolerance for intersection weaving
-            if a_idx < last_act_matched_idx - 3:
+def compare_prepared_routes(proposed: PreparedRoute, actual: PreparedRoute, *,
+                            max_lateral_m=45.0, max_heading_diff_deg=60.0,
+                            budget: ComparisonBudget | None = None) -> RouteComparisonMetrics:
+    if proposed.resolution != actual.resolution:
+        raise ValueError("prepared routes must use the same resolution")
+    if not 0 <= max_lateral_m <= 45 or not 0 <= max_heading_diff_deg <= 60:
+        raise ValueError("corridor thresholds exceed supported bounds")
+    budget = budget if budget is not None else ComparisonBudget()
+    shared, last_actual = 0.0, 0.0
+    cells, segments = set(), []
+    for p in proposed.pieces:
+        candidates = sorted({index for cell in h3.grid_disk(p.cell, 1)
+                             for index in actual.positions.get(cell, ())})
+        budget.consume(len(candidates))
+        intervals = []
+        for index in candidates:
+            a = actual.pieces[index]
+            if a.offset_m + a.length_m <= last_actual + 1e-9:
                 continue
-            a_sample = act_samples[a_idx]
-            # 1. Heading verification: discard opposite-direction lanes
-            h_diff = _heading_diff(p_sample["heading"], a_sample["heading"])
-            if h_diff > max_heading_diff_deg:
+            if _heading_diff(p.heading, a.heading) > max_heading_diff_deg:
                 continue
-            # 2. Spatial lateral distance verification
-            dist = _haversine_m((p_sample["lat"], p_sample["lon"]), (a_sample["lat"], a_sample["lon"]))
-            if dist <= min_dist:
-                min_dist = dist
-                best_match_idx = a_idx
-
-        if best_match_idx is not None:
-            shared_m += p_sample["length_m"]
-            shared_cells.add(p_sample["cell"])
-            matched_prop_samples.append(p_sample)
-            last_act_matched_idx = max(last_act_matched_idx, best_match_idx)
-
-    # Assemble continuous matched polyline segments
-    shared_segments: list[list[tuple[float, float]]] = []
-    if matched_prop_samples:
-        current_segment: list[tuple[float, float]] = [(matched_prop_samples[0]["lat"], matched_prop_samples[0]["lon"])]
-        for s1, s2 in zip(matched_prop_samples, matched_prop_samples[1:]):
-            d = _haversine_m((s1["lat"], s1["lon"]), (s2["lat"], s2["lon"]))
-            if d <= _get_step_m_for_resolution(resolution) * 2.5:
-                current_segment.append((s2["lat"], s2["lon"]))
+            interval = _projected_interval(p, a, max_lateral_m)
+            if interval:
+                lo, hi, u0, du, lateral = interval
+                intervals.append((lo, lateral, a.offset_m, hi, u0, du, a))
+        cursor = 0.0
+        for lo, lateral, offset, hi, u0, du, a in sorted(intervals, key=lambda item: item[:3]):
+            lo = max(lo, cursor, ((last_actual - offset) / a.length_m - u0) / du)
+            if hi - lo <= 1e-9:
+                continue
+            actual_length = (hi - lo) * du * a.length_m
+            shared += min((hi - lo) * p.length_m, actual_length)
+            last_actual = offset + (u0 + du * hi) * a.length_m
+            cursor = hi
+            cells.add(p.cell)
+            cells.add(a.cell)
+            start, end = _lerp(p.start, p.end, lo), _lerp(p.start, p.end, hi)
+            if segments and _haversine_m(segments[-1][-1], start) < 0.05:
+                segments[-1].append(end)
             else:
-                if len(current_segment) >= 2:
-                    shared_segments.append(current_segment)
-                current_segment = [(s2["lat"], s2["lon"])]
-        if len(current_segment) >= 2:
-            shared_segments.append(current_segment)
-
-    pct_proposed = min(100.0, max(0.0, (shared_m / prop_total_m) * 100.0))
-    pct_actual = min(100.0, max(0.0, (shared_m / act_total_m) * 100.0))
-
+                segments.append([start, end])
+    # shortcut: 10 m chord approximation, refine only against measured corridor error.
+    shared = min(shared, proposed.distance_m, actual.distance_m)
     return RouteComparisonMetrics(
-        proposed_distance_m=round(prop_total_m, 1),
-        actual_distance_m=round(act_total_m, 1),
-        shared_distance_m=round(shared_m, 1),
-        shared_pct_on_proposed=round(pct_proposed, 2),
-        shared_pct_on_actual=round(pct_actual, 2),
-        resolution=resolution,
-        shared_cells_count=len(shared_cells),
-        shared_cells=sorted(shared_cells),
-        shared_segments=shared_segments,
-    )
+        round(proposed.distance_m, 1), round(actual.distance_m, 1), round(shared, 1),
+        round(shared / proposed.distance_m * 100, 2) if proposed.distance_m else 0.0,
+        round(shared / actual.distance_m * 100, 2) if actual.distance_m else 0.0,
+        proposed.resolution, len(cells), sorted(cells), segments,
+        sorted(proposed.positions), sorted(actual.positions))
+
+
+def match_and_compare_routes(proposed_coords, actual_coords, resolution=9,
+                             max_lateral_m=45.0, max_heading_diff_deg=60.0, *, budget=None):
+    return compare_prepared_routes(prepare_route(proposed_coords, resolution),
+                                   prepare_route(actual_coords, resolution),
+                                   max_lateral_m=max_lateral_m,
+                                   max_heading_diff_deg=max_heading_diff_deg, budget=budget)

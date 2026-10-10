@@ -78,6 +78,8 @@ export function registerVehicleModel(modelKey, spec) {
     const name = spec.name || spec.display_name || modelKey;
 
     MODEL_SPECS[modelKey] = {
+        ...spec,
+        max_motor_power_kw: spec.max_motor_power_kw ?? null,
         vehicle_model: modelKey,
         brand,
         name,
@@ -150,34 +152,4 @@ export function calculateSocDepletion(arg1, arg2, arg3) {
     const energyUsedKwh = (dist * consumption) / 1000.0;
     const socDropPct = (energyUsedKwh / usable) * 100.0;
     return Math.max(0, socDropPct);
-}
-
-/**
- * Calculate instantaneous estimated battery power draw in kW.
- * Distinguishes vehicle maximum motor capability from current power draw.
- */
-export function calculateInstantaneousPowerKw(modelSpec, speedKmh = 0, accelerationMs2 = 0, hvacOn = true) {
-    const spec = modelSpec || FALLBACK_MODEL_SPECS.VF_3;
-    const vMs = Math.max(0, (Number(speedKmh) || 0) / 3.6);
-    const massKg = (spec.curb_weight_kg || 1000) + 75; // + 1 driver 75kg
-    const cd = spec.drag_coefficient || 0.35;
-    const area = spec.frontal_area_m2 || 2.2;
-    const crr = spec.rolling_resistance_coeff || 0.012;
-    const maxPower = spec.max_motor_power_kw || 30.0;
-
-    // Forces: aerodynamic drag, rolling resistance, acceleration inertia
-    const fAero = 0.5 * 1.204 * cd * area * (vMs ** 2);
-    const fRoll = crr * massKg * 9.81;
-    const fAccel = massKg * (Number(accelerationMs2) || 0);
-
-    const pMechKw = ((fAero + fRoll + fAccel) * vMs) / 1000.0;
-    let pTractionKw = 0;
-    if (pMechKw >= 0) {
-        pTractionKw = Math.min(maxPower, pMechKw / 0.90);
-    } else {
-        // Regenerative braking capped at 50% max motor power
-        pTractionKw = Math.max(-maxPower * 0.5, pMechKw * 0.65);
-    }
-    const pAuxKw = hvacOn ? 1.5 : 0.4;
-    return Math.max(0.2, Math.round((pTractionKw + pAuxKw) * 10) / 10);
 }

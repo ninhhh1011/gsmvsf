@@ -9,7 +9,6 @@
  * - GraphHopper 11 multi-leg routing for detours.
  * - Full test contract compatibility.
  */
-
 import { TrajectoryReplayController, ReplayState } from '../replay.js';
 import {
     decodePolyline,
@@ -18,14 +17,12 @@ import {
     computePolylineDistanceMeters,
     simplifyTrajectoryRDP
 } from '../map.js';
-
 export {
     DriverState,
     isValidStateTransition,
     getDriverStateLabel,
     getDriverStateBadgeClass
 } from '../domain/driver_state.js';
-
 export {
     straightLineDistanceKm,
     EARTH_RADIUS_KM,
@@ -34,10 +31,8 @@ export {
     registerVehicleModel,
     getVehicleModelSpec,
     calculateEstimatedRangeKm,
-    calculateSocDepletion,
-    calculateInstantaneousPowerKw
+    calculateSocDepletion
 } from '../domain/vehicle_model.js';
-
 import { DriverState, getDriverStateLabel, getDriverStateBadgeClass } from '../domain/driver_state.js';
 import {
     straightLineDistanceKm,
@@ -45,8 +40,7 @@ import {
     VINFAST_MODEL_SPECS,
     getVehicleModelSpec,
     calculateEstimatedRangeKm,
-    calculateSocDepletion,
-    calculateInstantaneousPowerKw
+    calculateSocDepletion
 } from '../domain/vehicle_model.js';
 import { isPositionOffRoute, shouldTriggerReroute } from '../domain/navigation_tracker.js';
 import { isStationCompatibleWithVehicle, filterStations } from '../domain/station_evaluator.js';
@@ -73,7 +67,6 @@ import { renderDriverRecommendation, renderRecommendationPanelHTML } from './dri
 import { MapPicker } from './map_picker.js';
 import { createCockpitBindings } from './cockpit_bindings.js';
 import { RouteFamiliarityOverlay } from './route_familiarity_overlay.js';
-
 export class DriverModeController {
     constructor(apiClient, mapEngine, options = {}) {
         this.api = apiClient;
@@ -97,7 +90,10 @@ export class DriverModeController {
         this.state = DriverState.AVAILABLE; this.currentTrip = null; this.currentVehicle = null; this.userSelectedVehicleModel = null;
         this.currentSocPct = 85.0; this.estimatedRangeKm = 153.6; this.safetyReserveKm = 2.0; this.totalDistanceTravelledKm = 0.0; this.lastMovementPos = null;
         this.currentPos = null; this.matchedPos = null; this.currentObservation = null;
-        this.remainingTripDistanceKm = 0.0; this.directRouteGeometry = null; this.fullRouteCoords = null; this.lastPassedSegmentIndex = 0;
+        this.remainingTripDistanceKm = 0.0; this.directRouteGeometry = null; this.fullRouteCoords = null;
+        this.offlineProposedGeometry = null; this.actualTrajectoryCoords = null;
+        this._lastPowerObservation = null;
+        this.lastPassedSegmentIndex = 0;
         this.offRouteConsecutiveSamples = 0; this.lastRerouteTimestamp = 0;
         this.lastRecommendation = null; this.lastRecommendedStationId = null; this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
         this._navigationLocked = false; this._selectedStationId = null; this.routeRevision = 0;
@@ -115,8 +111,15 @@ export class DriverModeController {
             session: this.session
         });
         // Powertrain motor capability vs instantaneous consumption
-        this.maxMotorPowerKw = 30.0;
-        this.instantaneousPowerKw = 1.5;
+        this.maxMotorPowerKw = null;
+        this.instantaneousPowerKw = null;
+        this.powerStatus = 'UNAVAILABLE';
+        this._lastPowerObservation = null;
+        this.offlineProposedGeometry = null;
+        this.offlineEvaluationTime = null;
+        this._comparisonRequest = 0;
+        this._powerRevision = 0;
+        this._comparisonKey = null;
         // H3 Multi-Resolution & Direction-Aware Route Comparison
         this.h3Resolution = 9;
         this.actualTrajectoryCoords = null;
@@ -126,7 +129,6 @@ export class DriverModeController {
         this._h3Initialized = false;
         this.onStateChange = options.onStateChange || (() => {});
     }
-
     setCatalogs(trips, vehicles, stations, scenarios = [], vehicleCatalog = []) {
         this.trips = trips || [];
         this.vehicles = vehicles || [];
@@ -138,7 +140,6 @@ export class DriverModeController {
         }
         this.bindings.setVehicleCatalog(renderVehicleOptions(this.vehicleCatalog), this.currentVehicle?.vehicle_model || 'VF_3');
     }
-
     async init() {
         this.setState(DriverState.AVAILABLE);
         this.renderAvailableUI();
@@ -146,13 +147,11 @@ export class DriverModeController {
         this.bindings.setVehicleSelection(this.currentVehicle?.vehicle_model || 'VF_3');
         this.initH3Overlay();
     }
-
     initH3Overlay({ leaflet = globalThis.L, h3 = globalThis.h3 } = {}) {
         if (this._h3Initialized) return;
         this._h3Initialized = true;
         const h3Lib = h3 || globalThis.h3;
         if (!h3Lib || !this.map?.map) return;
-
         const toggle = this.bindings?.getH3Toggle?.();
         if (toggle) {
             this._h3Overlay = new RouteFamiliarityOverlay({
@@ -170,26 +169,22 @@ export class DriverModeController {
             this.bindings?.setH3ResBadgeText?.(`⬡ Res ${this.h3Resolution}`);
         }
     }
-
     async cycleH3Resolution() {
         // Discrete selector cycling 9 -> 10 -> 8 -> 9
         const nextResMap = { 9: 10, 10: 8, 8: 9 };
         this.h3Resolution = nextResMap[this.h3Resolution] || 9;
         this.bindings?.setH3ResBadgeText?.(`⬡ Res ${this.h3Resolution}`);
         this._h3Overlay?.setResolution(this.h3Resolution);
-
         if (this._h3Enabled) {
             await this.refreshRouteComparison();
         }
     }
-
     async onToggleH3() {
         if (!this._h3Overlay) return;
         const toggle = this.bindings?.getH3Toggle?.();
         const wantEnabled = toggle?.checked ?? false;
-
         if (wantEnabled) {
-            if (!this.directRouteGeometry || !Array.isArray(this.directRouteGeometry) || this.directRouteGeometry.length < 2) {
+            if ((this.offlineProposedGeometry || this.directRouteGeometry)?.length < 2 || !(this.offlineProposedGeometry || this.directRouteGeometry)) {
                 this.bindings?.setH3Checked?.(false);
                 this._h3Enabled = false;
                 this._h3Overlay.setEnabled(false);
@@ -201,67 +196,89 @@ export class DriverModeController {
             await this.refreshRouteComparison();
         } else {
             this._h3Enabled = false;
+            this._comparisonRequest++;
+            this._comparisonKey = null;
             this._h3Overlay.setEnabled(false);
             this._h3Overlay.clear();
             this.bindings?.updateH3ComparisonBanner?.({ visible: false });
         }
     }
-
     async refreshRouteComparison() {
-        if (!this.directRouteGeometry || !Array.isArray(this.directRouteGeometry) || this.directRouteGeometry.length < 2) {
+        if (!this._h3Enabled) return;
+        const proposed = this.offlineProposedGeometry;
+        const actual = this.actualTrajectoryCoords;
+        if (proposed?.length > 1 && actual?.length > 1) {
+            const payload = { proposed_coordinates: proposed, actual_coordinates: actual,
+                resolution: this.h3Resolution,
+                as_of_iso: this.offlineEvaluationTime ?? this.currentTrip?.start_time ?? null,
+                ...(this.currentVehicle?.vehicle_model ? { vehicle_model: this.currentVehicle.vehicle_model } : {}) };
+            const key = JSON.stringify(payload);
+            if (this._comparisonKey === key) return;
+            this._comparisonKey = key;
+            const request = ++this._comparisonRequest;
+            const generation = this.generation;
+            const isCurrent = () => this._h3Enabled && request === this._comparisonRequest &&
+                generation === this.generation && payload.resolution === this.h3Resolution &&
+                proposed === this.offlineProposedGeometry && actual === this.actualTrajectoryCoords &&
+                payload.vehicle_model === (this.currentVehicle?.vehicle_model || undefined);
+            try {
+                const comp = this._comparisonCacheKey === key && this.latestRouteComparison
+                    ? this.latestRouteComparison : await this.api.compareRoutes(payload);
+                if (!isCurrent()) {
+                    if (request === this._comparisonRequest) this._comparisonKey = null;
+                    return;
+                }
+                this.latestRouteComparison = comp;
+                this._comparisonCacheKey = key;
+                this.bindings?.updateH3ComparisonBanner?.({ visible: true,
+                    proposedText: 'Đề xuất: ' + comp.shared_pct_on_proposed.toFixed(1) + '%',
+                    actualText: 'GPS quan sát: ' + comp.shared_pct_on_actual.toFixed(1) + '%',
+                    sharedDistText: 'Chung: ' + (comp.shared_distance_m / 1000).toFixed(1) + ' km',
+                    cellCountText: comp.shared_cells.length + ' ô có đoạn chung' });
+                const cells = [...new Set([...(comp.proposed_cells || []), ...(comp.actual_cells || [])])];
+                this._h3Overlay?.renderFromCells(cells, comp.shared_cells, true);
+            } catch (err) {
+                if (!isCurrent()) return;
+                this._comparisonKey = null;
+                this._h3Overlay?.clear();
+                this.bindings?.updateH3ComparisonBanner?.({ visible: false });
+                this.bindings?.showH3Toast?.('So sánh toàn chuyến offline không khả dụng');
+                console.warn('[DriverMode] Offline comparison unavailable:', err);
+            }
             return;
         }
-
-        // If Route B (actual driver trajectory) is available, run direction- and sequence-aware comparison
-        if (this.actualTrajectoryCoords && Array.isArray(this.actualTrajectoryCoords) && this.actualTrajectoryCoords.length > 1) {
-            try {
-                const asOfTime = this.currentObservation?.timestamp || '2026-09-01T08:00:00Z';
-                const comp = await this.api.compareRoutes({
-                    route_a_coords: this.directRouteGeometry,
-                    route_b_coords: this.actualTrajectoryCoords,
-                    resolution: this.h3Resolution,
-                    as_of_time: asOfTime
-                });
-                this.latestRouteComparison = comp;
-
-                // Update Cockpit comparison banner with dual metrics
-                const pProp = comp.pct_overlap_proposed ?? 0;
-                const pAct = comp.pct_overlap_actual ?? 0;
-                const sDist = comp.shared_distance_km ?? 0;
-                const cCount = comp.shared_cell_ids?.length ?? 0;
-                this.bindings?.updateH3ComparisonBanner?.({
-                    visible: true,
-                    proposedText: `Đề xuất: ${pProp.toFixed(1)}%`,
-                    actualText: `Thực đi: ${pAct.toFixed(1)}%`,
-                    sharedDistText: `Chung: ${sDist.toFixed(1)} km`,
-                    cellCountText: `${cCount} ô`
-                });
-
-                // Render Route A cells with confirmed shared cells highlighted
-                if (this._h3Overlay) {
-                    const cellsA = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry, this.h3Resolution);
-                    this._h3Overlay.renderFromCells(cellsA, comp.shared_cell_ids || []);
-                }
-                return;
-            } catch (err) {
-                console.warn('[DriverMode] Route comparison API error, falling back to local corridor:', err);
-            }
-        }
-
-        // Single-route corridor overlay (no Route B yet)
-        if (this._h3Overlay) {
+        if (this.directRouteGeometry?.length > 1 && this._h3Overlay) {
             const cells = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry, this.h3Resolution);
             this._h3Overlay.setStations(this.stations);
             this._h3Overlay.renderFromCells(cells, this.stations);
             this.bindings?.updateH3ComparisonBanner?.({ visible: false });
         }
     }
-
+    _resetTripEvidence() {
+        this._powerRevision++;
+        this.offlineProposedGeometry = null;
+        this.actualTrajectoryCoords = null;
+        this.latestRouteComparison = null;
+        this.offlineEvaluationTime = null;
+        this._comparisonCacheKey = null;
+        this._lastPowerObservation = null;
+        this.instantaneousPowerKw = null;
+        this.powerStatus = 'UNAVAILABLE';
+        this._clearH3OnRouteChange();
+        this.bindings?.updateH3ComparisonBanner?.({ visible: false });
+    }
+    _captureOfflineProposedGeometry(coords) {
+        this.offlineProposedGeometry = Object.freeze(coords.map(point => Object.freeze([...point])));
+        this._comparisonKey = null;
+        this.latestRouteComparison = null;
+    }
     /**
      * Clear H3 overlay when route changes.
      * Called by route update methods.
      */
     _clearH3OnRouteChange() {
+        this._comparisonRequest++;
+        this._comparisonKey = null;
         if (this._h3Enabled && this._h3Overlay) {
             this._h3Overlay.clear();
             this._h3Overlay.setEnabled(false);
@@ -270,7 +287,6 @@ export class DriverModeController {
             this.bindings?.updateH3ComparisonBanner?.({ visible: false });
         }
     }
-
     renderCurrentStateUI() {
         if (this.state === DriverState.AVAILABLE) {
             this.renderAvailableUI();
@@ -284,7 +300,6 @@ export class DriverModeController {
             this.renderOfflineUI();
         }
     }
-
     restoreMapState() {
         this.map.clearAll();
         if (this.stations.length) this.map.renderStations(this.stations,
@@ -298,9 +313,15 @@ export class DriverModeController {
         if (this.postTripRoute?.geometry) this.map.renderPostTripRoute(this.postTripRoute.geometry);
         this.map.renderDriver(this.currentPos, this.matchedPos, this.currentObservation?.heading_deg);
     }
-
     selectVehicleModel(modelKey) {
-        const spec = VINFAST_MODEL_SPECS[modelKey] || VINFAST_MODEL_SPECS['VF_3'];
+        this._powerRevision++;
+        const spec = VINFAST_MODEL_SPECS[modelKey];
+        if (!spec) {
+            this.powerStatus = 'UNSUPPORTED_MODEL';
+            this.instantaneousPowerKw = null;
+            this.bindings?.updateInstantaneousPower?.('— (không khả dụng)');
+            return;
+        }
         const matchedVehicle = this.vehicles.find(v => v.vehicle_model === spec.vehicle_model) || {
             vehicle_id: 'V0001',
             vehicle_model: spec.vehicle_model,
@@ -310,9 +331,11 @@ export class DriverModeController {
             charging_supported: spec.charging_supported,
             swap_supported: spec.swap_supported
         };
-
-        const maxMotor = spec.max_motor_power_kw || 30.0;
+        const maxMotor = spec.max_motor_power_kw ?? null;
         this.maxMotorPowerKw = maxMotor;
+        this._lastPowerObservation = null;
+        this.instantaneousPowerKw = null;
+        this.powerStatus = "UNAVAILABLE";
         this.userSelectedVehicleModel = spec.vehicle_model;
         this.currentVehicle = {
             ...matchedVehicle,
@@ -327,40 +350,32 @@ export class DriverModeController {
             charging_supported: spec.charging_supported,
             swap_supported: spec.swap_supported
         };
-
         this.session.vehicle_id = this.currentVehicle.vehicle_id;
         this.session.vehicle_category = this.currentVehicle.vehicle_type;
-
         // Recalculate range according to current SOC and new vehicle specifications
         this.updateEstimatedRange();
-
         // Sync dropdown UI
         this.bindings.setVehicleSelection(spec.vehicle_model);
-
         console.log(`[VEHICLE SWITCHED] Model: ${spec.vehicle_model} (${spec.usable_kwh} kWh, ${spec.consumption_wh_km} Wh/km), Current Range: ${this.estimatedRangeKm} km`);
-
         // Re-render HUD
         this.renderCurrentStateUI();
-
         // If stations drawer is open, refresh evaluations
         if (this.bindings.isStationsDrawerOpen()) {
             this.refreshDrawerEvaluations();
         }
     }
-
     updateEstimatedRange() {
         const usable = this.currentVehicle?.usable_capacity_kwh || MODEL_SPECS.VF_3.usable_capacity_kwh;
         const cons = this.currentVehicle?.consumption_wh_per_km || MODEL_SPECS.VF_3.consumption_wh_per_km;
         this.estimatedRangeKm = parseFloat(((usable * 1000.0 * (this.currentSocPct / 100.0)) / cons).toFixed(1));
     }
-
     setBatterySoc(newSoc, triggerEvaluation = true) {
+        this._powerRevision++;
+        this._lastPowerObservation = null;
         const val = Math.min(100, Math.max(5, parseFloat(newSoc) || 10));
         this.currentSocPct = val;
         this.updateEstimatedRange();
-
         this.bindings.updateBattery(renderBatteryView({ soc: this.currentSocPct, range: this.estimatedRangeKm }));
-
         if (triggerEvaluation && this.state === DriverState.TRIP_ACTIVE) {
             this._evaluateAtCurrentPosition().then(() => {
                 this.renderTripActiveUI();
@@ -370,28 +385,24 @@ export class DriverModeController {
             }).catch(err => console.warn('SOC change evaluation warning:', err));
         }
     }
-
     setState(newState) {
         this.state = newState;
         this.onStateChange(this.state);
         this.updateHeaderBadge();
     }
-
     updateHeaderBadge() {
         this.bindings.setStatusBadge(renderStatusBadge(this.state));
     }
-
     _getScenarioDescription(scenarioId) {
         const map = { NORMAL_TRIP: 'Chuyến đi thông thường', NO_SERVICE_NEEDED: 'Pin đủ - Không cần sạc', LOW_SOC: 'Pin thấp - Cần sạc gấp', NEED_CHARGING: 'Cần sạc pin', QUEUE_REALTIME_CHANGE: 'Hàng đợi biến động', TRAFFIC_REALTIME_CHANGE: 'Giao thông ùn tắc', STATION_STATUS_CHANGE: 'Trạm đổi trạng thái', FARTHER_BUT_FASTER: 'Xa hơn nhưng nhanh hơn', NEED_SWAP: 'Cần đổi pin' };
         return map[scenarioId] || scenarioId;
     }
-
     // ─── Trip Assignment ────────────────────────────────────────────────
-
     async assignTrip(tripId) {
         this.generation++;
+        this._resetTripEvidence();
+        this.directRouteGeometry = null;
         const currentGen = this.generation;
-
         let trip = this.trips.find(t => t.trip_id === tripId);
         if (!trip) {
             const origin = this.customOrigin || { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
@@ -406,9 +417,8 @@ export class DriverModeController {
                 planned_distance_m: 8500.0
             };
         }
-
         this.currentTrip = trip;
-
+        this.offlineEvaluationTime = trip.start_time ?? null;
         if (!this.userSelectedVehicleModel) {
             const tripVehicle = this.vehicles.find(v => v.vehicle_id === trip.vehicle_id);
             if (tripVehicle) {
@@ -417,7 +427,6 @@ export class DriverModeController {
                 this.selectVehicleModel('VF_3');
             }
         }
-
         // Scenario energy context matching
         const matchingScenario = this.scenarios.find(s => s.trip_id === trip.trip_id || s.id === trip.scenario_id);
         if (matchingScenario) {
@@ -428,7 +437,6 @@ export class DriverModeController {
             this.safetyReserveKm = 2.0;
         }
         this.updateEstimatedRange();
-
         // Reset tracking state
         this.fullRouteCoords = null;
         this.lastPassedSegmentIndex = 0;
@@ -440,18 +448,20 @@ export class DriverModeController {
         this.remainingTripDistanceKm = trip.planned_distance_m ? (trip.planned_distance_m / 1000) : 0.0;
         this.map.clearAll();
         this._renderEndpointsWithDrag(trip.origin, trip.destination);
-
-        // Load actual GPS trajectory if available (Route B ground-truth observations)
+        // Load actual GPS trajectory if available (Route B observed raw GPS, not ground truth)
         this.actualTrajectoryCoords = null;
         try {
             const trajId = this._tripToTrajectory(trip.trip_id);
             if (trajId) {
                 const obs = await this.api.getTrajectory(trajId);
+                if (this.generation !== currentGen) return;
                 if (obs && Array.isArray(obs) && obs.length > 1) {
                     this.actualTrajectoryCoords = obs.map(p => [p.latitude, p.longitude]);
+                    this.offlineEvaluationTime ??= obs[0].timestamp ?? null;
                 }
             }
         } catch (e) {
+            if (this.generation !== currentGen) return;
             this.actualTrajectoryCoords = null;
         }
 
@@ -477,6 +487,7 @@ export class DriverModeController {
             if (coords && coords.length > 0) {
                 this.fullRouteCoords = coords;
                 this.directRouteGeometry = coords;
+                this._captureOfflineProposedGeometry(coords);
                 this._clearH3OnRouteChange();
                 this.map.renderDirectRoute(coords);
                 this.map.fitBoundsToActive(coords);
@@ -496,11 +507,13 @@ export class DriverModeController {
         this.setState(DriverState.TRIP_ASSIGNED);
         this.renderTripAssignedUI();
     }
-
     // ─── Start Trip ─────────────────────────────────────────────────────
-
     async startTrip() {
         if (!this.currentTrip) return;
+        this._powerRevision++;
+        this._lastPowerObservation = null;
+        this.instantaneousPowerKw = null;
+        this.powerStatus = "UNAVAILABLE";
 
         this.generation++;
         const currentGen = this.generation;
@@ -517,8 +530,10 @@ export class DriverModeController {
         if (trajId) {
             try {
                 await this.replay.loadTrajectory(trajId);
+                if (this.generation !== currentGen) return;
                 if (this.replay.observations?.length > 0) {
                     this.actualTrajectoryCoords = this.replay.observations.map(o => [o.latitude, o.longitude]);
+                    this.offlineEvaluationTime ??= this.currentTrip.start_time ?? this.replay.observations[0].timestamp ?? null;
                 }
             } catch (err) {
                 if (this.generation !== currentGen) return;
@@ -561,9 +576,7 @@ export class DriverModeController {
         }
         return null;
     }
-
     // ─── Step Handling ──────────────────────────────────────────────────
-
     async _onReplayStep(stepData) {
         const { locResp, observation, isComplete } = stepData || {};
         if (this.state !== DriverState.TRIP_ACTIVE) return;
@@ -600,32 +613,17 @@ export class DriverModeController {
                 this.matchedPos = null;
             }
 
-            // Dynamic Energy & SOC depletion during movement
+            // Distance is presentation only; backend owns interval energy.
             if (this.lastMovementPos && this.currentPos) {
-                const stepDistKm = straightLineDistanceKm(
-                    this.lastMovementPos.latitude,
-                    this.lastMovementPos.longitude,
-                    this.currentPos.latitude,
-                    this.currentPos.longitude
-                );
-                if (stepDistKm > 0.005) { // At least 5m
-                    const usable = this.currentVehicle?.usable_capacity_kwh || MODEL_SPECS.VF_3.usable_capacity_kwh;
-                    const cons = this.currentVehicle?.consumption_wh_per_km || MODEL_SPECS.VF_3.consumption_wh_per_km;
-                    const energyKwh = stepDistKm * (cons / 1000.0);
-                    const socDropPct = (energyKwh / usable) * 100.0;
-
-                    this.currentSocPct = Math.max(0.0, parseFloat((this.currentSocPct - socDropPct).toFixed(2)));
-                    this.updateEstimatedRange();
-                    this.totalDistanceTravelledKm = (this.totalDistanceTravelledKm || 0.0) + stepDistKm;
-                    this.lastMovementPos = { ...this.currentPos };
-                }
-            } else if (this.currentPos) {
-                this.lastMovementPos = { ...this.currentPos };
+                this.totalDistanceTravelledKm += straightLineDistanceKm(
+                    this.lastMovementPos.latitude, this.lastMovementPos.longitude,
+                    this.currentPos.latitude, this.currentPos.longitude);
             }
-
-            const speedKmh = observation?.speed_kmh ?? 0;
-            this.instantaneousPowerKw = calculateInstantaneousPowerKw(this.currentVehicle, speedKmh);
-            this.bindings?.updateInstantaneousPower?.(`${this.instantaneousPowerKw.toFixed(1)} kW`);
+            if (this.currentPos) this.lastMovementPos = { ...this.currentPos };
+            if (observation && locResp?.status !== 'STALE_OBSERVATION') {
+                await this._updateReplayPower(observation, currentGen, locResp?.timestamp);
+                if (this.generation !== currentGen) return;
+            }
 
             // Update remaining route & distance
             const probePos = this.matchedPos || this.currentPos;
@@ -720,7 +718,34 @@ export class DriverModeController {
             console.warn('[DriverMode] _onReplayStep error:', stepErr);
         }
     }
-
+    async _updateReplayPower(observation, generation, acceptedTimestamp = null) {
+        const timestamp = Date.parse(acceptedTimestamp ?? observation.timestamp);
+        const previous = this._lastPowerObservation;
+        if (!Number.isFinite(timestamp) || (previous && timestamp <= previous.timestamp)) return;
+        const model = this.currentVehicle?.vehicle_model;
+        const powerRevision = this._powerRevision;
+        const payload = { vehicle_model: model, speed_kmh: observation.speed_kmh ?? 0,
+            dt_seconds: previous ? (timestamp - previous.timestamp) / 1000 : 0,
+            current_soc_pct: this.currentSocPct };
+        if (previous) payload.previous_speed_kmh = previous.speed;
+        try {
+            const result = await this.api.computePowerStep(payload);
+            if (this.generation !== generation || this._powerRevision !== powerRevision || this.currentVehicle?.vehicle_model !== model) return;
+            this.currentSocPct = result.current_soc_pct;
+            this.estimatedRangeKm = result.estimated_range_km;
+            this.instantaneousPowerKw = result.instantaneous_power_kw;
+            this.maxMotorPowerKw = result.max_motor_power_kw;
+            this.powerStatus = result.power_status;
+        } catch (err) {
+            if (this.generation !== generation || this._powerRevision !== powerRevision || this.currentVehicle?.vehicle_model !== model) return;
+            this.instantaneousPowerKw = null;
+            this.powerStatus = 'UNAVAILABLE';
+            console.warn('[DriverMode] Power estimate unavailable:', err);
+        }
+        this._lastPowerObservation = { timestamp, speed: payload.speed_kmh };
+        this.bindings?.updateInstantaneousPower?.(Number.isFinite(this.instantaneousPowerKw)
+            ? this.instantaneousPowerKw.toFixed(1) + (this.powerStatus === 'KINEMATICS_EXCEED_CAPABILITY' ? ' kW (ước tính, vượt khả năng)' : ' kW (ước tính)') : '— (không khả dụng)');
+    }
     async _triggerReroute(fromPos) {
         if (!fromPos || !this.currentTrip?.destination) return;
         const currentGen = this.generation;
@@ -746,9 +771,7 @@ export class DriverModeController {
             console.warn('Rerouting error:', err);
         }
     }
-
     // ─── Evaluation ─────────────────────────────────────────────────────
-
     async _evaluateAtCurrentPosition() {
         if (!this.currentVehicle || !this.currentPos || this._isEvaluating) return;
 
@@ -952,7 +975,6 @@ export class DriverModeController {
             this._recommendTimer = null;
         }
     }
-
     async _refreshRecommendation() {
         if (this.state !== DriverState.TRIP_ACTIVE) {
             this.stopRecommendRefresh();
@@ -964,16 +986,13 @@ export class DriverModeController {
         }
         await this._evaluateAtCurrentPosition();
     }
-
     async _selectStationAndNavigate(stationId) {
         const currentGen = this.generation;
         await this.navigateViaStationId(stationId);
         if (this.generation !== currentGen) return;
         this.renderTripActiveUI();
     }
-
     // ─── Controls ──────────────────────────────────────────────────────
-
     async stepTrip() {
         if (this.state !== DriverState.TRIP_ACTIVE) return;
         await this.replay.step();
@@ -1004,6 +1023,7 @@ export class DriverModeController {
 
     returnToAvailable() {
         this.generation++;
+        this._resetTripEvidence();
         this.replay.clearSession();
         this.replay.reset();
         this.map.clearAll();
@@ -1047,14 +1067,12 @@ export class DriverModeController {
         this._onReplayStep({}).catch(() => {});
         this.renderTripActiveUI();
     }
-
     async navigateViaStation() {
         if (!this.lastRecommendation?.has_recommendation || !this.lastRecommendation.ranked_candidates?.length) return;
         const top = this.lastRecommendation.ranked_candidates[0];
         this._hideRecommendationPanel();
         return this._selectStationAndNavigate(top.station_id);
     }
-
     async navigateViaStationId(stationId) {
         const st = this.stations.find(s => s.station_id === stationId);
         if (!st) return;
@@ -1154,7 +1172,6 @@ export class DriverModeController {
             console.warn('Navigation to station failed:', err);
         }
     }
-
     async setPostTripStation(stId) {
         const st = this.stations.find(s => s.station_id === stId);
         if (!st) return;
@@ -1207,9 +1224,7 @@ export class DriverModeController {
             this.renderTripAssignedUI();
         }
     }
-
     // ─── Proactive Station Drawer & Map Destination Picking ─────────────
-
     bindGlobalControls() {
         this.bindings.bindGlobalControls({
             selectVehicle: value => this.selectVehicleModel(value),
@@ -1229,7 +1244,6 @@ export class DriverModeController {
             }
         });
     }
-
     async openStationsDrawer(filter = null) {
         if (filter) this.currentStationsFilter = filter;
         if (!this.bindings.setStationsDrawerOpen(true)) return;
@@ -1238,7 +1252,6 @@ export class DriverModeController {
     }
 
     closeStationsDrawer() { this.bindings.setStationsDrawerOpen(false); }
-
     async refreshDrawerEvaluations() {
         const currentGen = this.generation;
         const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
@@ -1331,7 +1344,6 @@ export class DriverModeController {
             console.warn('Failed to refresh drawer evaluations:', e);
         }
     }
-
     renderStationsDrawer(filter = 'ALL') {
         const currentPos = this.currentPos || (this.currentTrip?.origin ? {
             latitude: this.currentTrip.origin.latitude,
@@ -1434,7 +1446,6 @@ export class DriverModeController {
     startPickCustomDestination() { this.mapPicker.setMapController(this.map); this.mapPicker.startPickDestination(); }
     cancelPickCustomDestination() { this.mapPicker.cancelPickDestination(); }
     cancelAllPicking() { this.mapPicker.cancelAll(); }
-
     async setCustomOrigin(orig) {
         if (!orig) return;
         this.customOrigin = orig;
@@ -1447,7 +1458,6 @@ export class DriverModeController {
 
         await this._updateCustomRoute(orig, dest);
     }
-
     async setCustomDestination(dest) {
         if (!dest) return;
         this.customDestination = dest;
@@ -1458,7 +1468,6 @@ export class DriverModeController {
 
         await this._updateCustomRoute(origin, dest);
     }
-
     async _updateCustomRoute(origin, dest) {
         const currentGen = this.generation;
         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
@@ -1469,6 +1478,9 @@ export class DriverModeController {
                 const coords = decodePolyline(routeResult.geometry);
                 this.fullRouteCoords = coords;
                 this.directRouteGeometry = coords;
+                this._captureOfflineProposedGeometry(coords);
+                this.actualTrajectoryCoords = null;
+                this.offlineEvaluationTime = null;
                 this._clearH3OnRouteChange();
                 this.map.clearAll();
                 this._renderEndpointsWithDrag(origin, dest);
@@ -1513,18 +1525,14 @@ export class DriverModeController {
             this.bindings.showRouteUnavailable('GraphHopper chưa tìm thấy đường xe chạy kết nối điểm này. Vui lòng chọn vị trí gần đường giao thông hơn.');
         }
     }
-
     // ─── UI Renderers ───────────────────────────────────────────────────
-
     renderAvailableUI() {
         this.bindings.renderAvailable(renderAvailableCardHTML(this.customOrigin, this.customDestination), {
             accept: () => this.assignTrip(), pickOrigin: () => this.startPickCustomOrigin(),
             pickDestination: () => this.startPickCustomDestination(), goOffline: () => this.goOffline()
         });
     }
-
     renderOfflineUI() { this.bindings.renderOffline(renderOfflineCardHTML(), { goOnline: () => this.goOnline() }); }
-
     renderTripAssignedUI() {
         this.bindings.renderAssigned(renderTripAssignedCardHTML(this), {
             start: () => this.startTrip(), pickOrigin: () => this.startPickCustomOrigin(),
@@ -1532,7 +1540,6 @@ export class DriverModeController {
             setSoc: (value, evaluate) => this.setBatterySoc(value, evaluate)
         });
     }
-
     renderTripActiveUI() {
         const etaMin = renderTripActiveEta(this.lastRecommendation, this.remainingTripDistanceKm);
         const warningBanner = renderEnergyWarningHTML(this.lastRecommendation?.energy_context);
@@ -1574,7 +1581,6 @@ export class DriverModeController {
         this.replay.setSpeedMultiplier(speed);
         this.renderTripActiveUI();
     }
-
     renderTripCompleteUI() {
         this._navigationLocked = false;
         this._selectedStationId = null;

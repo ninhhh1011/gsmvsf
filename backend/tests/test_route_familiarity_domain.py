@@ -49,6 +49,7 @@ def test_signature_is_resolution_11_weighted_and_collapses_only_consecutive_cell
     assert len(signature.cells) == len(signature.cell_distances_m)
     assert sum(signature.cell_distances_m) == pytest.approx(signature.distance_m, abs=0.001)
     assert signature.cells
+    assert signature.coordinates == tuple(points)
     with pytest.raises(ValueError):
         create_route_signature([polyline([(21.0, 105.0), (21.0, 105.0)])])
 
