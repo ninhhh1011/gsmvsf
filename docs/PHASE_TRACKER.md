@@ -1,4 +1,4 @@
-﻿# Phase 0–3 Production Shape Tracker
+# Phase 0–3 Production Shape Tracker
 
 **Branch:** `fix/phase-0-3-production-shape`
 **Status:** All locked gates pass locally; whole-branch review passed and final verification is green.
@@ -54,3 +54,9 @@ Implemented on `fix/offline-route-weighting`; this does not start Week 6 infrast
 - [ ] Runtime activation/migration of application database and live browser deployment verification (not performed by this code implementation).
 
 Current checks: 561 backend PASS / 12 skipped, 196 frontend PASS, Ruff PASS, validator 152 PASS / 0 FAIL and 22/22 assertions; 63 canonical Dataset files unchanged during verification.
+
+## 2026-10-10 Driver UI panels
+
+User-authorized UI refinements complete: one station drawer with Top-5, compact/expandable mobile cockpit, primary distance/destination ETA/SOC, native analysis disclosure and readable light surfaces. Reroute progress, persistent controls and drawer update state are covered by regressions. See [verification report](reports/driver-ui-panels-2026-10-10.md) and ADR-023.
+
+Checks: frontend 205 PASS; backend 561 PASS / 12 skipped; Ruff PASS; real desktop/mobile browser 39/39 PASS. No Dataset V1 edits, runtime feature activation or Week 6 infrastructure changes. Driving ETA remains an estimate; station-leg fallback and physical calibration limitations are documented.

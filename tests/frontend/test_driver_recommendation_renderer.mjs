@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { renderDriverRecommendation, renderRecommendationPanelHTML } from '../../backend/app/static/demo/js/ui/driver_recommendation_renderer.js';
+import { renderDriverRecommendation } from '../../backend/app/static/demo/js/ui/driver_recommendation_renderer.js';
 import { DriverModeController } from '../../backend/app/static/demo/js/ui/driver_controller.js';
 
 test('renders the top station summary and escapes station supplied markup', () => {
@@ -21,7 +21,8 @@ test('renders the top station summary and escapes station supplied markup', () =
     });
 
     assert.match(html, /border-swap/);
-    assert.match(html, /btn-nav-station/);
+    assert.match(html, /btn-view-cost-breakdown/);
+    assert.doesNotMatch(html, /btn-nav-station|station-cost-grid/);
     assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
     assert.doesNotMatch(html, /<img src=x/);
 });
@@ -29,13 +30,6 @@ test('renders the top station summary and escapes station supplied markup', () =
 test('renders no recommendation as an empty snippet', () => {
     assert.equal(renderDriverRecommendation({ has_recommendation: false }), '');
     assert.equal(renderDriverRecommendation(null), '');
-});
-
-test('recommendation panel renderer escapes station IDs and names', () => {
-    const html = renderRecommendationPanelHTML([{ station_id: '<img src=x>', score: 0.5 }], [{ station_id: '<img src=x>', name: '<script>bad</script>' }]);
-    assert.match(html, /&lt;script&gt;bad&lt;\/script&gt;/);
-    assert.match(html, /data-station-id="&lt;img src=x&gt;"/);
-    assert.doesNotMatch(html, /<script>|data-station-id="<img/);
 });
 
 test('controller puts the extracted recommendation renderer output in the active HUD', () => {

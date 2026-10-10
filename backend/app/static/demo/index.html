@@ -89,26 +89,12 @@
                     ⚡ Tìm trạm sạc
                 </button>
                 <button id="btn-pick-custom-origin" class="btn btn-fab-origin" title="Chọn điểm xuất phát (A) trên bản đồ">
-                    📍 Đổi xuất phát (A)
+                    📍 Điểm A
                 </button>
                 <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
-                    🏁 Đổi điểm đến (B)
+                    🏁 Điểm B
                 </button>
-                <label class="btn btn-fab-h3 route-familiarity-toggle" title="Hiện/Ẩn ô H3 phủ lộ trình">
-                    <input id="toggle-route-familiarity" type="checkbox">
-                    ⬡ H3
-                </label>
-                <button id="btn-h3-res-badge" class="btn btn-fab-h3-res" title="Chuyển đổi độ phân giải H3: 9 -> 10 -> 8" style="display: none;">
-                    ⬡ Res 9
-                </button>
-                <div id="h3-comparison-banner" class="h3-comparison-banner" style="display: none;">
-                    <span>So sánh toàn chuyến offline · GPS quan sát</span>
-                    <span class="comparison-title" style="font-weight: 700; color: #38bdf8;">⬡ So sánh 2 tuyến:</span>
-                    <span id="h3-pct-proposed-badge" class="badge-overlap-prop" title="Tỷ lệ trùng trên tuyến đề xuất">Đề xuất: 0%</span>
-                    <span id="h3-pct-actual-badge" class="badge-overlap-act" title="Tỷ lệ trùng trên tuyến thực tế">GPS quan sát: 0%</span>
-                    <span id="h3-shared-dist-badge" class="badge-overlap-dist" title="Chiều dài đoạn đi chung">Chung: 0.0 km</span>
-                    <span id="h3-cells-count-badge" class="legend-count" title="Ô chứa đoạn chung đã xác minh; không phải toàn bộ ô trùng">0 ô có đoạn chung</span>
-                </div>
+
             </div>
 
             <!-- Map Picker Instruction Toast Banner (hidden by default) -->
@@ -122,9 +108,9 @@
                 <div class="drawer-header">
                     <div class="drawer-title">
                         <h4>⚡ Trạm sạc & Đổi pin</h4>
-                        <span class="text-xs text-muted" id="drawer-station-count">30 trạm khả dụng</span>
+                        <span class="text-xs text-muted" id="drawer-station-count">30 trạm trong danh sách</span>
                     </div>
-                    <button id="btn-close-stations-drawer" class="btn btn-sm btn-outline">✕</button>
+                    <button id="btn-close-stations-drawer" class="btn btn-sm btn-outline" type="button" aria-label="Đóng danh sách trạm">✕</button>
                 </div>
                 <!-- Charging Intent Selector: En-route vs Post-trip -->
                 <div class="charging-intent-selector">
@@ -156,37 +142,54 @@
 
         <!-- DRIVER MODE COCKPIT (Floating HUD over Map) -->
         <div id="driver-view-container" class="driver-mode-container">
-            <div class="driver-container-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span class="text-xs font-semibold text-muted" style="letter-spacing: 0.5px;">KHOANG LÁI ĐIỆN TỬ VINFAST</span>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.25); font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600;" title="Thời gian kẹt xe và độ trễ giao thông được tự động tính vào Cost và đề xuất trạm">🚦 Tự động tính tắc đường</span>
-                    <label for="cockpit-vehicle-select" class="text-xs text-muted" style="font-size: 11px; margin: 0;">Mẫu xe:</label>
-                    <select id="cockpit-vehicle-select" class="form-control form-control-sm" style="background: #1e293b; color: #38bdf8; border: 1px solid #334155; font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight: 600; cursor: pointer;" title="Đổi mẫu xe VinFast">
+            <div class="driver-container-header">
+                <div class="driver-vehicle-control">
+                    <label for="cockpit-vehicle-select">Mẫu xe</label>
+                    <select id="cockpit-vehicle-select" class="form-control form-control-sm" title="Đổi mẫu xe">
                         <option value="VF_3">Loading models...</option>
                     </select>
-                    <span class="status-indicator-dot online"></span>
                 </div>
+                <button id="btn-driver-sheet-toggle" class="btn btn-outline btn-sm" type="button" aria-expanded="false" aria-controls="driver-panel-content" data-expanded-label="Thu gọn" data-collapsed-label="Mở rộng">Mở rộng</button>
             </div>
 
             <!-- Dynamic Content Rendered by DriverModeController -->
             <div id="driver-panel-content">
                 <!-- Initial content rendered via JS -->
             </div>
+            <details id="driver-analysis-tools">
+                <summary>Phân tích hành trình</summary>
+                <div id="driver-analysis-content"></div>
+                <div class="analysis-controls">
+                    <label class="btn btn-fab-h3 route-familiarity-toggle" title="Hiện/Ẩn ô H3 phủ lộ trình">
+                        <input id="toggle-route-familiarity" type="checkbox">
+                        ⬡ H3
+                    </label>
+                    <button id="btn-h3-res-badge" class="btn btn-fab-h3-res" title="Chuyển đổi độ phân giải H3: 9 -> 10 -> 8" style="display: none;">
+                        ⬡ Res 9
+                    </button>
+                    <div id="h3-comparison-banner" class="h3-comparison-banner" style="display: none;">
+                        <span>So sánh toàn chuyến offline · GPS quan sát</span>
+                        <span class="comparison-title">⬡ So sánh 2 tuyến:</span>
+                        <span id="h3-pct-proposed-badge" class="badge-overlap-prop" title="Tỷ lệ trùng trên tuyến đề xuất">Đề xuất: 0%</span>
+                        <span id="h3-pct-actual-badge" class="badge-overlap-act" title="Tỷ lệ trùng trên tuyến thực tế">GPS quan sát: 0%</span>
+                        <span id="h3-shared-dist-badge" class="badge-overlap-dist" title="Chiều dài đoạn đi chung">Chung: 0.0 km</span>
+                        <span id="h3-cells-count-badge" class="legend-count" title="Ô chứa đoạn chung đã xác minh; không phải toàn bộ ô trùng">0 ô có đoạn chung</span>
+                    </div>
+                </div>
+            </details>
         </div>
 
 
 
         <!-- Cost Breakdown Modal (Driver Cockpit) -->
-        <div id="cost-breakdown-modal" class="cost-breakdown-modal" style="display: none;">
+        <div id="cost-breakdown-modal" class="cost-breakdown-modal" role="dialog" aria-modal="true" aria-labelledby="cost-modal-title" style="display: none;">
             <div class="cost-modal-backdrop" id="cost-modal-backdrop"></div>
             <div class="cost-modal-content">
-                <div class="cost-modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #334155; background: #0f172a;">
-                    <h4 style="margin: 0; font-size: 15px; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-                        <span>📊</span> Phân tích chi tiết chi phí đề xuất
-                    </h4>
-                    <button id="btn-close-cost-modal" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 8px;">✕</button>
+                <div class="cost-modal-header">
+                    <h4 id="cost-modal-title">Phân tích chi tiết chi phí đề xuất</h4>
+                    <button id="btn-close-cost-modal" class="btn btn-outline btn-sm" type="button" aria-label="Đóng phân tích chi phí">✕</button>
                 </div>
-                <div class="cost-modal-body" id="cost-modal-body" style="padding: 16px; max-height: 70vh; overflow-y: auto;">
+                <div class="cost-modal-body" id="cost-modal-body">
                     <!-- Populated dynamically -->
                 </div>
             </div>

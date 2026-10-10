@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
     renderAvailableCardHTML,
+    renderDriverAnalysisHTML,
     renderOfflineCardHTML,
     renderTripCompleteCardHTML,
     renderPositionStatusHTML,
@@ -62,18 +63,11 @@ test('post trip banner renderer escapes station supplied markup', () => {
     assert.match(html, /1\.2 km/);
 });
 
-test('renderAvailableCardHTML renders complete cockpit ready state with origin and dest', () => {
-    const origin = { latitude: 20.9849, longitude: 105.7935 };
-    const dest = { latitude: 21.0285, longitude: 105.8542 };
-
-    const html = renderAvailableCardHTML(origin, dest);
-
-    assert.ok(html.includes('Sẵn sàng bắt đầu hành trình'), 'Contains ready title');
-    assert.ok(html.includes('20.9849, 105.7935'), 'Contains origin coords');
-    assert.ok(html.includes('21.0285, 105.8542'), 'Contains dest coords');
-    assert.ok(html.includes('btn-pick-origin-map'), 'Contains pick origin button');
-    assert.ok(html.includes('btn-pick-dest-map'), 'Contains pick dest button');
-    assert.ok(html.includes('btn-go-offline'), 'Contains go offline button');
+test('ready primary card keeps action while analysis contains coordinates', () => {
+    const html = renderAvailableCardHTML();
+    assert.match(html, /btn-accept-trip/); assert.doesNotMatch(html, /text-origin-coords|btn-pick-origin-map/);
+    const analysis = renderDriverAnalysisHTML({state: 'AVAILABLE', currentSocPct: 50, estimatedRangeKm: 80, customOrigin: {latitude: 0, longitude: 1}, customDestination: {latitude: 2, longitude: 3}});
+    assert.match(analysis, /0\.0000, 1\.0000/); assert.match(analysis, /2\.0000, 3\.0000/);
 });
 
 test('renderOfflineCardHTML renders offline cockpit state with reconnect button', () => {

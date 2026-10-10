@@ -227,20 +227,12 @@ test('recommend with 1 result handles single candidate correctly', async () => {
     const driver = createTestDriver(mockApi);
     const bindings = driver.bindings;
 
-    // Capture what would be rendered
-    const origShowPanel = bindings.showRecommendationPanel;
-    bindings.showRecommendationPanel = (html, opts) => {
-        capturedCandidates = html;
-        return origShowPanel(html, opts);
-    };
-
     await driver._evaluateAtCurrentPosition();
 
     // Verify single candidate handled
     assert.ok(driver._top5Result, '_top5Result should exist');
     assert.equal(driver._top5Result.candidates.length, 1, 'Should have exactly 1 candidate');
 
-    bindings.showRecommendationPanel = origShowPanel;
 });
 
 test('recommend with 5 results handles max candidates correctly', async () => {
@@ -292,24 +284,14 @@ test('station with BATTERY_SWAP and CHARGING renders as one composite card', asy
     };
 
     const driver = createTestDriver(mockApi);
-    let capturedPanelHtml = null;
-
-    const origShowPanel = driver.bindings.showRecommendationPanel;
-    driver.bindings.showRecommendationPanel = (html, opts) => {
-        capturedPanelHtml = html;
-        return origShowPanel(html, opts);
-    };
-
     await driver._evaluateAtCurrentPosition();
 
-    assert.ok(capturedPanelHtml, 'Panel HTML should be rendered');
     // Station COMBO has both service types - verify in stored result
     assert.ok(driver._top5Result.candidates[0].service_types, 'Candidate should have service_types array');
     assert.equal(driver._top5Result.candidates[0].service_types.length, 2, 'Should have 2 service types');
     assert.ok(driver._top5Result.candidates[0].service_types.includes('BATTERY_SWAP'), 'Should include BATTERY_SWAP');
     assert.ok(driver._top5Result.candidates[0].service_types.includes('FAST_CHARGING'), 'Should include FAST_CHARGING');
 
-    driver.bindings.showRecommendationPanel = origShowPanel;
 });
 
 // ─── Step 5: Test — _top5Result sharing via callback ───

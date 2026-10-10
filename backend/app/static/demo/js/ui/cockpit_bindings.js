@@ -3,9 +3,16 @@ export function createCockpitBindings(root = globalThis.document) {
     const get = id => root?.getElementById(id);
     const listen = (id, type, callback, options) => get(id)?.addEventListener(type, callback, options);
     const each = (selector, callback) => root?.querySelectorAll(selector).forEach(callback);
+    let analysisState;
+    let assignedSlider;
 
     function bindStateButtons(bindings) {
         for (const [id, callback] of Object.entries(bindings)) listen(id, 'click', callback);
+    }
+
+    function updateAnalysisView(view) {
+        if (!view) return;
+        for (const [id, text] of [['hud-val-max-motor', view.maxMotorText], ['hud-val-instant-power', view.powerText], ['hud-vehicle-model', view.vehicleText], ['val-trip-range', view.rangeText]]) { const el = get(id); if (el) el.textContent = text; }
     }
 
     function bindActiveControls(callbacks) {
@@ -18,7 +25,8 @@ export function createCockpitBindings(root = globalThis.document) {
             'btn-switch-post-trip-modal': callbacks.switchToDestination,
             'btn-cancel-post-trip': callbacks.cancelPostTrip,
             'btn-view-cost-breakdown': callbacks.viewCostBreakdown,
-            'btn-complete-trip': callbacks.completeTrip
+            'btn-complete-trip': callbacks.completeTrip,
+            'btn-driver-stations': callbacks.openStations
         });
         const slider = get('slider-cockpit-soc');
         slider?.addEventListener('input', event => callbacks.setSoc(parseFloat(event.target.value), false));
@@ -43,6 +51,12 @@ export function createCockpitBindings(root = globalThis.document) {
         },
         setVehicleSelection(value) { const select = get('cockpit-vehicle-select'); if (select) select.value = value; },
         bindGlobalControls(callbacks) {
+            listen('btn-driver-sheet-toggle', 'click', event => {
+                const button = event.currentTarget;
+                const expanded = get('driver-view-container')?.classList.toggle('is-expanded');
+                button.setAttribute('aria-expanded', String(!!expanded));
+                button.textContent = expanded ? button.dataset.expandedLabel : button.dataset.collapsedLabel;
+            });
             listen('cockpit-vehicle-select', 'change', event => callbacks.selectVehicle(event.target.value));
             bindStateButtons({
                 'btn-open-stations-drawer': callbacks.openStations,
@@ -88,7 +102,8 @@ export function createCockpitBindings(root = globalThis.document) {
             for (const id of ['slider-cockpit-soc', 'slider-assigned-soc']) { const slider = get(id); if (slider && root.activeElement !== slider) slider.value = view.sliderValue; }
         },
         isStationsDrawerOpen() { const drawer = get('stations-drawer'); return !!drawer && drawer.style.display !== 'none'; },
-        setStationsDrawerOpen(open) { const drawer = get('stations-drawer'); if (drawer) drawer.style.display = open ? 'flex' : 'none'; return !!drawer; },
+        setStationsDrawerOpen(open) { const drawer = get('stations-drawer'); if (drawer) drawer.style.display = open ? 'flex' : 'none'; root?.body?.classList?.toggle('station-drawer-open', open); return !!drawer; },
+        renderAnalysis(html, stateKey, view) { const slot = get('driver-analysis-content'); if (!slot) return; if (analysisState !== stateKey) { slot.innerHTML = html; analysisState = stateKey; } updateAnalysisView(view); },
         setOriginCoordinates(text) { const el = get('text-origin-coords'); if (el) el.textContent = text; },
         setDestinationCoordinates(text) { const el = get('text-dest-coords'); if (el) el.textContent = text; },
         setNavigationButtonState(text, disabled) { const button = get('btn-nav-station'); if (button) { button.textContent = text; button.disabled = disabled; } },
@@ -106,9 +121,12 @@ export function createCockpitBindings(root = globalThis.document) {
             container.innerHTML = html;
             bindStateButtons({ 'btn-start-driving': callbacks.start, 'btn-assigned-pick-origin': event => { event.stopPropagation(); callbacks.pickOrigin(); }, 'btn-assigned-pick-dest': event => { event.stopPropagation(); callbacks.pickDestination(); }, 'btn-cancel-trip': callbacks.cancel });
             const slider = get('slider-assigned-soc');
-            slider?.addEventListener('input', event => callbacks.setSoc(parseFloat(event.target.value), false));
-            slider?.addEventListener('change', event => callbacks.setSoc(parseFloat(event.target.value), false));
-            each('.btn-preset-assigned-soc', btn => btn.addEventListener('click', event => callbacks.setSoc(parseFloat(event.currentTarget.dataset.soc), false)));
+            if (slider && slider !== assignedSlider) {
+                slider.addEventListener('input', event => callbacks.setSoc(parseFloat(event.target.value), false));
+                slider.addEventListener('change', event => callbacks.setSoc(parseFloat(event.target.value), false));
+                each('.btn-preset-assigned-soc', btn => btn.addEventListener('click', event => callbacks.setSoc(parseFloat(event.currentTarget.dataset.soc), false)));
+                assignedSlider = slider;
+            }
             return true;
         },
         renderActive(html, state, callbacks) {
@@ -121,6 +139,8 @@ export function createCockpitBindings(root = globalThis.document) {
                 const eta = get('val-trip-eta'); if (eta) eta.innerHTML = view.etaMarkup;
                 const soc = get('val-trip-soc'); if (soc) { soc.textContent = view.socText; soc.className = view.socClass; }
                 const range = get('val-trip-range'); if (range) range.innerHTML = view.rangeMarkup;
+                updateAnalysisView(view);
+                each('.btn-quick-speed', button => { button.classList.toggle('btn-primary', Number(button.dataset.speed) === state.speedMultiplier); button.classList.toggle('btn-outline', Number(button.dataset.speed) !== state.speedMultiplier); });
                 const bar = get('battery-bar-fill'); if (bar) { bar.style.width = view.batteryWidth; bar.className = view.batteryClass; }
                 const label = get('label-soc-slider-val'); if (label) { label.textContent = view.labelText; label.style.color = view.labelColor; }
                 const slider = get('slider-cockpit-soc'); if (slider && root.activeElement !== slider) slider.value = view.sliderValue;
@@ -143,8 +163,17 @@ export function createCockpitBindings(root = globalThis.document) {
         },
         renderDrawer(html, count, callbacks) {
             const list = get('stations-drawer-list'); if (!list) return;
-            const countEl = get('drawer-station-count'); if (countEl) countEl.textContent = `${count} trạm khả dụng`;
+            const countEl = get('drawer-station-count'); if (countEl) countEl.textContent = `${count} trạm trong danh sách`;
+            const othersOpen = list.querySelector?.('.drawer-other-stations')?.open;
+            const scrollTop = list.scrollTop;
+            const focused = root.activeElement;
+            const focusStationId = focused?.closest?.('.station-drawer-card')?.dataset.stationId;
+            const focusClass = focused?.className;
             list.innerHTML = html;
+            const others = list.querySelector?.('.drawer-other-stations');
+            if (others) others.open = !!othersOpen;
+            list.scrollTop = scrollTop;
+            if (focusStationId) [...list.querySelectorAll('button')].find(button => button.closest('.station-drawer-card')?.dataset.stationId === focusStationId && button.className === focusClass)?.focus();
             for (const [selector, callback] of [['.btn-nav-drawer-station', callbacks.navigate], ['.btn-nav-post-trip-station', callbacks.setPostTrip], ['.btn-zoom-station', callbacks.zoom]]) {
                 list.querySelectorAll(selector).forEach(button => button.addEventListener('click', event => { event.stopPropagation(); callback(event.currentTarget.dataset); }));
             }
@@ -164,18 +193,6 @@ export function createCockpitBindings(root = globalThis.document) {
         openCostBreakdown(html) { const modal = get('cost-breakdown-modal'), body = get('cost-modal-body'); if (!modal || !body) return false; body.innerHTML = html; modal.style.display = 'flex'; return true; },
         bindCostModalClose(callback) { listen('btn-close-cost-modal', 'click', callback, { once: true }); listen('cost-modal-backdrop', 'click', callback, { once: true }); },
         closeCostBreakdown() { const modal = get('cost-breakdown-modal'); if (modal) modal.style.display = 'none'; },
-        showRecommendationPanel(html, callbacks) {
-            if (!root?.body) return;
-            let panel = get('recommendation-panel');
-            if (panel) panel.outerHTML = html;
-            else root.body.insertAdjacentHTML('beforeend', html);
-            panel = get('recommendation-panel');
-            get('rec-panel-close')?.addEventListener('click', callbacks.close);
-            panel?.querySelectorAll('.rec-candidate-item').forEach(item => {
-                item.addEventListener('click', event => callbacks.selectStation(event.currentTarget.dataset.stationId));
-            });
-        },
-        hideRecommendationPanel() { get('recommendation-panel')?.remove(); },
         bindH3Toggle(onToggle) {
             listen('toggle-route-familiarity', 'change', onToggle);
         },

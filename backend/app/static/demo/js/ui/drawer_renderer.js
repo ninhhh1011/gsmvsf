@@ -22,7 +22,8 @@ export function renderDrawerStationCard(st, options = {}) {
         dest = { latitude: 21.0285, longitude: 105.8542 },
         directDistKm = 5.0,
         isSelectedPostTrip = false,
-        remainingTripDistanceKm = 5.0,
+        remainingTripDistanceKm = 0.0,
+        directDrivingEtaMinutes = null,
     } = options;
 
     const isSwap = st.station_type === 'SWAP' || st.service_type === 'BATTERY_SWAP';
@@ -136,8 +137,8 @@ export function renderDrawerStationCard(st, options = {}) {
 
     let cardContent = '';
     if (isAtDest) {
-        const directDriveMin = Math.round((remainingTripDistanceKm || 5) * 2);
-        const totalPostTripMin = directDriveMin + bToStationMin + waitMin + serviceMin;
+        const directDriveMin = Number.isFinite(Number(directDrivingEtaMinutes)) && directDrivingEtaMinutes != null ? Number(directDrivingEtaMinutes) : null;
+        const totalPostTripMin = directDriveMin == null ? '—' : directDriveMin + bToStationMin + waitMin + serviceMin;
 
         cardContent = `
             <div class="station-cost-grid">
@@ -149,7 +150,7 @@ export function renderDrawerStationCard(st, options = {}) {
                 </div>
                 <div class="cost-grid-item">
                     <span class="cost-grid-label">🚗 Chuyến chính (A ➔ B thẳng)</span>
-                    <span class="cost-grid-val">${(remainingTripDistanceKm || 5).toFixed(1)} km <small>(${directDriveMin} phút)</small></span>
+                    <span class="cost-grid-val">${(remainingTripDistanceKm ?? 0).toFixed(1)} km <small>(${directDriveMin ?? '—'} phút)</small></span>
                 </div>
                 <div class="cost-grid-item">
                     <span class="cost-grid-label">⚡ Tại trạm (Chờ + Sạc)</span>
@@ -162,7 +163,7 @@ export function renderDrawerStationCard(st, options = {}) {
                 <span class="cost-score" style="color:#0d9488; font-weight:700;">✓ Đi thẳng trả khách trước</span>
             </div>
             <div style="font-size: 11px; color: #475569; padding: 4px 8px; background: rgba(13, 148, 136, 0.06); border: 1px solid rgba(13, 148, 136, 0.2); border-radius: 4px; margin-top: 4px;">
-                📊 <strong>Chi tiết chi phí (Cost):</strong> ${directDriveMin}p tới B + ${bToStationMin}p tới trạm + ${waitMin > 0 ? `<span style="color:#dc2626; font-weight:700;">${waitMin}p chờ</span>` : '<span style="color:#059669; font-weight:600;">0p chờ (trống)</span>'} + ${serviceMin}p sạc
+                📊 <strong>Chi tiết chi phí (Cost):</strong> ${directDriveMin ?? '—'}p tới B + ${bToStationMin}p tới trạm + ${waitMin > 0 ? `<span style="color:#dc2626; font-weight:700;">${waitMin}p chờ</span>` : '<span style="color:#059669; font-weight:600;">0p chờ (trống)</span>'} + ${serviceMin}p sạc
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
@@ -242,15 +243,17 @@ export function renderDrawerStationsListHTML(stations = [], options = {}) {
     if (!stations || stations.length === 0) {
         return `<div class="text-center text-muted p-4">Không tìm thấy trạm phù hợp với bộ lọc.</div>`;
     }
-    return stations.map(st => {
-        const isRec = st.station_id === options.topRecId;
-        const isSelectedPostTrip = options.postTripStationId === st.station_id;
-        return renderDrawerStationCard(st, {
-            ...options,
-            isRec,
-            isSelectedPostTrip
-        });
-    }).join('');
+    const byId = new Map(stations.map(st => [st.station_id, st]));
+    const topIds = [...new Set((options.activeRec?.ranked_candidates || []).map(c => c.station_id))].slice(0, 5);
+    const top = topIds.filter(id => byId.has(id)).map(id => byId.get(id));
+    const remaining = stations.filter(st => !top.some(item => item.station_id === st.station_id));
+    const cards = items => items.map(st => renderDrawerStationCard(st, {
+        ...options, isRec: st.station_id === options.topRecId,
+        isSelectedPostTrip: options.postTripStationId === st.station_id
+    })).join('');
+    if (!top.length) return cards(remaining);
+    return `<section class="drawer-top-five" aria-label="Top-5 đề xuất"><h3>Top-5 đề xuất (${top.length} trạm)</h3>${cards(top)}</section>
+        ${remaining.length ? `<details class="drawer-other-stations"><summary>Các trạm khác (${remaining.length})</summary>${cards(remaining)}</details>` : ''}`;
 }
 
 /**

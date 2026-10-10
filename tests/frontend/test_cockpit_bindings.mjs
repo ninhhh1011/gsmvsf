@@ -79,28 +79,6 @@ test('incremental active rendering preserves metric units and accessible ETA tex
     assert.equal(metrics['val-trip-range'].innerHTML, '42 <small>km</small>');
 });
 
-test('controller delegates recommendation panel rendering and selection to bindings', () => {
-    const calls = [];
-    const controller = Object.create(DriverModeController.prototype);
-    Object.assign(controller, {
-        _navigationLocked: false,
-        stations: [],
-        bindings: {
-            hideRecommendationPanel() {},
-            showRecommendationPanel(html, callbacks) {
-                calls.push(['show', html]);
-                callbacks.selectStation('ST_1');
-            }
-        },
-        _selectStationAndNavigate: id => calls.push(['select', id])
-    });
-    const candidates = [{ station_id: 'ST_1' }];
-    controller._showRecommendationPanel(candidates);
-    assert.equal(calls[0][0], 'show');
-    assert.match(calls[0][1], /rec-panel-list/);
-    assert.deepEqual(calls[1], ['select', 'ST_1']);
-});
-
 test('controller escapes externally supplied road identity before handing position markup to bindings', () => {
     let positionMarkup = '';
     const controller = Object.create(DriverModeController.prototype);
@@ -129,7 +107,7 @@ test('cockpit controller coordinates while bindings only apply renderer output',
     assert.doesNotMatch(domainSources.join('\n'), /\b(?:document|window)\b|getElementById|querySelector|addEventListener/);
     assert.ok(entrypointSource.split('\n').length <= 400, 'driver_mode remains a thin entry point');
     assert.doesNotMatch(entrypointSource, /recommendation-panel|rec-panel-list|renderDriverRecommendation/);
-    assert.match(bindingSource, /showRecommendationPanel/);
+    assert.match(bindingSource, /renderAnalysis/);
     assert.doesNotMatch(controllerSource, /recommendation-panel|rec-panel-list|createElement\(/);
     assert.doesNotMatch(bindingSource, /state\.soc\s*[<>=]|\.toFixed\(|#(?:ef4444|f59e0b|10b981)|bg-(?:danger|warning|success)|text-danger/);
     assert.doesNotMatch(controllerSource, /renderRecommendationCard/);
@@ -145,12 +123,67 @@ test('cockpit renderer owns SOC colors, classes, and active metric formatting', 
     assert.deepEqual(renderActiveCockpitView({ distance: 12.34, eta: '8', soc: 18, range: 42.4 }), {
         socText: '18%',
         distanceMarkup: '12.3 <small>km</small>', etaMarkup: '8 <small>phút</small><span class="sr-only">min</span>',
-        rangeMarkup: '42 <small>km</small>',
+        rangeMarkup: '42 <small>km</small>', maxMotorText: '— kW', powerText: '— (không khả dụng)', vehicleText: '—',
         socClass: 'stat-value text-danger', rangeText: '42 km', batteryWidth: '18%',
         batteryClass: 'battery-bar-fill bg-danger', labelText: '18% (42 km)',
         labelColor: '#ef4444', sliderValue: '18'
     });
     assert.equal(renderActiveCockpitView({ distance: 1, eta: '<img>', soc: 18, range: 2 }).etaMarkup, '&lt;img&gt; <small>phút</small><span class="sr-only">min</span>');
-    assert.equal(renderTripActiveEta({ ranked_candidates: [{ eta_to_station_s: 300 }] }, 30), '5');
-    assert.equal(renderTripActiveEta(null, 30), '60');
+    assert.equal(renderTripActiveEta({ ranked_candidates: [{ eta_to_station_s: 300 }] }, 30), '—');
+    assert.equal(renderTripActiveEta({ distance_m: 10000, duration_s: 1200 }, 5), '10');
+    assert.equal(renderTripActiveEta({ distance_m: 10000, duration_s: 1200 }, 30), '20');
+    assert.equal(renderTripActiveEta(null, 30), '—');
+});
+
+test('analysis markup survives replay and model values update incrementally', () => {
+    const slot = {innerHTML: ''};
+    const fields = {'driver-analysis-content': slot, 'driver-panel-content': {querySelector: () => element()}, 'hud-val-max-motor': element(), 'hud-val-instant-power': element(), 'hud-vehicle-model': element()};
+    const bindings = createCockpitBindings({getElementById: id => fields[id], querySelectorAll: () => []});
+    bindings.renderAnalysis('first', 'TRIP_ACTIVE'); bindings.renderAnalysis('replacement', 'TRIP_ACTIVE');
+    assert.equal(slot.innerHTML, 'first');
+    bindings.renderAnalysis('replacement', 'TRIP_ACTIVE', renderActiveCockpitView({distance: 3, eta: '5', soc: 50, range: 80, maxMotorPowerKw: 150, currentInstantPowerKw: null, vehicleModel: 'VF 6'}));
+    assert.equal(slot.innerHTML, 'first');
+    assert.equal(fields['hud-val-max-motor'].textContent, '150 kW');
+    assert.equal(fields['hud-vehicle-model'].textContent, 'VF 6');
+    bindings.renderActive('', {view: renderActiveCockpitView({distance: 3, eta: '5', soc: 50, range: 80, maxMotorPowerKw: 100, currentInstantPowerKw: 4.2, vehicleModel: 'VF 5'})}, {});
+    assert.equal(fields['hud-val-max-motor'].textContent, '100 kW');
+    assert.equal(fields['hud-val-instant-power'].textContent, '4.2 kW (ước tính)');
+    assert.equal(fields['hud-vehicle-model'].textContent, 'VF 5');
+    bindings.renderAnalysis('next', 'TRIP_ASSIGNED'); assert.equal(slot.innerHTML, 'next');
+});
+
+test('sheet toggle exposes its state and drawer toggles the mobile layout class', () => {
+    const toggle = element({expandedLabel: 'Thu gọn', collapsedLabel: 'Mở rộng'});
+    toggle.setAttribute = (name, value) => { toggle[name] = value; };
+    let expanded = false;
+    const panel = {classList: {toggle() { expanded = !expanded; return expanded; }}};
+    const drawer = element();
+    const bodyClasses = [];
+    const elements = {'btn-driver-sheet-toggle': toggle, 'driver-view-container': panel, 'stations-drawer': drawer};
+    const bindings = createCockpitBindings({getElementById: id => elements[id], querySelectorAll: () => [], body: {classList: {toggle: (...args) => bodyClasses.push(args)}}});
+    bindings.bindGlobalControls({});
+    toggle.fire('click'); assert.equal(toggle['aria-expanded'], 'true'); assert.equal(toggle.textContent, 'Thu gọn');
+    toggle.fire('click'); assert.equal(toggle['aria-expanded'], 'false'); assert.equal(toggle.textContent, 'Mở rộng');
+    bindings.setStationsDrawerOpen(true); assert.equal(drawer.style.display, 'flex');
+    bindings.setStationsDrawerOpen(false); assert.equal(drawer.style.display, 'none');
+    assert.deepEqual(bodyClasses, [['station-drawer-open', true], ['station-drawer-open', false]]);
+});
+
+test('rerendering assigned primary card does not duplicate persistent analysis slider listeners', () => {
+    const slider = element();
+    let subscriptions = 0;
+    slider.addEventListener = () => { subscriptions++; };
+    const elements = {'driver-panel-content': {innerHTML: ''}, 'slider-assigned-soc': slider};
+    const bindings = createCockpitBindings({getElementById: id => elements[id], querySelectorAll: () => []});
+    bindings.renderAssigned('first', {}); bindings.renderAssigned('model changed', {});
+    assert.equal(subscriptions, 2);
+});
+
+test('drawer refresh preserves the expanded catalog and its scroll position', () => {
+ let details={open:true};
+ const list={scrollTop:80,querySelector:()=>details,querySelectorAll:()=>[],set innerHTML(value){details={open:false};this.scrollTop=0;}};
+ const root={getElementById:id=>id==='stations-drawer-list'?list:null,querySelectorAll:()=>[]};
+ createCockpitBindings(root).renderDrawer('new ranking',3,{});
+ assert.equal(details.open,true);
+ assert.equal(list.scrollTop,80);
 });

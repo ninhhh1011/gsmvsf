@@ -50,6 +50,7 @@ import {
     renderTripCompleteCardHTML,
     renderTripAssignedCardHTML,
     renderTripActiveCardHTML,
+    renderDriverAnalysisHTML,
     renderPositionStatusHTML,
     renderBatteryView,
     renderActiveCockpitView,
@@ -63,7 +64,7 @@ import {
     renderPostTripBannerHTML
 } from './cockpit_renderer.js';
 import { renderDrawerStationsListHTML } from './drawer_renderer.js';
-import { renderDriverRecommendation, renderRecommendationPanelHTML } from './driver_recommendation_renderer.js';
+import { renderDriverRecommendation } from './driver_recommendation_renderer.js';
 import { MapPicker } from './map_picker.js';
 import { createCockpitBindings } from './cockpit_bindings.js';
 import { RouteFamiliarityOverlay } from './route_familiarity_overlay.js';
@@ -90,7 +91,7 @@ export class DriverModeController {
         this.state = DriverState.AVAILABLE; this.currentTrip = null; this.currentVehicle = null; this.userSelectedVehicleModel = null;
         this.currentSocPct = 85.0; this.estimatedRangeKm = 153.6; this.safetyReserveKm = 2.0; this.totalDistanceTravelledKm = 0.0; this.lastMovementPos = null;
         this.currentPos = null; this.matchedPos = null; this.currentObservation = null;
-        this.remainingTripDistanceKm = 0.0; this.directRouteGeometry = null; this.fullRouteCoords = null;
+        this.remainingTripDistanceKm = 0.0; this.directRouteGeometry = null; this.fullRouteCoords = null; this.currentRouteTiming = null;
         this.offlineProposedGeometry = null; this.actualTrajectoryCoords = null;
         this._lastPowerObservation = null;
         this.lastPassedSegmentIndex = 0;
@@ -438,7 +439,7 @@ export class DriverModeController {
         }
         this.updateEstimatedRange();
         // Reset tracking state
-        this.fullRouteCoords = null;
+        this.fullRouteCoords = null; this.currentRouteTiming = null;
         this.lastPassedSegmentIndex = 0;
         this.offRouteConsecutiveSamples = 0;
         this.lastRerouteTimestamp = 0;
@@ -486,6 +487,7 @@ export class DriverModeController {
             const coords = decodePolyline(routeResult.geometry);
             if (coords && coords.length > 0) {
                 this.fullRouteCoords = coords;
+                this.currentRouteTiming = routeResult;
                 this.directRouteGeometry = coords;
                 this._captureOfflineProposedGeometry(coords);
                 this._clearH3OnRouteChange();
@@ -628,7 +630,7 @@ export class DriverModeController {
             // Update remaining route & distance
             const probePos = this.matchedPos || this.currentPos;
             if (probePos && this.fullRouteCoords && this.fullRouteCoords.length >= 2) {
-                const progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
+                let progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
                 if (progress && !isNaN(progress.distanceMeters)) {
                     // Anti-spam off-route check
                     const OFF_ROUTE_THRESHOLD_METERS = 35.0;
@@ -642,21 +644,24 @@ export class DriverModeController {
                             this.offRouteConsecutiveSamples = 0;
                             await this._triggerReroute(probePos);
                             if (this.generation !== currentGen) return;
+                            progress = projectPointOnRoute(probePos, this.fullRouteCoords, this.lastPassedSegmentIndex);
                         }
                     } else {
                         this.offRouteConsecutiveSamples = 0;
                     }
 
-                    // Route slicing: shrink route ahead of the car (skip when in diversion)
-                    if (!this._navigationLocked && this.fullRouteCoords.length > 1) {
+                    // Measure the remaining road geometry, including a selected diversion.
+                    if (this.fullRouteCoords.length > 1) {
                         this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
                         const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
                             segmentIndex: this.lastPassedSegmentIndex,
                             projPoint: progress.projPoint
                         });
 
-                        this.directRouteGeometry = remainingCoords;
-                        this.map.updateDirectRoute?.(remainingCoords);
+                        if (!this._navigationLocked) {
+                            this.directRouteGeometry = remainingCoords;
+                            this.map.updateDirectRoute?.(remainingCoords);
+                        }
 
                         const remainingMeters = computePolylineDistanceMeters(remainingCoords);
                         this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
@@ -665,7 +670,7 @@ export class DriverModeController {
             }
 
             // Straight-line fallback when no route coords
-            if (this.currentPos && this.currentTrip?.destination) {
+            if (!this.fullRouteCoords?.length && this.currentPos && this.currentTrip?.destination) {
                 this.remainingTripDistanceKm = straightLineDistanceKm(
                     this.currentPos.latitude,
                     this.currentPos.longitude,
@@ -761,6 +766,7 @@ export class DriverModeController {
                 const coords = decodePolyline(rerouteResult.geometry);
                 if (coords && coords.length > 0) {
                     this.fullRouteCoords = coords;
+                    this.currentRouteTiming = rerouteResult;
                     this.lastPassedSegmentIndex = 0;
                     this.directRouteGeometry = coords;
                     this._clearH3OnRouteChange();
@@ -864,7 +870,6 @@ export class DriverModeController {
             let leg2Result = null;
 
             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
-                this._showRecommendationPanel(rec.ranked_candidates);
                 const top = rec.ranked_candidates[0];
                 const st = this.stations.find(s => s.station_id === top.station_id);
                 if (st && this.currentTrip?.destination) {
@@ -893,7 +898,6 @@ export class DriverModeController {
                 }
                 this.map.renderStations(this.stations, top.station_id, top.service_type, null, rec.ranked_candidates);
             } else {
-                this._hideRecommendationPanel();
                 this.lastRecommendedStationId = null;
                 this.lastDiversionLeg1 = null;
                 this.lastDiversionLeg2 = null;
@@ -944,21 +948,8 @@ export class DriverModeController {
         }
     }
 
-    _showRecommendationPanel(candidates) {
-        if (this._navigationLocked || !candidates?.length) return;
-        this.bindings.showRecommendationPanel(renderRecommendationPanelHTML(candidates, this.stations), {
-            close: () => this._hideRecommendationPanel(),
-            selectStation: stationId => {
-                this._hideRecommendationPanel();
-                this._selectStationAndNavigate(stationId);
-            }
-        });
-    }
-
-    _hideRecommendationPanel() { this.bindings.hideRecommendationPanel(); }
-
-    _notifyTop5Updated(result) {
-        // Top 5 shared via _top5Result; markers via renderStations()
+    _notifyTop5Updated() {
+        if (this.bindings.isStationsDrawerOpen()) this.renderStationsDrawer(this.currentStationsFilter);
     }
 
     startRecommendRefresh() {
@@ -1016,7 +1007,6 @@ export class DriverModeController {
         this.cancelAllPicking();
         this.closeStationsDrawer();
         this.closeCostBreakdownModal();
-        this._hideRecommendationPanel();
         this.map.clearAll();
         if (this.stations.length) this.map.renderStations(this.stations);
     }
@@ -1031,12 +1021,12 @@ export class DriverModeController {
         this.currentPos = null;
         this.matchedPos = null;
         this.currentObservation = null; this.lastRecommendation = null;
-        this.directRouteGeometry = null; this.fullRouteCoords = null;
+        this.directRouteGeometry = null; this.fullRouteCoords = null; this.currentRouteTiming = null;
         this.lastPassedSegmentIndex = 0; this.offRouteConsecutiveSamples = 0;
         this.lastRerouteTimestamp = 0; this.lastRecommendedStationId = null;
         this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
         this.remainingTripDistanceKm = 0.0; this._navigationLocked = false;
-        this._selectedStationId = null; this._hideRecommendationPanel();
+        this._selectedStationId = null;
         this.stopRecommendRefresh();
         this.session.driver_id = null; this.session.vehicle_id = null;
         this.session.vehicle_category = null; this.session.trip_id = null;
@@ -1051,7 +1041,6 @@ export class DriverModeController {
     cancelTrip() {
         this._navigationLocked = false;
         this._selectedStationId = null;
-        this._hideRecommendationPanel();
         this.returnToAvailable();
     }
 
@@ -1059,8 +1048,6 @@ export class DriverModeController {
         if (!this._navigationLocked) return;
         this._navigationLocked = false;
         this._selectedStationId = null;
-        // Hide recommendation panel
-        this._hideRecommendationPanel();
         // Re-trigger evaluation
         this.lastEvalTimestamp = 0; // force re-evaluate
         this._evaluateAtCurrentPosition().catch(() => {});
@@ -1070,7 +1057,6 @@ export class DriverModeController {
     async navigateViaStation() {
         if (!this.lastRecommendation?.has_recommendation || !this.lastRecommendation.ranked_candidates?.length) return;
         const top = this.lastRecommendation.ranked_candidates[0];
-        this._hideRecommendationPanel();
         return this._selectStationAndNavigate(top.station_id);
     }
     async navigateViaStationId(stationId) {
@@ -1079,7 +1065,6 @@ export class DriverModeController {
         const currentGen = this.generation;
         const navRev = ++this.routeRevision;
 
-        this._hideRecommendationPanel();
         this.closeStationsDrawer();
 
         const currentPos = this.currentPos || (this.currentTrip?.origin ? {
@@ -1108,6 +1093,7 @@ export class DriverModeController {
                 this._navigationLocked = true;
                 this._selectedStationId = stationId;
                 this.fullRouteCoords = combined;
+                this.currentRouteTiming = { distance_m: leg1.distance_m + leg2.distance_m, duration_s: leg1.duration_s + leg2.duration_s };
                 this.directRouteGeometry = combined;
                 this._clearH3OnRouteChange();
                 this.lastPassedSegmentIndex = 0;
@@ -1146,6 +1132,7 @@ export class DriverModeController {
                 this._selectedStationId = stationId;
                 this.lastRecommendedStationId = st.station_id;
                 this.fullRouteCoords = coords;
+                this.currentRouteTiming = route;
                 this.directRouteGeometry = coords;
                 this._clearH3OnRouteChange();
                 this.map.clearAll();
@@ -1201,7 +1188,7 @@ export class DriverModeController {
             }
 
             // Highlight selected station marker
-            this.map.highlightStation(st.station_id);
+            this.map.renderStations(this.stations, st.station_id, st.service_type, null, this.postTripRecommendation?.ranked_candidates);
 
             // Refresh UI for post-trip charging
             if (this.state === DriverState.TRIP_ACTIVE) {
@@ -1420,7 +1407,8 @@ export class DriverModeController {
             dest,
             directDistKm,
             postTripStationId: this.postTripStation?.station_id,
-            remainingTripDistanceKm: this.remainingTripDistanceKm
+            remainingTripDistanceKm: this.remainingTripDistanceKm,
+            directDrivingEtaMinutes: renderTripActiveEta(this.currentRouteTiming, this.remainingTripDistanceKm)
         });
         this.bindings.renderDrawer(html, filtered.length, {
             navigate: data => this.navigateViaStationId(data.stationId),
@@ -1477,6 +1465,7 @@ export class DriverModeController {
             if (routeResult?.geometry) {
                 const coords = decodePolyline(routeResult.geometry);
                 this.fullRouteCoords = coords;
+                this.currentRouteTiming = routeResult;
                 this.directRouteGeometry = coords;
                 this._captureOfflineProposedGeometry(coords);
                 this.actualTrajectoryCoords = null;
@@ -1526,14 +1515,20 @@ export class DriverModeController {
         }
     }
     // ─── UI Renderers ───────────────────────────────────────────────────
+    _renderAnalysis(status = {}) {
+        const view = renderActiveCockpitView({ distance: this.remainingTripDistanceKm, eta: '—', soc: this.currentSocPct, range: this.estimatedRangeKm, maxMotorPowerKw: this.maxMotorPowerKw, currentInstantPowerKw: this.instantaneousPowerKw, vehicleModel: this.currentVehicle?.vehicle_model, powerStatus: this.powerStatus });
+        this.bindings.renderAnalysis?.(renderDriverAnalysisHTML(this, status), this.state, view);
+    }
     renderAvailableUI() {
+        this._renderAnalysis();
         this.bindings.renderAvailable(renderAvailableCardHTML(this.customOrigin, this.customDestination), {
             accept: () => this.assignTrip(), pickOrigin: () => this.startPickCustomOrigin(),
             pickDestination: () => this.startPickCustomDestination(), goOffline: () => this.goOffline()
         });
     }
-    renderOfflineUI() { this.bindings.renderOffline(renderOfflineCardHTML(), { goOnline: () => this.goOnline() }); }
+    renderOfflineUI() { this._renderAnalysis(); this.bindings.renderOffline(renderOfflineCardHTML(), { goOnline: () => this.goOnline() }); }
     renderTripAssignedUI() {
+        this._renderAnalysis();
         this.bindings.renderAssigned(renderTripAssignedCardHTML(this), {
             start: () => this.startTrip(), pickOrigin: () => this.startPickCustomOrigin(),
             pickDestination: () => this.startPickCustomDestination(), cancel: () => this.cancelTrip(),
@@ -1541,14 +1536,16 @@ export class DriverModeController {
         });
     }
     renderTripActiveUI() {
-        const etaMin = renderTripActiveEta(this.lastRecommendation, this.remainingTripDistanceKm);
+        const etaMin = renderTripActiveEta(this.currentRouteTiming, this.remainingTripDistanceKm);
         const warningBanner = renderEnergyWarningHTML(this.lastRecommendation?.energy_context);
         const recSnippet = renderDriverRecommendation(this.lastRecommendation);
         const posStatus = renderPositionStatusHTML(this.matchedPos, this.currentPos);
         const progress = this.replay.getProgressText?.() || '';
         const replayControls = renderReplayControls({ isPlaying: this.replay.isPlaying, currentIndex: this.replay.currentIndex });
         const postTripSnippet = renderPostTripBannerHTML(this.postTripStation, this.postTripRoute);
+        this._renderAnalysis({ posStatus, progress });
         const callbacks = {
+            openStations: () => this.openStationsDrawer(),
             play: () => { this.playTrip(); this.renderTripActiveUI(); }, pause: () => { this.pauseTrip(); this.renderTripActiveUI(); },
             step: () => this.stepTrip(), unlockNavigation: () => this.unlockNavigation(), navigateViaStation: () => this.navigateViaStation(),
             switchToDestination: () => { this.chargingIntent = 'AT_DESTINATION'; this.bindings.setActiveIntent('AT_DESTINATION'); this.openStationsDrawer(); },
@@ -1560,9 +1557,9 @@ export class DriverModeController {
         };
         this.bindings.renderActive(renderTripActiveCardHTML(this, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, replayControls }), {
             distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm,
-            view: renderActiveCockpitView({ distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm }),
+            view: renderActiveCockpitView({ distance: this.remainingTripDistanceKm, eta: etaMin, soc: this.currentSocPct, range: this.estimatedRangeKm, maxMotorPowerKw: this.maxMotorPowerKw, currentInstantPowerKw: this.instantaneousPowerKw, vehicleModel: this.currentVehicle?.vehicle_model, powerStatus: this.powerStatus }),
             posStatus, progress, warning: warningBanner, recommendation: recSnippet, postTrip: postTripSnippet,
-            ...replayControls, navigationLocked: this._navigationLocked
+            ...replayControls, navigationLocked: this._navigationLocked, speedMultiplier: this.replay.speedMultiplier
         }, callbacks);
     }
 
@@ -1582,9 +1579,9 @@ export class DriverModeController {
         this.renderTripActiveUI();
     }
     renderTripCompleteUI() {
+        this._renderAnalysis();
         this._navigationLocked = false;
         this._selectedStationId = null;
-        this._hideRecommendationPanel();
         this.bindings.renderComplete(renderTripCompleteCardHTML(this.lastRecommendation, this.postTripStation), {
             startPostTrip: async () => {
                 const station = this.postTripStation;

@@ -29,20 +29,21 @@ export function renderActiveCockpitView(state) {
         ...renderBatteryView(state),
         distanceMarkup: `${distance} <small>km</small>`,
         etaMarkup: `${eta} <small>phút</small><span class="sr-only">min</span>`,
-        rangeMarkup: `${range} <small>km</small>`
+        rangeMarkup: `${range} <small>km</small>`,
+        maxMotorText: `${state.maxMotorPowerKw ?? '—'} kW`,
+        powerText: Number.isFinite(state.currentInstantPowerKw) ? `${state.currentInstantPowerKw.toFixed(1)} kW (ước tính)${state.powerStatus === 'KINEMATICS_EXCEED_CAPABILITY' ? ' (vượt khả năng)' : ''}` : '— (không khả dụng)',
+        vehicleText: state.vehicleModel || '—'
     };
 }
 
-export function renderTripActiveEta(recommendation, remainingDistanceKm) {
-    if (recommendation?.ranked_candidates?.length > 0) {
-        return (recommendation.ranked_candidates[0].eta_to_station_s / 60).toFixed(0);
-    }
-    return remainingDistanceKm > 0 ? Math.round(remainingDistanceKm * 2).toString() : '—';
+export function renderTripActiveEta(routeTiming, remainingDistanceKm) {
+    if (!Number.isFinite(routeTiming?.distance_m) || routeTiming.distance_m <= 0 || !Number.isFinite(routeTiming.duration_s) || routeTiming.duration_s < 0 || !Number.isFinite(remainingDistanceKm)) return '—';
+    return String(Math.round(Math.max(0, Math.min(1, remainingDistanceKm * 1000 / routeTiming.distance_m)) * routeTiming.duration_s / 60));
 }
 
 export function renderStatusBadge(state) {
     const labels = {
-        AVAILABLE: '\u1eb4N S\u00c0NG',
+        AVAILABLE: 'SẴN SÀNG',
         TRIP_ASSIGNED: '\u0110\u00c3 NH\u1eacN CHUY\u1ebeN',
         TRIP_ACTIVE: '\u0110ANG DI CHUY\u1ec2N',
         TRIP_COMPLETE: 'HO\u00c0N TH\u00c0NH',
@@ -78,51 +79,13 @@ export function renderEnergyWarningHTML(context) {
 /**
  * Render Available HUD card.
  */
-export function renderAvailableCardHTML(origCoords, destCoords) {
-    const origLat = (origCoords?.latitude || 20.9849).toFixed(4);
-    const origLng = (origCoords?.longitude || 105.7935).toFixed(4);
-    const destLat = (destCoords?.latitude || 21.0285).toFixed(4);
-    const destLng = (destCoords?.longitude || 105.8542).toFixed(4);
-
-    return `
-        <div class="driver-available-card">
-            <div class="card-status-indicator">
-                <span class="pulse-dot green"></span>
-                <h3>Sẵn sàng bắt đầu hành trình</h3>
-            </div>
-            <p class="text-muted" style="margin-top: 4px; font-size: 13px;">
-                Dẫn đường thông minh & phân tích lộ trình thói quen. Thiết lập điểm xuất phát và điểm đến:
-            </p>
-
-            <div class="endpoints-box mt-3" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
-                    <span style="color: #10b981; font-weight: 600;">📍 Điểm A (Xuất phát):</span>
-                    <span id="text-origin-coords" class="text-muted" style="font-size: 12px; font-family: monospace;">${origLat}, ${origLng}</span>
-                </div>
-                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
-                    <span style="color: #ef4444; font-weight: 600;">🏁 Điểm B (Điểm đến):</span>
-                    <span id="text-dest-coords" class="text-muted" style="font-size: 12px; font-family: monospace;">${destLat}, ${destLng}</span>
-                </div>
-            </div>
-
-            <div class="driver-actions mt-3">
-                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                    <button id="btn-pick-origin-map" class="btn btn-outline flex-1" style="font-size: 13px;">
-                        📍 Đổi điểm đi (A)
-                    </button>
-                    <button id="btn-pick-dest-map" class="btn btn-outline flex-1" style="font-size: 13px;">
-                        🏁 Đổi điểm đến (B)
-                    </button>
-                </div>
-                <button id="btn-accept-trip" class="btn btn-primary btn-lg btn-block">
-                    🚀 Tạo lộ trình & Bắt đầu
-                </button>
-                <button id="btn-go-offline" class="btn btn-outline btn-sm mt-2">
-                    Chuyển ngoại tuyến
-                </button>
-            </div>
-        </div>
-    `;
+export function renderAvailableCardHTML() {
+    return `<div class="driver-available-card driver-summary">
+        <h3>Sẵn sàng bắt đầu hành trình</h3>
+        <p class="text-muted">Chọn điểm A và B trên bản đồ để tạo lộ trình.</p>
+        <div class="driver-primary-actions"><button id="btn-accept-trip" class="btn btn-primary btn-block">Tạo lộ trình & Bắt đầu</button></div>
+        <button id="btn-go-offline" class="btn btn-outline driver-expanded-only">Chuyển ngoại tuyến</button>
+    </div>`;
 }
 
 /**
@@ -211,183 +174,60 @@ export function renderTripCompleteCardHTML(lastRecommendation, postTripStation) 
 
 
 export function renderTripAssignedCardHTML(controller) {
-    const battery = renderBatteryView({ soc: controller.currentSocPct, range: controller.estimatedRangeKm });
-    return `
-            <div class="driver-nav-hud">
-                <div class="hud-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span class="badge badge-info">
-                        ĐÃ NHẬN CHUYẾN
-                        <span class="sr-only">TRIP_ASSIGNED TRIP ASSIGNED</span>
-                    </span>
-                    <h3 style="margin: 0; font-size: 18px;">${escapeHtml(controller.currentTrip?.trip_id || '')}</h3>
-                </div>
-
-                <div class="hud-details" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
-                    <div class="stat-box">
-                        <span class="stat-label">Phương tiện</span>
-                        <strong class="stat-value" style="font-size: 14px;">${escapeHtml(controller.currentVehicle?.vehicle_model || 'VF 3')}</strong>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">Cự ly dự kiến</span>
-                        <strong class="stat-value" style="font-size: 14px;">${(controller.currentTrip?.planned_distance_m / 1000).toFixed(1)} km</strong>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">Dung lượng Pin</span>
-                        <strong id="val-assigned-soc" class="stat-value" style="font-size: 14px;">${controller.currentSocPct.toFixed(0)}%</strong>
-                    </div>
-                </div>
-
-                <!-- Interactive Battery SOC Adjuster -->
-                <div class="cockpit-soc-control" style="margin-bottom: 14px; padding: 10px 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
-                            🔋 Tùy chỉnh mức Pin ban đầu (SOC)
-                        </span>
-                        <span id="label-assigned-soc-val" style="font-size: 12px; font-weight: 700; color: ${battery.labelColor};">
-                            ${battery.labelText}
-                        </span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="range" id="slider-assigned-soc" min="5" max="100" step="1" value="${battery.sliderValue}"
-                               style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
-                        <div style="display: flex; gap: 4px;">
-                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="12" style="padding: 2px 6px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">12%</button>
-                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="22" style="padding: 2px 6px; font-size: 11px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.5);">22%</button>
-                            <button type="button" class="btn btn-outline btn-xs btn-preset-assigned-soc" data-soc="85" style="padding: 2px 6px; font-size: 11px; color: #10b981; border-color: rgba(16, 185, 129, 0.5);">85%</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="driver-actions">
-                    <button id="btn-start-driving" class="btn btn-success btn-lg btn-block">
-                        ▶ Bắt đầu lái xe
-                    </button>
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button id="btn-assigned-pick-origin" class="btn btn-outline flex-1" style="font-size: 13px;">
-                            📍 Đổi điểm xuất phát (A)
-                        </button>
-                        <button id="btn-assigned-pick-dest" class="btn btn-outline flex-1" style="font-size: 13px;">
-                            🏁 Đổi điểm đến (B)
-                        </button>
-                    </div>
-                    <button id="btn-cancel-trip" class="btn btn-outline btn-sm mt-2">
-                        Hủy nhận chuyến
-                    </button>
-                </div>
-            </div>
-        `;
+    return `<div class="driver-nav-hud driver-summary">
+        <h3>Đã nhận chuyến <span class="sr-only">TRIP_ASSIGNED TRIP ASSIGNED</span></h3>
+        <div class="nav-stats-grid">
+            <div class="stat-box"><span class="stat-label">Cự ly đường</span><strong class="stat-value">${((controller.currentTrip?.planned_distance_m || 0) / 1000).toFixed(1)} km</strong></div>
+            <div class="stat-box"><span class="stat-label">ETA tới B (ước tính)</span><strong class="stat-value">${renderTripActiveEta(controller.currentRouteTiming, (controller.currentTrip?.planned_distance_m || 0) / 1000)} phút</strong></div>
+            <div class="stat-box"><span class="stat-label">Pin (SOC)</span><strong id="val-assigned-soc" class="stat-value">${controller.currentSocPct.toFixed(0)}%</strong></div>
+        </div>
+        <div class="driver-primary-actions"><button id="btn-start-driving" class="btn btn-success btn-block">▶ Bắt đầu lái xe</button></div>
+        <button id="btn-cancel-trip" class="btn btn-outline driver-expanded-only">Hủy nhận chuyến</button>
+    </div>`;
 }
 
-export function renderTripActiveCardHTML(controller, { warningBanner, etaMin, posStatus, progress, recSnippet, postTripSnippet, replayControls }) {
-    const battery = renderBatteryView({ soc: controller.currentSocPct, range: controller.estimatedRangeKm });
-    const { playClass: playBtnClass, playText: playBtnText, pauseClass: pauseBtnClass } = replayControls;
-    return `
-            <div class="driver-nav-hud" id="driver-active-hud" data-hud-state="TRIP_ACTIVE">
-                <div id="hud-warning-container">
-                    ${warningBanner}
-                </div>
+export function renderDriverAnalysisHTML(controller, {posStatus = '', progress = ''} = {}) {
+    const active = controller.state === 'TRIP_ACTIVE';
+    const assigned = controller.state === 'TRIP_ASSIGNED';
+    const battery = renderBatteryView({soc: controller.currentSocPct, range: controller.estimatedRangeKm});
+    const view = renderActiveCockpitView({distance: controller.remainingTripDistanceKm || 0, eta: '—', soc: controller.currentSocPct, range: controller.estimatedRangeKm, maxMotorPowerKw: controller.maxMotorPowerKw, currentInstantPowerKw: controller.instantaneousPowerKw, vehicleModel: controller.currentVehicle?.vehicle_model, powerStatus: controller.powerStatus});
+    const origin = controller.customOrigin || controller.currentTrip?.origin;
+    const destination = controller.customDestination || controller.currentTrip?.destination;
+    return `<div class="analysis-coordinates">
+        <span>Điểm A: <span id="text-origin-coords">${origin ? renderCoordinateText(origin) : '—'}</span></span>
+        <span>Điểm B: <span id="text-dest-coords">${destination ? renderCoordinateText(destination) : '—'}</span></span>
+    </div><div class="analysis-grid">
+        <span>Xe: <strong id="hud-vehicle-model">${escapeHtml(view.vehicleText)}</strong></span>
+        <span>Tầm xa: <strong id="val-trip-range">${view.rangeMarkup}</strong></span>
+        <span>Động cơ (Max): <strong id="hud-val-max-motor">${escapeHtml(view.maxMotorText)}</strong></span>
+        <span>Công suất: <strong id="hud-val-instant-power">${escapeHtml(view.powerText)}</strong></span>
+        <span id="hud-pos-status">${posStatus}</span><span id="hud-progress-status">${escapeHtml(progress)}</span>
+    </div>
+    ${(active || assigned) ? `<div class="cockpit-soc-control analysis-controls"><label for="${assigned ? 'slider-assigned-soc' : 'slider-cockpit-soc'}">SOC mô phỏng <span id="${assigned ? 'label-assigned-soc-val' : 'label-soc-slider-val'}">${battery.labelText}</span></label>
+        <input type="range" id="${assigned ? 'slider-assigned-soc' : 'slider-cockpit-soc'}" min="5" max="100" step="1" value="${battery.sliderValue}">
+        <div>${[12,22,85].map(soc => `<button type="button" class="btn btn-outline btn-sm ${assigned ? 'btn-preset-assigned-soc' : 'btn-quick-soc'}" data-soc="${soc}">${soc}%</button>`).join('')}</div></div>` : ''}
+    ${active ? `<div class="analysis-controls"><span>Tốc độ replay:</span>${[1,5,10].map(speed => `<button type="button" class="btn btn-sm ${(controller.replay?.speedMultiplier || 5) === speed ? 'btn-primary' : 'btn-outline'} btn-quick-speed" data-speed="${speed}">${speed}x</button>`).join('')}
+        <button id="btn-driver-replay-step" class="btn btn-outline btn-sm">⏭ Từng bước</button></div>` : ''}`;
+}
 
-                <div class="nav-metrics-card">
-                    <div class="nav-destination" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div>
-                            <span class="text-sm text-muted" style="font-size: 11px; text-transform: uppercase;">Điểm đến</span>
-                            <div class="dest-name" style="font-weight: 700; font-size: 16px;">
-                                Điểm trả khách
-                                <span class="sr-only">Passenger Drop-off (Trả khách)</span>
-                            </div>
-                        </div>
-                        <span class="badge badge-teal">Đang di chuyển</span>
-                    </div>
-
-                    <div class="nav-stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
-                        <div class="stat-box">
-                            <span class="stat-label">Cự ly còn lại</span>
-                            <span class="stat-value" id="val-remaining-dist">${controller.remainingTripDistanceKm.toFixed(1)} <small>km</small></span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">ETA</span>
-                            <span class="stat-value" id="val-trip-eta">${etaMin} <small>phút</small><span class="sr-only">min</span></span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">Pin (SOC)</span>
-                            <span class="${battery.socClass}" id="val-trip-soc">${battery.socText}</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-label">Tầm xa</span>
-                            <span class="stat-value" id="val-trip-range">${controller.estimatedRangeKm.toFixed(0)} <small>km</small></span>
-                        </div>
-                    </div>
-
-                    <div class="battery-bar-container" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                        <div id="battery-bar-fill" class="${battery.batteryClass}"
-                             style="width: ${battery.batteryWidth}; height: 100%;"></div>
-                    </div>
-
-                    <!-- Powertrain Motor Capability vs Instantaneous Draw -->
-                    <div class="powertrain-strip">
-                        <span style="color: #94a3b8;">Động cơ (Max): <strong style="color: #38bdf8;">${controller.maxMotorPowerKw ?? '—'} kW</strong></span>
-                        <span style="color: #94a3b8;">Công suất (ước tính): <strong id="hud-val-instant-power" style="color: #34d399;">${Number.isFinite(controller.instantaneousPowerKw) ? controller.instantaneousPowerKw.toFixed(1) + ' kW' : '— (không khả dụng)'}${controller.powerStatus === 'KINEMATICS_EXCEED_CAPABILITY' ? ' (vượt khả năng)' : ''}</strong></span>
-                    </div>
-
-                    <!-- Interactive Battery SOC Adjuster -->
-                    <div class="cockpit-soc-control" style="margin-top: 10px; padding: 8px 10px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">
-                                🔋 Điều chỉnh mức Pin (SOC)
-                            </span>
-                            <span id="label-soc-slider-val" style="font-size: 12px; font-weight: 700; color: ${battery.labelColor};">
-                                ${battery.labelText}
-                            </span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="range" id="slider-cockpit-soc" min="5" max="100" step="1" value="${battery.sliderValue}"
-                                   style="flex: 1; accent-color: #0d9488; cursor: pointer; height: 6px;">
-                            <div class="quick-soc-presets" style="display: flex; gap: 4px;">
-                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="12" title="Mức pin nguy cấp (< 15%)"
-                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">12%</button>
-                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="22" title="Mức pin khuyến cáo (< 30%)"
-                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #f59e0b; border-color: rgba(245, 158, 11, 0.5);">22%</button>
-                                <button type="button" class="btn btn-outline btn-xs btn-quick-soc" data-soc="85" title="Mức pin an toàn"
-                                        style="padding: 2px 6px; font-size: 11px; font-weight: 600; color: #10b981; border-color: rgba(16, 185, 129, 0.5);">85%</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="text-xs text-muted mt-2" style="display: flex; justify-content: space-between; font-size: 11px;">
-                        <span id="hud-pos-status">${posStatus}</span>
-                        <span id="hud-progress-status">${progress}</span>
-                    </div>
-                </div>
-
-                <div id="hud-rec-container">
-                    ${recSnippet}
-                </div>
-
-                <div id="hud-post-trip-container">
-                    ${postTripSnippet}
-                </div>
-
-                <div class="driver-controls mt-3">
-                    <div class="replay-controls d-flex gap-2 mb-2" style="display: flex; gap: 8px;">
-                        <button id="btn-driver-replay-play" class="${playBtnClass}">${playBtnText}</button>
-                        <button id="btn-driver-replay-pause" class="${pauseBtnClass}">⏸ Tạm dừng</button>
-                        <button id="btn-driver-replay-step" class="btn btn-outline btn-sm flex-1">⏭ Từng bước</button>
-                    </div>
-                    <div class="speed-controls" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 4px 8px; background: rgba(15, 23, 42, 0.4); border-radius: 6px; border: 1px solid rgba(51, 65, 85, 0.5);">
-                        <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Tốc độ:</span>
-                        <div style="display: flex; gap: 4px;">
-                            <button type="button" class="btn btn-xs ${(controller.replay?.speedMultiplier === 1) ? 'btn-primary' : 'btn-outline'} btn-quick-speed" data-speed="1" style="padding: 2px 8px; font-size: 11px;">1x</button>
-                            <button type="button" class="btn btn-xs ${(!controller.replay?.speedMultiplier || controller.replay?.speedMultiplier === 5) ? 'btn-primary' : 'btn-outline'} btn-quick-speed" data-speed="5" style="padding: 2px 8px; font-size: 11px;">5x</button>
-                            <button type="button" class="btn btn-xs ${(controller.replay?.speedMultiplier === 10) ? 'btn-primary' : 'btn-outline'} btn-quick-speed" data-speed="10" style="padding: 2px 8px; font-size: 11px;">10x</button>
-                        </div>
-                    </div>
-                    <button id="btn-change-station" class="btn btn-sm btn-outline-secondary" style="margin-top: 6px; width: 100%; display: ${controller._navigationLocked ? 'block' : 'none'};">
-                        🔄 Đổi trạm sạc khác
-                    </button>
-                    <button id="btn-complete-trip" class="btn btn-outline btn-sm btn-block">
-                        ✓ Hoàn thành chuyến đi
-                    </button>
-                </div>
-            </div>
-        `;
+export function renderTripActiveCardHTML(controller, {warningBanner, etaMin, recSnippet, postTripSnippet, replayControls}) {
+    const battery = renderBatteryView({soc: controller.currentSocPct, range: controller.estimatedRangeKm});
+    const destination = controller.currentTrip?.trip_id?.startsWith('NAVI') ? 'Trạm đã chọn' : 'Điểm trả khách';
+    return `<div class="driver-nav-hud driver-summary" id="driver-active-hud" data-hud-state="TRIP_ACTIVE">
+        <div id="hud-warning-container">${warningBanner}</div>
+        <div class="nav-metrics-card"><div class="nav-destination"><span class="stat-label">Điểm đến</span><strong class="dest-name">${destination}<span class="sr-only">Passenger Drop-off (Trả khách)</span></strong></div>
+            <div class="nav-stats-grid">
+                <div class="stat-box"><span class="stat-label">${controller.fullRouteCoords?.length >= 2 ? 'Cự ly đường còn lại' : 'Cự ly thẳng (ước tính)'}</span><span class="stat-value" id="val-remaining-dist">${controller.remainingTripDistanceKm.toFixed(1)} <small>km</small></span></div>
+                <div class="stat-box"><span class="stat-label">ETA lái xe (ước tính)</span><span class="stat-value" id="val-trip-eta">${escapeHtml(etaMin)} <small>phút</small><span class="sr-only">min</span></span></div>
+                <div class="stat-box"><span class="stat-label">Pin (SOC)</span><span class="${battery.socClass}" id="val-trip-soc">${battery.socText}</span></div>
+            </div><div class="battery-bar-container"><div id="battery-bar-fill" class="${battery.batteryClass}" style="width:${battery.batteryWidth};height:100%"></div></div>
+        </div>
+        <div class="driver-primary-actions"><button id="btn-driver-stations" class="btn btn-primary btn-block">Chọn trạm sạc</button>
+            <div class="replay-controls"><button id="btn-driver-replay-play" class="${replayControls.playClass}">${replayControls.playText}</button><button id="btn-driver-replay-pause" class="${replayControls.pauseClass}">⏸ Tạm dừng</button></div>
+            <button id="btn-change-station" class="btn btn-outline btn-block" style="display:${controller._navigationLocked ? 'block' : 'none'}">Đổi trạm sạc khác</button>
+        </div>
+        <div id="hud-post-trip-container">${postTripSnippet}</div>
+        <div id="hud-rec-container" class="driver-expanded-only">${recSnippet}</div>
+        <button id="btn-complete-trip" class="btn btn-outline btn-block driver-expanded-only">✓ Hoàn thành chuyến đi</button>
+    </div>`;
 }

@@ -454,3 +454,15 @@ The existing personal penalty remains nonnegative and capped at 30 seconds; it c
 **Evidence:** See `docs/reports/offline-route-weighting-fixes-2026-10-10.md`. Historical ADR-021 acceptance records describe their earlier baseline and are not overwritten. No Dataset V1 edits, new production SLA, new routing engine or streaming worker are introduced.
 
 
+
+## ADR-023: One station chooser and compact Driver cockpit
+
+**Date:** 2026-10-10. **Status:** Authorized by the user.
+
+**Decision:** Reuse the station drawer as the sole station chooser. Show up to five unique stations in backend-ranked order, followed by the remaining catalog in a native disclosure. Recommendation refresh does not open another panel or select a station. Keep the drawer disclosure, scroll and focused station action across updates. The cockpit recommendation is a compact summary with a cost-detail action.
+
+Mobile starts with a compact cockpit containing destination, remaining distance, estimated driving ETA, SOC and primary actions. A semantic button expands it; opening the station bottom sheet hides the cockpit so its controls cannot obstruct the chooser. Native details contains coordinates, road identity, replay speed, simulation SOC and H3 analysis. Preserve its state and controls across replay updates; update model/power values incrementally. No new dependencies or historical trip picker.
+
+Remaining road distance comes from the untraveled route geometry; straight-line fallback is explicitly labelled. ETA scales the active engine route duration by remaining distance and is labelled an estimate; it excludes station queue/service and is never taken from an unselected station recommendation. Combined selected legs include driving to the station and onward to B. Unknown timing remains unavailable. This is not a live traffic or segment-speed forecast. Backend ranking, eligibility, offline comparison and Dataset V1 are unchanged.
+
+**Evidence:** [Driver UI verification](reports/driver-ui-panels-2026-10-10.md).
