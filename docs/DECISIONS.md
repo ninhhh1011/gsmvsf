@@ -466,3 +466,13 @@ Mobile starts with a compact cockpit containing destination, remaining distance,
 Remaining road distance comes from the untraveled route geometry; straight-line fallback is explicitly labelled. ETA scales the active engine route duration by remaining distance and is labelled an estimate; it excludes station queue/service and is never taken from an unselected station recommendation. Combined selected legs include driving to the station and onward to B. Unknown timing remains unavailable. This is not a live traffic or segment-speed forecast. Backend ranking, eligibility, offline comparison and Dataset V1 are unchanged.
 
 **Evidence:** [Driver UI verification](reports/driver-ui-panels-2026-10-10.md).
+
+## ADR-024: Separate station intent from physical energy warnings
+
+**Date:** 2026-10-12. **Status:** User-authorized bug fix and project review.
+
+**Decision:** Preserve the canonical `need_service`, `request_valid` and `reason_code` service-intent contract. An explicit valid station request remains `VALID_REQUEST` even with ample battery. Add optional `energy_assessment` carrying the existing backend demand detector's physical decision and warning level. The backend owns thresholds; the UI maps warning level/reason to presentation. Missing/invalid/unsupported evidence must not default to a safe battery or a low-reserve warning. Legacy manual-request evidence without a physical assessment is unavailable; no database migration is needed.
+
+Propagate detector-derived range to candidate search when range is absent. Explicit requests retain valid supplied range/trip/reserve even when physical assessment is unavailable due to missing SOC. Reject nonfinite telemetry at demand/candidate HTTP boundaries. During locked station navigation, reuse `/demand/evaluate` to refresh energy without reranking or changing the selected station. Manual SOC/model changes, accepted power steps and newer drawer requests invalidate outstanding assessment results. Failed stale requests must not clear newer evidence. No second threshold policy, new dependency, background server process or Week 6 infrastructure.
+
+**Evidence and limits:** [Energy warning fix and project review](reports/energy-warning-and-project-review-2026-10-12.md). The warning patch is verified separately from eight still-open runtime/UI findings. Physical thresholds and the uncalibrated catalog/physics estimate remain unchanged; no claim of exhaustive project correctness.

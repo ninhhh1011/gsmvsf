@@ -224,7 +224,8 @@ class AutoDemandDetector:
             remaining_range_km = self.estimate_remaining_range_km(
                 soc_pct=soc_pct,
                 usable_capacity_kwh=usable_cap_kwh,
-                consumption_wh_per_km=context.consumption_wh_per_km,
+                consumption_wh_per_km=(context.consumption_wh_per_km
+                                      or capability.get_effective_consumption_wh_per_km()),
             )
 
         # Check range feasibility and compute energy margin
@@ -267,6 +268,9 @@ class AutoDemandDetector:
         return NeedServiceDecision(
             need_service=need,
             reason_code=reason,
+            warning_level=('CRITICAL' if destination_unreachable else 'ADVISORY' if need
+                           else 'SAFE' if remaining_range_km is not None and remaining_trip_km is not None
+                           else 'UNAVAILABLE'),
             safety_reserve_km=round(safety_reserve_km, 3) if safety_reserve_km is not None else None,
             remaining_trip_distance_km=round(remaining_trip_km, 3) if remaining_trip_km is not None else None,
             remaining_energy_kwh=round(remaining_energy_kwh, 3) if remaining_energy_kwh is not None else None,

@@ -30,7 +30,7 @@ from backend.app.services.routing.engine import (
 )
 from backend.app.services.routing.models import RouteRequest, RouteResult, RouteStatus
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter()
 
@@ -80,6 +80,7 @@ class EvaluateAndSearchApiRequest(BaseModel):
     """
     Unified payload providing telemetry to evaluate demand and search candidates.
     """
+    model_config = ConfigDict(allow_inf_nan=False)
     vehicle_id: str
     driver_id: str | None = None
     trip_id: str | None = None

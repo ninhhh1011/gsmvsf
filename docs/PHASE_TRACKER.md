@@ -60,3 +60,9 @@ Current checks: 561 backend PASS / 12 skipped, 196 frontend PASS, Ruff PASS, val
 User-authorized UI refinements complete: one station drawer with Top-5, compact/expandable mobile cockpit, primary distance/destination ETA/SOC, native analysis disclosure and readable light surfaces. Reroute progress, persistent controls and drawer update state are covered by regressions. See [verification report](reports/driver-ui-panels-2026-10-10.md) and ADR-023.
 
 Checks: frontend 205 PASS; backend 561 PASS / 12 skipped; Ruff PASS; real desktop/mobile browser 39/39 PASS. No Dataset V1 edits, runtime feature activation or Week 6 infrastructure changes. Driving ETA remains an estimate; station-leg fallback and physical calibration limitations are documented.
+
+## 2026-10-12 Energy warning fix and deep project review
+
+Fixed the `VALID_REQUEST` false low-reserve banner through separate backend physical assessment, preserved derived/range-only candidate evidence, rejected nonfinite telemetry, and guarded energy responses after manual/replay updates. Locked station navigation refreshes energy without reranking the selected station. See ADR-024 and [the fix/review report](reports/energy-warning-and-project-review-2026-10-12.md).
+
+Verification: backend 574 PASS / 12 skipped; frontend 215 PASS; Ruff PASS; validator 152 PASS / 0 FAIL and 22/22 assertions; 63 canonical file hashes unchanged; live contract verified on both updated API replicas; desktop/mobile browser 18/18 PASS. Independent review regressions reproduced and fixed. Eight further audit findings remain explicitly open in the report; this is not project-wide bug clearance or Week 6 activation.

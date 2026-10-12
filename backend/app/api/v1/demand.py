@@ -25,13 +25,14 @@ from backend.app.services.demand.models import (
 from backend.app.services.realtime.location import resolve_current_location
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Path as FPath
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter()
 
 
 class EvaluateDemandApiRequest(BaseModel):
     """Payload to evaluate auto demand."""
+    model_config = ConfigDict(allow_inf_nan=False)
     vehicle_id: str
     driver_id: str | None = None
     trip_id: str | None = None
@@ -51,6 +52,7 @@ class EvaluateDemandApiRequest(BaseModel):
 
 class DriverIntentApiRequest(BaseModel):
     """Payload to submit explicit driver intent."""
+    model_config = ConfigDict(allow_inf_nan=False)
     vehicle_id: str
     requested_service_type: RequestedServiceType
     driver_id: str | None = None

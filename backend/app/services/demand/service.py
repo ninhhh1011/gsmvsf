@@ -94,9 +94,10 @@ class DemandService:
             resolved_service_type=resolved_service,
             request_valid=True,
             reason_code=decision.reason_code,
+            energy_assessment=decision,
             current_soc_pct=context.current_soc_pct,
             remaining_energy_kwh=decision.remaining_energy_kwh,
-            estimated_remaining_range_km=context.estimated_remaining_range_km,
+            estimated_remaining_range_km=decision.estimated_remaining_range_km,
             remaining_trip_distance_km=decision.remaining_trip_distance_km,
             safety_reserve_km=decision.safety_reserve_km,
             energy_margin_km=decision.energy_margin_km,
@@ -130,30 +131,10 @@ class DemandService:
         vmeta = self._populate_vehicle_metadata(capability, vrow)
 
         decision = self._driver_requester.process_request(capability, requested_service)
+        physical = self._auto_detector.evaluate_need(context, capability)
 
         # In explicit driver requests, need_service is True
         need_service = True
-
-        safety_reserve = context.safety_reserve_km
-        if safety_reserve is None and context.remaining_trip_distance_km is not None:
-            safety_reserve = self._auto_detector.compute_safety_reserve_km(context.remaining_trip_distance_km)
-
-        usable_cap = capability.usable_capacity_kwh or capability.total_battery_capacity_kwh
-        rem_energy = (
-            round(usable_cap * (context.current_soc_pct / 100.0), 3)
-            if context.current_soc_pct is not None and usable_cap is not None
-            else None
-        )
-        energy_margin = None
-        if (
-            context.estimated_remaining_range_km is not None
-            and context.remaining_trip_distance_km is not None
-            and safety_reserve is not None
-        ):
-            energy_margin = round(
-                context.estimated_remaining_range_km - (context.remaining_trip_distance_km + safety_reserve),
-                3,
-            )
 
         request = EnergyServiceRequest(
             service_request_id=req_id,
@@ -168,12 +149,16 @@ class DemandService:
             resolved_service_type=decision.resolved_service_type,
             request_valid=decision.request_valid,
             reason_code=decision.reason_code,
+            energy_assessment=physical,
             current_soc_pct=context.current_soc_pct,
-            remaining_energy_kwh=rem_energy,
-            estimated_remaining_range_km=context.estimated_remaining_range_km,
-            remaining_trip_distance_km=context.remaining_trip_distance_km,
-            safety_reserve_km=safety_reserve,
-            energy_margin_km=energy_margin,
+            remaining_energy_kwh=physical.remaining_energy_kwh,
+            estimated_remaining_range_km=(context.estimated_remaining_range_km if context.estimated_remaining_range_km is not None
+                                          else physical.estimated_remaining_range_km),
+            remaining_trip_distance_km=(context.remaining_trip_distance_km if context.remaining_trip_distance_km is not None
+                                        else physical.remaining_trip_distance_km),
+            safety_reserve_km=(context.safety_reserve_km if context.safety_reserve_km is not None
+                              else physical.safety_reserve_km),
+            energy_margin_km=physical.energy_margin_km,
             vehicle_model=vmeta["vehicle_model"],
             vehicle_type=vmeta["vehicle_type"],
             battery_capacity_kwh=vmeta["battery_capacity_kwh"],

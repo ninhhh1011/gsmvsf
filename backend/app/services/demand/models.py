@@ -11,6 +11,7 @@ Contains:
 
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -147,7 +148,7 @@ class DemandContext(BaseModel):
     """
     Realtime telemetry and trip context required to evaluate energy service need.
     """
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", allow_inf_nan=False)
 
     vehicle_id: str
     driver_id: str | None = None
@@ -176,6 +177,7 @@ class NeedServiceDecision(BaseModel):
     """
     need_service: bool
     reason_code: ReasonCode
+    warning_level: Literal['SAFE', 'ADVISORY', 'CRITICAL', 'UNAVAILABLE'] = 'UNAVAILABLE'
     safety_reserve_km: float | None = None
     remaining_trip_distance_km: float | None = None
     remaining_energy_kwh: float | None = None
@@ -213,6 +215,8 @@ class EnergyServiceRequest(BaseModel):
 
     request_valid: bool = True
     reason_code: ReasonCode
+    # Physical energy state is independent of an explicit request to find a station.
+    energy_assessment: NeedServiceDecision | None = None
 
     # Energy and trip metrics
     current_soc_pct: float | None = None

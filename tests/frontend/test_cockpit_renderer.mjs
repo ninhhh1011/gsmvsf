@@ -39,14 +39,14 @@ test('driver controller coordinates replay facts without owning labels or button
     assert.doesNotMatch(source, /▶ (?:Đang chạy|Tiếp tục|Bắt đầu)|btn-(?:outline|primary) btn-sm flex-1/);
 });
 
-test('energy warning renderer escapes an external reason code', () => {
+test('energy warning renderer treats unknown external reasons as unavailable', () => {
     const html = renderEnergyWarningBanner({
         need_service: true,
         reason_code: '<img src=x onerror=alert(1)>',
         estimated_remaining_range_km: 10,
         remaining_trip_distance_km: 20
     });
-    assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+    assert.match(html, /Chưa có đánh giá năng lượng/);
     assert.doesNotMatch(html, /<img src=x/);
 });
 

@@ -44,6 +44,16 @@ def clean_state():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/api/v1/demand/evaluate", "/api/v1/demand/request", "/api/v1/candidate-search/evaluate"])
+@pytest.mark.parametrize("soc", ["NaN", "Infinity"])
+async def test_nonfinite_energy_telemetry_is_rejected(app, path, soc):
+    async with AsyncClient(transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test") as client:
+        response = await client.post(path, json={"vehicle_id":"V0001", "current_soc_pct":soc,
+                                                "requested_service_type":"CHARGING"})
+        assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_evaluate_auto_demand_car(app):
     """POST /api/v1/demand/evaluate for a car with low SOC."""
     transport = ASGITransport(app=app)

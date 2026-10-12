@@ -353,6 +353,8 @@ body {
     border: 1px solid transparent;
 }
 
+.banner-unavailable { background: #f8fafc; border: 1px solid #cbd5e1; color: #334155; }
+
 .banner-safe {
     background: var(--color-safe-bg);
     border-color: var(--color-safe-border);

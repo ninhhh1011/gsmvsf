@@ -9,49 +9,29 @@ import { ApiError } from './api.js';
 import { escapeHtml } from './domain/route-display.js';
 
 export function classifyEnergyWarning(energyContext) {
-    if (!energyContext) {
-        return {
-            level: 'SAFE',
-            title: 'Trạng thái năng lượng: An toàn',
-            testToken: 'SAFE',
-            message: 'Dữ liệu pin bình thường.',
-            reasonCode: 'NOMINAL'
-        };
-    }
-
-    const { need_service, reason_code, estimated_remaining_range_km, remaining_trip_distance_km, energy_margin_km } = energyContext;
-
-    if (!need_service || reason_code === 'SUFFICIENT_SOC_RANGE') {
-        return {
-            level: 'SAFE',
-            title: 'Trạng thái năng lượng: An toàn',
-            testToken: 'SAFE',
-            message: 'Tầm xa ước tính đủ cho chuyến đi hiện tại và mức dự phòng an toàn.',
-            reasonCode: reason_code || 'SUFFICIENT_SOC_RANGE'
-        };
-    }
-
-    // Critical: Vehicle cannot reach destination
-    if (
-        reason_code === 'DESTINATION_NOT_REACHABLE' ||
-        (estimated_remaining_range_km != null && remaining_trip_distance_km != null && estimated_remaining_range_km < remaining_trip_distance_km)
-    ) {
-        return {
-            level: 'CRITICAL',
-            title: 'Năng lượng nguy cấp',
-            testToken: 'ENERGY CRITICAL',
-            message: 'Tầm xa không đủ để đến đích. Cần ghé trạm sạc hoặc đổi pin ngay lập tức.',
-            reasonCode: reason_code || 'DESTINATION_NOT_REACHABLE'
-        };
-    }
-
-    // Advisory: Destination reachable, but insufficient post-destination reserve
+    const legacyLevels = {SUFFICIENT_SOC_RANGE: 'SAFE', DESTINATION_NOT_REACHABLE: 'CRITICAL',
+        LOW_SOC: 'ADVISORY', INSUFFICIENT_POST_DESTINATION_RESERVE: 'ADVISORY'};
+    const physical = energyContext?.energy_assessment ?? energyContext;
+    const reasonCode = physical?.reason_code || 'MISSING_DATA';
+    const level = physical?.warning_level || legacyLevels[reasonCode] || 'UNAVAILABLE';
+    if (level === 'SAFE') return {
+        level, title: 'Trạng thái năng lượng: An toàn', testToken: 'SAFE',
+        message: 'Tầm xa ước tính đủ cho chuyến đi hiện tại và mức dự phòng an toàn.', reasonCode
+    };
+    if (level === 'CRITICAL') return {
+        level, title: 'Năng lượng nguy cấp', testToken: 'ENERGY CRITICAL',
+        message: 'Tầm xa không đủ để đến đích. Cần ghé trạm sạc hoặc đổi pin ngay lập tức.', reasonCode
+    };
+    if (level === 'ADVISORY') return reasonCode === 'LOW_SOC' ? {
+        level, title: 'Mức pin thấp', testToken: 'Low SOC',
+        message: 'Pin đang dưới ngưỡng cảnh báo. Hãy kiểm tra phương án bổ sung năng lượng.', reasonCode
+    } : {
+        level, title: 'Dự phòng năng lượng thấp', testToken: 'Energy Reserve Low',
+        message: 'Bạn có thể hoàn tất chuyến đi hiện tại. Khuyến nghị ghé trạm bổ sung năng lượng sau khi trả khách.', reasonCode
+    };
     return {
-        level: 'ADVISORY',
-        title: 'Dự phòng năng lượng thấp',
-        testToken: 'Energy Reserve Low',
-        message: 'Bạn có thể hoàn tất chuyến đi hiện tại. Khuyến nghị ghé trạm bổ sung năng lượng sau khi trả khách.',
-        reasonCode: reason_code || 'INSUFFICIENT_POST_DESTINATION_RESERVE'
+        level: 'UNAVAILABLE', title: 'Chưa có đánh giá năng lượng', testToken: 'ENERGY UNAVAILABLE',
+        message: 'Chưa đủ dữ liệu hiện tại để xác nhận pin đủ cho hành trình.', reasonCode: 'MISSING_DATA'
     };
 }
 
@@ -61,6 +41,7 @@ export function renderEnergyWarningBanner(energyContext) {
 
     const reasonLabels = {
         'NOMINAL': 'Bình thường',
+        'MISSING_DATA': 'Chưa đủ dữ liệu',
         'SUFFICIENT_SOC_RANGE': 'Pin đủ',
         'DESTINATION_NOT_REACHABLE': 'Không đủ pin đến đích',
         'LOW_SOC_AND_INSUFFICIENT_RANGE': 'Pin thấp không đủ đến đích',
@@ -82,13 +63,15 @@ export function renderEnergyWarningBanner(energyContext) {
                 <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
             </svg>
         `;
-    } else {
+    } else if (warning.level === 'CRITICAL') {
         iconSvg = `
             <svg class="warning-icon" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
             </svg>
         `;
     }
+
+    if (!iconSvg) iconSvg = '<svg class="warning-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 14H9V9h2v6zm0-8H9V5h2v2z"/></svg>';
 
     return `
         <div class="energy-warning-banner banner-${badgeClass}" role="alert">

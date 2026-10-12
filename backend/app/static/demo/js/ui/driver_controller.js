@@ -99,6 +99,7 @@ export class DriverModeController {
         this.lastRecommendation = null; this.lastRecommendedStationId = null; this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
         this._navigationLocked = false; this._selectedStationId = null; this.routeRevision = 0;
         this._top5Result = null; this._top5Revision = 0;
+        this._drawerRevision = 0;
         this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000; this._recommendTimer = null;
         this.isPickingDestination = false; this.currentStationsFilter = 'ALL'; this.chargingIntent = 'EN_ROUTE';
         this.customOrigin = { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
@@ -337,6 +338,7 @@ export class DriverModeController {
         this._lastPowerObservation = null;
         this.instantaneousPowerKw = null;
         this.powerStatus = "UNAVAILABLE";
+        if (this.lastRecommendation) this.lastRecommendation = { ...this.lastRecommendation, energy_context: null };
         this.userSelectedVehicleModel = spec.vehicle_model;
         this.currentVehicle = {
             ...matchedVehicle,
@@ -371,6 +373,7 @@ export class DriverModeController {
         this.estimatedRangeKm = parseFloat(((usable * 1000.0 * (this.currentSocPct / 100.0)) / cons).toFixed(1));
     }
     setBatterySoc(newSoc, triggerEvaluation = true) {
+        if (this.lastRecommendation) this.lastRecommendation = { ...this.lastRecommendation, energy_context: null };
         this._powerRevision++;
         this._lastPowerObservation = null;
         const val = Math.min(100, Math.max(5, parseFloat(newSoc) || 10));
@@ -736,6 +739,7 @@ export class DriverModeController {
         try {
             const result = await this.api.computePowerStep(payload);
             if (this.generation !== generation || this._powerRevision !== powerRevision || this.currentVehicle?.vehicle_model !== model) return;
+            this._powerRevision++;
             this.currentSocPct = result.current_soc_pct;
             this.estimatedRangeKm = result.estimated_range_km;
             this.instantaneousPowerKw = result.instantaneous_power_kw;
@@ -781,23 +785,12 @@ export class DriverModeController {
     async _evaluateAtCurrentPosition() {
         if (!this.currentVehicle || !this.currentPos || this._isEvaluating) return;
 
-        // Check danger even when locked
-        const isDangerous = this.estimatedRangeKm < 5;
-        if (isDangerous && this._navigationLocked) {
-            // Show warning but don't auto-unlock
-            console.warn('[DriverMode] ⚠️ Range < 5km! User should change station.');
-        }
-
-        // Skip when navigation is locked
-        if (this._navigationLocked) {
-            this._isEvaluating = false;
-            return;
-        }
-
         this._isEvaluating = true;
 
         const currentGen = this.generation;
-        const evalRev = ++this.routeRevision;
+        const lockedAtRequest = this._navigationLocked;
+        const energyRev = this._powerRevision;
+        const evalRev = lockedAtRequest ? this.routeRevision : ++this.routeRevision;
         const driverId = this.session.driver_id || 'UNASSIGNED';
         const timestamp = (this.currentObservation?.timestamp)
             ? this.currentObservation.timestamp
@@ -829,9 +822,16 @@ export class DriverModeController {
         };
 
         try {
+            if (lockedAtRequest) {
+                const energy = await this.api.evaluateDemand(payload.context);
+                if (this.generation === currentGen && this.routeRevision === evalRev && this._powerRevision === energyRev) {
+                    this.lastRecommendation = { ...this.lastRecommendation, energy_context: energy };
+                }
+                return;
+            }
             const rec = await this.api.getRecommendation(payload);
 
-            if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) {
+            if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev || this._navigationLocked) {
                 this._isEvaluating = false;
                 return;
             }
@@ -878,11 +878,11 @@ export class DriverModeController {
                         leg1Result = await this.api.computeRoute(this.currentPos, stPos, {
                             vehicle_category: this.currentVehicle.vehicle_type
                         });
-                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) return;
+                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev || this._navigationLocked) return;
                         leg2Result = await this.api.computeRoute(stPos, this.currentTrip.destination, {
                             vehicle_category: this.currentVehicle.vehicle_type
                         });
-                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) return;
+                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev || this._navigationLocked) return;
                         if (this.generation === currentGen && this.routeRevision === evalRev && !this._navigationLocked) {
                             this.lastRecommendedStationId = top.station_id;
                             this.lastDiversionLeg1 = leg1Result;
@@ -892,7 +892,7 @@ export class DriverModeController {
                             }
                         }
                     } catch (routeErr) {
-                        if (this.generation !== currentGen || this.routeRevision !== evalRev) return;
+                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev) return;
                         console.warn('Recommendation diversion route error:', routeErr);
                     }
                 }
@@ -924,7 +924,8 @@ export class DriverModeController {
                 });
             }
         } catch (err) {
-            if (this.generation !== currentGen) return;
+            if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev) return;
+            if (lockedAtRequest) { this.lastRecommendation = { ...this.lastRecommendation, energy_context: null }; return; }
 
             console.warn('Recommendation evaluation error:', err);
             this.lastRecommendation = null;
@@ -971,11 +972,8 @@ export class DriverModeController {
             this.stopRecommendRefresh();
             return;
         }
-        if (this._navigationLocked) {
-            // Skip refresh during active navigation
-            return;
-        }
         await this._evaluateAtCurrentPosition();
+        if (this.state === DriverState.TRIP_ACTIVE) this.renderTripActiveUI();
     }
     async _selectStationAndNavigate(stationId) {
         const currentGen = this.generation;
@@ -1241,6 +1239,9 @@ export class DriverModeController {
     closeStationsDrawer() { this.bindings.setStationsDrawerOpen(false); }
     async refreshDrawerEvaluations() {
         const currentGen = this.generation;
+        const energyRev = this._powerRevision;
+        const routeRev = this.routeRevision;
+        const requestRev = ++this._drawerRevision;
         const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
         const vId = this.currentVehicle?.vehicle_id || 'V0001';
         const isAtDest = this.chargingIntent === 'AT_DESTINATION';
@@ -1308,7 +1309,7 @@ export class DriverModeController {
                 }).catch(() => null)
             ]);
 
-            if (this.generation !== currentGen) return;
+            if (this.generation !== currentGen || this._powerRevision !== energyRev || this.routeRevision !== routeRev || this._drawerRevision !== requestRev) return;
 
             if (isAtDest) {
                 if (recRes && recRes.ranked_candidates) {

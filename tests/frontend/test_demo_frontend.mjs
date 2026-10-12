@@ -72,6 +72,7 @@ test('classifyEnergyWarning maps backend reason codes to UX warning levels', () 
     const critResult2 = classifyEnergyWarning({
         need_service: true,
         reason_code: 'LOW_SOC_AND_INSUFFICIENT_RANGE',
+        energy_assessment: {warning_level: 'CRITICAL', reason_code: 'LOW_SOC_AND_INSUFFICIENT_RANGE'},
         estimated_remaining_range_km: 5.0,
         remaining_trip_distance_km: 10.0
     });
