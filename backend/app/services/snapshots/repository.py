@@ -1,12 +1,13 @@
 """PostgreSQL is authoritative for immutable snapshots and search evidence."""
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from math import isfinite
 from pathlib import Path
 from uuid import UUID
 
 import asyncpg
-from backend.app.services.ranking.models import CandidateSearchEvidence
+from backend.app.services.ranking.models import CandidateSearchEvidence, RankingPolicy
 from backend.app.services.snapshots.models import Snapshot, StateError, aware_utc, snapshot_adapter
 
 
@@ -115,19 +116,26 @@ class SnapshotRepository:
         return CandidateSearchEvidence.model_validate_json(payload)
 
     async def get_congested_polygons(self, min_delay: float = 1.6, limit: int = 5,
-                                     as_of: datetime | None = None) -> list[dict]:
+                                     as_of: datetime | None = None,
+                                     traffic_fresh_s: float | None = None) -> list[dict]:
         """Fetch GeoJSON polygon buffers for currently congested road segments (Block 3)."""
         import json
+        freshness = RankingPolicy().traffic_fresh_s if traffic_fresh_s is None else traffic_fresh_s
+        if not isfinite(freshness) or freshness < 0:
+            raise ValueError('Traffic freshness must be finite and nonnegative')
+        as_of = aware_utc(as_of or datetime.now(UTC))
         async with self.connection() as connection:
             rows = await connection.fetch('''
                 WITH entities AS (
-                    SELECT DISTINCT entity_id FROM state_snapshots WHERE kind = 'traffic'
+                    SELECT DISTINCT entity_id FROM state_snapshots
+                    WHERE kind = 'traffic' AND timestamp >= $4 AND timestamp <= $3
                 ), latest AS (
                     SELECT e.entity_id, head.payload
                     FROM entities e
                     CROSS JOIN LATERAL (
                         SELECT payload FROM state_snapshots
-                        WHERE kind = 'traffic' AND entity_id = e.entity_id AND timestamp <= $3
+                        WHERE kind = 'traffic' AND entity_id = e.entity_id
+                            AND timestamp >= $4 AND timestamp <= $3
                         ORDER BY timestamp DESC LIMIT 1
                     ) head
                 )
@@ -139,7 +147,7 @@ class SnapshotRepository:
                 WHERE (s.payload->>'delay_factor')::float >= $1
                 ORDER BY (s.payload->>'delay_factor')::float DESC, s.entity_id
                 LIMIT $2
-            ''', min_delay, limit, aware_utc(as_of or datetime.now(UTC)))
+            ''', min_delay, limit, as_of, as_of - timedelta(seconds=freshness))
         return [json.loads(row['geojson']) for row in rows if row.get('geojson')]
 
     async def get_nearest_segment(self, latitude: float, longitude: float) -> str | None:

@@ -164,7 +164,8 @@ async def recommend(request: RecommendRequest, request_obj: Request,
         constraints = None
         repo = getattr(workflow, 'repository', None)
         if request.avoid_congestion and repo is not None and hasattr(repo, 'get_congested_polygons'):
-            avoid_areas = await repo.get_congested_polygons(min_delay=1.6, as_of=context.timestamp)
+            avoid_areas = await repo.get_congested_polygons(min_delay=1.6, as_of=context.timestamp,
+                traffic_fresh_s=workflow.ranking.policy.traffic_fresh_s)
             if avoid_areas:
                 from backend.app.services.routing.models import RouteConstraints
                 constraints = RouteConstraints(custom={"avoid_areas": avoid_areas, "congestion_priority": 0.05})
