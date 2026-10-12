@@ -131,3 +131,49 @@ test('unlocked reroute rejects a route superseded by station selection revision'
  resolve({geometry:'??_ibE_ibE',distance_m:1000,duration_s:60});
  await pending;assert.equal(c.fullRouteCoords,previous);
 });
+
+test('after passed B reroute has no return destination and retains passenger history',async()=>{
+ let request;
+ const c=fixture({getStationPlan:async payload=>{request=payload;return {station_id:'S',service_type:'CHARGING',goal_role:'STATION',plan_mode:'BEFORE_DESTINATION',route:{geometry:[[105,21],[105.01,21.01]],distance_m:1000,duration_s:60},waypoints:[]};}});
+ c.customDestination={latitude:21.02,longitude:105.02};c.currentTrip={destination:c.stations[0],goal_role:'STATION'};
+ c.selectedStationPlan={station_id:'S',service_type:'CHARGING',plan_mode:'AFTER_DESTINATION'};
+ c.navigationStages={originalMode:'AFTER_DESTINATION',passengerPassed:true,stationPassed:false};c._navigationLocked=true;
+ await c._triggerReroute(c.currentPos);
+ assert.equal(request.destination_latitude,null);assert.equal(request.plan_mode,'BEFORE_DESTINATION');
+ assert.equal(c.passengerDestination.latitude,21.02);
+});
+test('before passed station reroute goes to B retaining confirmed constraints',async()=>{
+ let call;
+ const c=fixture({computeRoute:async(...args)=>{call=args;return {geometry:'??_ibE_ibE',distance_m:1000,duration_s:60};},getStationPlan(){throw Error('must not revisit station');}});
+ c.customDestination={latitude:21.02,longitude:105.02};c.currentTrip={destination:c.customDestination};
+ c.selectedStationPlan={station_id:'S',service_type:'CHARGING',plan_mode:'BEFORE_DESTINATION',constraints:{avoid_tolls:true}};
+ c.navigationStages={originalMode:'BEFORE_DESTINATION',stationPassed:true,passengerPassed:false};c._navigationLocked=true;
+ await c._triggerReroute(c.currentPos);
+ assert.deepEqual(call?.[1],c.customDestination);assert.deepEqual(call?.[4],{avoid_tolls:true});
+});
+
+test('waypoint passage requires monotonic projected route progress and survives replanning',async()=>{
+ const {recordWaypointProgress}=await import('../../backend/app/static/demo/js/ui/station_planning.js');
+ const c=fixture({});c.fullRouteCoords=[[21,105],[21.01,105.01],[21.02,105.02]];
+ c.selectedStationPlan={plan_mode:'AFTER_DESTINATION',waypoints:[{role:'PASSENGER_DESTINATION',geometry_index:1},{role:'STATION',geometry_index:2}]};
+ c.lastPassedSegmentIndex=0;
+ recordWaypointProgress(c,{segmentIndex:0,distanceMeters:0,projPoint:[21,105]});
+ assert.equal(c.navigationStages.passengerPassed,false);
+ recordWaypointProgress(c,{segmentIndex:1,distanceMeters:100,projPoint:[21.01,105.01]});
+ assert.equal(c.navigationStages.passengerPassed,false,'off-route proximity cannot confirm B');
+ recordWaypointProgress(c,{segmentIndex:0,distanceMeters:0,projPoint:[21.01,105.01]});
+ assert.equal(c.navigationStages.passengerPassed,true);
+ assert.equal(c.navigationStages.stationPassed,false);
+});
+test('new passenger goal clears old navigation stage',async()=>{
+ const c=fixture({});c.navigationStages={passengerPassed:true,stationPassed:true};
+ c.bindings.setDestinationCoordinates=()=>{};c._updateCustomRoute=async()=>{};
+ await c.setCustomDestination({latitude:21.03,longitude:105.03});
+ assert.equal(c.navigationStages,null);
+});
+test('route client forwards confirmed domain constraints',async()=>{
+ const {ApiClient}=await import('../../backend/app/static/demo/js/api.js');
+ const api=new ApiClient();let body;api._request=async(_endpoint,options)=>{body=JSON.parse(options.body);};
+ await api.computeRoute({latitude:21,longitude:105},{latitude:22,longitude:106},{vehicle_category:'EV_CAR'},[],{custom:{avoid_areas:[1]}});
+ assert.deepEqual(body.constraints,{custom:{avoid_areas:[1]}});
+});

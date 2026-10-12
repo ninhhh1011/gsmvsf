@@ -5,7 +5,7 @@ import { decodePolyline } from '../map.js';
 export function planningRequest(controller) {
     const origin = controller.planningOrigin;
     if (!origin || !controller.currentVehicle) return null;
-    const destination = controller.passengerDestination;
+    const destination = controller.navigationStages?.passengerPassed ? null : controller.passengerDestination;
     return {
         context: {
             vehicle_id: controller.currentVehicle.vehicle_id,
@@ -38,15 +38,18 @@ export async function selectStationPlan(stationId, serviceType = null, mode = 'B
     const revision = ++this.routeRevision;
     this.bindings.setNavigationButtonState('Đang kiểm tra trạm...', true);
     try {
-        const plan = await this.api.getStationPlan({ ...payload, station_id: stationId, service_type: pair.service_type, plan_mode: mode });
+        const effectiveMode = this.navigationStages?.passengerPassed ? 'BEFORE_DESTINATION' : mode;
+        const plan = await this.api.getStationPlan({ ...payload, station_id: stationId, service_type: pair.service_type, plan_mode: effectiveMode });
         if (this.generation !== generation || this.routeRevision !== revision || this._powerRevision !== powerRevision) return false;
         if (plan.station_id !== stationId || plan.service_type !== pair.service_type || !plan.route) throw new Error('Kế hoạch trạm không hợp lệ');
         const coords = typeof plan.route.geometry === 'string' ? decodePolyline(plan.route.geometry) : plan.route.geometry?.map(([lng, lat]) => [lat, lng]);
         if (!coords?.length) throw new Error('Chưa có hình học tuyến đường');
         const origin = this.planningOrigin;
         const passengerDestination = this.passengerDestination;
-        const target = this.passengerDestination && mode !== 'AFTER_DESTINATION' ? this.passengerDestination : { latitude: station.latitude, longitude: station.longitude };
+        const target = payload.destination_latitude != null && effectiveMode !== 'AFTER_DESTINATION' ? this.passengerDestination : { latitude: station.latitude, longitude: station.longitude };
         this.selectedStationPlan = plan;
+        if (!refresh && !this.navigationStages?.passengerPassed) this.navigationStages = { originalMode: mode, passengerPassed: false, stationPassed: false };
+        else this.navigationStages ??= { originalMode: mode, passengerPassed: false, stationPassed: false };
         this._navigationLocked = true; this._selectedStationId = stationId;
         this.stationNavigationTarget = { latitude: station.latitude, longitude: station.longitude };
         this.lastRecommendedStationId = stationId;
@@ -79,7 +82,7 @@ export async function refreshStationPlans() {
     if (!request) { this.renderStationsDrawer(); this.bindings.showRouteUnavailable?.('Chọn điểm A trên bản đồ để tìm trạm.'); return; }
     const generation = this.generation, power = this._powerRevision, route = this.routeRevision;
     const revision = ++this._drawerRevision;
-    const after = this.chargingIntent === 'AT_DESTINATION';
+    const after = this.chargingIntent === 'AT_DESTINATION' && !this.navigationStages?.passengerPassed;
     if (after && !this.passengerDestination) return;
     this.bindings.setAfterDestinationEnabled?.(!!this.passengerDestination);
     if (after) { this.postTripRecommendation = null; this.postTripCandidateDetails = null; }
@@ -104,7 +107,7 @@ export async function refreshStationPlans() {
 }
 
 export function renderStationPlans(filter = 'ALL') {
-    const after = this.chargingIntent === 'AT_DESTINATION' && !!this.passengerDestination;
+    const after = this.chargingIntent === 'AT_DESTINATION' && !!this.passengerDestination && !this.navigationStages?.passengerPassed;
     const activeRec = after ? this.postTripRecommendation : this.lastRecommendation;
     const activeCand = after ? this.postTripCandidateDetails : this.stationCandidateDetails;
     let stations = this.stations;
@@ -120,4 +123,19 @@ export function renderStationPlans(filter = 'ALL') {
         setPostTrip: data => this.setPostTripStation(data.stationId, data.serviceType),
         zoom: data => this.map.map.flyTo([Number(data.lat), Number(data.lng)],16)
     });
+}
+
+export function recordWaypointProgress(controller, progress) {
+    if (!controller.selectedStationPlan || !progress || progress.distanceMeters > 35 || (controller.navigationStages?.originalMode === 'BEFORE_DESTINATION' && controller.navigationStages.stationPassed)) return;
+    const coords = controller.fullRouteCoords;
+    let passedIndex = controller.lastPassedSegmentIndex;
+    const endpoint = coords?.[passedIndex + 1];
+    if (endpoint && progress.projPoint && Math.abs(endpoint[0] - progress.projPoint[0]) < 1e-7 && Math.abs(endpoint[1] - progress.projPoint[1]) < 1e-7) passedIndex++;
+    controller.navigationStages ??= { originalMode: controller.selectedStationPlan.plan_mode, passengerPassed: false, stationPassed: false };
+    for (const waypoint of controller.selectedStationPlan.waypoints || []) {
+        if (passedIndex >= waypoint.geometry_index) {
+            if (waypoint.role === 'PASSENGER_DESTINATION') controller.navigationStages.passengerPassed = true;
+            if (waypoint.role === 'STATION') controller.navigationStages.stationPassed = true;
+        }
+    }
 }

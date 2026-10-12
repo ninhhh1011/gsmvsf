@@ -146,12 +146,13 @@ export class ApiClient {
     /**
      * Computes a road-network route and returns encoded polyline geometry.
      */
-    async computeRoute(origin, destination, profile = { vehicle_category: 'EV_CAR' }, via = []) {
+    async computeRoute(origin, destination, profile = { vehicle_category: 'EV_CAR' }, via = [], constraints = null) {
         const payload = {
             origin: { latitude: origin.latitude, longitude: origin.longitude },
             destination: { latitude: destination.latitude, longitude: destination.longitude },
             profile
         };
+        if (constraints != null) payload.constraints = constraints;
         if (via && via.length > 0) {
             payload.via = via.map(p => ({ latitude: p.latitude, longitude: p.longitude }));
         }

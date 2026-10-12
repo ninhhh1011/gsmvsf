@@ -1,4 +1,4 @@
-import { selectStationPlan, refreshStationPlans, renderStationPlans, planningRequest } from './station_planning.js';
+import { selectStationPlan, refreshStationPlans, renderStationPlans, planningRequest, recordWaypointProgress } from './station_planning.js';
 /**
  * Driver Mode Controller for VinFast EV Recommendation Demo.
  * Clean, distraction-free Cockpit HUD for in-car use.
@@ -98,7 +98,7 @@ export class DriverModeController {
         this.lastPassedSegmentIndex = 0;
         this.offRouteConsecutiveSamples = 0; this.lastRerouteTimestamp = 0;
         this.lastRecommendation = null; this.lastRecommendedStationId = null; this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
-        this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null; this.routeRevision = 0;
+        this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null; this.navigationStages = null; this.routeRevision = 0;
         this._top5Result = null; this._top5Revision = 0;
         this._drawerRevision = 0;
         this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000; this._recommendTimer = null;
@@ -662,7 +662,8 @@ export class DriverModeController {
 
                     // Measure the remaining road geometry, including a selected diversion.
                     if (this.fullRouteCoords.length > 1) {
-                        this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
+                        if (progress.distanceMeters <= OFF_ROUTE_THRESHOLD_METERS) this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
+                        recordWaypointProgress(this, progress);
                         const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
                             segmentIndex: this.lastPassedSegmentIndex,
                             projPoint: progress.projPoint
@@ -697,20 +698,6 @@ export class DriverModeController {
                 if (this.generation !== currentGen) return;
                 this.renderTripCompleteUI();
                 return;
-            }
-
-            if (this._navigationLocked && this._selectedStationId && this.currentPos) {
-                const selectedStation = this.stations.find(s => s.station_id === this._selectedStationId);
-                if (selectedStation) {
-                    const distKm = straightLineDistanceKm(
-                        this.currentPos.latitude, this.currentPos.longitude,
-                        selectedStation.latitude, selectedStation.longitude
-                    );
-                    if (distKm < 0.1) { // < 100m → coi như đến nơi
-                        this._navigationLocked = false;
-                        this._selectedStationId = null;
-                    }
-                }
             }
 
             // Throttled recommendation evaluation
@@ -764,7 +751,7 @@ export class DriverModeController {
     }
     async _triggerReroute(fromPos) {
         if (!fromPos || !this.currentTrip?.destination) return;
-        if (this._navigationLocked && this.selectedStationPlan) {
+        if (this._navigationLocked && this.selectedStationPlan && !(this.navigationStages?.originalMode === 'BEFORE_DESTINATION' && this.navigationStages.stationPassed)) {
             const plan = this.selectedStationPlan;
             return selectStationPlan.call(this, plan.station_id, plan.service_type, plan.plan_mode, true);
         }
@@ -774,7 +761,7 @@ export class DriverModeController {
             const rerouteResult = await this.api.computeRoute(
                 fromPos,
                 this.currentTrip.destination,
-                { vehicle_category: vCat }
+                { vehicle_category: vCat }, [], this.selectedStationPlan?.constraints
             );
             if (this.generation !== currentGen || this.routeRevision !== revision || this._powerRevision !== powerRevision) return;
             if (rerouteResult?.geometry) {
@@ -1025,7 +1012,7 @@ export class DriverModeController {
         this.lastRerouteTimestamp = 0; this.lastRecommendedStationId = null;
         this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
         this.remainingTripDistanceKm = 0.0; this._navigationLocked = false;
-        this._selectedStationId = null; this.selectedStationPlan = null;
+        this._selectedStationId = null; this.selectedStationPlan = null; this.navigationStages = null;
         this.stopRecommendRefresh();
         this.session.driver_id = null; this.session.vehicle_id = null;
         this.session.vehicle_category = null; this.session.trip_id = null;
@@ -1046,7 +1033,7 @@ export class DriverModeController {
     unlockNavigation() {
         if (!this._navigationLocked) return;
         this._navigationLocked = false;
-        this._selectedStationId = null; this.selectedStationPlan = null;
+        this._selectedStationId = null; this.selectedStationPlan = null; this.navigationStages = null;
         // Re-trigger evaluation
         this.lastEvalTimestamp = 0; // force re-evaluate
         this._evaluateAtCurrentPosition().catch(() => {});
@@ -1122,6 +1109,7 @@ export class DriverModeController {
     cancelAllPicking() { this.mapPicker.cancelAll(); }
     async setCustomOrigin(orig) {
         if (!orig) return;
+        this.navigationStages = null;
         this.customOrigin = orig;
         this.currentPos = { latitude: orig.latitude, longitude: orig.longitude };
         this.matchedPos = null;
@@ -1135,6 +1123,7 @@ export class DriverModeController {
     }
     async setCustomDestination(dest) {
         if (!dest) return;
+        this.navigationStages = null;
         this.customDestination = dest;
 
         const origin = this.planningOrigin;
@@ -1148,7 +1137,7 @@ export class DriverModeController {
         this.generation++; this.routeRevision++; this.replay.reset(); this.stopRecommendRefresh();
         this.customDestination = null; this.currentTrip = null; this.stationNavigationTarget = null;
         this.fullRouteCoords = null; this.directRouteGeometry = null; this.currentRouteTiming = null;
-        this.remainingTripDistanceKm = 0; this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null;
+        this.remainingTripDistanceKm = 0; this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null; this.navigationStages = null;
         this.lastRecommendation = null; this.stationCandidateDetails = null; this.postTripRecommendation = null;
         this.postTripStation = null; this.postTripRoute = null; this.chargingIntent = 'EN_ROUTE';
         this.bindings.setDestinationCoordinates('Chưa chọn B'); this.bindings.setActiveIntent('EN_ROUTE');
@@ -1159,7 +1148,7 @@ export class DriverModeController {
     async _updateCustomRoute(origin, dest) {
         const currentGen = this.generation;
         const routeRev = ++this.routeRevision;
-        this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null;
+        this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null; this.navigationStages = null;
         this.bindings.setAfterDestinationEnabled?.(!!dest);
         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
         try {
