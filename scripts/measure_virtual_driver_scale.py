@@ -17,6 +17,7 @@ import math
 import os
 from pathlib import Path
 import random
+import re
 import sys
 from time import perf_counter
 from uuid import uuid4
@@ -29,6 +30,24 @@ from backend.app.services.route_familiarity.signature import decode_polyline, _d
 
 CADENCE = 30.0
 SPEED_M_S = 20 / 3.6
+
+
+def validate_namespace(namespace):
+    if not re.fullmatch(r'synthetic-scale-[a-z0-9-]{1,40}', namespace):
+        raise ValueError('Load namespace must be synthetic-scale- followed by 1..40 lowercase letters/digits/hyphens')
+    return namespace
+
+
+def load_driver_ids(namespace, stages=(100, 500, 1000)):
+    validate_namespace(namespace)
+    return [f'{namespace}-{count}-{driver:04d}' for count in stages for driver in range(count)]
+
+
+def validate_output(output):
+    output = Path(output).resolve()
+    if not output.is_relative_to(ROOT) or output.is_relative_to(ROOT / 'dataset_v1') or output.exists():
+        raise ValueError('Use a new output file inside the repository, outside Dataset')
+    return output
 
 
 def schedule(drivers: int, intervals: int):
@@ -180,9 +199,8 @@ async def run(args):
     secret = os.environ.get('ROUTE_FAMILIARITY_IDENTITY_SECRET', '')
     if len(secret.encode()) < 32:
         raise ValueError('Private ROUTE_FAMILIARITY_IDENTITY_SECRET environment value required (>=32 bytes)')
-    output = Path(args.output).resolve()
-    if not output.is_relative_to(ROOT) or output.is_relative_to(ROOT / 'dataset_v1') or output.exists():
-        raise ValueError('Use a new output file inside the repository, outside Dataset')
+    output = validate_output(args.output)
+    namespace = validate_namespace(args.namespace) if args.namespace else 'synthetic-scale-' + uuid4().hex[:12]
     manifest = json.loads(Path(args.manifest).read_text(encoding='utf-8'))
     templates = []
     for template in manifest['templates']:
@@ -193,7 +211,7 @@ async def run(args):
     if not templates:
         raise ValueError('Seed manifest has no route templates')
     report = {'status': 'MEASURING', 'started_at': datetime.now(UTC).isoformat(),
-              'run_namespace': 'synthetic-scale-' + uuid4().hex[:12],
+              'run_namespace': namespace,
               'api_url': args.api_url, 'seed_manifest': str(Path(args.manifest)), 'seed': args.seed,
               'vehicle_template': {'canonical_vehicle_id': 'V0001', 'category': 'EV_CAR',
                                    'virtual_copies': True, 'unique_driver_ids': True},
@@ -202,13 +220,15 @@ async def run(args):
               'limitations': ['Single client IP; existing API rate limit is retained.',
                               'Synthetic geometry/model copies do not prove real driver behavior.',
                               'No production SLA; error and matching status counts are evidence.',
+                              'Fixed namespace reuses GPS state unless the runtime is independently isolated.',
+                              'Personal history requires matching --load-namespace seed inputs; burst identities have none.',
                               'Latency includes warmup; recommendation sampled once at final interval.']}
     output.parent.mkdir(parents=True, exist_ok=True)
     def save():
         output.write_text(json.dumps(report, indent=2), encoding='utf-8')
     save()
     try:
-        async with httpx.AsyncClient(base_url=args.api_url,
+        async with httpx.AsyncClient(base_url=args.api_url, timeout=None,
                                      limits=httpx.Limits(max_connections=args.concurrency)) as client:
             for count in args.stages:
                 report['stages'].append(await measure_stage(client, templates, args, count, secret,
@@ -230,6 +250,7 @@ def main():
     parser.add_argument('--api-url', default='http://127.0.0.1:8000')
     parser.add_argument('--manifest', default='runtime/synthetic-journeys-20261012/manifest.json')
     parser.add_argument('--output', required=True)
+    parser.add_argument('--namespace', help='Fixed synthetic-scale- namespace matching seeded personal history')
     parser.add_argument('--stages', nargs='+', type=int, default=[100, 500, 1000])
     parser.add_argument('--intervals', type=int, default=3)
     parser.add_argument('--concurrency', type=int, default=32)

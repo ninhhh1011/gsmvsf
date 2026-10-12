@@ -15,6 +15,9 @@ from backend.app.services.route_familiarity.ingestion import RouteHistoryIngesti
 from backend.app.services.route_familiarity.repository import RouteHistoryRepository
 from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from backend.app.services.routing.models import Position, RouteRequest, RouteStatus, VehicleRoutingProfile
+from scripts.measure_virtual_driver_scale import load_driver_ids, validate_namespace
+
+ROOT = Path(__file__).resolve().parents[1]
 
 PAIRS = [((20.9849, 105.7935), (21.0315, 105.7830)),
          ((20.9849, 105.7935), (21.0245, 105.8560)),
@@ -28,22 +31,49 @@ def choice_cost(duration, queue_minutes, familiarity):
     return duration + queue_minutes * 60 - familiarity * 180
 
 
-async def seed(args):
-    as_of = datetime.fromisoformat(args.as_of.replace('Z', '+00:00'))
+def output_directory(output):
+    output = Path(output).resolve()
+    if not output.is_relative_to(ROOT) or output.is_relative_to(ROOT / 'dataset_v1') or \
+            output.is_relative_to(settings.dataset_path.resolve()):
+        raise ValueError('Seed output must be inside the repository and outside Dataset V1')
+    return output
+
+
+def seed_time(value):
+    as_of = datetime.fromisoformat(value.replace('Z', '+00:00'))
     if as_of.tzinfo is None:
         raise ValueError('as-of requires an explicit timezone')
+    return as_of
+
+
+def retry_templates(manifest, seed, as_of, drivers, load_namespace):
+    existing = json.loads(manifest.read_text(encoding='utf8'))
+    if (existing['seed'], existing['as_of'], existing['drivers'], existing.get('load_namespace')) != (
+            seed, as_of.isoformat(), drivers, load_namespace):
+        raise ValueError('Use a new output directory for a different seed/time/size/namespace')
+    if not existing.get('templates') or any(t.get('engine') != 'graphhopper' for t in existing['templates']):
+        raise ValueError('Manifest requires real GraphHopper templates')
+    return existing['templates']
+
+
+def trip_times(as_of, day, duration_s):
+    if not 1 <= day <= 5 or duration_s <= 0:
+        raise ValueError('Require a historical day and positive route duration')
+    completed = as_of - timedelta(days=day, minutes=10)
+    return completed - timedelta(seconds=duration_s), completed
+
+
+async def seed(args):
+    as_of = seed_time(args.as_of)
+    load_namespace = getattr(args, 'load_namespace', None)
+    if load_namespace:
+        validate_namespace(load_namespace)
     rng = random.Random(args.seed)
-    output = Path(args.output)
-    if output.resolve().is_relative_to(settings.dataset_path.resolve()):
-        raise ValueError('Output cannot be inside Dataset V1')
+    output = output_directory(args.output)
     output.mkdir(parents=True, exist_ok=True)
     manifest = output / 'manifest.json'
     if manifest.exists():
-        existing = json.loads(manifest.read_text())
-        if (existing['seed'], existing['as_of'], existing['drivers']) != (
-                args.seed, as_of.isoformat(), args.drivers):
-            raise ValueError('Use a new output directory for a different seed/time/size')
-        templates = existing['templates']
+        templates = retry_templates(manifest, args.seed, as_of, args.drivers, load_namespace)
     else:
         templates = []
         async with httpx.AsyncClient(timeout=60) as client:
@@ -59,11 +89,15 @@ async def seed(args):
                     templates.append({'origin': origin, 'destination': destination,
                         'polyline': route.geometry, 'duration_s': route.duration_s,
                         'distance_m': route.distance_m, 'engine': route.engine_name})
-        manifest.write_text(json.dumps({'seed': args.seed, 'as_of': as_of.isoformat(),
+        data = {'seed': args.seed, 'as_of': as_of.isoformat(),
             'drivers': args.drivers, 'namespace': 'synthetic', 'templates': templates,
             'provenance': 'seeded behavioral choices over real GraphHopper routes',
-            'limitations': 'Synthetic motivations are not evidence of real driver causality'},
-            indent=2), encoding='utf8')
+            'limitations': 'Synthetic motivations are not evidence of real driver causality'}
+        if load_namespace:
+            data.update(load_namespace=load_namespace, load_stages=[100, 500, 1000],
+                        load_drivers=1600, histories_per_driver=5)
+        with manifest.open('x', encoding='utf8') as stream:
+            stream.write(json.dumps(data, indent=2))
     batch = hashlib.sha256(manifest.read_bytes()).hexdigest()[:16]
     truth = []
     async with asyncpg.create_pool(settings.database_url.replace('postgresql+asyncpg://',
@@ -72,6 +106,8 @@ async def seed(args):
         await repo.ensure_schema()
         ingestion = RouteHistoryIngestion(repo)
         identities = ['synthetic_sample_driver'] + [f'synthetic_{batch}_{i}' for i in range(args.drivers)]
+        if load_namespace:
+            identities = ['synthetic_sample_driver'] + load_driver_ids(load_namespace)
         for index, driver in enumerate(identities):
             pair = index % len(PAIRS)
             for day in range(1, 6):
@@ -82,8 +118,7 @@ async def seed(args):
                          for t, q, f in zip(options, queue, preference)]
                 selected = min(range(2), key=lambda i: costs[i])
                 route = options[selected]
-                completed = as_of - timedelta(days=day, minutes=10)
-                started = completed - timedelta(seconds=route['duration_s'])
+                started, completed = trip_times(as_of, day, route['duration_s'])
                 trip = f'{batch}_{index}_{day}'
                 await ingestion.ingest(driver, trip, completed, route['polyline'], started)
                 truth.append({'driver_id': driver, 'trip_id': trip, 'selected_template': pair * 2 + selected,
@@ -99,6 +134,7 @@ def main():
     parser.add_argument('--drivers', type=int, default=100)
     parser.add_argument('--as-of', required=True)
     parser.add_argument('--output', default='runtime/synthetic-journeys')
+    parser.add_argument('--load-namespace', help='Seed five causal histories for each 100/500/1000-stage driver')
     args = parser.parse_args()
     if not 5 <= args.drivers <= 1000:
         parser.error('drivers must be between5 and1000')
