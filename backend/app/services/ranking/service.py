@@ -37,13 +37,15 @@ def _explanation(assessment, *, cells=()):
     )
 
 
-def rank_features(features, assessments=None, *, include_familiarity=False) -> list[RankedCandidate]:
+def rank_features(features, assessments=None, *, include_familiarity=False,
+                  time_reference_s=None) -> list[RankedCandidate]:
     features = list(features)
     assessments = assessments or {}
     def total(f):
         return (f.adjusted_travel_duration_s + f.effective_queue_wait_s +
                 f.service_duration_s + (f.duration_station_to_dest_s or 0))
-    reference = max(1.0, min((total(f) for f in features), default=1.0))
+    reference = (time_reference_s if time_reference_s is not None else
+                 max(1.0, min((total(f) for f in features), default=1.0)))
     def contributions(f):
         assessment = assessments.get((f.station_id, f.service_type.value))
         personal = (0.1 * (1 - assessment.personal_adherence) * assessment.confidence

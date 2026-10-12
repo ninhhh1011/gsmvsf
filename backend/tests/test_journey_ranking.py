@@ -156,6 +156,27 @@ async def test_selection_rechecks_snapshot_after_geometry(client, app, monkeypat
     assert response.status_code == 409, response.text
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('selected_id,other_id', [('S001', 'S002'), ('S002', 'S001')])
+async def test_unselected_station_change_does_not_invalidate_selected_plan(client, app, monkeypatch, selected_id, other_id):
+    from datetime import timedelta
+    from backend.tests.test_route_familiarity_workflow import workflow, body, Routes
+    from backend.tests.test_week4_ranking import HistoryResolver
+    from backend.app.config import settings
+    monkeypatch.setattr(settings, 'enable_route_familiarity', False)
+    resolver = HistoryResolver(station(), queue(), station('S002'), queue('S002'))
+    class ChangingRoutes(Routes):
+        async def route(self, request):
+            result = await super().route(request)
+            if len(self.requests) == 6:
+                resolver.snapshots += (station(other_id, timestamp=NOW + timedelta(seconds=1), operating_status='OFFLINE'),)
+            return result
+    app.state.recommendation_workflow = workflow(routes=ChangingRoutes(), resolver=resolver)
+    response = await client.post('/api/v1/station-plan', json=body() | {'station_id': selected_id, 'service_type': 'CHARGING'})
+    assert response.status_code == 200, response.text
+    assert response.json()['ranked_candidate']['time_reference_s'] == 1431
+
+
 def test_after_destination_keeps_origin_traffic_on_prefix_once():
     from backend.tests.test_week4_ranking import traffic
     saved = evidence([candidate()], segment=None).model_copy(update={'prefix_duration_s': 200, 'prefix_traffic_segment_id': 'segment'})
