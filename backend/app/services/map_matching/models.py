@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ResolutionStatus(str, Enum):
@@ -22,6 +22,7 @@ def timestamp_instant(value: str) -> datetime:
 
 class GPSObservation(BaseModel):
     """A single GPS observation."""
+    model_config = ConfigDict(allow_inf_nan=False)
     observation_id: str
     trajectory_id: str
     trip_id: str

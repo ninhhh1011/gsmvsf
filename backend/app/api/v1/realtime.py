@@ -31,7 +31,7 @@ from backend.app.services.realtime.state import (
 )
 from backend.app.services.realtime.trigger import get_default_policy
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class MatchingStatus(str, Enum):
 # Request/Response Models
 class LocationIngestionRequest(BaseModel):
     """Request to ingest a GPS observation."""
+    model_config = ConfigDict(allow_inf_nan=False)
     vehicle_id: str | None = None
     vehicle_category: Literal["EV_CAR", "EV_MOTORBIKE"] | None = None
     observation_id: str | None = None

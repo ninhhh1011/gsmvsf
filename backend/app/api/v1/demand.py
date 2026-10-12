@@ -173,6 +173,8 @@ async def list_vehicle_models(request: Request) -> list[VehicleCapability]:
 
 
 class EnergyStepRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     vehicle_model: str = Field(..., description="VinFast model name (e.g. VF_3, VF_8, EVO)")
     distance_km: float = Field(..., ge=0, description="Distance traveled in km")
     current_soc_pct: float = Field(..., ge=0, le=100, description="Current SOC percentage")

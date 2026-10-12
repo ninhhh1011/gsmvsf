@@ -24,6 +24,7 @@ from backend.app.services.demand.capability import VehicleCapabilityResolver
 from backend.app.services.demand.service import DemandService
 from backend.app.services.snapshots.models import StateError
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -52,6 +53,13 @@ def create_app() -> FastAPI:
     app.include_router(route_familiarity_router, prefix="/api/v1", tags=["route-familiarity"])
     app.include_router(route_comparison_router, prefix="/api/v1", tags=["routing"])
     app.include_router(vehicles_router, prefix="/api/v1", tags=["vehicles"])
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(request, exc):
+        # Invalid input can contain nonfinite numbers or private telemetry.
+        return JSONResponse(status_code=422, content={'detail': [
+            {key: error[key] for key in ('loc', 'msg', 'type')}
+            for error in exc.errors()]})
 
     @app.exception_handler(StateError)
     async def state_error_handler(request, exc):
