@@ -245,8 +245,10 @@ async def station_plan(request: StationPlanRequest, request_obj: Request,
         positions.insert(0, Position(latitude=location.latitude, longitude=location.longitude))
     elif request.destination_latitude is not None:
         positions.append(Position(latitude=request.destination_latitude, longitude=request.destination_longitude))
-    geometry, distance, duration = [], 0.0, 0.0
-    for origin, destination in zip(positions, positions[1:]):
+    geometry, waypoints, distance, duration = [], [], 0.0, 0.0
+    roles = (['PASSENGER_DESTINATION', 'STATION'] if request.plan_mode == 'AFTER_DESTINATION' else
+             ['STATION', 'PASSENGER_DESTINATION'] if request.destination_latitude is not None else ['STATION'])
+    for role, origin, destination in zip(roles, positions, positions[1:]):
         leg = await workflow.routing_engine.route(RouteRequest(origin=origin, destination=destination,
             profile=profile, constraints=evidence.constraints))
         raise_for_routing_failure(leg)
@@ -254,6 +256,8 @@ async def station_plan(request: StationPlanRequest, request_obj: Request,
             raise StateError('Selected navigation geometry is unavailable', 'STATION_PLAN_UNAVAILABLE', 409)
         points = [[lon, lat] for lat, lon in decode_polyline(leg.geometry)]
         geometry.extend(points[1:] if geometry and points[0] == geometry[-1] else points)
+        waypoints.append({'role': role, 'geometry_index': len(geometry) - 1,
+                          'longitude': geometry[-1][0], 'latitude': geometry[-1][1]})
         distance += leg.distance_m
         duration += leg.duration_s
     if abs(distance - selected.features.distance_to_station_m -
@@ -280,6 +284,7 @@ async def station_plan(request: StationPlanRequest, request_obj: Request,
             'plan_mode': request.plan_mode,
             'goal_role': 'PASSENGER_DESTINATION' if request.destination_latitude is not None and request.plan_mode != 'AFTER_DESTINATION' else 'STATION',
             'route': {'geometry': geometry, 'distance_m': distance, 'duration_s': duration},
+            'waypoints': waypoints,
             'ranked_candidate': selected,
             'projected_station_range_km': (energy.estimated_remaining_range_km -
                 (selected.features.distance_to_station_m - evidence.prefix_distance_m) / 1000

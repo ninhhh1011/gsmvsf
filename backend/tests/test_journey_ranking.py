@@ -48,6 +48,12 @@ async def test_station_plan_goals_and_geometry(client, app, monkeypatch, mode, h
     assert result['route']['distance_m'] == legs * 1000
     assert len(result['route']['geometry']) == legs + 1
     assert result['goal_role'] == ('PASSENGER_DESTINATION' if has_b and mode == 'BEFORE_DESTINATION' else 'STATION')
+    expected_roles = (['PASSENGER_DESTINATION', 'STATION'] if mode == 'AFTER_DESTINATION' else
+                      ['STATION', 'PASSENGER_DESTINATION'] if has_b else ['STATION'])
+    assert [point['role'] for point in result['waypoints']] == expected_roles
+    assert [point['geometry_index'] for point in result['waypoints']] == list(range(1, legs + 1))
+    for point in result['waypoints']:
+        assert result['route']['geometry'][point['geometry_index']] == [point['longitude'], point['latitude']]
     assert result['ranked_candidate']['total_completion_time_s'] == result['ranked_candidate']['eta_to_service_complete_s'] + (131 if mode == 'BEFORE_DESTINATION' and has_b else 0)
 
 
