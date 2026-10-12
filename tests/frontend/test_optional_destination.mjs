@@ -177,3 +177,12 @@ test('route client forwards confirmed domain constraints',async()=>{
  await api.computeRoute({latitude:21,longitude:105},{latitude:22,longitude:106},{vehicle_category:'EV_CAR'},[],{custom:{avoid_areas:[1]}});
  assert.deepEqual(body.constraints,{custom:{avoid_areas:[1]}});
 });
+
+for (const [filter, available, forbidden] of [['SWAP','CHARGING','CHARGING'],['FAST_DC','BATTERY_SWAP','BATTERY_SWAP']]) {
+ test(`mixed station fallback never restores excluded ${available} action under ${filter}`,async()=>{
+  const {renderDrawerStationsListHTML}=await import('../../backend/app/static/demo/js/ui/drawer_renderer.js');
+  const html=renderDrawerStationsListHTML([{station_id:'S',station_type:'CHARGING_SWAP'}],{serviceFilter:filter,activeRec:{ranked_candidates:[{station_id:'S',service_type:available,rank:1}]}});
+  assert.ok(!html.includes(`data-service-type="${forbidden}"`));
+  assert.ok(!html.includes('btn-nav-drawer-station'),'excluded service cannot regain a selection action');
+ });
+}

@@ -14,8 +14,10 @@ import { escapeHtml, formatDistanceKm, formatDuration } from '../domain/route-di
  */
 export function renderDrawerStationCard(st, options = {}) {
     const { isRec = false, isAtDest = false, activeRec = null, activeCand = null, dest = null } = options;
-    const ranked = options.rankedCandidate || activeRec?.ranked_candidates?.find(c => c.station_id === st.station_id && (!st.service_type || c.service_type === st.service_type));
-    const service = ranked?.service_type || st.service_type;
+    const filteredService = options.serviceFilter === 'SWAP' ? 'BATTERY_SWAP' : options.serviceFilter === 'FAST_DC' ? 'CHARGING' : null;
+    const requestedService = filteredService || st.service_type;
+    const ranked = options.rankedCandidate && (!requestedService || options.rankedCandidate.service_type === requestedService) ? options.rankedCandidate : activeRec?.ranked_candidates?.find(c => c.station_id === st.station_id && (!requestedService || c.service_type === requestedService));
+    const service = ranked?.service_type || requestedService;
     const cand = activeCand?.find(c => c.station_id === st.station_id && (!service || c.service_type === service));
     const features = ranked?.features || {};
     const metrics = cand?.route_metrics || {};
