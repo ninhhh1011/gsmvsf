@@ -138,7 +138,7 @@ test('station card with ranked candidate shows full metrics breakdown', () => {
     assert.ok(html.includes('Chặng 1'), 'Contains leg 1 label');
     assert.ok(html.includes('Chặng 2'), 'Contains leg 2 label');
     assert.ok(html.includes('Lệch lộ trình'), 'Contains detour label');
-    assert.ok(html.includes('Tổng chuyến đi'), 'Contains total trip label');
+    assert.ok(html.includes('Tổng thời gian hoàn thành'), 'Contains total trip label');
 });
 
 test('at-destination station card shows post-trip layout', () => {
@@ -156,7 +156,7 @@ test('at-destination station card shows post-trip layout', () => {
     // At-destination cards should show post-trip specific UI
     assert.ok(html.includes('Cự ly từ Điểm đến'), 'Contains post-trip distance label');
     assert.ok(html.includes('Chuyến chính'), 'Contains direct trip label');
-    assert.ok(html.includes('Đến B rồi sạc'), 'Contains post-trip action label');
+    assert.ok(!html.includes('btn-nav-post-trip-station'), 'Station without matching eligible pair has no action');
 });
 
 test('null available_capacity shows placeholder', () => {

@@ -108,9 +108,16 @@ export class ApiClient {
     /**
      * Recommendation API: demand detection, candidate search, and ranking.
      */
+    async getConfig() { return this._request('/api/v1/config'); }
+
+    _identityHeaders() { return this.driverIdentity?.signature ? { 'x-driver-identity-signature': this.driverIdentity.signature } : {}; }
+
+    async getStationPlan(payload) { return this._request('/api/v1/station-plan', { method: 'POST', headers: this._identityHeaders(), body: JSON.stringify(payload) }); }
+
     async getRecommendation(recommendRequest) {
         return this._request('/api/v1/recommend', {
             method: 'POST',
+            headers: this._identityHeaders(),
             body: JSON.stringify(recommendRequest)
         });
     }

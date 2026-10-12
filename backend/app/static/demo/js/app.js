@@ -44,6 +44,10 @@ class DemoApp {
             // Initial station plot
             this.map.renderStations(this.stations);
 
+            const config = await this.api.getConfig();
+            this.api.driverIdentity = config.route_familiarity_identity || null;
+            this.session.driver_id = this.api.driverIdentity?.driver_id || null;
+
             // Initialize Driver Mode Controller
             this.driverMode = new DriverModeController(this.api, this.map, {
                 session: this.session

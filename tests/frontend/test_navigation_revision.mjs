@@ -39,6 +39,11 @@ const STATIONS = [
 
 // Minimal driver setup for testing
 function createTestDriver(mockApi) {
+    mockApi.getStationPlan = async payload => {
+        const station = driver.stations.find(s => s.station_id === payload.station_id);
+        const route = await mockApi.computeRoute(driver.currentPos, station, {});
+        return { station_id: payload.station_id, service_type: payload.service_type, route: { ...route, duration_s: route.duration_s ?? 60 } };
+    };
     const driver = new DriverModeController(mockApi, mockMap());
     driver.state = DriverState.TRIP_ACTIVE;
     driver.currentVehicle = {
@@ -292,6 +297,7 @@ test('Test 8: revision is preserved across state transitions', async () => {
     };
     driver.setState(DriverState.TRIP_ACTIVE);
 
+    driver.currentPos = {latitude:21.01, longitude:105.81};
     // New navigation should work with fresh state
     await driver.navigateViaStationId('NEW_STATION');
     assert.equal(driver._selectedStationId, 'NEW_STATION');

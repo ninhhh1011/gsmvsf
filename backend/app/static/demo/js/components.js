@@ -204,135 +204,49 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
     `;
 }
 
-export function renderCostBreakdown(topCandidate) {
-    const f = topCandidate?.features;
-    if (!f) return '<p class="muted-text">Không có dữ liệu chi tiết.</p>';
-
-    const baseTravel = f.base_travel_duration_s != null ? (f.base_travel_duration_s / 60).toFixed(1) : 'N/A';
-    const trafficAdj = f.traffic_adjustment_s != null ? (f.traffic_adjustment_s / 60).toFixed(1) : '0.0';
-    const adjTravel = f.adjusted_travel_duration_s != null ? (f.adjusted_travel_duration_s / 60).toFixed(1) : 'N/A';
-    const queueWait = f.effective_queue_wait_s != null ? (f.effective_queue_wait_s / 60).toFixed(1) : '0.0';
-    const serviceDur = f.service_duration_s != null ? (f.service_duration_s / 60).toFixed(1) : 'N/A';
-    const distToStation = f.distance_to_station_m != null ? (f.distance_to_station_m / 1000).toFixed(1) : 'N/A';
-    
-    // Leg 2 and Via Total
-    const leg2Dist = f.distance_station_to_dest_m != null ? (f.distance_station_to_dest_m / 1000).toFixed(1) : '-';
-    const leg2Dur = f.duration_station_to_dest_s != null ? (f.duration_station_to_dest_s / 60).toFixed(1) : '-';
-    const viaDist = f.via_total_distance_m != null ? (f.via_total_distance_m / 1000).toFixed(1) : '-';
-    const viaDur = f.via_total_duration_s != null ? (f.via_total_duration_s / 60).toFixed(1) : '-';
-
-    const detourDist = f.detour_distance_m != null ? (f.detour_distance_m / 1000).toFixed(1) : '0.0';
-    const detourDur = f.detour_duration_s != null ? (f.detour_duration_s / 60).toFixed(1) : '0.0';
-    const cap = f.available_capacity ?? 'N/A';
-    const trafficMethod = f.traffic_method || 'N/A';
-    const queueAssumption = f.queue_assumption || '';
-
-    const etaComplete = topCandidate.eta_to_service_complete_s != null ? (topCandidate.eta_to_service_complete_s / 60).toFixed(1) : 'N/A';
-    const etaDest = topCandidate.eta_to_destination_via_station_s != null 
-        ? (topCandidate.eta_to_destination_via_station_s / 60).toFixed(1)
-        : (f.duration_station_to_dest_s != null ? ((topCandidate.eta_to_service_complete_s + f.duration_station_to_dest_s) / 60).toFixed(1) : etaComplete);
-
-    return `
-        <div class="cost-breakdown-card">
-            <!-- Chặng 1: A -> Trạm -->
-            <div class="cost-section">
-                <div class="cost-section-title">🚗 Chặng 1: Xe (A) ➔ Trạm sạc</div>
-                <div class="cost-row">
-                    <span>Khoảng cách đến trạm:</span>
-                    <span><strong>${distToStation} km</strong></span>
-                </div>
-                <div class="cost-row">
-                    <span>Thời gian lái xe cơ bản:</span>
-                    <span>${baseTravel} phút</span>
-                </div>
-                <div class="cost-row">
-                    <span>Độ trễ kẹt xe:</span>
-                    <span style="color: #f59e0b;">+${trafficAdj} phút</span>
-                </div>
-                <div class="cost-row highlight">
-                    <span>Thời gian đến trạm (ETA Trạm):</span>
-                    <span style="color: #38bdf8;">${adjTravel} phút</span>
-                </div>
-            </div>
-
-            <!-- Tại trạm: Chờ + Dịch vụ -->
-            <div class="cost-section">
-                <div class="cost-section-title">⚡ Tại trạm: Hàng đợi & Dịch vụ</div>
-                <div class="cost-row">
-                    <span>Thời gian chờ hàng đợi:</span>
-                    <span>${queueWait} phút${queueAssumption ? ` (${queueAssumption})` : ''}</span>
-                </div>
-                <div class="cost-row">
-                    <span>Thời gian sạc / đổi pin:</span>
-                    <span>${serviceDur} phút</span>
-                </div>
-                <div class="cost-row">
-                    <span>Cổng / Vị trí còn trống:</span>
-                    <span style="color: #10b981;"><strong>${cap} vị trí</strong></span>
-                </div>
-                <div class="cost-row highlight">
-                    <span>Tổng thời gian nạp xong tại trạm:</span>
-                    <span style="color: #38bdf8;">${etaComplete} phút</span>
-                </div>
-            </div>
-
-            <!-- Chặng 2: Trạm -> Đích B -->
-            <div class="cost-section">
-                <div class="cost-section-title">🏁 Chặng 2: Trạm sạc ➔ Điểm đến (B)</div>
-                <div class="cost-row">
-                    <span>Khoảng cách trạm về đích:</span>
-                    <span>${leg2Dist} km</span>
-                </div>
-                <div class="cost-row highlight">
-                    <span>Thời gian chạy tiếp về đích:</span>
-                    <span>${leg2Dur} phút</span>
-                </div>
-            </div>
-
-            <!-- Tổng hợp lộ trình & Độ lệch -->
-            <div class="cost-section">
-                <div class="cost-section-title">📐 So sánh lộ trình & Độ lệch (Detour)</div>
-                <div class="cost-row">
-                    <span>Tổng quãng đường qua trạm:</span>
-                    <span>${viaDist} km (lái xe ~${viaDur} phút)</span>
-                </div>
-                <div class="cost-row">
-                    <span>Lệch lộ trình (Detour overhead):</span>
-                    <span style="color: #f59e0b;"><strong>+${detourDist} km (+${detourDur} phút)</strong></span>
-                </div>
-            </div>
-
-            <!-- Tổng kết Final Cost -->
-            <div class="cost-section" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3);">
-                <div class="cost-section-title" style="color: #10b981;">⏱ Tổng thời gian chuyến đi (A ➔ Trạm ➔ B)</div>
-                <div class="cost-row total">
-                    <span>Dự kiến đến đích (bao gồm sạc):</span>
-                    <span style="font-size: 16px;"><strong>${etaDest} phút</strong></span>
-                </div>
-                <div class="cost-row muted" style="margin-top: 4px;">
-                    <span>Công thức xếp hạng:</span>
-                    <span><code>final_cost_s = travel + queue + service</code> (${(topCandidate.final_cost_s / 60).toFixed(1)}p)</span>
-                </div>
-            </div>
-
-            <!-- Trạng thái nguồn dữ liệu -->
-            <div class="cost-section">
-                <div class="cost-section-title">📡 Trạng thái dữ liệu thời gian thực</div>
-                <div class="cost-row muted">
-                    <span>Phương pháp tính traffic:</span>
-                    <span>${trafficMethod}</span>
-                </div>
-                <div class="cost-row muted">
-                    <span>Độ tươi trạng thái trạm:</span>
-                    <span>${f.station_state?.freshness || 'N/A'}</span>
-                </div>
-                <div class="cost-row muted">
-                    <span>Độ tươi trạng thái hàng đợi:</span>
-                    <span>${f.queue_state?.freshness || 'N/A'}</span>
-                </div>
-            </div>
-        </div>
-    `;
+export function renderCostBreakdown(candidate) {
+    const f = candidate?.features;
+    if (!f) return '<p>Không có dữ liệu chi tiết.</p>';
+    const minutes = value => Number.isFinite(value) ? `${(value / 60).toFixed(1)} phút` : 'Chưa có dữ liệu';
+    const distance = value => Number.isFinite(value) ? `${(value / 1000).toFixed(1)} km` : 'Chưa có dữ liệu';
+    const row = (label, value) => `<div class="cost-row"><span>${label}</span><strong>${escapeHtml(String(value))}</strong></div>`;
+    const after = f.prior_travel_duration_s > 0;
+    const onward = f.duration_station_to_dest_s != null;
+    const familiarity = candidate.familiarity;
+    const percent = value => value != null ? `${Math.round(value * 100)}%` : 'Chưa đủ dữ liệu';
+    return `<div class="cost-breakdown-card">
+      <div class="cost-section"><div class="cost-section-title">Di chuyển</div>
+        ${after ? row('A → B', minutes(f.prior_travel_duration_s)) : ''}
+        ${row(after ? 'B → trạm' : 'Xe → trạm', minutes(after ? f.adjusted_travel_duration_s - f.prior_travel_duration_s : f.adjusted_travel_duration_s))}
+        ${row('Cự ly đường đến trạm', distance(f.distance_to_station_m))}
+        ${row('Độ trễ giao thông đã tính trong thời gian di chuyển', minutes(f.traffic_adjustment_s))}
+        ${onward ? row('Trạm → B', minutes(f.duration_station_to_dest_s)) : ''}
+      </div>
+      <div class="cost-section"><div class="cost-section-title">Tại trạm</div>
+        ${row('Chờ hàng đợi', minutes(f.effective_queue_wait_s))}
+        ${f.queue_assumption ? row('Cơ sở thời gian chờ', f.queue_assumption) : ''}
+        ${row('Sạc / đổi pin', minutes(f.service_duration_s))}
+        ${row('Vị trí còn trống', f.available_capacity ?? 'Chưa có dữ liệu')}
+      </div>
+      <div class="cost-section"><div class="cost-section-title">Tổng thời gian hoàn thành</div>
+        ${row('Di chuyển + chờ + dịch vụ', minutes(candidate.total_completion_time_s ?? candidate.eta_to_destination_via_station_s ?? candidate.eta_to_service_complete_s))}
+        ${row('Điểm xếp hạng 80% thời gian / 10% cá nhân / 10% cộng đồng', candidate.ranking_score?.toFixed(3) ?? 'Chưa có dữ liệu')}
+        ${Object.entries(candidate.score_components || {}).map(([key,value]) => row({time:'Phần thời gian',personal:'Phần độ quen cá nhân',community:'Phần phổ biến cộng đồng'}[key] || key, Number.isFinite(value) ? value.toFixed(3) : 'Chưa có dữ liệu')).join('')}
+        ${row('Thời gian tham chiếu phương án nhanh nhất', minutes(candidate.time_reference_s))}
+      </div>
+      ${familiarity ? `<div class="cost-section"><div class="cost-section-title">Bằng chứng lịch sử</div>
+        ${row('Độ quen cá nhân', percent(familiarity.personal_adherence))}
+        ${row('Mức phổ biến cộng đồng', percent(familiarity.community_adherence))}
+        ${row('Chuyến cá nhân được xét', familiarity.personal_history_trip_count ?? 'Chưa có dữ liệu')}
+        ${row('Tài xế ủng hộ / nhóm so sánh', `${familiarity.community_driver_count ?? '—'} / ${familiarity.community_cohort_driver_count ?? '—'}`)}
+        ${row('Trạng thái bằng chứng', familiarity.status)}
+      </div>` : ''}
+      <div class="cost-section"><div class="cost-section-title">Trạng thái dữ liệu</div>
+        ${row('Giao thông', f.traffic_method ?? 'Chưa có dữ liệu')}
+        ${row('Trạng thái trạm', f.station_state?.freshness ?? 'Chưa có dữ liệu')}
+        ${row('Hàng đợi', f.queue_state?.freshness ?? 'Chưa có dữ liệu')}
+      </div>
+    </div>`;
 }
 
 export function renderPipelineLatency(timingsMs) {

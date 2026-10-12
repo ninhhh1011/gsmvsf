@@ -62,6 +62,7 @@ export function createCockpitBindings(root = globalThis.document) {
                 'btn-open-stations-drawer': callbacks.openStations,
                 'btn-close-stations-drawer': callbacks.closeStations,
                 'btn-pick-custom-origin': event => { event.stopPropagation(); event.preventDefault(); callbacks.pickOrigin(); },
+                'btn-clear-custom-dest': callbacks.clearDestination,
                 'btn-pick-custom-dest': event => { event.stopPropagation(); event.preventDefault(); callbacks.pickDestination(); },
                 'btn-cancel-pick': event => { event.stopPropagation(); callbacks.cancelPicking(); },
                 'btn-cancel-pick-dest': event => { event.stopPropagation(); callbacks.cancelPicking(); }
@@ -107,6 +108,7 @@ export function createCockpitBindings(root = globalThis.document) {
         setOriginCoordinates(text) { const el = get('text-origin-coords'); if (el) el.textContent = text; },
         setDestinationCoordinates(text) { const el = get('text-dest-coords'); if (el) el.textContent = text; },
         setNavigationButtonState(text, disabled) { const button = get('btn-nav-station'); if (button) { button.textContent = text; button.disabled = disabled; } },
+        setAfterDestinationEnabled(enabled) { const tab = get('tab-intent-dest'); if (tab) { tab.disabled = !enabled; tab.title = enabled ? '' : 'Chọn điểm B để dùng lựa chọn này'; } },
         setActiveIntent(value) { each('.charging-intent-selector .intent-tab', tab => tab.classList.toggle('active', tab.dataset.intent === value)); },
         showRouteUnavailable(message) { root?.defaultView?.alert(message); },
         renderAvailable(html, callbacks) {

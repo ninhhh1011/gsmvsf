@@ -59,7 +59,7 @@ test('reroute reprojects progress before measuring the replacement road', async 
 });
 
 test('after-arrival drawer preserves zero road distance and engine driving ETA', () => {
- const html=renderDrawerStationsListHTML([{station_id:'ZERO',latitude:21,longitude:105,distKm:'0'}],{isAtDest:true,remainingTripDistanceKm:0,directDrivingEtaMinutes:0,dest:{latitude:21,longitude:105}});
+ const html=renderDrawerStationsListHTML([{station_id:'ZERO',latitude:21,longitude:105,distKm:'0'}],{activeRec:{ranked_candidates:[{station_id:'ZERO',features:{distance_to_station_m:0,prior_travel_duration_s:0},eta_to_station_s:0,total_completion_time_s:0}]},isAtDest:true,remainingTripDistanceKm:0,directDrivingEtaMinutes:0,dest:{latitude:21,longitude:105}});
  assert.match(html,/0\.0 km/);
  assert.doesNotMatch(html,/5\.0 km|10 phút/);
 });

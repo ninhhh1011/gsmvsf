@@ -21,6 +21,10 @@ function driverFixture(api) {
         renderPostTripRoute(geometry) { this.scene = 'DRIVER'; this.postTripGeometry = geometry; },
         fitBoundsToActive() { this.scene = 'DRIVER'; }, onMapClick() {}
     };
+    api.getStationPlan = async payload => {
+        const route = await api.computeRoute(driver.currentPos, driver.stations.find(s => s.station_id === payload.station_id), {});
+        return { station_id: payload.station_id, service_type: payload.service_type, route };
+    };
     const driver = new DriverModeController({ getRecommendation: async () => ({ has_recommendation: false }), ...api }, map);
     driver.state = DriverState.TRIP_ACTIVE;
     driver.currentVehicle = { vehicle_id: 'V0001', vehicle_type: 'EV_CAR', usable_capacity_kwh: 17.15, consumption_wh_per_km: 150 };
@@ -251,7 +255,7 @@ for (const hasPreviousSelection of [false, true]) {
         assert.equal(driver.postTripStation, driver.stations[1]);
         assert.equal(driver.postTripRoute, route);
         assert.equal(map.highlightedStation, 'S002');
-        assert.equal(map.postTripGeometry, route.geometry);
+        assert.equal(driver.fullRouteCoords.length, 2, 'backend plan geometry is the selected route');
         map.layers = { recommendRoute: { clearLayers() { map.postTripGeometry = null; } } };
         driver.cancelPostTripStation();
         assert.equal(driver.postTripStation, null);

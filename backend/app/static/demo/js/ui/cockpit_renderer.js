@@ -37,6 +37,7 @@ export function renderActiveCockpitView(state) {
 }
 
 export function renderTripActiveEta(routeTiming, remainingDistanceKm) {
+    if (routeTiming?.distance_m === 0 && routeTiming?.duration_s === 0 && remainingDistanceKm === 0) return '0';
     if (!Number.isFinite(routeTiming?.distance_m) || routeTiming.distance_m <= 0 || !Number.isFinite(routeTiming.duration_s) || routeTiming.duration_s < 0 || !Number.isFinite(remainingDistanceKm)) return '—';
     return String(Math.round(Math.max(0, Math.min(1, remainingDistanceKm * 1000 / routeTiming.distance_m)) * routeTiming.duration_s / 60));
 }
@@ -79,11 +80,11 @@ export function renderEnergyWarningHTML(context) {
 /**
  * Render Available HUD card.
  */
-export function renderAvailableCardHTML() {
+export function renderAvailableCardHTML(origin = null, destination = null) {
     return `<div class="driver-available-card driver-summary">
         <h3>Sẵn sàng bắt đầu hành trình</h3>
-        <p class="text-muted">Chọn điểm A và B trên bản đồ để tạo lộ trình.</p>
-        <div class="driver-primary-actions"><button id="btn-accept-trip" class="btn btn-primary btn-block">Tạo lộ trình & Bắt đầu</button></div>
+        <p class="text-muted">Chọn điểm A để tìm trạm; thêm B nếu có điểm trả khách.</p>
+        <div class="driver-primary-actions"><button id="btn-accept-trip" class="btn btn-primary btn-block">${destination ? 'Tạo lộ trình & Bắt đầu' : 'Tìm trạm từ A'}</button></div>
         <button id="btn-go-offline" class="btn btn-outline driver-expanded-only">Chuyển ngoại tuyến</button>
     </div>`;
 }
@@ -133,7 +134,7 @@ export function renderPostTripBannerHTML(station, route) {
 /**
  * Render Trip Complete HUD card.
  */
-export function renderTripCompleteCardHTML(lastRecommendation, postTripStation) {
+export function renderTripCompleteCardHTML(lastRecommendation, postTripStation, goalRole) {
     const warningBanner = renderEnergyWarningBanner(lastRecommendation?.energy_context);
     const recCard = renderRecommendationCard(lastRecommendation);
 
@@ -141,8 +142,8 @@ export function renderTripCompleteCardHTML(lastRecommendation, postTripStation) 
         <div class="driver-nav-hud">
             <div class="completion-header text-center" style="text-align: center; margin-bottom: 16px;">
                 <span class="check-icon" style="display: inline-block; width: 44px; height: 44px; line-height: 44px; background: rgba(16, 185, 129, 0.2); color: #10b981; border-radius: 50%; font-size: 22px; font-weight: bold; margin-bottom: 8px;">✓</span>
-                <h3>Chuyến đi hoàn tất</h3>
-                <p class="text-muted" style="font-size: 13px;">Hành khách đã xuống xe an toàn.</p>
+                <h3>${goalRole === 'STATION' ? 'Đã đến trạm' : 'Chuyến đi hoàn tất'}</h3>
+                <p class="text-muted" style="font-size: 13px;">${goalRole === 'STATION' ? 'Bạn đã tới trạm đã chọn. Thời gian chờ và dịch vụ là ước tính.' : 'Hành khách đã xuống xe an toàn.'}</p>
             </div>
 
             ${warningBanner}
@@ -178,7 +179,7 @@ export function renderTripAssignedCardHTML(controller) {
         <h3>Đã nhận chuyến <span class="sr-only">TRIP_ASSIGNED TRIP ASSIGNED</span></h3>
         <div class="nav-stats-grid">
             <div class="stat-box"><span class="stat-label">Cự ly đường</span><strong class="stat-value">${((controller.currentTrip?.planned_distance_m || 0) / 1000).toFixed(1)} km</strong></div>
-            <div class="stat-box"><span class="stat-label">ETA tới B (ước tính)</span><strong class="stat-value">${renderTripActiveEta(controller.currentRouteTiming, (controller.currentTrip?.planned_distance_m || 0) / 1000)} phút</strong></div>
+            <div class="stat-box"><span class="stat-label">ETA tới ${controller.currentTrip?.goal_role === 'STATION' ? 'trạm' : 'B'} (ước tính)</span><strong class="stat-value">${renderTripActiveEta(controller.currentRouteTiming, (controller.currentTrip?.planned_distance_m || 0) / 1000)} phút</strong></div>
             <div class="stat-box"><span class="stat-label">Pin (SOC)</span><strong id="val-assigned-soc" class="stat-value">${controller.currentSocPct.toFixed(0)}%</strong></div>
         </div>
         <div class="driver-primary-actions"><button id="btn-start-driving" class="btn btn-success btn-block">▶ Bắt đầu lái xe</button></div>
@@ -192,7 +193,7 @@ export function renderDriverAnalysisHTML(controller, {posStatus = '', progress =
     const battery = renderBatteryView({soc: controller.currentSocPct, range: controller.estimatedRangeKm});
     const view = renderActiveCockpitView({distance: controller.remainingTripDistanceKm || 0, eta: '—', soc: controller.currentSocPct, range: controller.estimatedRangeKm, maxMotorPowerKw: controller.maxMotorPowerKw, currentInstantPowerKw: controller.instantaneousPowerKw, vehicleModel: controller.currentVehicle?.vehicle_model, powerStatus: controller.powerStatus});
     const origin = controller.customOrigin || controller.currentTrip?.origin;
-    const destination = controller.customDestination || controller.currentTrip?.destination;
+    const destination = controller.passengerDestination ?? controller.customDestination ?? (controller.currentTrip?.goal_role === 'STATION' ? null : controller.currentTrip?.destination);
     return `<div class="analysis-coordinates">
         <span>Điểm A: <span id="text-origin-coords">${origin ? renderCoordinateText(origin) : '—'}</span></span>
         <span>Điểm B: <span id="text-dest-coords">${destination ? renderCoordinateText(destination) : '—'}</span></span>

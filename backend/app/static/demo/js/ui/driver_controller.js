@@ -1,3 +1,4 @@
+import { selectStationPlan, refreshStationPlans, renderStationPlans } from './station_planning.js';
 /**
  * Driver Mode Controller for VinFast EV Recommendation Demo.
  * Clean, distraction-free Cockpit HUD for in-car use.
@@ -102,8 +103,9 @@ export class DriverModeController {
         this._drawerRevision = 0;
         this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000; this._recommendTimer = null;
         this.isPickingDestination = false; this.currentStationsFilter = 'ALL'; this.chargingIntent = 'EN_ROUTE';
-        this.customOrigin = { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
-        this.customDestination = { latitude: 21.0285, longitude: 105.8542, node_id: "DEST_B" };
+        this.customOrigin = null;
+        this.customDestination = null;
+        this.stationNavigationTarget = null;
         this.postTripStation = null; this.postTripRoute = null; this.postTripRecommendation = null; this.postTripCandidateDetails = null;
         this._onMapPickClick = null; this.avoidCongestion = true; this._isEvaluating = false; this.lastEvalPos = null; this.lastEvalTimestamp = 0;
         // Trajectory Replay Controller
@@ -131,6 +133,8 @@ export class DriverModeController {
         this._h3Initialized = false;
         this.onStateChange = options.onStateChange || (() => {});
     }
+    get passengerDestination() { return this.customDestination || (this.currentTrip && Object.hasOwn(this.currentTrip, 'passenger_destination') ? this.currentTrip.passenger_destination : this.currentTrip?.goal_role === 'STATION' ? null : this.currentTrip?.destination) || null; }
+    get planningOrigin() { return this.currentPos || this.customOrigin || this.currentTrip?.origin || null; }
     setCatalogs(trips, vehicles, stations, scenarios = [], vehicleCatalog = []) {
         this.trips = trips || [];
         this.vehicles = vehicles || [];
@@ -409,8 +413,10 @@ export class DriverModeController {
         const currentGen = this.generation;
         let trip = this.trips.find(t => t.trip_id === tripId);
         if (!trip) {
-            const origin = this.customOrigin || { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
-            const dest = this.customDestination || { latitude: 21.0285, longitude: 105.8542, node_id: "DEST_B" };
+            const origin = this.planningOrigin;
+            const dest = this.passengerDestination;
+            if (!dest) return this.openStationsDrawer();
+            if (!origin) return this.startPickCustomOrigin();
             trip = {
                 trip_id: `TRIP_${Date.now()}`,
                 driver_id: "D_USER",
@@ -418,7 +424,7 @@ export class DriverModeController {
                 scenario_id: "CUSTOM_ROUTE",
                 origin: origin,
                 destination: dest,
-                planned_distance_m: 8500.0
+                planned_distance_m: 0.0
             };
         }
         this.currentTrip = trip;
@@ -522,7 +528,7 @@ export class DriverModeController {
 
         this.generation++;
         const currentGen = this.generation;
-        this.session.driver_id = `driver_${Date.now().toString(36)}`;
+        this.session.driver_id = this.api.driverIdentity?.driver_id || `driver_${Date.now().toString(36)}`;
         this.session.vehicle_id = this.currentVehicle?.vehicle_id;
         this.session.vehicle_category = this.currentVehicle?.vehicle_type;
         this.session.trip_id = this.currentTrip.trip_id;
@@ -815,8 +821,8 @@ export class DriverModeController {
                 raw_longitude: rawLng,
                 road_segment_id: this.matchedPos?.road_segment_id || this.currentObservation?.road_segment_id || null
             },
-            destination_latitude: this.currentTrip?.destination?.latitude,
-            destination_longitude: this.currentTrip?.destination?.longitude,
+            destination_latitude: this.passengerDestination?.latitude,
+            destination_longitude: this.passengerDestination?.longitude,
             avoid_congestion: !!this.avoidCongestion,
             top_n: 5
         };
@@ -1057,148 +1063,8 @@ export class DriverModeController {
         const top = this.lastRecommendation.ranked_candidates[0];
         return this._selectStationAndNavigate(top.station_id);
     }
-    async navigateViaStationId(stationId) {
-        const st = this.stations.find(s => s.station_id === stationId);
-        if (!st) return;
-        const currentGen = this.generation;
-        const navRev = ++this.routeRevision;
-
-        this.closeStationsDrawer();
-
-        const currentPos = this.currentPos || (this.currentTrip?.origin ? {
-            latitude: this.currentTrip.origin.latitude,
-            longitude: this.currentTrip.origin.longitude
-        } : { latitude: 21.1038023, longitude: 106.0023809 });
-
-        const stationPos = { latitude: st.latitude, longitude: st.longitude };
-        const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
-
-        this.bindings.setNavigationButtonState('Đang dẫn đường...', true);
-
-        try {
-            if (this.currentTrip?.destination) {
-                // Route via station: Leg 1 + Leg 2
-                const leg1 = await this.api.computeRoute(currentPos, stationPos, { vehicle_category: vCat });
-                if (this.generation !== currentGen || this.routeRevision !== navRev) return;
-                const leg2 = await this.api.computeRoute(stationPos, this.currentTrip.destination, { vehicle_category: vCat });
-                if (this.generation !== currentGen || this.routeRevision !== navRev) return;
-
-                if (!leg1?.geometry || !leg2?.geometry) return;
-                const coords1 = decodePolyline(leg1.geometry);
-                const coords2 = decodePolyline(leg2.geometry);
-                if (!coords1.length || !coords2.length) return;
-                const combined = [...coords1, ...coords2];
-                this._navigationLocked = true;
-                this._selectedStationId = stationId;
-                this.fullRouteCoords = combined;
-                this.currentRouteTiming = { distance_m: leg1.distance_m + leg2.distance_m, duration_s: leg1.duration_s + leg2.duration_s };
-                this.directRouteGeometry = combined;
-                this._clearH3OnRouteChange();
-                this.lastPassedSegmentIndex = 0;
-                this.lastRecommendedStationId = st.station_id;
-                this.lastDiversionLeg1 = leg1;
-                this.lastDiversionLeg2 = leg2;
-                const top5Candidates = (this.lastRecommendation?.ranked_candidates || []).slice(0, 5).map((c, idx) => {
-                    const stMatch = this.stations?.find(s => s.station_id === c.station_id);
-                    return {
-                        ...c,
-                        rank: c.rank ?? (idx + 1),
-                        station_id: c.station_id,
-                        latitude: c.latitude ?? stMatch?.latitude,
-                        longitude: c.longitude ?? stMatch?.longitude,
-                    };
-                }).filter(c => c.latitude != null && c.longitude != null);
-                this.map.renderRecommendationRoute(leg1.geometry, leg2?.geometry, top5Candidates);
-                this.map.fitBoundsToActive();
-
-                const totalDistM = (leg1.distance_m || 0) + (leg2?.distance_m || 0);
-                this.remainingTripDistanceKm = parseFloat((totalDistM / 1000).toFixed(2));
-
-                // Load combined diversion into replay
-                if (this.state === DriverState.TRIP_ACTIVE) {
-                    await this.replay.loadFromPolyline(combined);
-                    if (this.generation !== currentGen || this.routeRevision !== navRev) return;
-                }
-            } else {
-                // Direct route to station (free drive)
-                const route = await this.api.computeRoute(currentPos, stationPos, { vehicle_category: vCat });
-                if (this.generation !== currentGen || this.routeRevision !== navRev) return;
-                if (!route?.geometry) return;
-                const coords = decodePolyline(route.geometry);
-                if (!coords.length) return;
-                this._navigationLocked = true;
-                this._selectedStationId = stationId;
-                this.lastRecommendedStationId = st.station_id;
-                this.fullRouteCoords = coords;
-                this.currentRouteTiming = route;
-                this.directRouteGeometry = coords;
-                this._clearH3OnRouteChange();
-                this.map.clearAll();
-                this.map.renderTripEndpoints(currentPos, stationPos);
-                this.map.renderDirectRoute(coords);
-                this.map.fitBoundsToActive(coords);
-                this.currentTrip = {
-                    trip_id: `NAVI_${st.station_id}`,
-                    origin: currentPos,
-                    destination: stationPos,
-                    planned_distance_m: route.distance_m
-                };
-                this.remainingTripDistanceKm = parseFloat((route.distance_m / 1000).toFixed(2));
-                if (this.state === DriverState.AVAILABLE) {
-                    this.setState(DriverState.TRIP_ASSIGNED);
-                    this.renderTripAssignedUI();
-                }
-            }
-
-            this.map.renderStations(this.stations, st.station_id, st.service_type || 'FAST_CHARGING', null, this.lastRecommendation?.ranked_candidates);
-
-        } catch (err) {
-            if (this.generation !== currentGen) return;
-            console.warn('Navigation to station failed:', err);
-        }
-    }
-    async setPostTripStation(stId) {
-        const st = this.stations.find(s => s.station_id === stId);
-        if (!st) return;
-        const currentGen = this.generation;
-        const postTripRev = ++this.routeRevision;
-
-        this.closeStationsDrawer();
-
-        const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
-        const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
-        const stationPos = { latitude: st.latitude, longitude: st.longitude };
-
-        try {
-            // Compute route from Destination B to Station
-            const routeBToSt = await this.api.computeRoute(dest, stationPos, { vehicle_category: vCat });
-            if (this.generation !== currentGen || this.routeRevision !== postTripRev) return;
-            if (!routeBToSt?.geometry || !decodePolyline(routeBToSt.geometry).length) return;
-            this.postTripStation = st;
-            this.postTripRoute = routeBToSt;
-
-            // Render A -> B direct, plus B -> Station onward
-            if (this.fullRouteCoords) {
-                this.map.renderDirectRoute(this.fullRouteCoords);
-            }
-            if (routeBToSt?.geometry) {
-                this.map.renderPostTripRoute(routeBToSt.geometry);
-            }
-
-            // Highlight selected station marker
-            this.map.renderStations(this.stations, st.station_id, st.service_type, null, this.postTripRecommendation?.ranked_candidates);
-
-            // Refresh UI for post-trip charging
-            if (this.state === DriverState.TRIP_ACTIVE) {
-                this.renderTripActiveUI();
-            } else if (this.state === DriverState.TRIP_ASSIGNED) {
-                this.renderTripAssignedUI();
-            }
-        } catch (err) {
-            console.warn('Failed to compute route from B to station:', err);
-        }
-    }
-
+    async navigateViaStationId(stationId, serviceType = null) { return selectStationPlan.call(this, stationId, serviceType); }
+    async setPostTripStation(stationId, serviceType = null) { return selectStationPlan.call(this, stationId, serviceType, 'AFTER_DESTINATION'); }
     cancelPostTripStation() {
         this.postTripStation = null;
         this.postTripRoute = null;
@@ -1217,8 +1083,10 @@ export class DriverModeController {
             closeStations: () => this.closeStationsDrawer(),
             pickOrigin: () => this.startPickCustomOrigin(),
             pickDestination: () => this.startPickCustomDestination(),
+            clearDestination: () => this.clearDestination(),
             cancelPicking: () => this.cancelAllPicking(),
             changeIntent: async value => {
+                if (value === 'AT_DESTINATION' && !this.passengerDestination) return;
                 this.chargingIntent = value;
                 this.renderStationsDrawer(this.currentStationsFilter);
                 await this.refreshDrawerEvaluations();
@@ -1237,186 +1105,8 @@ export class DriverModeController {
     }
 
     closeStationsDrawer() { this.bindings.setStationsDrawerOpen(false); }
-    async refreshDrawerEvaluations() {
-        const currentGen = this.generation;
-        const energyRev = this._powerRevision;
-        const routeRev = this.routeRevision;
-        const requestRev = ++this._drawerRevision;
-        const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
-        const vId = this.currentVehicle?.vehicle_id || 'V0001';
-        const isAtDest = this.chargingIntent === 'AT_DESTINATION';
-
-        let evalOrigin;
-        let evalSoc = parseFloat(this.currentSocPct.toFixed(1));
-        let evalRange = parseFloat(this.estimatedRangeKm.toFixed(1));
-        let evalRemainingTrip = parseFloat(this.remainingTripDistanceKm.toFixed(2));
-        let evalTravelled = parseFloat((this.totalDistanceTravelledKm || 0.0).toFixed(2));
-
-        if (isAtDest) {
-            evalOrigin = { latitude: dest.latitude, longitude: dest.longitude };
-            const remainingTrip = Math.max(0, this.remainingTripDistanceKm || 0.0);
-            const cons = this.currentVehicle?.consumption_wh_per_km || MODEL_SPECS.VF_3.consumption_wh_per_km;
-            const usable = this.currentVehicle?.usable_capacity_kwh || MODEL_SPECS.VF_3.usable_capacity_kwh;
-            const energyTripKwh = (remainingTrip * cons) / 1000.0;
-            const deltaSoc = (energyTripKwh / usable) * 100.0;
-            evalSoc = Math.max(1.0, parseFloat((this.currentSocPct - deltaSoc).toFixed(1)));
-            evalRange = Math.max(1.0, parseFloat(((evalSoc / 100.0) * usable * 1000.0 / cons).toFixed(1)));
-            evalRemainingTrip = 0.0;
-            evalTravelled = parseFloat((evalTravelled + remainingTrip).toFixed(2));
-        } else {
-            evalOrigin = this.currentPos || (this.currentTrip?.origin ? {
-                latitude: this.currentTrip.origin.latitude,
-                longitude: this.currentTrip.origin.longitude
-            } : { latitude: 21.0285, longitude: 105.8542 });
-        }
-
-        try {
-            const [candRes, recRes] = await Promise.all([
-                this.api.evaluateAndSearchCandidates({
-                    vehicle_id: vId,
-                    current_soc_pct: evalSoc,
-                    estimated_remaining_range_km: evalRange,
-                    remaining_trip_distance_km: evalRemainingTrip,
-                    distance_travelled_km: evalTravelled,
-                    safety_reserve_km: this.safetyReserveKm,
-                    consumption_wh_per_km: this.currentVehicle?.consumption_wh_per_km,
-                    raw_latitude: evalOrigin.latitude,
-                    raw_longitude: evalOrigin.longitude,
-                    destination_latitude: dest.latitude,
-                    destination_longitude: dest.longitude,
-                    requested_service: 'ANY',
-                    eligible_only: false
-                }).catch(() => null),
-                this.api.getRecommendation({
-                    context: {
-                        vehicle_id: vId,
-                        current_soc_pct: evalSoc,
-                        estimated_remaining_range_km: evalRange,
-                        remaining_trip_distance_km: evalRemainingTrip,
-                        distance_travelled_km: evalTravelled,
-                        safety_reserve_km: this.safetyReserveKm,
-                        consumption_wh_per_km: this.currentVehicle?.consumption_wh_per_km,
-                        raw_latitude: evalOrigin.latitude,
-                        raw_longitude: evalOrigin.longitude,
-                        road_segment_id: isAtDest ? null : (this.matchedPos?.road_segment_id || this.currentObservation?.road_segment_id || null),
-                        timestamp: new Date().toISOString()
-                    },
-                    requested_service: 'ANY',
-                    destination_latitude: dest.latitude,
-                    destination_longitude: dest.longitude,
-                    avoid_congestion: !!this.avoidCongestion,
-                    top_n: 30
-                }).catch(() => null)
-            ]);
-
-            if (this.generation !== currentGen || this._powerRevision !== energyRev || this.routeRevision !== routeRev || this._drawerRevision !== requestRev) return;
-
-            if (isAtDest) {
-                if (recRes && recRes.ranked_candidates) {
-                    this.postTripRecommendation = recRes;
-                }
-                if (candRes && candRes.candidates) {
-                    this.postTripCandidateDetails = candRes.candidates;
-                }
-            } else {
-                if (recRes && recRes.ranked_candidates) {
-                    this.lastRecommendation = recRes;
-                }
-                if (candRes && candRes.candidates) {
-                    this.stationCandidateDetails = candRes.candidates;
-                }
-            }
-
-            this.renderStationsDrawer(this.currentStationsFilter);
-        } catch (e) {
-            console.warn('Failed to refresh drawer evaluations:', e);
-        }
-    }
-    renderStationsDrawer(filter = 'ALL') {
-        const currentPos = this.currentPos || (this.currentTrip?.origin ? {
-            latitude: this.currentTrip.origin.latitude,
-            longitude: this.currentTrip.origin.longitude
-        } : { latitude: 21.1038023, longitude: 106.0023809 });
-
-        const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
-        const directDistKm = straightLineDistanceKm(currentPos.latitude, currentPos.longitude, dest.latitude, dest.longitude);
-
-        // Calculate straight line distance for fallback
-        const stationsWithDist = this.stations.map(st => {
-            const distMeters = straightLineDistanceKm(
-                currentPos.latitude, currentPos.longitude,
-                st.latitude, st.longitude
-            ) * 1000;
-            return { ...st, distMeters, distKm: (distMeters / 1000).toFixed(1) };
-        });
-
-        // Apply filter
-        let filtered = stationsWithDist;
-        if (filter === 'FAST_DC') {
-            filtered = stationsWithDist.filter(s => s.station_type !== 'SWAP' && s.service_type !== 'BATTERY_SWAP');
-        } else if (filter === 'SWAP') {
-            filtered = stationsWithDist.filter(s => s.station_type === 'SWAP' || s.station_type === 'CHARGING_SWAP' || s.service_type === 'BATTERY_SWAP');
-        }
-
-        const isAtDest = this.chargingIntent === 'AT_DESTINATION';
-        const activeRec = isAtDest 
-            ? (this.postTripRecommendation || this.lastRecommendation) 
-            : this.lastRecommendation;
-        const activeCand = isAtDest 
-            ? (this.postTripCandidateDetails || this.stationCandidateDetails) 
-            : this.stationCandidateDetails;
-
-        // Top recommendation ID for current active intent
-        const topRecId = activeRec?.has_recommendation && activeRec.ranked_candidates?.length > 0
-            ? activeRec.ranked_candidates[0].station_id
-            : null;
-
-        // Sort stations based on active intent
-        if (isAtDest) {
-            // AT_DESTINATION: sort by rank, then distance to B
-            filtered.sort((a, b) => {
-                if (a.station_id === topRecId) return -1;
-                if (b.station_id === topRecId) return 1;
-
-                const rankA = activeRec?.ranked_candidates?.find(c => c.station_id === a.station_id)?.rank ?? 999;
-                const rankB = activeRec?.ranked_candidates?.find(c => c.station_id === b.station_id)?.rank ?? 999;
-                if (rankA !== rankB) return rankA - rankB;
-
-                const distA = straightLineDistanceKm(dest.latitude, dest.longitude, a.latitude, a.longitude);
-                const distB = straightLineDistanceKm(dest.latitude, dest.longitude, b.latitude, b.longitude);
-                return distA - distB;
-            });
-        } else {
-            // EN_ROUTE: sort by rank, then by distance from vehicle
-            filtered.sort((a, b) => {
-                if (a.station_id === topRecId) return -1;
-                if (b.station_id === topRecId) return 1;
-
-                const rankA = activeRec?.ranked_candidates?.find(c => c.station_id === a.station_id)?.rank ?? 999;
-                const rankB = activeRec?.ranked_candidates?.find(c => c.station_id === b.station_id)?.rank ?? 999;
-                if (rankA !== rankB) return rankA - rankB;
-
-                return a.distMeters - b.distMeters;
-            });
-        }
-
-        const html = renderDrawerStationsListHTML(filtered, {
-            topRecId,
-            isAtDest,
-            activeRec,
-            activeCand,
-            dest,
-            directDistKm,
-            postTripStationId: this.postTripStation?.station_id,
-            remainingTripDistanceKm: this.remainingTripDistanceKm,
-            directDrivingEtaMinutes: renderTripActiveEta(this.currentRouteTiming, this.remainingTripDistanceKm)
-        });
-        this.bindings.renderDrawer(html, filtered.length, {
-            navigate: data => this.navigateViaStationId(data.stationId),
-            setPostTrip: data => this.setPostTripStation(data.stationId),
-            zoom: data => this.map.map.flyTo([parseFloat(data.lat), parseFloat(data.lng)], 16)
-        });
-    }
+    async refreshDrawerEvaluations() { return refreshStationPlans.call(this); }
+    renderStationsDrawer(filter = 'ALL') { return renderStationPlans.call(this, filter); }
 
     _renderEndpointsWithDrag(origin, dest) {
         this.map.renderTripEndpoints(origin, dest, {
@@ -1441,28 +1131,45 @@ export class DriverModeController {
         this.currentPos = { latitude: orig.latitude, longitude: orig.longitude };
         this.matchedPos = null;
 
-        const dest = this.customDestination || { latitude: 21.0285, longitude: 105.8542 };
+        const dest = this.passengerDestination;
 
         this.bindings.setOriginCoordinates(renderCoordinateText(orig));
 
-        await this._updateCustomRoute(orig, dest);
+        if (dest) await this._updateCustomRoute(orig, dest);
+        else { this.clearDestination(); this.map.renderTripEndpoints(orig, null); }
     }
     async setCustomDestination(dest) {
         if (!dest) return;
         this.customDestination = dest;
 
-        const origin = this.customOrigin || this.currentPos || { latitude: 20.9849, longitude: 105.7935 };
+        const origin = this.planningOrigin;
 
         this.bindings.setDestinationCoordinates(renderCoordinateText(dest));
 
-        await this._updateCustomRoute(origin, dest);
+        if (origin) await this._updateCustomRoute(origin, dest);
+        else this.startPickCustomOrigin();
+    }
+    clearDestination() {
+        this.generation++; this.routeRevision++; this.replay.reset(); this.stopRecommendRefresh();
+        this.customDestination = null; this.currentTrip = null; this.stationNavigationTarget = null;
+        this.fullRouteCoords = null; this.directRouteGeometry = null; this.currentRouteTiming = null;
+        this.remainingTripDistanceKm = 0; this._navigationLocked = false; this._selectedStationId = null;
+        this.lastRecommendation = null; this.stationCandidateDetails = null; this.postTripRecommendation = null;
+        this.postTripStation = null; this.postTripRoute = null; this.chargingIntent = 'EN_ROUTE';
+        this.bindings.setDestinationCoordinates('Chưa chọn B'); this.bindings.setActiveIntent('EN_ROUTE');
+        this.bindings.setAfterDestinationEnabled?.(false); this._clearH3OnRouteChange();
+        this.map.clearAll(); this.map.renderStations(this.stations);
+        this.setState(DriverState.AVAILABLE); this.renderAvailableUI();
     }
     async _updateCustomRoute(origin, dest) {
         const currentGen = this.generation;
+        const routeRev = ++this.routeRevision;
+        this._navigationLocked = false; this._selectedStationId = null;
+        this.bindings.setAfterDestinationEnabled?.(!!dest);
         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
         try {
             const routeResult = await this.api.computeRoute(origin, dest, { vehicle_category: vCat });
-            if (this.generation !== currentGen) return;
+            if (this.generation !== currentGen || this.routeRevision !== routeRev) return;
             if (routeResult?.geometry) {
                 const coords = decodePolyline(routeResult.geometry);
                 this.fullRouteCoords = coords;
@@ -1481,9 +1188,10 @@ export class DriverModeController {
                 // Initialize synthetic GPS replay from route geometry
                 if (coords && coords.length > 1) {
                     await this.replay.loadFromPolyline(coords);
+                    if (this.generation !== currentGen || this.routeRevision !== routeRev) return;
                 }
 
-                const plannedKm = routeResult.distance_m ? parseFloat((routeResult.distance_m / 1000).toFixed(2)) : 5.0;
+                const plannedKm = routeResult.distance_m != null ? routeResult.distance_m / 1000 : 0;
                 this.remainingTripDistanceKm = plannedKm;
 
                 this.currentTrip = {
@@ -1503,7 +1211,7 @@ export class DriverModeController {
                 }
             }
         } catch (err) {
-            if (this.generation !== currentGen) return;
+            if (this.generation !== currentGen || this.routeRevision !== routeRev) return;
             console.warn('Failed to compute route for custom endpoints:', err);
             this.map.clearAll();
             this._renderEndpointsWithDrag(origin, dest);
@@ -1543,7 +1251,7 @@ export class DriverModeController {
         const posStatus = renderPositionStatusHTML(this.matchedPos, this.currentPos);
         const progress = this.replay.getProgressText?.() || '';
         const replayControls = renderReplayControls({ isPlaying: this.replay.isPlaying, currentIndex: this.replay.currentIndex });
-        const postTripSnippet = renderPostTripBannerHTML(this.postTripStation, this.postTripRoute);
+        const postTripSnippet = this.selectedStationPlan?.plan_mode === 'AFTER_DESTINATION' ? '' : renderPostTripBannerHTML(this.postTripStation, this.postTripRoute);
         this._renderAnalysis({ posStatus, progress });
         const callbacks = {
             openStations: () => this.openStationsDrawer(),
@@ -1583,7 +1291,7 @@ export class DriverModeController {
         this._renderAnalysis();
         this._navigationLocked = false;
         this._selectedStationId = null;
-        this.bindings.renderComplete(renderTripCompleteCardHTML(this.lastRecommendation, this.postTripStation), {
+        this.bindings.renderComplete(renderTripCompleteCardHTML(this.lastRecommendation, this.currentTrip?.goal_role === 'STATION' ? null : this.postTripStation, this.currentTrip?.goal_role), {
             startPostTrip: async () => {
                 const station = this.postTripStation;
                 this.postTripStation = null;
