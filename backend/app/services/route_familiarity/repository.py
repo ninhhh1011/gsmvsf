@@ -37,7 +37,6 @@ WITH active_drivers AS (
     SELECT driver_id, max(completed_at) AS last_completed_at
     FROM realtime.route_familiarity_routes
     WHERE driver_id <> $1 AND completed_at >= $2 AND completed_at < $3
-      AND cells && $4::text[]
     GROUP BY driver_id
     ORDER BY last_completed_at DESC, driver_id
     LIMIT 101
@@ -49,7 +48,7 @@ WITH active_drivers AS (
            row_number() OVER (PARTITION BY r.driver_id ORDER BY r.completed_at DESC, r.trip_id DESC) AS driver_rank
     FROM realtime.route_familiarity_routes r
     JOIN ranked_drivers d USING (driver_id)
-    WHERE r.completed_at >= $2 AND r.completed_at < $3 AND r.cells && $4::text[]
+    WHERE r.completed_at >= $2 AND r.completed_at < $3
 )
 SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at,
        active_rank, driver_rank
@@ -59,28 +58,35 @@ ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606
 
 
 class RouteHistoryRepository:
-    def __init__(self, pool: asyncpg.Pool):
+    def __init__(self, pool: asyncpg.Pool, namespace: str = 'realtime'):
+        if namespace not in ('realtime', 'synthetic'):
+            raise ValueError('Unsupported route history namespace')
         self.pool = pool
+        self.namespace = namespace
+
+    def _query(self, sql: str) -> str:
+        return sql.replace('realtime.', f'{self.namespace}.')
 
     async def ensure_schema(self) -> None:
         """Apply the explicit schema file; deliberately not called during app startup."""
         from pathlib import Path
 
-        sql = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
+        sql = self._query(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))
+        sql = sql.replace('SCHEMA IF NOT EXISTS realtime;', f'SCHEMA IF NOT EXISTS {self.namespace};')
         async with self.pool.acquire() as conn:
             await conn.execute(sql)
 
     async def upsert_route(self, driver_id: str, trip_id: str, completed_at: datetime,
                            signature: RouteSignature, started_at: datetime | None = None):
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(_INSERT, driver_id, trip_id, completed_at,
+            row = await conn.fetchrow(self._query(_INSERT), driver_id, trip_id, completed_at,
                                       signature.distance_m, signature.resolution,
                                       list(signature.cells), list(signature.cell_distances_m),
                                       json.dumps(signature.coordinates) if signature.coordinates else None,
                                       started_at)
             if row:
                 return row, True
-            row = await conn.fetchrow(_SELECT_ONE, driver_id, trip_id)
+            row = await conn.fetchrow(self._query(_SELECT_ONE), driver_id, trip_id)
         same = (row and row["completed_at"] == completed_at and
                 row["distance_m"] == signature.distance_m and row["resolution"] == signature.resolution and
                 tuple(row["cells"]) == signature.cells and
@@ -94,7 +100,7 @@ class RouteHistoryRepository:
             raise StateError("Route ingestion conflicts with an existing trip", "ROUTE_CONFLICT", 409)
         if (not geometry and signature.coordinates or row.get("started_at") is None and started_at is not None):
             async with self.pool.acquire() as conn:
-                row = await conn.fetchrow(_ADD_EVIDENCE, driver_id, trip_id,
+                row = await conn.fetchrow(self._query(_ADD_EVIDENCE), driver_id, trip_id,
                     json.dumps(signature.coordinates) if signature.coordinates else None, started_at)
             if not row:
                 raise StateError("Route ingestion conflicts with an existing trip", "ROUTE_CONFLICT", 409)
@@ -102,7 +108,7 @@ class RouteHistoryRepository:
 
     async def personal_routes(self, driver_id: str, as_of: datetime, lookback: timedelta):
         async with self.pool.acquire() as conn:
-            return await conn.fetch(PERSONAL_ROUTES_QUERY, driver_id, as_of - lookback, as_of)
+            return await conn.fetch(self._query(PERSONAL_ROUTES_QUERY), driver_id, as_of - lookback, as_of)
 
     async def community_routes(self, cells: list[str], exclude_driver_id: str,
                                as_of: datetime, lookback: timedelta):
@@ -110,7 +116,7 @@ class RouteHistoryRepository:
             return []
         async with self.pool.acquire() as conn:
             return await conn.fetch(
-                COMMUNITY_ROUTES_QUERY, exclude_driver_id, as_of - lookback, as_of, cells)
+                self._query(COMMUNITY_ROUTES_QUERY), exclude_driver_id, as_of - lookback, as_of)
 
 
 def coordinates_from_row(row):

@@ -56,9 +56,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 def setup_middleware(app):
     """Apply all middleware to the FastAPI app."""
     from .middleware import RateLimitMiddleware
+    from backend.app.config import settings
 
     # Rate limiting - applies to all /api/v1/ endpoints including /drivers/
     app.add_middleware(
         RateLimitMiddleware,
-        requests_per_minute=REQUESTS_PER_MINUTE
+        requests_per_minute=settings.requests_per_minute
     )

@@ -320,7 +320,7 @@ async def _postgres_measure(database_url, signature):
             personal_plan = await conn.fetch(PERSONAL_EXPLAIN_QUERY,
                         "phase4-benchmark-personal", as_of - timedelta(days=7), as_of)
             community_plan = await conn.fetch(COMMUNITY_EXPLAIN_QUERY,
-                        "phase4-benchmark-personal", as_of - timedelta(days=7), as_of, list(db_signature.cells))
+                        "phase4-benchmark-personal", as_of - timedelta(days=7), as_of)
             per_size.append({"history_rows": actual, "repository_query_pair": timings,
                 "personal_query": personal_timings, "community_query": community_timings,
                 "repository_rows_returned": {"personal": len(personal_rows),

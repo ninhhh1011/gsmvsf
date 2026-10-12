@@ -1,8 +1,10 @@
 """Application configuration management."""
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from backend.app.core.constants import REQUESTS_PER_MINUTE
 
 
 class Settings(BaseSettings):
@@ -19,6 +21,7 @@ class Settings(BaseSettings):
     app_name: str = "EV Recommendation API"
     app_version: str = "0.1.0"
     debug: bool = False
+    requests_per_minute: int = Field(default=REQUESTS_PER_MINUTE, ge=1, le=100000)
 
     # City & Geographic Configuration (Default Hanoi, configurable for HCMC, Da Nang, etc.)
     city_name: str = "Hanoi"
@@ -56,6 +59,8 @@ class Settings(BaseSettings):
     snapshot_ingestion_token: str = ""
 
     enable_route_familiarity: bool = False
+    route_history_namespace: Literal['realtime', 'synthetic'] = 'realtime'
+    public_synthetic_sample: bool = False
     route_familiarity_identity_secret: str = ""
     route_familiarity_lookback_days: int = Field(default=7, ge=1, le=365)
     max_familiarity_penalty_s: float = Field(default=30.0, ge=0, le=30, allow_inf_nan=False)
@@ -67,6 +72,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_route_familiarity(self):
+        if self.public_synthetic_sample and (not self.enable_route_familiarity or
+                                            self.route_history_namespace != 'synthetic'):
+            raise ValueError('Public sample requires enabled isolated synthetic history')
         if self.enable_route_familiarity and len(self.route_familiarity_identity_secret.encode()) < 32:
             raise ValueError("ROUTE_FAMILIARITY_IDENTITY_SECRET must be at least 32 bytes when enabled")
         return self

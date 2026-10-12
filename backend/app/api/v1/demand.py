@@ -22,7 +22,8 @@ from backend.app.services.demand.models import (
     RequestedServiceType,
     VehicleCapability,
 )
-from backend.app.services.realtime.location import resolve_current_location
+from backend.app.services.realtime.location import resolve_shared_current_location
+from backend.app.services.realtime.driver_state_manager import DriverStateUnavailableError
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi import Path as FPath
 from pydantic import BaseModel, ConfigDict, Field
@@ -254,10 +255,12 @@ async def evaluate_driver_demand_with_realtime_state(
     realtime map-matching state (matched coordinates, road segment ID) if active.
     """
     request_time = payload.timestamp if payload.timestamp is not None else datetime.now(UTC)
-    location = resolve_current_location(driver_id, payload.raw_latitude,
-                                        payload.raw_longitude, payload.road_segment_id, request_time,
-                                        getattr(request.app.state, "driver_state_store", None)
-                                        if request is not None else None)
+    try:
+        location = await resolve_shared_current_location(
+            driver_id, payload.raw_latitude, payload.raw_longitude, payload.road_segment_id,
+            request_time, getattr(request.app.state, "driver_state_manager", None))
+    except DriverStateUnavailableError as exc:
+        raise HTTPException(503, 'Driver state unavailable') from exc
 
     # Construct context
     ctx = DemandContext(

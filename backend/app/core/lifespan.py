@@ -43,7 +43,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if settings.enable_route_familiarity:
             from backend.app.services.route_familiarity.repository import RouteHistoryRepository
             from backend.app.services.route_familiarity.ingestion import RouteHistoryIngestion
-            app.state.route_history_repository = RouteHistoryRepository(pool)
+            app.state.route_history_repository = RouteHistoryRepository(
+                pool, namespace=settings.route_history_namespace)
             app.state.route_history_ingestion = RouteHistoryIngestion(app.state.route_history_repository)
         app.state.redis = redis
         app.state.http_client = client

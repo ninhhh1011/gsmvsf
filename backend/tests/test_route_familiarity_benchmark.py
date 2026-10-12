@@ -460,8 +460,7 @@ async def test_database_benchmark_times_personal_and_community_queries_separatel
                 clock[0] += 0.002
                 return self.rows[:51]
             assert sql == COMMUNITY_ROUTES_QUERY
-            from backend.app.services.route_familiarity.service import history_query_cells
-            assert args[3] in (list(signature.cells), history_query_cells([signature]))
+            assert len(args) == 3  # Cohort includes non-supporting drivers.
             clock[0] += 0.007
             return [{**row, "active_rank": index, "driver_rank": 1}
                     for index, row in enumerate(self.rows[51:], 1)]

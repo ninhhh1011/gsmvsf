@@ -13,7 +13,9 @@ DRIVER = 'week5-location-test'
 
 def app_request():
     from backend.app.services.demand.service import create_demand_service
-    state = SimpleNamespace(driver_state_store=get_state_store(), demand_service=create_demand_service())
+    state = SimpleNamespace(driver_state_store=get_state_store(), demand_service=create_demand_service(),
+        driver_state_manager=SimpleNamespace(get_or_create=AsyncMock(
+            side_effect=lambda driver: get_state_store().get_or_create(driver))))
     return SimpleNamespace(app=SimpleNamespace(state=state))
 
 @pytest.fixture
@@ -84,6 +86,7 @@ async def test_recommend_location_bridge(state, branch, coordinates, expected):
             energy_context=request.energy_request, degraded=False, degraded_reasons=[], reason='TEST')
     app = create_app()
     app.state.driver_state_store = get_state_store()
+    app.state.driver_state_manager = app_request().app.state.driver_state_manager
     app.dependency_overrides[get_workflow] = lambda: SimpleNamespace(recommend=recommend)
     if branch == 'raw':
         state.last_matched_state = None
