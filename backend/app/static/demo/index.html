@@ -113,11 +113,11 @@
                     <button id="btn-close-stations-drawer" class="btn btn-sm btn-outline" type="button" aria-label="Đóng danh sách trạm">✕</button>
                 </div>
                 <!-- Charging Intent Selector: En-route vs Post-trip -->
-                <button id="btn-clear-custom-dest" class="btn btn-outline btn-sm" type="button">Bỏ điểm B</button>
+                <button id="btn-clear-custom-dest" class="btn btn-outline btn-sm" type="button" style="display:none" disabled>Bỏ điểm B</button>
                 <div class="charging-intent-selector">
                     <button class="intent-tab active" data-intent="EN_ROUTE" id="tab-intent-enroute">
-                        <span>🔀 Ghé sạc giữa đường</span>
-                        <small>A ➔ Trạm ➔ B (Sạc ngay)</small>
+                        <span id="station-enroute-label">Tìm trạm từ vị trí A</span>
+                        <small id="station-enroute-path">A ➔ Trạm</small>
                     </button>
                     <button class="intent-tab" data-intent="AT_DESTINATION" id="tab-intent-dest" disabled>
                         <span>🏁 Đến B xong mới sạc</span>

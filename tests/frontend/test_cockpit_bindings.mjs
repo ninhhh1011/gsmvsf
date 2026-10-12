@@ -187,3 +187,19 @@ test('drawer refresh preserves the expanded catalog and its scroll position', ()
  assert.equal(details.open,true);
  assert.equal(list.scrollTop,80);
 });
+
+test('station intent labels describe optional and completed passenger goal',()=>{
+ const elements=Object.fromEntries(['tab-intent-dest','btn-clear-custom-dest','station-enroute-label','station-enroute-path'].map(id=>[id,element()]));
+ const bindings=createCockpitBindings({getElementById:id=>elements[id],querySelectorAll:()=>[]});
+ bindings.setAfterDestinationEnabled(false);
+ assert.equal(elements['station-enroute-path'].textContent,'A ➔ Trạm');
+ assert.equal(elements['btn-clear-custom-dest'].style.display,'none');
+ assert.equal(elements['tab-intent-dest'].disabled,true);
+ bindings.setAfterDestinationEnabled(true);
+ assert.equal(elements['station-enroute-path'].textContent,'A ➔ Trạm ➔ B');
+ assert.equal(elements['btn-clear-custom-dest'].style.display,'');
+ assert.equal(elements['tab-intent-dest'].disabled,false);
+ bindings.setAfterDestinationEnabled(false,true);
+ assert.equal(elements['station-enroute-path'].textContent,'A ➔ Trạm');
+ assert.equal(elements['tab-intent-dest'].disabled,true,'already passed B cannot be scheduled again');
+});

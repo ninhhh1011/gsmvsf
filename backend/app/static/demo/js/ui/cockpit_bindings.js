@@ -108,7 +108,12 @@ export function createCockpitBindings(root = globalThis.document) {
         setOriginCoordinates(text) { const el = get('text-origin-coords'); if (el) el.textContent = text; },
         setDestinationCoordinates(text) { const el = get('text-dest-coords'); if (el) el.textContent = text; },
         setNavigationButtonState(text, disabled) { const button = get('btn-nav-station'); if (button) { button.textContent = text; button.disabled = disabled; } },
-        setAfterDestinationEnabled(enabled) { const tab = get('tab-intent-dest'); if (tab) { tab.disabled = !enabled; tab.title = enabled ? '' : 'Chọn điểm B để dùng lựa chọn này'; } },
+        setAfterDestinationEnabled(enabled, hasDestination = enabled) {
+            const tab = get('tab-intent-dest'); if (tab) { tab.disabled = !enabled; tab.title = enabled ? '' : 'Cần một điểm B chưa đi qua để dùng lựa chọn này'; }
+            const clear = get('btn-clear-custom-dest'); if (clear) { clear.style.display = hasDestination ? '' : 'none'; clear.disabled = !hasDestination; }
+            const label = get('station-enroute-label'); if (label) label.textContent = enabled ? 'Ghé sạc giữa đường' : 'Tìm trạm từ vị trí A';
+            const path = get('station-enroute-path'); if (path) path.textContent = enabled ? 'A ➔ Trạm ➔ B' : 'A ➔ Trạm';
+        },
         setActiveIntent(value) { each('.charging-intent-selector .intent-tab', tab => tab.classList.toggle('active', tab.dataset.intent === value)); },
         showRouteUnavailable(message) { root?.defaultView?.alert(message); },
         renderAvailable(html, callbacks) {

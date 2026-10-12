@@ -84,7 +84,7 @@ export async function refreshStationPlans() {
     const revision = ++this._drawerRevision;
     const after = this.chargingIntent === 'AT_DESTINATION' && !this.navigationStages?.passengerPassed;
     if (after && !this.passengerDestination) return;
-    this.bindings.setAfterDestinationEnabled?.(!!this.passengerDestination);
+    this.bindings.setAfterDestinationEnabled?.(!!this.passengerDestination && !this.navigationStages?.passengerPassed, !!this.passengerDestination);
     if (after) { this.postTripRecommendation = null; this.postTripCandidateDetails = null; }
     else { this.lastRecommendation = null; this.stationCandidateDetails = null; }
     this.renderStationsDrawer();
