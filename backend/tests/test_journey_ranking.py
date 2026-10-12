@@ -58,6 +58,27 @@ async def test_station_plan_goals_and_geometry(client, app, monkeypatch, mode, h
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('mode,has_b', [('BEFORE_DESTINATION', True), ('BEFORE_DESTINATION', False), ('AFTER_DESTINATION', True)])
+async def test_recommend_candidate_details_share_ranked_attempt(client, app, monkeypatch, mode, has_b):
+    from backend.tests.test_route_familiarity_workflow import body, workflow
+    from backend.app.config import settings
+    monkeypatch.setattr(settings, 'enable_route_familiarity', False)
+    app.state.recommendation_workflow = workflow()
+    payload = body() | {'plan_mode': mode}
+    if not has_b:
+        payload.pop('destination_latitude')
+        payload.pop('destination_longitude')
+    response = await client.post('/api/v1/recommend', json=payload)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    saved = await app.state.recommendation_workflow.repository.get_search(result['candidate_search_id'])
+    assert result['candidate_details'] == [{'station_id': row.station_id, 'service_type': row.service_type.value,
+                                          'eligible': row.eligible, 'reason': row.reason.value} for row in saved.result.candidates]
+    eligible = {(row['station_id'], row['service_type']) for row in result['candidate_details'] if row['eligible']}
+    assert all((row['station_id'], row['service_type']) in eligible for row in result['ranked_candidates'])
+
+
+@pytest.mark.asyncio
 async def test_impossible_after_destination_and_ineligible_selection(client, app, monkeypatch):
     from backend.tests.test_route_familiarity_workflow import body, workflow
     from backend.app.config import settings

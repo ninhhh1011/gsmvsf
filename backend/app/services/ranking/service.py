@@ -5,6 +5,7 @@ from time import perf_counter
 from backend.app.core.logging import get_logger
 from backend.app.core.metrics import record_route_familiarity_event
 from backend.app.services.candidate.station_catalog import station_catalog
+from backend.app.services.candidate.models import StationServiceCandidate
 from backend.app.services.ranking.context import build_features, invalid_evidence
 from backend.app.services.ranking.models import (
     FamiliarityExplanation, RankedCandidate, RankingPolicy, RecommendationResult,
@@ -142,6 +143,8 @@ class RankingService:
             recommended_station_id=best.station_id if best else None,
             recommended_service_type=best.service_type if best else None,
             ranked_candidates=ranked[:top_n], eligible_count=len(ranked), policy=self.policy,
+            candidate_details=[StationServiceCandidate(station_id=row.station_id, service_type=row.service_type,
+                eligible=row.eligible, reason=row.reason) for row in evidence.result.candidates],
             familiarity_enabled=familiarity_evaluated,
             familiarity_status=(selected_assessment.status if selected_assessment else
                                 'UNAVAILABLE' if familiarity_evaluated and best else None),

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from backend.app.services.candidate.models import CandidateSearchResult
+from backend.app.services.candidate.models import CandidateSearchResult, StationServiceCandidate
 from backend.app.services.demand.models import EnergyServiceRequest, ServiceType
 from backend.app.services.routing.models import RouteConstraints
 from backend.app.services.snapshots.models import (
@@ -116,6 +116,7 @@ class RecommendationResult(FrozenModel):
     recommended_station_id: str | None
     recommended_service_type: ServiceType | None
     ranked_candidates: list[RankedCandidate]
+    candidate_details: list[StationServiceCandidate] = Field(default_factory=list)
     eligible_count: Count
     policy: RankingPolicy
     # Historical familiarity evidence

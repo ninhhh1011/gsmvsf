@@ -237,6 +237,8 @@ async def test_enabled_state_conflict_retries_search_and_uses_only_new_route_car
     assert [row["result"]["eligible_count"] for row in searches.saved] == [2, 1]
     assert result.candidate_search_id == searches.saved[1]["candidate_search_id"]
     assert result.recommended_station_id == "S002"
+    assert [(row.station_id, row.eligible, row.reason.value) for row in result.candidate_details] == [
+        ('S001', False, 'OFFLINE'), ('S002', True, 'ELIGIBLE')]
     assert built[1].cells != built[2].cells
     from backend.app.services.route_familiarity.service import history_query_cells
     from backend.app.services.route_familiarity.route_matcher import prepare_route
