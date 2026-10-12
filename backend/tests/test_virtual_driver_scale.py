@@ -3,6 +3,7 @@ from argparse import Namespace
 import hashlib
 import hmac
 import json
+from datetime import datetime, UTC
 
 import httpx
 import pytest
@@ -52,7 +53,9 @@ def test_burst_keeps_transport_bounded_and_reports_rate_limit():
             await asyncio.sleep(0.01)
             active -= 1
             assert request.url.path.endswith('/location')
-            return httpx.Response(429, json={'detail': 'rate limit'})
+            stamp = datetime.fromisoformat(json.loads(request.content)['timestamp'])
+            assert 0.9 <= (datetime.now(UTC) - stamp).total_seconds() < 2
+            return httpx.Response(429, json={'detail': 'rate limit' + 'x' * 1100})
 
         args = Namespace(burst_size=6, intervals=3, drain_seconds=1, concurrency=2,
                          request_timeout=1, seed=7, noise_m=3, demand_every=2)
@@ -63,6 +66,8 @@ def test_burst_keeps_transport_bounded_and_reports_rate_limit():
         assert peak == 2
         assert result['http_statuses'] == {'gps:429': 6}
         assert result['counters']['gps_http_errors'] == 6
+        assert len(result['http_error_samples']['gps:429']) == 3
+        assert all(len(sample) == 1000 for sample in result['http_error_samples']['gps:429'])
         assert result['achieved_successful_rates_per_second']['gps'] == 0
         assert result['request_latency_ms']['gps']['samples'] == 6
         assert 'recommendation_sent' not in result['counters']

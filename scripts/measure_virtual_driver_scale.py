@@ -9,7 +9,7 @@ import argparse
 import asyncio
 from bisect import bisect_right
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import json
@@ -30,6 +30,12 @@ from backend.app.services.route_familiarity.signature import decode_polyline, _d
 
 CADENCE = 30.0
 SPEED_M_S = 20 / 3.6
+OBSERVATION_AGE_SECONDS = 1
+
+
+def observation_timestamp():
+    # Fixed transport-age assumption avoids milliseconds of client/container clock skew.
+    return (datetime.now(UTC) - timedelta(seconds=OBSERVATION_AGE_SECONDS)).isoformat()
 
 
 def validate_namespace(namespace):
@@ -94,6 +100,7 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
     semaphore = asyncio.Semaphore(args.concurrency)
     counters = Counter()
     statuses, matching, familiarity = Counter(), Counter(), Counter()
+    error_samples = {}
     latency, queue_delay = {}, {}
     peak_pending = 0
     pending = set()
@@ -113,6 +120,9 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
                 counters[kind + '_completed'] += 1
                 if not response.is_success:
                     counters[kind + '_http_errors'] += 1
+                    samples = error_samples.setdefault(f'{kind}:{response.status_code}', [])
+                    if len(samples) < 3:
+                        samples.append(response.text[:1000])
                 try:
                     body = response.json()
                 except ValueError:
@@ -140,7 +150,7 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
         radius, angle = noise.uniform(0, args.noise_m), noise.uniform(0, math.tau)
         lat += radius * math.cos(angle) / 111195
         lon += radius * math.sin(angle) / (111195 * math.cos(math.radians(lat)))
-        stamp = datetime.now(UTC).isoformat()
+        stamp = observation_timestamp()
         due = started + due_offset
         gps = await request('gps', f'/api/v1/drivers/{driver_id}/location', {
             'vehicle_id': 'V0001', 'vehicle_category': 'EV_CAR',
@@ -188,6 +198,7 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
             'elapsed_seconds': elapsed, 'completion_deadline_seconds': duration + args.drain_seconds,
             'peak_pending_events': peak_pending, 'counters': dict(counters),
             'http_statuses': dict(statuses), 'matching_statuses': dict(matching),
+            'http_error_samples': error_samples,
             'familiarity_statuses': dict(familiarity),
             'achieved_successful_rates_per_second': {kind: counters[kind + '_successful'] / elapsed
                                                     for kind in ('gps', 'demand', 'recommendation')},
@@ -216,8 +227,10 @@ async def run(args):
               'vehicle_template': {'canonical_vehicle_id': 'V0001', 'category': 'EV_CAR',
                                    'virtual_copies': True, 'unique_driver_ids': True},
               'warmup_intervals': 1, 'noise_bound_m': args.noise_m, 'speed_kmh': 20,
+              'observation_age_seconds': OBSERVATION_AGE_SECONDS,
               'resource_metrics': 'not_measured', 'stages': [],
               'limitations': ['Single client IP; existing API rate limit is retained.',
+                              'GPS timestamps use a fixed 1-second observation age; larger clock skew remains an error.',
                               'Synthetic geometry/model copies do not prove real driver behavior.',
                               'No production SLA; error and matching status counts are evidence.',
                               'Fixed namespace reuses GPS state unless the runtime is independently isolated.',
