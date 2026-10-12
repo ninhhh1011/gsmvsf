@@ -44,6 +44,23 @@ class RecommendationWorkflow:
         self.ranking = RankingService(resolver, catalog=catalog, policy=policy,
                                       familiarity_evaluator=familiarity_evaluator)
 
+    async def _pinned_search(self, request, *, eligible_only=False, signature_sink=None):
+        request_time = aware_utc(request.energy_request.timestamp)
+        baseline_catalog_digest = catalog_digest(self.catalog)
+        keys = [f'{kind}:{station.station_id}' for station in self.catalog.get_all_stations()
+                for kind in ('station', 'queue')]
+        view = (await self.resolver.resolve(keys, request_time)
+                if request.energy_request.request_valid and request.energy_request.need_service else {})
+        service = CandidateSearchService(self.routing_engine, SnapshotCatalogView(self.catalog, view))
+        result = await service.search_candidates(request, eligible_only=eligible_only,
+                                                 _signature_sink=signature_sink)
+        return result, view, baseline_catalog_digest
+
+    async def search_candidates(self, request, *, eligible_only=False):
+        """Standalone bounded response; never persist partial ranking evidence."""
+        result, _, _ = await self._pinned_search(request, eligible_only=eligible_only)
+        return result
+
     async def _search(self, request, *, collect_signatures=False):
         request_time = aware_utc(request.energy_request.timestamp)
         energy = request.energy_request
@@ -61,14 +78,8 @@ class RecommendationWorkflow:
         if (not energy.request_valid or energy.reason_code in
                 ('MISSING_DATA', 'INVALID_STATE', 'STALE_STATE')):
             raise StateError('Energy service request is invalid', 'INVALID_ENERGY_REQUEST', 422)
-        stations = self.catalog.get_all_stations()
-        baseline_catalog_digest = catalog_digest(self.catalog)
-        # No operational reads needed for the existing no-service short circuit.
-        keys = [f'{kind}:{s.station_id}' for s in stations for kind in ('station', 'queue')]
-        view = await self.resolver.resolve(keys, request_time) if request.energy_request.need_service else {}
-        service = CandidateSearchService(self.routing_engine, SnapshotCatalogView(self.catalog, view))
         signatures = {} if collect_signatures else None
-        result = await service.search_candidates(request, _signature_sink=signatures)
+        result, view, baseline_catalog_digest = await self._pinned_search(request, signature_sink=signatures)
         # Normalize legacy naive timestamps at this boundary.
         if result.search_timestamp.tzinfo is None:
             result = result.model_copy(update={

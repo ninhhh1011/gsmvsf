@@ -75,7 +75,11 @@ def get_snapshot_ingestion(request: Request) -> IngestionService:
 
 def get_recommendation_workflow(request: Request) -> RecommendationWorkflow:
     """RecommendationWorkflow instance from lifespan."""
-    return _require_state("recommendation_workflow", request)
+    from backend.app.services.snapshots.models import StateError
+    workflow = getattr(request.app.state, 'recommendation_workflow', None)
+    if workflow is None:
+        raise StateError('Snapshot backend not initialized')
+    return workflow
 
 
 def get_realtime_simulator(request: Request):

@@ -9,7 +9,7 @@ Provides:
 
 from datetime import UTC, datetime
 
-from backend.app.dependencies import get_candidate_service, get_demand_service
+from backend.app.dependencies import get_candidate_service, get_demand_service, get_recommendation_workflow
 from backend.app.services.candidate.models import (
     CandidateSearchRequest,
     CandidateSearchResult,
@@ -116,9 +116,9 @@ async def search_candidates(
     """
     Execute Week 3 candidate search and multi-leg routing for an EnergyServiceRequest.
     """
-    service = get_candidate_service(request_obj)
+    workflow = get_recommendation_workflow(request_obj)
     try:
-        return await service.search_candidates(request, eligible_only=eligible_only)
+        return await workflow.search_candidates(request, eligible_only=eligible_only)
     except RoutingEngineError as exc:
         raise _routing_http_error(exc) from exc
 
@@ -177,8 +177,8 @@ async def evaluate_and_search(
         max_candidates=request.max_candidates,
     )
 
-    service = get_candidate_service(request_obj)
+    workflow = get_recommendation_workflow(request_obj)
     try:
-        return await service.search_candidates(search_req, eligible_only=request.eligible_only)
+        return await workflow.search_candidates(search_req, eligible_only=request.eligible_only)
     except RoutingEngineError as exc:
         raise _routing_http_error(exc) from exc
