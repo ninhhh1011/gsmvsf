@@ -129,8 +129,8 @@ async def test_disabled_recommend_preserves_legacy_defaults_and_costs_without_fa
     assert result["history_window_days"] == 7
     assert result["familiarity"]["status"] == "DISABLED"
     assert result["recommended_station_id"] == "S001"
-    assert [c["final_cost_s"] for c in result["ranked_candidates"]] == [1300, 1331]
-    assert all(c["final_cost_s"] == c["eta_to_service_complete_s"] and
+    assert [c['final_cost_s'] for c in result['ranked_candidates']] == [1431, 1462]
+    assert all(c['final_cost_s'] == c['total_completion_time_s'] and
                c["penalty_components_s"] == {} for c in result["ranked_candidates"])
     assert history.calls == []
     # Compare all candidate/legacy familiarity outputs with staged neutral ranking.
@@ -248,7 +248,7 @@ async def test_enabled_state_conflict_retries_search_and_uses_only_new_route_car
 
 
 @pytest.mark.asyncio
-async def test_penalized_route_more_than_thirty_seconds_physically_faster_still_wins(app):
+async def test_weighted_familiarity_can_outweigh_thirty_seconds(app):
     routes = Routes()
     familiar = create_route_signature([
         polyline([ORIGIN, STATION_POINTS["S002"]]),
@@ -261,13 +261,13 @@ async def test_penalized_route_more_than_thirty_seconds_physically_faster_still_
     evaluator = RouteFamiliarityService(history, max_penalty_s=30, confidence_prior_strength=0)
     combined = workflow(evaluator, routes=routes)
     result = await combined.recommend(search_request(app))
-    faster, slower = result.ranked_candidates
-    assert faster.station_id == result.recommended_station_id == "S001"
+    slower, faster = result.ranked_candidates
+    assert slower.station_id == result.recommended_station_id == 'S002'
     assert slower.eta_to_service_complete_s - faster.eta_to_service_complete_s == 31
     assert faster.familiarity.penalty_s > slower.familiarity.penalty_s
-    assert 0 < faster.familiarity.penalty_s <= 30
-    assert faster.final_cost_s == faster.eta_to_service_complete_s + faster.familiarity.penalty_s
-    assert faster.final_cost_s < slower.final_cost_s
+    assert faster.familiarity.penalty_s > 30
+    assert faster.final_cost_s == faster.total_completion_time_s + faster.familiarity.penalty_s
+    assert faster.final_cost_s > slower.final_cost_s
 
 
 @pytest.mark.asyncio
@@ -294,4 +294,4 @@ async def test_geometric_history_can_change_station_order_without_changing_physi
     before = {candidate.station_id: candidate for candidate in baseline.ranked_candidates}
     for candidate in weighted.ranked_candidates:
         assert candidate.eta_to_service_complete_s == before[candidate.station_id].eta_to_service_complete_s
-        assert 0 <= candidate.familiarity.penalty_s <= 30
+        assert 0 <= candidate.familiarity.penalty_s <= candidate.time_reference_s / 8

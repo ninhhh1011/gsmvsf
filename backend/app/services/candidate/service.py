@@ -164,6 +164,7 @@ class CandidateSearchService:
                 driver_pos=driver_pos,
                 destination_pos=dest_pos,
                 profile=vehicle_profile,
+                constraints=request.constraints,
             )
 
         # 8. Pre-compute all station routes concurrently
@@ -226,6 +227,14 @@ class CandidateSearchService:
                 service_type=service_type,
                 is_soc_feasible=soc_feasible,
             )
+            if eligible and dest_pos is not None:
+                if route_metrics.duration_station_to_dest_s is None:
+                    eligible, reason = False, 'UNREACHABLE'
+                elif (esr.estimated_remaining_range_km is None or
+                      (net_dist_m + route_metrics.distance_station_to_dest_m) / 1000 +
+                      (esr.safety_reserve_km or 0) > esr.estimated_remaining_range_km):
+                    # Service-time estimates do not prove replenished energy.
+                    eligible, reason = False, 'ONWARD_ENERGY_UNVERIFIED'
 
             candidate = EvaluatedCandidate(
                 station_id=station.station_id,
@@ -244,10 +253,10 @@ class CandidateSearchService:
             if candidate.eligible and _signature_sink is not None:
                 key = (station.station_id, service_type.value)
                 _signature_sink[key] = None
-            if candidate.eligible and _signature_sink is not None and dest_pos is not None:
+            if candidate.eligible and _signature_sink is not None:
                 leg1, leg2 = route_result[2:4]
-                if (leg1 is not None and leg2 is not None and leg1.geometry and leg2.geometry and
-                        leg2.status.value == "SUCCESS"):
+                if (leg1 is not None and leg1.geometry and
+                        (dest_pos is None or (leg2 is not None and leg2.geometry and leg2.status.value == 'SUCCESS'))):
                     from backend.app.core.metrics import (
                         observe_route_familiarity, record_route_familiarity_event,
                     )
@@ -256,7 +265,8 @@ class CandidateSearchService:
                     signature_started = perf_counter()
                     try:
                         _signature_sink[key] = create_route_signature(
-                            [leg1.geometry, leg2.geometry])
+                            ([request.prefix_geometry] if request.prefix_geometry else []) +
+                            [leg1.geometry] + ([leg2.geometry] if dest_pos is not None else []))
                         record_route_familiarity_event('signature')
                     except ValueError:
                         record_route_familiarity_event('signature', 'unavailable')

@@ -59,10 +59,10 @@ async def test_no_history_has_zero_penalty_and_bounded_two_queries():
     before = ROUTE_FAMILIARITY_EVENTS.labels(stage="no_history", outcome="completed")._value.get()
     result = await service.assess_many("driver", {("station", "CHARGING"): sig(["a", "b"])}, NOW)
     assessment = result[("station", "CHARGING")]
-    assert assessment.status == "NO_HISTORY"
+    assert assessment.status == "AVAILABLE"
     assert assessment.penalty_s == 0
     assert assessment.community_driver_count == 5
-    assert ROUTE_FAMILIARITY_EVENTS.labels(stage="no_history", outcome="completed")._value.get() == before + 1
+    assert ROUTE_FAMILIARITY_EVENTS.labels(stage="no_history", outcome="completed")._value.get() == before
     assert repo.calls == [
         ("personal", ("driver", NOW, timedelta(days=7))),
         ("community", (["a", "b"], "driver", NOW, timedelta(days=7))),

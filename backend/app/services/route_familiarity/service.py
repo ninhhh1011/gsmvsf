@@ -37,6 +37,8 @@ class FamiliarityAssessment:
     history_truncated: bool = False
     degraded_reason: str | None = None
     route_cells: tuple[str, ...] = ()
+    community_confidence: float = 0.0
+    community_cohort_driver_count: int | None = None
 
 
 class RouteFamiliarityService:
@@ -130,32 +132,34 @@ class RouteFamiliarityService:
                 return score_cache[key]
             for key, recommended in prepared.items():
                 personal_results = [score(recommended, route) for route in personal_indexed]
-                best_result = max(personal_results, key=lambda item: item.adherence) if personal_results else None
-                best = best_result.adherence if best_result else None
+                best = sum(item.adherence for item in personal_results) / len(personal_results) if personal_results else None
                 supporting = sum(item.adherence >= self.minimum_support for item in personal_results)
                 confidence = len(personal) / (len(personal) + self.confidence_prior) if personal else 0.0
                 penalty = self.max_penalty_s * (1 - best) * confidence if best is not None else 0.0
-                driver_best, driver_trips = {}, {}
+                driver_best, driver_trips, driver_scores = {}, {}, {}
                 for row, route in zip(community, community_indexed):
                     adherence = score(recommended, route).adherence
+                    driver = row['driver_id']
+                    driver_scores.setdefault(driver, []).append(adherence)
                     if adherence >= self.minimum_support:
-                        driver = row["driver_id"]
                         driver_best[driver] = max(adherence, driver_best.get(driver, 0.0))
                         driver_trips[driver] = driver_trips.get(driver, 0) + 1
                 drivers = len(driver_best)
                 visible = drivers >= self.minimum_drivers
-                community_adherence = ((sum(driver_best.values()) + self.prior_mean * self.prior_strength) /
-                                       (drivers + self.prior_strength)) if visible else None
+                community_adherence = ((sum(sum(scores) / len(scores) for scores in driver_scores.values()) + self.prior_mean * self.prior_strength) /
+                                       (len(driver_scores) + self.prior_strength)) if visible else None
                 legacy_only = not personal and legacy_personal
                 result[key] = FamiliarityAssessment(
-                    "UNAVAILABLE" if legacy_only else "AVAILABLE" if personal else "NO_HISTORY",
+                    "UNAVAILABLE" if legacy_only else "AVAILABLE" if personal or visible else "NO_HISTORY",
                     best, supporting, len(personal), community_adherence,
                     sum(driver_trips.values()) if visible else None, drivers if visible else None,
                     confidence, recommended.distance_m,
-                    best_result.shared_route_distance_m if best_result else None,
+                    sum(item.shared_route_distance_m for item in personal_results) / len(personal_results) if personal_results else None,
                     min(30.0, self.max_penalty_s, max(0.0, penalty)), truncated or legacy_personal,
                     "HISTORY_GEOMETRY_OR_START_UNAVAILABLE" if legacy_only else None,
-                    tuple(sorted(recommended.positions)))
+                    tuple(sorted(recommended.positions)),
+                    len(driver_scores) / (len(driver_scores) + self.confidence_prior) if visible else 0.0,
+                    len(driver_scores) if visible else None)
         except SimilarityWorkLimitExceeded:
             record_familiarity_work_limit()
             record_route_familiarity_event('comparison', 'unavailable')

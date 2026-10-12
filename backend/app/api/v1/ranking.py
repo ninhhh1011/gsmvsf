@@ -4,14 +4,15 @@ import hashlib
 import logging
 from datetime import UTC, datetime
 from time import perf_counter
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from backend.app.config import settings
 from backend.app.services.candidate.models import CandidateSearchRequest
-from backend.app.services.demand.models import DemandContext, RequestedServiceType
+from backend.app.services.demand.models import DemandContext, RequestedServiceType, ServiceType
 from backend.app.dependencies import get_demand_service
 from backend.app.services.ranking.models import CandidateSearchEvidence, RecommendationResult
-from backend.app.services.realtime.location import resolve_current_location
+from backend.app.services.realtime.location import resolve_shared_current_location
 from backend.app.services.snapshots.models import (
     FrozenModel,
     QueueSnapshot,
@@ -94,11 +95,14 @@ class RecommendRequest(FrozenModel):
     destination_node_id: str | None = None
     top_n: int | None = Field(None, ge=1, le=1000)
     avoid_congestion: bool = True
+    plan_mode: Literal['BEFORE_DESTINATION', 'AFTER_DESTINATION'] = 'BEFORE_DESTINATION'
 
     @model_validator(mode='after')
     def destination_pair(self):
         if (self.destination_latitude is None) != (self.destination_longitude is None):
             raise ValueError('Both destination coordinates are required together')
+        if self.plan_mode == 'AFTER_DESTINATION' and self.destination_latitude is None:
+            raise ValueError('After-destination planning requires a destination')
         return self
 
 
@@ -132,9 +136,9 @@ async def recommend(request: RecommendRequest, request_obj: Request,
                                           settings.route_familiarity_identity_secret):
                 raise HTTPException(403, 'Invalid driver identity signature')
 
-        location = resolve_current_location(context.driver_id, context.raw_latitude,
+        location = await resolve_shared_current_location(context.driver_id, context.raw_latitude,
             context.raw_longitude, context.road_segment_id, context.timestamp,
-            getattr(request_obj.app.state, "driver_state_store", None))
+            getattr(request_obj.app.state, 'driver_state_manager', None))
 
         repo = getattr(workflow, 'repository', None)
         road_seg = location.road_segment_id
@@ -160,7 +164,7 @@ async def recommend(request: RecommendRequest, request_obj: Request,
         constraints = None
         repo = getattr(workflow, 'repository', None)
         if request.avoid_congestion and repo is not None and hasattr(repo, 'get_congested_polygons'):
-            avoid_areas = await repo.get_congested_polygons(min_delay=1.6)
+            avoid_areas = await repo.get_congested_polygons(min_delay=1.6, as_of=context.timestamp)
             if avoid_areas:
                 from backend.app.services.routing.models import RouteConstraints
                 constraints = RouteConstraints(custom={"avoid_areas": avoid_areas, "congestion_priority": 0.05})
@@ -170,6 +174,26 @@ async def recommend(request: RecommendRequest, request_obj: Request,
             destination_longitude=request.destination_longitude,
             destination_node_id=request.destination_node_id,
             constraints=constraints)
+        if request.plan_mode == 'AFTER_DESTINATION':
+            from backend.app.services.routing.models import Position, RouteRequest, RouteStatus, VehicleRoutingProfile
+            from backend.app.services.routing.engine import raise_for_routing_failure
+            prefix = await workflow.routing_engine.route(RouteRequest(
+                origin=Position(latitude=location.latitude, longitude=location.longitude),
+                destination=Position(latitude=request.destination_latitude, longitude=request.destination_longitude),
+                profile=VehicleRoutingProfile(vehicle_id=context.vehicle_id, vehicle_model=energy.vehicle_model,
+                                              vehicle_category=energy.vehicle_type), constraints=constraints))
+            raise_for_routing_failure(prefix)
+            remaining = energy.estimated_remaining_range_km
+            if (prefix.status != RouteStatus.SUCCESS or remaining is None or
+                    remaining < prefix.distance_m / 1000 + (energy.safety_reserve_km or 0)):
+                raise StateError('Destination cannot be reached with current energy', 'DESTINATION_ENERGY_INFEASIBLE', 409)
+            energy = energy.model_copy(update={'latitude': request.destination_latitude,
+                'longitude': request.destination_longitude, 'road_segment_id': None,
+                'estimated_remaining_range_km': remaining - prefix.distance_m / 1000,
+                'remaining_trip_distance_km': 0})
+            search = CandidateSearchRequest(energy_request=energy, constraints=constraints,
+                prefix_duration_s=prefix.duration_s, prefix_distance_m=prefix.distance_m,
+                prefix_geometry=prefix.geometry)
         metrics = {}
         result = await workflow.recommend(search, top_n=request.top_n, metrics=metrics)
         metrics.setdefault('timings_ms', {}).update(location_resolution=location_ms, demand=demand_ms,
@@ -181,6 +205,74 @@ async def recommend(request: RecommendRequest, request_obj: Request,
     finally:
         from backend.app.core.metrics import observe_recommendation
         observe_recommendation('request', perf_counter() - started)
+
+
+class StationPlanRequest(RecommendRequest):
+    station_id: str = Field(min_length=1, max_length=100)
+    service_type: ServiceType
+
+
+@router.post('/station-plan')
+async def station_plan(request: StationPlanRequest, request_obj: Request,
+                       x_driver_identity_signature: str | None = Header(None),
+                       workflow=Depends(get_workflow)):
+    """Confirm the selected pair against current backend eligibility and routing policy."""
+    from backend.app.services.routing.models import Position, RouteRequest, RouteStatus, VehicleRoutingProfile
+    from backend.app.services.routing.engine import raise_for_routing_failure
+    from backend.app.services.route_familiarity.signature import decode_polyline
+    recommendation_request = RecommendRequest.model_validate(
+        request.model_dump(exclude={'station_id', 'service_type', 'top_n'}) | {'top_n': None})
+    result = await recommend(recommendation_request, request_obj, x_driver_identity_signature, workflow)
+    evidence = await workflow.repository.get_search(result.candidate_search_id)
+    selected = next((row for row in result.ranked_candidates
+                     if row.station_id == request.station_id and row.service_type == request.service_type), None)
+    if selected is None:
+        rejected = next((row for row in evidence.result.candidates if row.station_id == request.station_id
+                         and row.service_type == request.service_type), None)
+        error = StateError('Selected station/service is no longer eligible', 'STATION_PLAN_UNAVAILABLE', 409)
+        error.detail['eligibility_reason'] = rejected.reason.value if rejected else 'PAIR_NOT_FOUND'
+        raise error
+    energy = evidence.energy_request
+    station = workflow.catalog.get_station(request.station_id)
+    profile = VehicleRoutingProfile(vehicle_id=energy.vehicle_id, vehicle_model=energy.vehicle_model,
+                                    vehicle_category=energy.vehicle_type)
+    station_position = Position(latitude=station.latitude, longitude=station.longitude)
+    positions = [Position(latitude=energy.latitude, longitude=energy.longitude), station_position]
+    if request.plan_mode == 'AFTER_DESTINATION':
+        location = await resolve_shared_current_location(request.context.driver_id, request.context.raw_latitude,
+            request.context.raw_longitude, request.context.road_segment_id, request.context.timestamp,
+            getattr(request_obj.app.state, 'driver_state_manager', None))
+        positions.insert(0, Position(latitude=location.latitude, longitude=location.longitude))
+    elif request.destination_latitude is not None:
+        positions.append(Position(latitude=request.destination_latitude, longitude=request.destination_longitude))
+    geometry, distance, duration = [], 0.0, 0.0
+    for origin, destination in zip(positions, positions[1:]):
+        leg = await workflow.routing_engine.route(RouteRequest(origin=origin, destination=destination,
+            profile=profile, constraints=evidence.constraints))
+        raise_for_routing_failure(leg)
+        if leg.status != RouteStatus.SUCCESS or not leg.geometry:
+            raise StateError('Selected navigation geometry is unavailable', 'STATION_PLAN_UNAVAILABLE', 409)
+        points = [[lon, lat] for lat, lon in decode_polyline(leg.geometry)]
+        geometry.extend(points[1:] if geometry and points[0] == geometry[-1] else points)
+        distance += leg.distance_m
+        duration += leg.duration_s
+    if abs(distance - selected.features.distance_to_station_m -
+           (selected.features.distance_station_to_dest_m or 0)) > max(5, distance * 0.001):
+        raise StateError('Route changed during selection', 'STATION_PLAN_UNAVAILABLE', 409)
+    expected_duration = (selected.features.base_travel_duration_s + evidence.prefix_duration_s +
+                         (selected.features.duration_station_to_dest_s or 0))
+    if abs(duration - expected_duration) > max(0.3, duration * 0.001):
+        raise StateError('Route timing changed during selection', 'STATION_PLAN_UNAVAILABLE', 409)
+    await workflow.ranking.recommend(evidence)
+    return {'station_id': request.station_id, 'service_type': request.service_type,
+            'plan_mode': request.plan_mode,
+            'goal_role': 'PASSENGER_DESTINATION' if request.destination_latitude is not None and request.plan_mode != 'AFTER_DESTINATION' else 'STATION',
+            'route': {'geometry': geometry, 'distance_m': distance, 'duration_s': duration},
+            'ranked_candidate': selected,
+            'projected_station_range_km': (energy.estimated_remaining_range_km -
+                (selected.features.distance_to_station_m - evidence.prefix_distance_m) / 1000
+                if energy.estimated_remaining_range_km is not None else None),
+            'constraints': evidence.constraints}
 
 
 async def ingest_snapshot(snapshot, response, service):

@@ -63,6 +63,8 @@ def build_features(evidence, view, request_time, policy, catalog) -> list[Candid
             raise invalid_evidence('Eligible candidate must have ELIGIBLE reason and route evidence')
         if metrics.distance_to_station_m is None or metrics.duration_to_station_s is None:
             raise invalid_evidence('Eligible candidate is missing station route metrics')
+        if evidence.destination_lat is not None and metrics.duration_station_to_dest_s is None:
+            raise invalid_evidence('Eligible journey is missing onward route metrics')
         if any(value is not None and (not isfinite(value) or value < 0)
                for value in metrics.model_dump().values()):
             raise invalid_evidence('Candidate route metrics must be finite and nonnegative')
@@ -113,14 +115,16 @@ def build_features(evidence, view, request_time, policy, catalog) -> list[Candid
         observed_wait = op.estimated_wait_min * 60 if op.estimated_wait_min is not None else None
         features.append(CandidateRankingFeatures(
             station_id=sid, service_type=service, base_travel_duration_s=base,
-            adjusted_travel_duration_s=adjusted, traffic_adjustment_s=adjusted-base,
+            adjusted_travel_duration_s=adjusted + evidence.prefix_duration_s, traffic_adjustment_s=adjusted-base,
             traffic_method='ORIGIN_SEGMENT_PROXY' if traffic.snapshot else 'BASE_DURATION_MISSING',
             observed_queue_wait_s=observed_wait,
             effective_queue_wait_s=observed_wait if observed_wait is not None else policy.missing_queue_wait_s,
             queue_assumption='PROJECT_POLICY_MISSING_QUEUE' if observed_wait is None else None,
             service_duration_s=op.service_time_min * 60,
             detour_duration_s=metrics.detour_duration_s, detour_distance_m=metrics.detour_distance_m,
-            distance_to_station_m=metrics.distance_to_station_m,
+            distance_to_station_m=metrics.distance_to_station_m + evidence.prefix_distance_m,
+            prior_travel_duration_s=evidence.prefix_duration_s,
+            prior_travel_distance_m=evidence.prefix_distance_m,
             duration_station_to_dest_s=metrics.duration_station_to_dest_s,
             distance_station_to_dest_m=metrics.distance_station_to_dest_m,
             via_total_duration_s=metrics.via_total_duration_s,

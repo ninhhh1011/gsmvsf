@@ -28,7 +28,8 @@ def _explanation(assessment, *, cells=()):
         community_adherence=assessment.community_adherence,
         community_trip_count=assessment.community_trip_count,
         community_driver_count=assessment.community_driver_count,
-        confidence=assessment.confidence,
+        confidence=assessment.confidence, community_confidence=assessment.community_confidence,
+        community_cohort_driver_count=assessment.community_cohort_driver_count,
         recommended_distance_m=assessment.recommended_distance_m,
         shared_distance_m=assessment.shared_distance_m,
         penalty_s=assessment.penalty_s, history_truncated=assessment.history_truncated,
@@ -37,12 +38,22 @@ def _explanation(assessment, *, cells=()):
 
 
 def rank_features(features, assessments=None, *, include_familiarity=False) -> list[RankedCandidate]:
+    features = list(features)
     assessments = assessments or {}
-    def order(f):
-        start = f.adjusted_travel_duration_s + f.effective_queue_wait_s
+    def total(f):
+        return (f.adjusted_travel_duration_s + f.effective_queue_wait_s +
+                f.service_duration_s + (f.duration_station_to_dest_s or 0))
+    reference = max(1.0, min((total(f) for f in features), default=1.0))
+    def contributions(f):
         assessment = assessments.get((f.station_id, f.service_type.value))
-        penalty = assessment.penalty_s if assessment else 0.0
-        return (round(start + f.service_duration_s + penalty, 3), round(start, 3),
+        personal = (0.1 * (1 - assessment.personal_adherence) * assessment.confidence
+                    if assessment and assessment.personal_adherence is not None else 0)
+        community = (0.1 * (1 - assessment.community_adherence) * assessment.community_confidence
+                     if assessment and assessment.community_adherence is not None else 0)
+        return {'time': 0.8 * total(f) / reference, 'personal': personal, 'community': community}
+    def order(f):
+        return (round(sum(contributions(f).values()) * reference / 0.8, 3),
+                round(f.adjusted_travel_duration_s + f.effective_queue_wait_s, 3),
                 f.detour_duration_s if f.detour_duration_s is not None else inf,
                 f.detour_distance_m if f.detour_distance_m is not None else inf,
                 f.station_state.snapshot_age_s if f.station_state.snapshot_age_s is not None else inf,
@@ -53,7 +64,8 @@ def rank_features(features, assessments=None, *, include_familiarity=False) -> l
         start = f.adjusted_travel_duration_s + f.effective_queue_wait_s
         complete = start + f.service_duration_s
         assessment = assessments.get((f.station_id, f.service_type.value))
-        penalty = assessment.penalty_s if assessment else 0.0
+        components = contributions(f)
+        penalty = (components['personal'] + components['community']) * reference / 0.8
         eta_to_dest = round(complete + f.duration_station_to_dest_s, 3) if f.duration_station_to_dest_s is not None else None
         ranked.append(RankedCandidate(
             rank=rank,
@@ -63,10 +75,12 @@ def rank_features(features, assessments=None, *, include_familiarity=False) -> l
             eta_to_station_s=f.adjusted_travel_duration_s,
             eta_to_service_start_s=start,
             eta_to_service_complete_s=complete,
-            final_cost_s=complete + penalty,
+            final_cost_s=total(f) + penalty,
+            total_completion_time_s=total(f), ranking_score=sum(components.values()),
+            time_reference_s=reference, score_components=components,
             eta_to_destination_via_station_s=eta_to_dest,
             penalty_components_s={"route_familiarity": penalty} if penalty else {},
-            familiarity=(_explanation(assessment) if include_familiarity else None),
+            familiarity=(_explanation(assessment).model_copy(update={'penalty_s': penalty}) if include_familiarity else None),
         ))
     return ranked
 
@@ -130,10 +144,11 @@ class RankingService:
                                 'UNAVAILABLE' if familiarity_evaluated and best else None),
             familiarity=(_explanation(selected_assessment,
                 cells=selected_signature.cells if selected_signature is not None else ())
+                .model_copy(update={'penalty_s': best.penalty_components_s.get('route_familiarity', 0.0)})
                 if include_familiarity and best else None),
             route_adherence=selected_assessment.personal_adherence if selected_assessment else None,
             family_support=selected_assessment.community_adherence if selected_assessment else None,
-            familiarity_penalty_s=selected_assessment.penalty_s if selected_assessment else 0.0,
+            familiarity_penalty_s=best.penalty_components_s.get('route_familiarity', 0.0) if best else 0.0,
             driver_trip_count=selected_assessment.personal_history_trip_count or 0 if selected_assessment else 0,
             history_window_days=getattr(getattr(self.familiarity_evaluator, 'lookback', None), 'days', 7),
             energy_context=evidence.energy_request, degraded=bool(degraded_reasons),

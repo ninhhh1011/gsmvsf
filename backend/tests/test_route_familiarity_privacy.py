@@ -140,7 +140,7 @@ async def test_recommend_returns_private_safe_explanation_and_selected_route_cel
     assert explanation["status"] == "AVAILABLE"
     assert explanation["personal_adherence_pct"] == 75.0
     assert explanation["personal_history_trip_count"] == 3
-    assert explanation["penalty_s"] == 3.75
+    assert explanation['penalty_s'] == 21.875
     assert explanation["route_cells"] == ["cell-a", "cell-b"]
     assert explanation["community_adherence"] is None
     assert explanation["community_trip_count"] is None

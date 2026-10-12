@@ -1,7 +1,7 @@
 """PostgreSQL is authoritative for immutable snapshots and search evidence."""
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -114,20 +114,27 @@ class SnapshotRepository:
             raise StateError('Candidate search not found', 'CANDIDATE_SEARCH_NOT_FOUND', 404)
         return CandidateSearchEvidence.model_validate_json(payload)
 
-    async def get_congested_polygons(self, min_delay: float = 1.6, limit: int = 5) -> list[dict]:
+    async def get_congested_polygons(self, min_delay: float = 1.6, limit: int = 5,
+                                     as_of: datetime | None = None) -> list[dict]:
         """Fetch GeoJSON polygon buffers for currently congested road segments (Block 3)."""
         import json
         async with self.connection() as connection:
             rows = await connection.fetch('''
-                SELECT DISTINCT ON (s.entity_id)
+                WITH latest AS (
+                    SELECT DISTINCT ON (entity_id) entity_id, payload, timestamp
+                    FROM state_snapshots
+                    WHERE kind = 'traffic' AND timestamp <= $3
+                    ORDER BY entity_id, timestamp DESC, snapshot_id
+                )
+                SELECT
                     s.entity_id,
                     ST_AsGeoJSON(ST_Buffer(r.geom, 0.001)) AS geojson
-                FROM state_snapshots s
+                FROM latest s
                 JOIN road_segments r ON r.segment_id = s.entity_id
-                WHERE s.kind = 'traffic' AND (s.payload->>'delay_factor')::float >= $1
-                ORDER BY s.entity_id, s.timestamp DESC
+                WHERE (s.payload->>'delay_factor')::float >= $1
+                ORDER BY (s.payload->>'delay_factor')::float DESC, s.entity_id
                 LIMIT $2
-            ''', min_delay, limit)
+            ''', min_delay, limit, aware_utc(as_of or datetime.now(UTC)))
         return [json.loads(row['geojson']) for row in rows if row.get('geojson')]
 
     async def get_nearest_segment(self, latitude: float, longitude: float) -> str | None:

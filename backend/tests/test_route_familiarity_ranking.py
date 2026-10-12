@@ -11,36 +11,35 @@ def test_familiarity_only_changes_final_cost_and_close_order():
     features = build_features(saved, view(station(), queue(), station("S002"), queue("S002"), traffic()),
                               saved.request_time, RankingPolicy(), station_catalog)
     baseline = rank_features(features)
-    familiar = rank_features(features, {("S001", "CHARGING"): type("A", (), {"penalty_s": 0})(),
-                                        ("S002", "CHARGING"): type("A", (), {"penalty_s": 30})()})
+    familiar = rank_features(features, {('S002', 'CHARGING'): FamiliarityAssessment('AVAILABLE', personal_adherence=0, confidence=1)})
     assert baseline[0].station_id == "S001"
     assert familiar[0].station_id == "S001"  # 25 seconds faster remains faster.
     assert familiar[0].features == baseline[0].features
-    assert familiar[1].final_cost_s == baseline[1].final_cost_s + 30
+    assert familiar[1].final_cost_s == baseline[1].final_cost_s + baseline[0].total_completion_time_s / 8
 
 
 def test_penalty_can_break_close_tie_but_not_a_large_physical_gap():
     saved = evidence([candidate(duration=100), candidate("S002", duration=110)])
     features = build_features(saved, view(station(), queue(), station("S002"), queue("S002"), traffic()),
                               saved.request_time, RankingPolicy(), station_catalog)
-    ranked = rank_features(features, {("S001", "CHARGING"): type("A", (), {"penalty_s": 25})()})
+    ranked = rank_features(features, {('S001', 'CHARGING'): FamiliarityAssessment('AVAILABLE', personal_adherence=0, confidence=1)})
     assert ranked[0].station_id == "S002"
 
 
-def test_maximum_penalty_cannot_overturn_a_physical_gap_greater_than_thirty_seconds():
+def test_preference_can_overturn_more_than_thirty_seconds_without_changing_eta():
     saved = evidence([candidate(duration=100), candidate("S002", duration=131)], segment=None)
     features = build_features(saved, view(station(), queue(), station("S002"), queue("S002")),
                               saved.request_time, RankingPolicy(), station_catalog)
     ranked = rank_features(features, {
-        ("S001", "CHARGING"): FamiliarityAssessment("AVAILABLE", penalty_s=30),
+        ('S001', 'CHARGING'): FamiliarityAssessment('AVAILABLE', personal_adherence=0, confidence=1),
     })
-    faster, slower = ranked
+    slower, faster = ranked
     assert faster.station_id == "S001"
     assert faster.eta_to_station_s == 100
     assert faster.eta_to_service_start_s == 220
     assert faster.eta_to_service_complete_s == 1300
-    assert faster.final_cost_s == 1330
-    assert faster.penalty_components_s == {"route_familiarity": 30}
+    assert faster.final_cost_s == 1462.5
+    assert faster.penalty_components_s == {'route_familiarity': 162.5}
     assert slower.eta_to_station_s == 131
     assert slower.eta_to_service_complete_s == slower.final_cost_s == 1331
     assert faster.features == features[0]

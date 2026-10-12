@@ -27,6 +27,7 @@ class CandidateEligibilityReason(str, Enum):
     EXCESSIVE_QUEUE = "EXCESSIVE_QUEUE"
     UNREACHABLE = "UNREACHABLE"
     INSUFFICIENT_SOC_TO_REACH = "INSUFFICIENT_SOC_TO_REACH"
+    ONWARD_ENERGY_UNVERIFIED = 'ONWARD_ENERGY_UNVERIFIED'
 
 
 class StationServiceCandidate(BaseModel):
@@ -134,6 +135,9 @@ class CandidateSearchRequest(BaseModel):
     destination_node_id: str | None = None
     max_candidates: int | None = None
     constraints: RouteConstraints | None = None
+    prefix_duration_s: float = Field(0, ge=0, allow_inf_nan=False)
+    prefix_distance_m: float = Field(0, ge=0, allow_inf_nan=False)
+    prefix_geometry: str | None = None
 
 
 class CandidateSearchResult(BaseModel):

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from backend.app.services.candidate.models import CandidateSearchResult
 from backend.app.services.demand.models import EnergyServiceRequest, ServiceType
+from backend.app.services.routing.models import RouteConstraints
 from backend.app.services.snapshots.models import (
     Count,
     FrozenModel,
@@ -17,7 +18,7 @@ from pydantic import Field, field_validator
 
 
 class RankingPolicy(FrozenModel):
-    name: str = 'TOTAL_SERVICE_COMPLETION_V1'
+    name: str = 'FULL_JOURNEY_FAMILIARITY_80_10_10_V2'
     missing_queue_wait_s: Nonnegative = 5400.0
     station_fresh_s: Nonnegative = 600.0
     queue_fresh_s: Nonnegative = 600.0
@@ -35,6 +36,9 @@ class CandidateSearchEvidence(FrozenModel):
     # Destination coordinates for familiarity calculation
     destination_lat: float | None = None
     destination_lng: float | None = None
+    prefix_duration_s: Nonnegative = 0
+    prefix_distance_m: Nonnegative = 0
+    constraints: RouteConstraints | None = None
 
     _time = field_validator('request_time', 'created_at')(aware_utc)
 
@@ -53,6 +57,8 @@ class CandidateRankingFeatures(FrozenModel):
     detour_duration_s: Nonnegative | None
     detour_distance_m: Nonnegative | None
     distance_to_station_m: Nonnegative
+    prior_travel_duration_s: Nonnegative = 0
+    prior_travel_distance_m: Nonnegative = 0
     duration_station_to_dest_s: Nonnegative | None = None
     distance_station_to_dest_m: Nonnegative | None = None
     via_total_duration_s: Nonnegative | None = None
@@ -72,6 +78,10 @@ class RankedCandidate(FrozenModel):
     eta_to_service_start_s: Nonnegative
     eta_to_service_complete_s: Nonnegative
     final_cost_s: Nonnegative
+    total_completion_time_s: Nonnegative = 0
+    ranking_score: Nonnegative = 0
+    time_reference_s: Nonnegative = 1
+    score_components: dict[str, float] = Field(default_factory=dict)
     eta_to_destination_via_station_s: Nonnegative | None = None
     penalty_components_s: dict[str, float] = Field(default_factory=dict)
     familiarity: 'FamiliarityExplanation | None' = None
@@ -88,6 +98,8 @@ class FamiliarityExplanation(FrozenModel):
     community_trip_count: int | None = Field(None, ge=0)
     community_driver_count: int | None = Field(None, ge=0)
     confidence: float = Field(0, ge=0, le=1)
+    community_confidence: float = Field(0, ge=0, le=1)
+    community_cohort_driver_count: int | None = Field(None, ge=0)
     recommended_distance_m: float | None = Field(None, ge=0)
     shared_distance_m: float | None = Field(None, ge=0)
     penalty_s: float = Field(0, ge=0)

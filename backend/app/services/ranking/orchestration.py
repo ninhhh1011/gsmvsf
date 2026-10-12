@@ -79,7 +79,9 @@ class RecommendationWorkflow:
             result=result, snapshot_ids={key: value.snapshot_id for key, value in view.items()},
             catalog_digest=baseline_catalog_digest,
             destination_lat=request.destination_latitude,
-            destination_lng=request.destination_longitude)
+            destination_lng=request.destination_longitude,
+            prefix_duration_s=request.prefix_duration_s, prefix_distance_m=request.prefix_distance_m,
+            constraints=request.constraints)
         await self.repository.save_search(evidence)
         return _SearchOutput(evidence, signatures or {}) if collect_signatures else evidence
 

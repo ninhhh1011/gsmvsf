@@ -20,7 +20,7 @@ from backend.app.services.demand.models import (
     EnergyServiceRequest,
     RequestedServiceType,
 )
-from backend.app.services.realtime.location import resolve_current_location
+from backend.app.services.realtime.location import resolve_shared_current_location
 from backend.app.services.routing.engine import (
     RouteNotFoundError,
     RoutingEngineError,
@@ -143,9 +143,9 @@ async def evaluate_and_search(
     3. Execute Week 3 candidate search and multi-leg routing.
     """
     request_time = request.timestamp if request.timestamp is not None else datetime.now(UTC)
-    location = resolve_current_location(request.driver_id, request.raw_latitude,
+    location = await resolve_shared_current_location(request.driver_id, request.raw_latitude,
                                         request.raw_longitude, request.road_segment_id, request_time,
-                                        getattr(request_obj.app.state, "driver_state_store", None)
+                                        getattr(request_obj.app.state, 'driver_state_manager', None)
                                         if request_obj is not None else None)
 
     demand_ctx = DemandContext(
