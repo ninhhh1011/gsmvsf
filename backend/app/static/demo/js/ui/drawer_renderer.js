@@ -14,7 +14,7 @@ import { escapeHtml, formatDistanceKm, formatDuration } from '../domain/route-di
  */
 export function renderDrawerStationCard(st, options = {}) {
     const { isRec = false, isAtDest = false, activeRec = null, activeCand = null, dest = null } = options;
-    const ranked = activeRec?.ranked_candidates?.find(c => c.station_id === st.station_id);
+    const ranked = options.rankedCandidate || activeRec?.ranked_candidates?.find(c => c.station_id === st.station_id && (!st.service_type || c.service_type === st.service_type));
     const service = ranked?.service_type || st.service_type;
     const cand = activeCand?.find(c => c.station_id === st.station_id && (!service || c.service_type === service));
     const features = ranked?.features || {};
@@ -64,16 +64,23 @@ export function renderDrawerStationsListHTML(stations = [], options = {}) {
         return `<div class="text-center text-muted p-4">Không tìm thấy trạm phù hợp với bộ lọc.</div>`;
     }
     const byId = new Map(stations.map(st => [st.station_id, st]));
-    const topIds = [...new Set((options.activeRec?.ranked_candidates || []).map(c => c.station_id))].slice(0, 5);
-    const top = topIds.filter(id => byId.has(id)).map(id => byId.get(id));
-    const remaining = stations.filter(st => !top.some(item => item.station_id === st.station_id));
-    const cards = items => items.map(st => renderDrawerStationCard(st, {
-        ...options, isRec: st.station_id === options.topRecId,
-        isSelectedPostTrip: options.postTripStationId === st.station_id
-    })).join('');
-    if (!top.length) return cards(remaining);
-    return `<section class="drawer-top-five" aria-label="Top-5 đề xuất"><h3>Top-5 đề xuất (${top.length} trạm)</h3>${cards(top)}</section>
-        ${remaining.length ? `<details class="drawer-other-stations"><summary>Các trạm khác (${remaining.length})</summary>${cards(remaining)}</details>` : ''}`;
+    const seen = new Set();
+    const pairs = [...(options.activeRec?.ranked_candidates || [])].sort((a,b) => a.rank - b.rank).filter(pair => { const key = `${pair.station_id}:${pair.service_type}`; if (seen.has(key)) return false; seen.add(key); return true; }).filter(pair => byId.has(pair.station_id) &&
+        (options.serviceFilter !== 'FAST_DC' || pair.service_type === 'CHARGING') &&
+        (options.serviceFilter !== 'SWAP' || pair.service_type === 'BATTERY_SWAP')).sort((a,b) => a.rank - b.rank);
+    const topIds = [...new Set(pairs.map(pair => pair.station_id))].slice(0,5);
+    const card = pair => renderDrawerStationCard({ ...byId.get(pair.station_id), service_type: pair.service_type }, {
+        ...options, rankedCandidate: pair, isRec: pair.rank === 1,
+        isSelectedPostTrip: options.postTripStationId === pair.station_id
+    });
+    const top = pairs.filter(pair => topIds.includes(pair.station_id));
+    const remainingPairs = pairs.filter(pair => !topIds.includes(pair.station_id));
+    const unranked = stations.filter(st => !pairs.some(pair => pair.station_id === st.station_id));
+    const remaining = remainingPairs.map(card).join('') + unranked.map(st => renderDrawerStationCard(st, options)).join('');
+    if (!top.length) return remaining;
+    return `<section class="drawer-top-five" aria-label="Top-5 đề xuất"><h3>Top-5 đề xuất (${topIds.length} trạm)</h3>${top.map(card).join('')}</section>
+        ${remaining ? `<details class="drawer-other-stations"><summary>Các trạm khác (${new Set([...remainingPairs,...unranked].map(item => item.station_id)).size})</summary>${remaining}</details>` : ''}`;
+
 }
 
 /**

@@ -2,7 +2,7 @@
 import { renderDrawerStationsListHTML } from './drawer_renderer.js';
 import { decodePolyline } from '../map.js';
 
-function planningRequest(controller) {
+export function planningRequest(controller) {
     const origin = controller.planningOrigin;
     if (!origin || !controller.currentVehicle) return null;
     const destination = controller.passengerDestination;
@@ -27,7 +27,7 @@ function planningRequest(controller) {
     };
 }
 
-export async function selectStationPlan(stationId, serviceType = null, mode = 'BEFORE_DESTINATION') {
+export async function selectStationPlan(stationId, serviceType = null, mode = 'BEFORE_DESTINATION', refresh = false) {
     const station = this.stations.find(item => item.station_id === stationId);
     const recommendation = mode === 'AFTER_DESTINATION' ? this.postTripRecommendation : this.lastRecommendation;
     const pair = recommendation?.ranked_candidates?.find(item => item.station_id === stationId && (!serviceType || item.service_type === serviceType)) || (station ? { service_type: serviceType || station.service_type || (station.station_type === 'SWAP' ? 'BATTERY_SWAP' : 'CHARGING') } : null);
@@ -60,7 +60,7 @@ export async function selectStationPlan(stationId, serviceType = null, mode = 'B
         this.map.renderStations(this.stations, stationId, pair.service_type, null, recommendation?.ranked_candidates);
         this.map.fitBoundsToActive(coords);
         this.closeStationsDrawer();
-        await this.replay.loadFromPolyline(coords);
+        if (!refresh) await this.replay.loadFromPolyline(coords);
         if (this.generation !== generation || this.routeRevision !== revision) return false;
         if (this.state === DriverState.AVAILABLE) this.setState(DriverState.TRIP_ASSIGNED);
         if (this.state === DriverState.TRIP_ACTIVE) this.renderTripActiveUI(); else this.renderTripAssignedUI();
@@ -108,11 +108,12 @@ export function renderStationPlans(filter = 'ALL') {
     const activeRec = after ? this.postTripRecommendation : this.lastRecommendation;
     const activeCand = after ? this.postTripCandidateDetails : this.stationCandidateDetails;
     let stations = this.stations;
-    if (filter === 'FAST_DC') stations = stations.filter(item => item.station_type !== 'SWAP' && item.service_type !== 'BATTERY_SWAP');
+    if (filter === 'FAST_DC') stations = stations.filter(item => item.station_type === 'CHARGING_SWAP' || (item.station_type !== 'SWAP' && item.service_type !== 'BATTERY_SWAP'));
     if (filter === 'SWAP') stations = stations.filter(item => item.station_type === 'SWAP' || item.station_type === 'CHARGING_SWAP' || item.service_type === 'BATTERY_SWAP');
-    const ranks = new Map((activeRec?.ranked_candidates || []).map(item => [item.station_id, item.rank]));
+    const ranks = new Map();
+    for (const item of activeRec?.ranked_candidates || []) ranks.set(item.station_id, Math.min(ranks.get(item.station_id) ?? Infinity, item.rank));
     stations = [...stations].sort((a,b) => (ranks.get(a.station_id) ?? Infinity) - (ranks.get(b.station_id) ?? Infinity));
-    const html = renderDrawerStationsListHTML(stations, { activeRec, activeCand, isAtDest: after, dest: this.passengerDestination,
+    const html = renderDrawerStationsListHTML(stations, { activeRec, activeCand, serviceFilter: filter, isAtDest: after, dest: this.passengerDestination,
         topRecId: activeRec?.ranked_candidates?.[0]?.station_id, postTripStationId: this.postTripStation?.station_id });
     this.bindings.renderDrawer(html, stations.length, {
         navigate: data => this.navigateViaStationId(data.stationId, data.serviceType),

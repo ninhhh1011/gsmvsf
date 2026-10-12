@@ -1,4 +1,4 @@
-import { selectStationPlan, refreshStationPlans, renderStationPlans } from './station_planning.js';
+import { selectStationPlan, refreshStationPlans, renderStationPlans, planningRequest } from './station_planning.js';
 /**
  * Driver Mode Controller for VinFast EV Recommendation Demo.
  * Clean, distraction-free Cockpit HUD for in-car use.
@@ -98,7 +98,7 @@ export class DriverModeController {
         this.lastPassedSegmentIndex = 0;
         this.offRouteConsecutiveSamples = 0; this.lastRerouteTimestamp = 0;
         this.lastRecommendation = null; this.lastRecommendedStationId = null; this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
-        this._navigationLocked = false; this._selectedStationId = null; this.routeRevision = 0;
+        this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null; this.routeRevision = 0;
         this._top5Result = null; this._top5Revision = 0;
         this._drawerRevision = 0;
         this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000; this._recommendTimer = null;
@@ -133,6 +133,7 @@ export class DriverModeController {
         this._h3Initialized = false;
         this.onStateChange = options.onStateChange || (() => {});
     }
+    get displayedRecommendation() { return this.selectedStationPlan?.ranked_candidate ? { ...this.lastRecommendation, has_recommendation: true, recommended_station_id: this.selectedStationPlan.station_id, recommended_service_type: this.selectedStationPlan.service_type, ranked_candidates: [this.selectedStationPlan.ranked_candidate] } : this.lastRecommendation; }
     get passengerDestination() { return this.customDestination || (this.currentTrip && Object.hasOwn(this.currentTrip, 'passenger_destination') ? this.currentTrip.passenger_destination : this.currentTrip?.goal_role === 'STATION' ? null : this.currentTrip?.destination) || null; }
     get planningOrigin() { return this.currentPos || this.customOrigin || this.currentTrip?.origin || null; }
     setCatalogs(trips, vehicles, stations, scenarios = [], vehicleCatalog = []) {
@@ -763,7 +764,11 @@ export class DriverModeController {
     }
     async _triggerReroute(fromPos) {
         if (!fromPos || !this.currentTrip?.destination) return;
-        const currentGen = this.generation;
+        if (this._navigationLocked && this.selectedStationPlan) {
+            const plan = this.selectedStationPlan;
+            return selectStationPlan.call(this, plan.station_id, plan.service_type, plan.plan_mode, true);
+        }
+        const currentGen = this.generation, revision = ++this.routeRevision, powerRevision = this._powerRevision;
         try {
             const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
             const rerouteResult = await this.api.computeRoute(
@@ -771,7 +776,7 @@ export class DriverModeController {
                 this.currentTrip.destination,
                 { vehicle_category: vCat }
             );
-            if (this.generation !== currentGen) return;
+            if (this.generation !== currentGen || this.routeRevision !== revision || this._powerRevision !== powerRevision) return;
             if (rerouteResult?.geometry) {
                 const coords = decodePolyline(rerouteResult.geometry);
                 if (coords && coords.length > 0) {
@@ -878,28 +883,18 @@ export class DriverModeController {
             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
                 const top = rec.ranked_candidates[0];
                 const st = this.stations.find(s => s.station_id === top.station_id);
-                if (st && this.currentTrip?.destination) {
-                    const stPos = { latitude: st.latitude, longitude: st.longitude };
+                if (st && this.api.getStationPlan) {
                     try {
-                        leg1Result = await this.api.computeRoute(this.currentPos, stPos, {
-                            vehicle_category: this.currentVehicle.vehicle_type
-                        });
+                        const plan = await this.api.getStationPlan({ ...planningRequest(this), station_id: top.station_id, service_type: top.service_type, plan_mode: 'BEFORE_DESTINATION' });
                         if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev || this._navigationLocked) return;
-                        leg2Result = await this.api.computeRoute(stPos, this.currentTrip.destination, {
-                            vehicle_category: this.currentVehicle.vehicle_type
-                        });
-                        if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev || this._navigationLocked) return;
-                        if (this.generation === currentGen && this.routeRevision === evalRev && !this._navigationLocked) {
-                            this.lastRecommendedStationId = top.station_id;
-                            this.lastDiversionLeg1 = leg1Result;
-                            this.lastDiversionLeg2 = leg2Result;
-                            if (leg1Result?.geometry) {
-                                this.map.renderRecommendationRoute(leg1Result.geometry, leg2Result?.geometry, top5Candidates);
-                            }
-                        }
+                        leg1Result = plan.route;
+                        this.lastRecommendedStationId = top.station_id;
+                        this.lastDiversionLeg1 = plan.route; this.lastDiversionLeg2 = null;
+                        if (plan.route?.geometry) this.map.renderRecommendationRoute(plan.route.geometry, null, top5Candidates);
                     } catch (routeErr) {
                         if (this.generation !== currentGen || this.routeRevision !== evalRev || this._powerRevision !== energyRev) return;
-                        console.warn('Recommendation diversion route error:', routeErr);
+                        this.map.clearRecommendationRoute();
+                        console.warn('Recommendation plan unavailable:', routeErr);
                     }
                 }
                 this.map.renderStations(this.stations, top.station_id, top.service_type, null, rec.ranked_candidates);
@@ -1030,7 +1025,7 @@ export class DriverModeController {
         this.lastRerouteTimestamp = 0; this.lastRecommendedStationId = null;
         this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
         this.remainingTripDistanceKm = 0.0; this._navigationLocked = false;
-        this._selectedStationId = null;
+        this._selectedStationId = null; this.selectedStationPlan = null;
         this.stopRecommendRefresh();
         this.session.driver_id = null; this.session.vehicle_id = null;
         this.session.vehicle_category = null; this.session.trip_id = null;
@@ -1051,7 +1046,7 @@ export class DriverModeController {
     unlockNavigation() {
         if (!this._navigationLocked) return;
         this._navigationLocked = false;
-        this._selectedStationId = null;
+        this._selectedStationId = null; this.selectedStationPlan = null;
         // Re-trigger evaluation
         this.lastEvalTimestamp = 0; // force re-evaluate
         this._evaluateAtCurrentPosition().catch(() => {});
@@ -1153,7 +1148,7 @@ export class DriverModeController {
         this.generation++; this.routeRevision++; this.replay.reset(); this.stopRecommendRefresh();
         this.customDestination = null; this.currentTrip = null; this.stationNavigationTarget = null;
         this.fullRouteCoords = null; this.directRouteGeometry = null; this.currentRouteTiming = null;
-        this.remainingTripDistanceKm = 0; this._navigationLocked = false; this._selectedStationId = null;
+        this.remainingTripDistanceKm = 0; this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null;
         this.lastRecommendation = null; this.stationCandidateDetails = null; this.postTripRecommendation = null;
         this.postTripStation = null; this.postTripRoute = null; this.chargingIntent = 'EN_ROUTE';
         this.bindings.setDestinationCoordinates('Chưa chọn B'); this.bindings.setActiveIntent('EN_ROUTE');
@@ -1164,7 +1159,7 @@ export class DriverModeController {
     async _updateCustomRoute(origin, dest) {
         const currentGen = this.generation;
         const routeRev = ++this.routeRevision;
-        this._navigationLocked = false; this._selectedStationId = null;
+        this._navigationLocked = false; this._selectedStationId = null; this.selectedStationPlan = null;
         this.bindings.setAfterDestinationEnabled?.(!!dest);
         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
         try {
@@ -1247,7 +1242,7 @@ export class DriverModeController {
     renderTripActiveUI() {
         const etaMin = renderTripActiveEta(this.currentRouteTiming, this.remainingTripDistanceKm);
         const warningBanner = renderEnergyWarningHTML(this.lastRecommendation?.energy_context);
-        const recSnippet = renderDriverRecommendation(this.lastRecommendation);
+        const recSnippet = renderDriverRecommendation(this.displayedRecommendation);
         const posStatus = renderPositionStatusHTML(this.matchedPos, this.currentPos);
         const progress = this.replay.getProgressText?.() || '';
         const replayControls = renderReplayControls({ isPlaying: this.replay.isPlaying, currentIndex: this.replay.currentIndex });
@@ -1259,7 +1254,7 @@ export class DriverModeController {
             step: () => this.stepTrip(), unlockNavigation: () => this.unlockNavigation(), navigateViaStation: () => this.navigateViaStation(),
             switchToDestination: () => { this.chargingIntent = 'AT_DESTINATION'; this.bindings.setActiveIntent('AT_DESTINATION'); this.openStationsDrawer(); },
             cancelPostTrip: () => this.cancelPostTripStation(),
-            viewCostBreakdown: () => { if (this.lastRecommendation?.ranked_candidates?.length) this.openCostBreakdownModal(this.lastRecommendation.ranked_candidates[0]); },
+            viewCostBreakdown: () => { if (this.displayedRecommendation?.ranked_candidates?.length) this.openCostBreakdownModal(this.displayedRecommendation.ranked_candidates[0]); },
             completeTrip: () => { this.setState(DriverState.TRIP_COMPLETE); this.renderTripCompleteUI(); },
             setSoc: (value, evaluate) => this.setBatterySoc(value, evaluate),
             setSpeed: (speed) => this.setSimulationSpeed(speed)
@@ -1291,7 +1286,7 @@ export class DriverModeController {
         this._renderAnalysis();
         this._navigationLocked = false;
         this._selectedStationId = null;
-        this.bindings.renderComplete(renderTripCompleteCardHTML(this.lastRecommendation, this.currentTrip?.goal_role === 'STATION' ? null : this.postTripStation, this.currentTrip?.goal_role), {
+        this.bindings.renderComplete(renderTripCompleteCardHTML(this.displayedRecommendation, this.currentTrip?.goal_role === 'STATION' ? null : this.postTripStation, this.currentTrip?.goal_role), {
             startPostTrip: async () => {
                 const station = this.postTripStation;
                 this.postTripStation = null;

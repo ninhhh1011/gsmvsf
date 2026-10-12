@@ -86,7 +86,7 @@ for (const outcome of ['rejected', 'resolved']) test(`Debug suspension rejects $
         computeRoute: (() => {
             let calls = 0;
             return () => {
-                if (outcome === 'resolved' && ++calls === 1) return Promise.resolve({ geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' });
+                calls++; // One authoritative plan response contains every leg.
                 started.resolve();
                 return diversion.promise;
             };

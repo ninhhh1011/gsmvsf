@@ -433,7 +433,7 @@ export class DemoMap {
         const boundsCoords = [];
 
         if (leg1Geometry) {
-            const coords1 = decodePolyline(leg1Geometry);
+            const coords1 = Array.isArray(leg1Geometry) ? leg1Geometry.map(([lng,lat]) => [lat,lng]) : decodePolyline(leg1Geometry);
             if (coords1.length > 0) {
                 boundsCoords.push(...coords1);
                 // Outer glow

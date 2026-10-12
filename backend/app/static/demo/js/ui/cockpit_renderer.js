@@ -213,10 +213,10 @@ export function renderDriverAnalysisHTML(controller, {posStatus = '', progress =
 
 export function renderTripActiveCardHTML(controller, {warningBanner, etaMin, recSnippet, postTripSnippet, replayControls}) {
     const battery = renderBatteryView({soc: controller.currentSocPct, range: controller.estimatedRangeKm});
-    const destination = controller.currentTrip?.trip_id?.startsWith('NAVI') ? 'Trạm đã chọn' : 'Điểm trả khách';
+    const destination = controller.currentTrip?.goal_role === 'STATION' ? 'Trạm đã chọn' : 'Điểm trả khách';
     return `<div class="driver-nav-hud driver-summary" id="driver-active-hud" data-hud-state="TRIP_ACTIVE">
         <div id="hud-warning-container">${warningBanner}</div>
-        <div class="nav-metrics-card"><div class="nav-destination"><span class="stat-label">Điểm đến</span><strong class="dest-name">${destination}<span class="sr-only">Passenger Drop-off (Trả khách)</span></strong></div>
+        <div class="nav-metrics-card"><div class="nav-destination"><span class="stat-label">Điểm đến</span><strong class="dest-name">${destination}<span class="sr-only">${controller.currentTrip?.goal_role === 'STATION' ? 'Selected station' : 'Passenger Drop-off (Trả khách)'}</span></strong></div>
             <div class="nav-stats-grid">
                 <div class="stat-box"><span class="stat-label">${controller.fullRouteCoords?.length >= 2 ? 'Cự ly đường còn lại' : 'Cự ly thẳng (ước tính)'}</span><span class="stat-value" id="val-remaining-dist">${controller.remainingTripDistanceKm.toFixed(1)} <small>km</small></span></div>
                 <div class="stat-box"><span class="stat-label">ETA lái xe (ước tính)</span><span class="stat-value" id="val-trip-eta">${escapeHtml(etaMin)} <small>phút</small><span class="sr-only">min</span></span></div>
