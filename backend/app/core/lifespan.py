@@ -8,7 +8,6 @@ from backend.app.config import settings
 from backend.app.core.logging import configure_logging, get_logger
 from backend.app.services.realtime.driver_state_manager import DriverStateManager
 from backend.app.services.realtime.driver_state_repository import RedisDriverStateRepository
-from backend.app.services.realtime.state import DriverStateStore
 from fastapi import FastAPI
 from redis.asyncio import Redis
 from redis.backoff import NoBackoff
@@ -50,7 +49,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.http_client = client
         app.state.driver_state_repository = RedisDriverStateRepository(client=redis)
         app.state.driver_state_manager = DriverStateManager(repository=app.state.driver_state_repository)
-        app.state.driver_state_store = DriverStateStore()
 
         from backend.app.services.candidate.service import CandidateSearchService
         from backend.app.services.demand.capability import VehicleCapabilityResolver
@@ -118,5 +116,4 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.http_client = None
             app.state.driver_state_manager = None
             app.state.driver_state_repository = None
-            app.state.driver_state_store = None
     logger.info("application_shutdown")

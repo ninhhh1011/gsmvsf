@@ -476,3 +476,17 @@ Remaining road distance comes from the untraveled route geometry; straight-line 
 Propagate detector-derived range to candidate search when range is absent. Explicit requests retain valid supplied range/trip/reserve even when physical assessment is unavailable due to missing SOC. Reject nonfinite telemetry at demand/candidate HTTP boundaries. During locked station navigation, reuse `/demand/evaluate` to refresh energy without reranking or changing the selected station. Manual SOC/model changes, accepted power steps and newer drawer requests invalidate outstanding assessment results. Failed stale requests must not clear newer evidence. No second threshold policy, new dependency, background server process or Week 6 infrastructure.
 
 **Evidence and limits:** [Energy warning fix and project review](reports/energy-warning-and-project-review-2026-10-12.md). The warning patch is verified separately from eight still-open runtime/UI findings. Physical thresholds and the uncalibrated catalog/physics estimate remain unchanged; no claim of exhaustive project correctness.
+
+## ADR-025: Complete journey scoring, optional destination and isolated synthetic history
+
+**Date:** 2026-10-12. **Status:** Customer-approved design and implementation in progress.
+
+**Decision:** Supersede ADR-021/022's personal-only 30-second ranking preference. Use 80% normalized complete journey time, 10% confidence-adjusted personal mismatch and 10% confidence-adjusted community mismatch. The time reference is the fastest eligible complete journey, floored at one second only for division. Physical ETA excludes preference cost. Personal history uses mean comparable corridor coverage; community includes non-supporting comparable drivers and withholds public support below five drivers. Preserve bounded, causal history and expose truncation.
+
+With B, include A→station→B travel, queue and service. Without B, include A→station, queue and service. After-B includes A→B→station once. Backend confirms the station/service pair, current operational eligibility and constrained geometry; waypoint indices preserve navigation progress when rerouting. Passing a waypoint does not prove that charging or swapping occurred. No durable charger workflow is added.
+
+The current service-time snapshot cannot prove replenished energy. Until such evidence exists, onward feasibility conservatively requires current range to cover the represented legs and reserve. This can exclude feasible charging journeys; it must remain explicit rather than inventing a full battery.
+
+Use only validated `realtime` or `synthetic` history schemas. Production defaults remain `realtime`, feature disabled and no public profile. The opt-in public sample requires enabled synthetic history and exposes only the existing fixed-ID HMAC read signature, never signing or ingestion secrets. Generated manifests and separate behavioral evaluation truth remain inside the repository, outside Dataset V1. Synthetic observations explain simulated usage; they do not establish real driver motivations. No fake/demo badge is added to the UI at the customer's request.
+
+Measure finite virtual-driver GPS at 30 real seconds separately from demand-triggered recommendations. Keep the existing per-IP limit of 100 requests/minute by default; the local measurement explicitly configures 6,000 to measure application capacity rather than the single load client's protective rate limit. No new infrastructure, numeric production SLA or Week 6 productionization is introduced.

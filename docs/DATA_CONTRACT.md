@@ -1,5 +1,11 @@
 # DATA_CONTRACT
 
+## Approved synthetic journey extension (2026-10-12)
+
+Dataset V1 remains immutable. Optional generated journey histories live in PostgreSQL `synthetic.route_familiarity_routes`; production history defaults to `realtime.route_familiarity_routes`. Namespace selection is server configuration, never a client-supplied SQL identifier. The fixed public example identity is exposed only with enabled synthetic history.
+
+Seed manifests contain batch identity, seed, exact observation time, real GraphHopper route templates and provenance. Behavioral inputs produce route choices; separate `evaluation_truth.json` records those inputs for evaluation and is never runtime prediction input. Immutable ingestion retries preserve trip geometry/time. Load drivers use virtual copies of canonical vehicle specifications and independent synthetic IDs; no canonical fleet or trajectories are patched.
+
 **MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary GraphHopper map; OSM remains canonical map data. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
 
 ## Dataset V1 Location

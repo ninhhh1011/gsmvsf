@@ -17,7 +17,6 @@ from backend.app.api.v1.vehicles import router as vehicles_router
 from backend.app.config import settings
 from backend.app.core.lifespan import lifespan
 from backend.app.services.routing.engine import RoutingEngineError
-from backend.app.services.realtime.state import DriverStateStore
 from backend.app.services.realtime.driver_state_manager import (
     DriverStateUnavailableError, DriverStateConflictError,
 )
@@ -36,7 +35,6 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
-    app.state.driver_state_store = DriverStateStore()
     app.state.capability_resolver = VehicleCapabilityResolver()
     app.state.demand_service = DemandService(app.state.capability_resolver)
 
