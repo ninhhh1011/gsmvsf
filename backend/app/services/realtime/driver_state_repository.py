@@ -7,6 +7,7 @@ shared state across multiple API processes.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
@@ -194,7 +195,7 @@ class DriverStateRepository(ABC):
 
     @abstractmethod
     async def save_with_expected_version(
-        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int, expected_generation: int | None = None
     ) -> tuple[bool, int]:
         """
         Conditional save: only save if current version matches expected_version.
@@ -226,7 +227,7 @@ class InMemoryDriverStateRepository(DriverStateRepository):
         self._local_states = {}
 
     async def get(self, driver_id: str) -> DriverTraceStateSnapshot | None:
-        return self._states.get(driver_id)
+        return deepcopy(self._states.get(driver_id))
 
     async def save(self, snapshot: DriverTraceStateSnapshot) -> bool:
         current = self._states.get(snapshot.driver_id)
@@ -235,22 +236,23 @@ class InMemoryDriverStateRepository(DriverStateRepository):
             snapshot.version = current.version + 1
         else:
             snapshot.version = 1
-        self._states[snapshot.driver_id] = snapshot
+        self._states[snapshot.driver_id] = deepcopy(snapshot)
         return True
 
     async def save_with_expected_version(
-        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int, expected_generation: int | None = None
     ) -> tuple[bool, int]:
         current = self._states.get(snapshot.driver_id)
         actual_version = current.version if current else 0
 
-        if actual_version != expected_version:
+        if actual_version != expected_version or (expected_generation is not None and
+                (current.generation if current else 1) != expected_generation):
             # Conflict - state changed since we read it
             return False, actual_version
 
         # Save with incremented version
         snapshot.version = expected_version + 1
-        self._states[snapshot.driver_id] = snapshot
+        self._states[snapshot.driver_id] = deepcopy(snapshot)
         return True, snapshot.version
 
     async def delete(self, driver_id: str) -> bool:
@@ -366,7 +368,7 @@ class RedisDriverStateRepository(DriverStateRepository):
             raise
 
     async def save_with_expected_version(
-        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int, expected_generation: int | None = None
     ) -> tuple[bool, int]:
         """
         Conditional save using CAS (Compare-And-Swap).
@@ -386,6 +388,7 @@ class RedisDriverStateRepository(DriverStateRepository):
         local new_value = ARGV[1]
         local ttl = tonumber(ARGV[2])
         local expected_version = tonumber(ARGV[3])
+        local expected_generation = tonumber(ARGV[4])
 
         local current = redis.call('GET', key)
 
@@ -394,7 +397,8 @@ class RedisDriverStateRepository(DriverStateRepository):
             local current_version = current_snapshot.version or 0
 
             -- Check if version matches
-            if current_version ~= expected_version then
+            if current_version ~= expected_version or (expected_generation ~= -1 and
+                (current_snapshot.generation or 1) ~= expected_generation) then
                 -- Conflict: return current version
                 return {0, current_version}
             end
@@ -407,7 +411,7 @@ class RedisDriverStateRepository(DriverStateRepository):
         else
             -- No existing state, this is a new driver
             -- Only save if expected_version is 0 (meaning no state existed)
-            if expected_version ~= 0 then
+            if expected_version ~= 0 or (expected_generation ~= -1 and expected_generation ~= 1) then
                 return {0, 0}
             end
 
@@ -426,6 +430,7 @@ class RedisDriverStateRepository(DriverStateRepository):
                 snapshot.to_json(),
                 self._driver_state_ttl,
                 expected_version,
+                expected_generation if expected_generation is not None else -1,
             )
             success = bool(result[0])
             actual_version = int(result[1])

@@ -1,8 +1,9 @@
 """Map matching service models."""
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ResolutionStatus(str, Enum):
@@ -12,6 +13,11 @@ class ResolutionStatus(str, Enum):
     GLOBAL_SPATIAL = "GLOBAL_SPATIAL"
     AMBIGUOUS = "AMBIGUOUS"
     UNRESOLVED = "UNRESOLVED"
+
+
+def timestamp_instant(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
 
 class GPSObservation(BaseModel):
@@ -25,6 +31,12 @@ class GPSObservation(BaseModel):
     speed_kmh: float | None = None
     heading_deg: float | None = None
     accuracy_m: float | None = None
+
+    @field_validator('timestamp')
+    @classmethod
+    def validate_timestamp(cls, value):
+        timestamp_instant(value)
+        return value
 
 
 class MapMatchRequest(BaseModel):

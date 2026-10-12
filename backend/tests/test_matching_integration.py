@@ -17,7 +17,7 @@ async def test_service_resolves_actual_matched_point_and_way():
     engine.match = AsyncMock(return_value=(Matching(.98, 100, 10, "encoded", [point, point], "car"), [point, point]))
     resolver = MagicMock()
     resolver.resolve_matched = AsyncMock(return_value=None)
-    obs = [GPSObservation(observation_id=str(i), trajectory_id="x", trip_id="external", timestamp=str(i), latitude=21.01, longitude=105.81) for i in range(2)]
+    obs = [GPSObservation(observation_id=str(i), trajectory_id="x", trip_id="external", timestamp=f"2026-01-01T00:00:0{i}Z", latitude=21.01, longitude=105.81) for i in range(2)]
     response = await MapMatchingService(engine, resolver).match_trajectory(
         MapMatchRequest(trajectory_id="x", trip_id="external", vehicle_category="EV_CAR", observations=obs))
     resolver.resolve_matched.assert_called_with(21, 105.8, 123, 90)
@@ -78,7 +78,7 @@ async def test_ambiguous_segment_identity_is_not_asserted():
     engine.match = AsyncMock(return_value=(Matching(.98,100,10,"encoded",[point,point],"car"),[point,point]))
     resolver = MagicMock()
     resolver.resolve_matched = AsyncMock(return_value=SegmentInfo("123_0_F","a","b",123,"FORWARD",1,ResolutionStatus.AMBIGUOUS))
-    obs = [GPSObservation(observation_id=str(i),trajectory_id="x",trip_id="external",timestamp=str(i),latitude=21,longitude=105.8) for i in range(2)]
+    obs = [GPSObservation(observation_id=str(i),trajectory_id="x",trip_id="external",timestamp=f"2026-01-01T00:00:0{i}Z",latitude=21,longitude=105.8) for i in range(2)]
     result = await MapMatchingService(engine,resolver).match_trajectory(MapMatchRequest(trajectory_id="x",trip_id="external",vehicle_category="EV_CAR",observations=obs))
     assert result.observations[0].road_segment_id is None
     assert result.observations[0].direction is None

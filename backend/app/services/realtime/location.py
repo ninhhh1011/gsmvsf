@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from math import isfinite
 
 from backend.app.services.snapshots.models import StateError
+from backend.app.services.realtime.driver_state_manager import DriverStateUnavailableError
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,10 @@ def resolve_current_location(driver_id, latitude, longitude, road_segment_id, re
             raise StateError('Invalid origin coordinates', 'INVALID_LOCATION', 422)
         return CurrentLocation(latitude, longitude, road_segment_id, 'EXPLICIT', timestamp)
     state = state_store.get(driver_id) if state_store is not None and driver_id is not None else None
+    return _location_from_state(state, timestamp)
+
+
+def _location_from_state(state, timestamp):
     if state is not None:
         matched = state.last_matched_state
         if (matched is not None and state.last_match_time is not None and
@@ -54,3 +59,15 @@ def resolve_current_location(driver_id, latitude, longitude, road_segment_id, re
                 return CurrentLocation(raw.latitude, raw.longitude, None,
                                        'RAW_GPS_FALLBACK', utc(raw.timestamp))
     return CurrentLocation()
+
+
+async def resolve_shared_current_location(driver_id, latitude, longitude, road_segment_id,
+                                          request_time, state_manager):
+    """Resolve from the authoritative shared store; explicit origins need no state read."""
+    explicit = resolve_current_location(driver_id, latitude, longitude, road_segment_id, request_time)
+    if explicit.source == 'EXPLICIT' or driver_id is None:
+        return explicit
+    if state_manager is None:
+        raise DriverStateUnavailableError("Shared driver state manager is not configured")
+    state = await state_manager.get_or_create(driver_id)
+    return _location_from_state(state, utc(request_time))

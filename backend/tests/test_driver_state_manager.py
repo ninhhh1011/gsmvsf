@@ -50,6 +50,7 @@ async def test_production_manager_with_healthy_redis():
     mock_repo = AsyncMock(spec=RedisDriverStateRepository)
     mock_repo.health_check = AsyncMock(return_value=True)
     mock_repo.get = AsyncMock(return_value=None)  # No existing state
+    mock_repo.save_with_expected_version = AsyncMock(return_value=(True, 1))
 
     manager = DriverStateManager(repository=mock_repo)
 

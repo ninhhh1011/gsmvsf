@@ -20,6 +20,7 @@ from backend.app.services.map_matching.models import MapMatchRequest
 from backend.app.services.realtime.driver_state_manager import (
     DriverStateUnavailableError,
     trace_state_to_snapshot,
+    DriverStateConflictError,
 )
 from backend.app.dependencies import get_driver_state_manager
 from backend.app.services.realtime.state import (
@@ -165,16 +166,7 @@ async def _add_observation_with_cas(
         if attempt == 0:
             base_generation = current.generation
         elif current.generation != base_generation:
-            # Reset occurred during processing - start with fresh state but keep new generation
-            logger.debug(
-                f"Driver {driver_id}: generation changed from {base_generation} to {current.generation}, "
-                f"reset detected, starting fresh"
-            )
-            # Read the new generation BEFORE creating fresh state
-            new_generation = current.generation
-            current = DriverTraceState(driver_id=driver_id)
-            current.generation = new_generation  # Preserve generation from reset
-            base_generation = new_generation
+            return current, True, False, "RESET_DURING_INGEST"
 
         # Step 3: Normalize last timestamp for comparison
         last_ts = current.last_observation_timestamp
@@ -199,23 +191,19 @@ async def _add_observation_with_cas(
                 detail=f"Observation conflict: {e!s}",
             )
 
-        # Step 6: Get base version for CAS from repository
-        # Note: state objects don't have version; it's stored in the snapshot
         repo = state_manager._get_repo()
-        current_snapshot = await repo.get(driver_id)
-        base_version = current_snapshot.version if current_snapshot else 0
-
-        # Step 7: Prepare snapshot for CAS
+        base_version = getattr(current, '_version', 0)
         snapshot = trace_state_to_snapshot(current, version=base_version)
 
         # Step 8: Attempt CAS save
         try:
             if hasattr(repo, 'save_with_expected_version'):
-                success, actual_version = await repo.save_with_expected_version(snapshot, base_version)
+                success, actual_version = await repo.save_with_expected_version(snapshot, base_version, current.generation)
                 if success:
                     logger.debug(
                         f"Driver {driver_id} observation added at version {actual_version}"
                     )
+                    current._version = actual_version
                     return current, False, gap_reset, gap_reason
                 else:
                     logger.debug(
@@ -282,7 +270,6 @@ async def ingest_location(
     try:
         state_manager = get_driver_state_manager(request_obj)
         state, is_stale, gap_reset, gap_reason = await _add_observation_with_cas(driver_id, obs, state_manager)
-        request_obj.app.state.driver_state_store._states[driver_id] = state
     except DriverStateUnavailableError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -471,6 +458,8 @@ async def ingest_location(
     # This MUST succeed - we cannot ACK MATCHED if final state wasn't committed
     try:
         await _persist_state_with_retry(driver_id, state, state_manager)
+    except DriverStateConflictError as exc:
+        raise HTTPException(409, "Driver state changed while matching; stale match withheld") from exc
     except DriverStateUnavailableError as e:
         # Match was successful but state couldn't be persisted
         # Return error - cannot ACK final state that wasn't committed
