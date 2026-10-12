@@ -193,7 +193,7 @@ async def recommend(request: RecommendRequest, request_obj: Request,
                 'remaining_trip_distance_km': 0})
             search = CandidateSearchRequest(energy_request=energy, constraints=constraints,
                 prefix_duration_s=prefix.duration_s, prefix_distance_m=prefix.distance_m,
-                prefix_geometry=prefix.geometry)
+                prefix_geometry=prefix.geometry, prefix_traffic_segment_id=location.road_segment_id or road_seg)
         metrics = {}
         result = await workflow.recommend(search, top_n=request.top_n, metrics=metrics)
         metrics.setdefault('timings_ms', {}).update(location_resolution=location_ms, demand=demand_ms,
@@ -263,7 +263,19 @@ async def station_plan(request: StationPlanRequest, request_obj: Request,
                          (selected.features.duration_station_to_dest_s or 0))
     if abs(duration - expected_duration) > max(0.3, duration * 0.001):
         raise StateError('Route timing changed during selection', 'STATION_PLAN_UNAVAILABLE', 409)
-    await workflow.ranking.recommend(evidence)
+    confirmed = await workflow.ranking.recommend(evidence, request_time=datetime.now(UTC))
+    from backend.app.services.ranking.service import rank_features
+    from backend.app.services.route_familiarity.service import FamiliarityAssessment
+    assessments = {}
+    for row in result.ranked_candidates:
+        if row.familiarity is not None and row.familiarity.status != 'DISABLED':
+            values = row.familiarity.model_dump()
+            assessments[(row.station_id, row.service_type.value)] = FamiliarityAssessment(**{
+                key: value for key, value in values.items() if key in FamiliarityAssessment.__dataclass_fields__})
+    refreshed = rank_features([row.features for row in confirmed.ranked_candidates], assessments,
+                              include_familiarity=True)
+    selected = next(row for row in refreshed
+                    if row.station_id == request.station_id and row.service_type == request.service_type)
     return {'station_id': request.station_id, 'service_type': request.service_type,
             'plan_mode': request.plan_mode,
             'goal_role': 'PASSENGER_DESTINATION' if request.destination_latitude is not None and request.plan_mode != 'AFTER_DESTINATION' else 'STATION',

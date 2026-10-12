@@ -81,6 +81,7 @@ class RecommendationWorkflow:
             destination_lat=request.destination_latitude,
             destination_lng=request.destination_longitude,
             prefix_duration_s=request.prefix_duration_s, prefix_distance_m=request.prefix_distance_m,
+            prefix_traffic_segment_id=request.prefix_traffic_segment_id,
             constraints=request.constraints)
         await self.repository.save_search(evidence)
         return _SearchOutput(evidence, signatures or {}) if collect_signatures else evidence

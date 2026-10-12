@@ -138,6 +138,7 @@ class CandidateSearchRequest(BaseModel):
     prefix_duration_s: float = Field(0, ge=0, allow_inf_nan=False)
     prefix_distance_m: float = Field(0, ge=0, allow_inf_nan=False)
     prefix_geometry: str | None = None
+    prefix_traffic_segment_id: str | None = None
 
 
 class CandidateSearchResult(BaseModel):

@@ -102,8 +102,9 @@ class RankingService:
             raise invalid_evidence('top_n must be a positive integer')
         candidates = [c for c in evidence.result.candidates if c.eligible]
         keys = {f'{kind}:{c.station_id}' for c in candidates for kind in ('station', 'queue')}
-        if candidates and evidence.energy_request.road_segment_id:
-            keys.add(f'traffic:{evidence.energy_request.road_segment_id}')
+        segment = evidence.prefix_traffic_segment_id or evidence.energy_request.road_segment_id
+        if candidates and segment:
+            keys.add(f'traffic:{segment}')
         view = await self.resolver.resolve(keys, request_time) if keys else {}
         features = build_features(evidence, view, request_time, self.policy, self.catalog)
 

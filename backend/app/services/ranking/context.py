@@ -104,18 +104,21 @@ def build_features(evidence, view, request_time, policy, catalog) -> list[Candid
                                     sorted(conflicts, key=lambda c: (c['station_id'], c['service_type'].value)))
 
     missing = ResolvedSnapshot.resolve(None, request_time, 0)
-    segment = evidence.energy_request.road_segment_id
+    segment = evidence.prefix_traffic_segment_id or evidence.energy_request.road_segment_id
     traffic = view.get(f'traffic:{segment}', missing) if segment else missing
     features = []
     for candidate in candidates:
         sid, service = candidate.station_id, candidate.service_type
         op, metrics = operational[(sid, service)], candidate.route_metrics
         base = metrics.duration_to_station_s
-        adjusted = base * traffic.snapshot.delay_factor if traffic.snapshot else base
+        factor = traffic.snapshot.delay_factor if traffic.snapshot else 1
+        prior = evidence.prefix_duration_s * factor if evidence.prefix_traffic_segment_id else evidence.prefix_duration_s
+        adjusted = base if evidence.prefix_traffic_segment_id else base * factor
         observed_wait = op.estimated_wait_min * 60 if op.estimated_wait_min is not None else None
         features.append(CandidateRankingFeatures(
             station_id=sid, service_type=service, base_travel_duration_s=base,
-            adjusted_travel_duration_s=adjusted + evidence.prefix_duration_s, traffic_adjustment_s=adjusted-base,
+            adjusted_travel_duration_s=adjusted + prior,
+            traffic_adjustment_s=adjusted-base + prior-evidence.prefix_duration_s,
             traffic_method='ORIGIN_SEGMENT_PROXY' if traffic.snapshot else 'BASE_DURATION_MISSING',
             observed_queue_wait_s=observed_wait,
             effective_queue_wait_s=observed_wait if observed_wait is not None else policy.missing_queue_wait_s,
@@ -123,7 +126,7 @@ def build_features(evidence, view, request_time, policy, catalog) -> list[Candid
             service_duration_s=op.service_time_min * 60,
             detour_duration_s=metrics.detour_duration_s, detour_distance_m=metrics.detour_distance_m,
             distance_to_station_m=metrics.distance_to_station_m + evidence.prefix_distance_m,
-            prior_travel_duration_s=evidence.prefix_duration_s,
+            prior_travel_duration_s=prior,
             prior_travel_distance_m=evidence.prefix_distance_m,
             duration_station_to_dest_s=metrics.duration_station_to_dest_s,
             distance_station_to_dest_m=metrics.distance_station_to_dest_m,

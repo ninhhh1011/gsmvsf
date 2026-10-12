@@ -129,3 +129,31 @@ async def test_recommend_without_shared_state_never_uses_replica_cache(client, a
         payload = payload['context'] | {'requested_service': 'CHARGING'}
     response = await client.post(endpoint, json=payload)
     assert response.status_code == 503, response.text
+
+
+@pytest.mark.asyncio
+async def test_selection_rechecks_snapshot_after_geometry(client, app, monkeypatch):
+    from datetime import timedelta
+    from backend.tests.test_route_familiarity_workflow import workflow, body, Routes
+    from backend.tests.test_week4_ranking import HistoryResolver
+    from backend.app.config import settings
+    monkeypatch.setattr(settings, 'enable_route_familiarity', False)
+    resolver = HistoryResolver(station(), queue(), station('S002'), queue('S002'))
+    class ChangingRoutes(Routes):
+        async def route(self, request):
+            result = await super().route(request)
+            if len(self.requests) == 6:
+                resolver.snapshots += (station(timestamp=NOW + timedelta(seconds=1), operating_status='OFFLINE'),)
+            return result
+    app.state.recommendation_workflow = workflow(routes=ChangingRoutes(), resolver=resolver)
+    response = await client.post('/api/v1/station-plan', json=body() | {'station_id': 'S001', 'service_type': 'CHARGING'})
+    assert response.status_code == 409, response.text
+
+
+def test_after_destination_keeps_origin_traffic_on_prefix_once():
+    from backend.tests.test_week4_ranking import traffic
+    saved = evidence([candidate()], segment=None).model_copy(update={'prefix_duration_s': 200, 'prefix_traffic_segment_id': 'segment'})
+    fs = build_features(saved, view(station(), queue(), traffic()), NOW, RankingPolicy(), station_catalog)
+    assert fs[0].adjusted_travel_duration_s == 500
+    assert fs[0].prior_travel_duration_s == 400
+    assert fs[0].traffic_adjustment_s == 200

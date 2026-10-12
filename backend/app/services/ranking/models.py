@@ -38,6 +38,7 @@ class CandidateSearchEvidence(FrozenModel):
     destination_lng: float | None = None
     prefix_duration_s: Nonnegative = 0
     prefix_distance_m: Nonnegative = 0
+    prefix_traffic_segment_id: str | None = None
     constraints: RouteConstraints | None = None
 
     _time = field_validator('request_time', 'created_at')(aware_utc)
