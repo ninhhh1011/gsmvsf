@@ -120,11 +120,16 @@ class SnapshotRepository:
         import json
         async with self.connection() as connection:
             rows = await connection.fetch('''
-                WITH latest AS (
-                    SELECT DISTINCT ON (entity_id) entity_id, payload, timestamp
-                    FROM state_snapshots
-                    WHERE kind = 'traffic' AND timestamp <= $3
-                    ORDER BY entity_id, timestamp DESC, snapshot_id
+                WITH entities AS (
+                    SELECT DISTINCT entity_id FROM state_snapshots WHERE kind = 'traffic'
+                ), latest AS (
+                    SELECT e.entity_id, head.payload
+                    FROM entities e
+                    CROSS JOIN LATERAL (
+                        SELECT payload FROM state_snapshots
+                        WHERE kind = 'traffic' AND entity_id = e.entity_id AND timestamp <= $3
+                        ORDER BY timestamp DESC LIMIT 1
+                    ) head
                 )
                 SELECT
                     s.entity_id,
