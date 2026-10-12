@@ -40,13 +40,10 @@ def set_candidate_service(service: CandidateSearchService | None) -> None:
     from backend.app.main import app
     from backend.app.services.demand.capability import VehicleCapabilityResolver
     from backend.app.services.demand.service import DemandService
-    from backend.app.services.realtime.state import DriverStateStore
     resolver = VehicleCapabilityResolver()
     app.state.candidate_service = service
     app.state.capability_resolver = resolver
     app.state.demand_service = DemandService(resolver)
-    if not hasattr(app.state, 'driver_state_store'):
-        app.state.driver_state_store = DriverStateStore()
 
 
 def _routing_http_error(exc: RoutingEngineError) -> HTTPException:

@@ -12,6 +12,7 @@ from backend.app.services.route_familiarity.similarity import ComparisonBudget
 _EARTH_RADIUS_M = 6_371_008.8
 _SAMPLE_STEP_M = 10.0
 _MAX_SAMPLES = 10_001
+_SPATIAL_STEP_DEG = math.degrees(45 / _EARTH_RADIUS_M)
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,30 @@ class PreparedRoute:
     distance_m: float
     resolution: int
     positions: dict[str, tuple[int, ...]]
+    spatial_positions: dict[tuple[int, int], tuple[int, ...]] | None = None
+
+
+def _tiles(min_lat, max_lat, min_lon, max_lon):
+    rows = range(math.floor(min_lat / _SPATIAL_STEP_DEG), math.floor(max_lat / _SPATIAL_STEP_DEG) + 1)
+    columns = range(math.floor(min_lon / _SPATIAL_STEP_DEG), math.floor(max_lon / _SPATIAL_STEP_DEG) + 1)
+    if len(rows) * len(columns) > 512:
+        return None
+    return [(row, column) for row in rows for column in columns]
+
+
+def _spatial_index(pieces):
+    positions, entries = defaultdict(list), 0
+    for index, piece in enumerate(pieces):
+        if abs(piece.start[0]) >= 80 or abs(piece.end[0]) >= 80 or abs(piece.end[1] - piece.start[1]) > 180:
+            return None
+        tiles = _tiles(min(piece.start[0], piece.end[0]), max(piece.start[0], piece.end[0]),
+                       min(piece.start[1], piece.end[1]), max(piece.start[1], piece.end[1]))
+        if tiles is None or entries + len(tiles) > 100_000:
+            return None
+        entries += len(tiles)
+        for tile in tiles:
+            positions[tile].append(index)
+    return {tile: tuple(indexes) for tile, indexes in positions.items()}
 
 
 def _haversine_m(p1, p2):
@@ -116,7 +141,8 @@ def prepare_route(coords: Sequence[tuple[float, float]], resolution=9, *, sample
         positions[cell].append(len(pieces))
         pieces.append(RoutePiece(a, b, offset, end_offset - offset, _heading_deg(a, b), cell))
     return PreparedRoute(tuple(pieces), total, resolution,
-                         {cell: tuple(indexes) for cell, indexes in positions.items()})
+                         {cell: tuple(indexes) for cell, indexes in positions.items()},
+                         _spatial_index(pieces))
 
 
 def _projected_interval(p: RoutePiece, a: RoutePiece, max_lateral_m):
@@ -162,9 +188,25 @@ def compare_prepared_routes(proposed: PreparedRoute, actual: PreparedRoute, *,
     budget = budget if budget is not None else ComparisonBudget()
     shared, last_actual = 0.0, 0.0
     cells, segments = set(), []
+    neighbors = {}
     for p in proposed.pieces:
-        candidates = sorted({index for cell in h3.grid_disk(p.cell, 1)
-                             for index in actual.positions.get(cell, ())})
+        if p.cell not in neighbors:
+            neighbors[p.cell] = set(h3.grid_disk(p.cell, 1))
+        tiles = None
+        if actual.spatial_positions is not None and abs(p.start[0]) < 80 and abs(p.end[1] - p.start[1]) <= 180:
+            # Projection uses this exact latitude scale; expanded rectangles cannot exclude a valid interval.
+            lat_margin = math.degrees(max_lateral_m / _EARTH_RADIUS_M) + 1e-10
+            lon_margin = lat_margin / math.cos(math.radians(p.start[0]))
+            min_lon, max_lon = min(p.start[1], p.end[1]) - lon_margin, max(p.start[1], p.end[1]) + lon_margin
+            if min_lon >= -180 and max_lon <= 180:
+                tiles = _tiles(min(p.start[0], p.end[0]) - lat_margin, max(p.start[0], p.end[0]) + lat_margin,
+                               min_lon, max_lon)
+        if tiles is not None:
+            candidates = sorted({index for tile in tiles for index in actual.spatial_positions.get(tile, ())
+                                 if actual.pieces[index].cell in neighbors[p.cell]})
+        else:
+            candidates = sorted({index for cell in neighbors[p.cell]
+                                 for index in actual.positions.get(cell, ())})
         budget.consume(len(candidates))
         intervals = []
         for index in candidates:

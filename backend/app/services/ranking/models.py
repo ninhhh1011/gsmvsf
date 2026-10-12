@@ -90,6 +90,7 @@ class RankedCandidate(FrozenModel):
 
 class FamiliarityExplanation(FrozenModel):
     status: Literal['DISABLED', 'UNAVAILABLE', 'NO_HISTORY', 'AVAILABLE']
+    degraded_reason: str | None = None
     resolution: int = 9
     personal_adherence: float | None = Field(None, ge=0, le=1)
     personal_adherence_pct: float | None = Field(None, ge=0, le=100)

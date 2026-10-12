@@ -98,7 +98,13 @@ class RouteFamiliarityService:
         budget = ComparisonBudget()
         comparison_started = perf_counter()
         target_window = get_vietnam_time_window(as_of)
-        legacy_personal = any(not coordinates_from_row(row) or not row.get("started_at")
+        coordinate_cache = {}
+        def coordinates(row):
+            key = id(row)
+            if key not in coordinate_cache:
+                coordinate_cache[key] = coordinates_from_row(row)
+            return coordinate_cache[key]
+        legacy_personal = any(not coordinates(row) or not row.get("started_at")
                               for row in personal)
         def usable(row):
             completed = row.get("completed_at")
@@ -106,12 +112,12 @@ class RouteFamiliarityService:
             return (completed is not None and as_of - self.lookback <= completed < as_of
                     and started is not None and started <= completed
                     and get_vietnam_time_window(started) == target_window
-                    and bool(coordinates_from_row(row)))
+                    and bool(coordinates(row)))
         personal = [row for row in personal if usable(row)]
         community = [row for row in community if usable(row)]
         try:
             point_count = sum(len(sig.coordinates) for sig in valid.values())
-            point_count += sum(len(coordinates_from_row(row)) for row in personal + community)
+            point_count += sum(len(coordinates(row)) for row in personal + community)
             if point_count > 100_000:
                 raise SimilarityWorkLimitExceeded
             route_cache, score_cache = {}, {}
@@ -120,8 +126,8 @@ class RouteFamiliarityService:
                 if coordinates not in route_cache:
                     route_cache[coordinates] = prepare_route(coordinates, sample_budget=sample_budget)
                 return route_cache[coordinates]
-            personal_indexed = [prepare(coordinates_from_row(row)) for row in personal]
-            community_indexed = [prepare(coordinates_from_row(row)) for row in community]
+            personal_indexed = [prepare(coordinates(row)) for row in personal]
+            community_indexed = [prepare(coordinates(row)) for row in community]
             prepared = {key: prepare(sig.coordinates) for key, sig in valid.items()}
             def score(recommended, historical):
                 ROUTE_FAMILIARITY_HISTORY_PAIRS.inc()

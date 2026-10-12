@@ -21,7 +21,7 @@ def _explanation(assessment, *, cells=()):
         return FamiliarityExplanation(status='DISABLED')
     adherence = assessment.personal_adherence
     return FamiliarityExplanation(
-        status=assessment.status, personal_adherence=adherence,
+        status=assessment.status, degraded_reason=assessment.degraded_reason, personal_adherence=adherence,
         personal_adherence_pct=round(adherence * 100, 2) if adherence is not None else None,
         personal_trip_count=assessment.personal_trip_count,
         personal_history_trip_count=assessment.personal_history_trip_count,
