@@ -88,16 +88,11 @@ export async function refreshStationPlans() {
     if (after) { this.postTripRecommendation = null; this.postTripCandidateDetails = null; }
     else { this.lastRecommendation = null; this.stationCandidateDetails = null; }
     this.renderStationsDrawer();
-    const candidatePayload = { ...request.context, ...request, eligible_only: false };
-    delete candidatePayload.context;
     try {
-        const [candidate, recommendation] = await Promise.all([
-            after ? null : this.api.evaluateAndSearchCandidates(candidatePayload).catch(() => null),
-            this.api.getRecommendation({ ...request, plan_mode: after ? 'AFTER_DESTINATION' : 'BEFORE_DESTINATION' })
-        ]);
+        const recommendation = await this.api.getRecommendation({ ...request, plan_mode: after ? 'AFTER_DESTINATION' : 'BEFORE_DESTINATION' });
         if (this.generation !== generation || this._powerRevision !== power || this.routeRevision !== route || this._drawerRevision !== revision) return;
-        if (after) { this.postTripRecommendation = recommendation; this.postTripCandidateDetails = candidate?.candidates || null; }
-        else { this.lastRecommendation = recommendation; this.stationCandidateDetails = candidate?.candidates || null; }
+        if (after) { this.postTripRecommendation = recommendation; this.postTripCandidateDetails = recommendation.candidate_details || null; }
+        else { this.lastRecommendation = recommendation; this.stationCandidateDetails = recommendation.candidate_details || null; }
         this.renderStationsDrawer();
     } catch (error) {
         if (this.generation === generation && this._powerRevision === power && this.routeRevision === route && this._drawerRevision === revision) {

@@ -21,6 +21,7 @@ export function renderDrawerStationCard(st, options = {}) {
     const cand = activeCand?.find(c => c.station_id === st.station_id && (!service || c.service_type === service));
     const features = ranked?.features || {};
     const metrics = cand?.route_metrics || {};
+    const operatingStatus = features.station_state?.snapshot?.operating_status;
     const minutes = value => value != null && Number.isFinite(value) ? Math.round(value / 60) : '—';
     const km = value => value != null && Number.isFinite(value) ? (value / 1000).toFixed(1) : '—';
     const totalTravel = ranked?.eta_to_station_s ?? metrics.duration_to_station_s;
@@ -31,7 +32,7 @@ export function renderDrawerStationCard(st, options = {}) {
     const duration = features.service_duration_s ?? ranked?.service_duration_s;
     const total = ranked?.total_completion_time_s ?? ranked?.eta_to_destination_via_station_s ?? ranked?.service_completion_time_s;
     const queueAssumed = features.observed_queue_wait_s == null && wait != null;
-    const eligible = !!ranked && ranked.eligible !== false && cand?.eligible !== false && st.station_state !== 'offline';
+    const eligible = !!ranked && ranked.eligible !== false && cand?.eligible !== false;
     const swap = service === 'BATTERY_SWAP' || st.station_type === 'SWAP';
     const serviceLabel = swap ? 'Đổi pin' : 'Sạc';
     const hasDestination = !!dest || features.duration_station_to_dest_s != null;
@@ -40,7 +41,7 @@ export function renderDrawerStationCard(st, options = {}) {
     return `<div class="station-drawer-card ${isRec ? 'is-recommended' : ''}" data-station-id="${escapeHtml(st.station_id)}">
         <div class="station-card-top"><div><span class="station-card-name">Trạm ${escapeHtml(st.station_id)}</span>
         ${isRec ? '<span class="badge-rec-hero">⭐ ĐỀ XUẤT TỐI ƯU</span>' : ranked ? `<span class="badge badge-teal">Hạng #${ranked.rank}</span>` : ''}
-        <div>${escapeHtml(st.name || st.station_id)}</div></div><span class="badge badge-teal">${serviceLabel}</span></div>
+        <div>${escapeHtml(st.name || st.station_id)}</div>${operatingStatus ? `<span class="badge">${escapeHtml(operatingStatus)}</span>` : ''}</div><span class="badge badge-teal">${serviceLabel}</span></div>
         <div class="station-cost-grid">
           <div class="cost-grid-item"><span class="cost-grid-label">${isAtDest ? 'Cự ly từ Điểm đến (B) ➔ Trạm' : 'Chặng 1 (Xe ➔ Trạm)'}</span><span class="cost-grid-val">${km(stationDistance)} km <small>(${minutes(travel)} phút)</small></span></div>
           <div class="cost-grid-item"><span class="cost-grid-label">Tại trạm (Chờ + ${serviceLabel})</span><span class="cost-grid-val">${minutes(wait)}p chờ${queueAssumed ? ' (ước tính)' : ''} · ${minutes(duration)}p ${serviceLabel.toLowerCase()} <small>(${features.available_capacity ?? '—'} cổng)</small></span></div>

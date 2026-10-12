@@ -186,3 +186,24 @@ for (const [filter, available, forbidden] of [['SWAP','CHARGING','CHARGING'],['F
   assert.ok(!html.includes('btn-nav-drawer-station'),'excluded service cannot regain a selection action');
  });
 }
+
+test('current eligible pair overrides static OFFLINE catalog and chooser has one workflow',async()=>{
+ let parallelCalls=0;
+ const recommendation={ranked_candidates:[{station_id:'S',service_type:'CHARGING',rank:1,features:{station_state:{snapshot:{operating_status:'OPEN'},freshness:'FRESH'}}}],candidate_details:[{station_id:'S',service_type:'CHARGING',eligible:true}]};
+ const c=fixture({evaluateAndSearchCandidates:async()=>{parallelCalls++;return {candidates:[{station_id:'S',service_type:'CHARGING',eligible:false,reason:'OFFLINE'}]};},getRecommendation:async()=>recommendation});
+ c.stations[0].station_state='offline';let html;c.bindings.renderDrawer=content=>html=content;
+ await c.refreshDrawerEvaluations();
+ assert.equal(parallelCalls,0);
+ assert.equal(c.stationCandidateDetails,recommendation.candidate_details);
+ assert.ok(html.includes('btn-nav-drawer-station'));
+ assert.ok(!html.includes('badge-danger'));
+ assert.ok(html.includes('OPEN'));
+ assert.ok(!html.includes('OFFLINE'));
+});
+test('AFTER chooser uses same workflow pair details',async()=>{
+ const details=[{station_id:'S',service_type:'CHARGING',eligible:true}];
+ const c=fixture({getRecommendation:async()=>({ranked_candidates:[{station_id:'S',service_type:'CHARGING'}],candidate_details:details})});
+ c.customDestination={latitude:21.02,longitude:105.02};c.chargingIntent='AT_DESTINATION';c.bindings.renderDrawer=()=>{};
+ await c.refreshDrawerEvaluations();
+ assert.equal(c.postTripCandidateDetails,details);
+});
