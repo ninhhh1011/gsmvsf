@@ -191,13 +191,6 @@ export class DriverModeController {
         const toggle = this.bindings?.getH3Toggle?.();
         const wantEnabled = toggle?.checked ?? false;
         if (wantEnabled) {
-            if ((this.offlineProposedGeometry || this.directRouteGeometry)?.length < 2 || !(this.offlineProposedGeometry || this.directRouteGeometry)) {
-                this.bindings?.setH3Checked?.(false);
-                this._h3Enabled = false;
-                this._h3Overlay.setEnabled(false);
-                this.bindings?.showH3Toast?.('📍 Vui lòng chọn điểm đến hoặc tìm đường trước khi bật lớp H3');
-                return;
-            }
             this._h3Enabled = true;
             this.bindings?.setH3ResBadgeVisible?.(true);
             await this.refreshRouteComparison();
@@ -243,6 +236,9 @@ export class DriverModeController {
                     sharedDistText: 'Chung: ' + (comp.shared_distance_m / 1000).toFixed(1) + ' km',
                     cellCountText: comp.shared_cells.length + ' ô có đoạn chung' });
                 const cells = [...new Set([...(comp.proposed_cells || []), ...(comp.actual_cells || [])])];
+                if (this._h3Overlay) {
+                    this._h3Overlay.proposedCoords = proposed;
+                }
                 this._h3Overlay?.renderFromCells(cells, comp.shared_cells, true);
             } catch (err) {
                 if (!isCurrent()) return;
@@ -258,6 +254,9 @@ export class DriverModeController {
             const cells = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry, this.h3Resolution);
             this._h3Overlay.setStations(this.stations);
             this._h3Overlay.renderFromCells(cells, this.stations);
+            this.bindings?.updateH3ComparisonBanner?.({ visible: false });
+        } else if (this._h3Overlay) {
+            this._h3Overlay.renderHanoiBaseline();
             this.bindings?.updateH3ComparisonBanner?.({ visible: false });
         }
     }

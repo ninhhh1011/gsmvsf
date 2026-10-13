@@ -332,15 +332,15 @@ test('cell metadata classifies charging safety tiers based on station proximity'
     overlay.destroy();
 });
 
-test('onToggleH3 guards against missing route geometry', () => {
+test('onToggleH3 enables Hanoi baseline grid when route geometry is missing', () => {
     const { controller, toggle } = createDriverControllerFixture();
     controller.directRouteGeometry = null;
 
     toggle.checked = true;
     controller.onToggleH3();
 
-    assert.equal(controller._h3Enabled, false, 'H3 should not be enabled without route');
-    assert.equal(toggle.checked, false, 'toggle checkbox should be reset to false');
+    assert.equal(controller._h3Enabled, true, 'H3 should be enabled without route');
+    assert.equal(toggle.checked, true, 'toggle checkbox should stay true');
 
     controller._h3Overlay?.destroy();
 });

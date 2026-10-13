@@ -27,11 +27,21 @@ export class RouteFamiliarityOverlay {
         this.layer = leaflet.layerGroup().addTo(map);
         this.active = true;
         this.enabled = false;
+        this.isBaseline = false;
+        this.proposedCoords = null;
         this.route = { resolution: null, route_cells: [] };
         this.frame = null;
         this.polygons = [];
         this.rendered = 0;
-        this.onMoveEnd = () => this.render();
+        this.onMoveEnd = () => {
+            if (this.isBaseline && this.enabled) {
+                const res = this.resolution || DEFAULT_RESOLUTION;
+                const cells = this.generateHanoiGrid(null, res);
+                this.route = { resolution: res, route_cells: cells };
+                this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
+            }
+            this.render();
+        };
         map.on('moveend', this.onMoveEnd);
         toggle?.addEventListener('change', () => this.setEnabled(toggle.checked));
         this.setCount('Route cells hidden');
@@ -40,18 +50,20 @@ export class RouteFamiliarityOverlay {
     setStations(stations) {
         this.stations = Array.isArray(stations) ? stations : [];
         if (this.route?.route_cells?.length > 0) {
-            this._computeCellMetadata(this.route.route_cells, this.stations, this.sharedCellsSet);
+            this._computeCellMetadata(this.route.route_cells, this.stations, this.sharedCellsSet, this.proposedCoords);
             if (this.enabled) this.render();
         }
     }
 
     setRoute(route) {
+        this.isBaseline = false;
+        this.proposedCoords = null;
         this.route = route && typeof route === 'object' ? route : { resolution: null, route_cells: [] };
         const res = this.route.resolution || this.resolution;
         const hasCells = Array.isArray(this.route.route_cells) &&
             this.route.route_cells.some(cell => this.isResolutionCell(cell, res));
-        if (this.toggle) this.toggle.disabled = !hasCells || !this.active;
-        if (!hasCells) this.setEnabled(false);
+        if (this.toggle && route !== null && Object.keys(route).length > 0) this.toggle.disabled = !hasCells || !this.active;
+        if (!hasCells && !this.isBaseline) this.setEnabled(false);
         const personal = Number.isInteger(this.route.personal_trip_count) ? this.route.personal_trip_count : null;
         const communityDrivers = Number.isInteger(this.route.community_driver_count) ? this.route.community_driver_count : null;
         const communityTrips = Number.isInteger(this.route.community_trip_count) ? this.route.community_trip_count : null;
@@ -62,7 +74,7 @@ export class RouteFamiliarityOverlay {
             this.supportElement.textContent = `Personal support: ${personalLabel} · Community support: ${communityLabel}`;
         }
         if (hasCells) {
-            this._computeCellMetadata(this.route.route_cells, this.stations, this.sharedCellsSet);
+            this._computeCellMetadata(this.route.route_cells, this.stations, this.sharedCellsSet, this.proposedCoords);
         }
         this.render();
     }
@@ -112,7 +124,13 @@ export class RouteFamiliarityOverlay {
             return;
         }
         const res = this.route?.resolution || this.resolution;
-        if (!res || !Array.isArray(this.route?.route_cells)) {
+        if ((!this.route?.route_cells || this.route.route_cells.length === 0) && this.enabled) {
+            this.isBaseline = true;
+            const cells = this.generateHanoiGrid(null, res);
+            this.route = { resolution: res, route_cells: cells };
+            this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
+        }
+        if (!res || !Array.isArray(this.route?.route_cells) || this.route.route_cells.length === 0) {
             this.setCount('Route cells unavailable');
             this.updateLegend(false);
             return;
@@ -146,19 +164,25 @@ export class RouteFamiliarityOverlay {
             const cell = item.cell;
             const coords = item.boundary;
             const meta = this.cellMetadata.get(cell) || this._getDefaultMeta(cell);
+            const isBase = meta.tier === 'BASELINE';
             const poly = this.L.polygon(coords, {
                 color: meta.color,
                 fillColor: meta.fillColor,
-                fillOpacity: 0.45,
-                weight: 1.5,
+                fillOpacity: isBase ? 0.12 : 0.45,
+                weight: isBase ? 1.0 : 1.5,
                 interactive: true
             });
+            poly._cellId = cell;
             if (typeof poly.bindPopup === 'function') {
                 poly.bindPopup(this._createPopupContent(cell, meta));
             }
             return poly;
         });
-        this.setCount(`Showing ${capped.length} of ${visible.length} route cells (H3-${res})`);
+        if (this.isBaseline) {
+            this.setCount(`Lưới H3 Hà Nội (${capped.length} ô - H3-${res})`);
+        } else {
+            this.setCount(`Showing ${capped.length} of ${visible.length} route cells (H3-${res})`);
+        }
         this.updateLegend(true, capped.length);
         this.renderBatch();
     }
@@ -179,12 +203,14 @@ export class RouteFamiliarityOverlay {
      * @param {string[]} cells - Array of H3 cell IDs
      * @param {Array|null} [sharedOrStations] - Optional shared cell IDs or stations
      */
-    renderFromCells(cells, sharedOrStations = null, comparison = false) {
+    renderFromCells(cells, sharedOrStations = null, comparison = false, proposedCoords = null) {
         if (!this.active || !Array.isArray(cells) || cells.length === 0) {
             this.clear();
             return;
         }
 
+        this.isBaseline = false;
+        this.proposedCoords = proposedCoords || this.proposedCoords;
         this.comparisonMode = comparison || (sharedOrStations?.length > 0 && typeof sharedOrStations[0] === 'string');
         let detRes = this.resolution;
         try {
@@ -213,7 +239,7 @@ export class RouteFamiliarityOverlay {
             this.sharedCellsSet = new Set();
         }
 
-        this._computeCellMetadata(cells, this.stations, this.sharedCellsSet);
+        this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
         this.enabled = true;
         if (this.toggle) this.toggle.checked = true;
         this.render();
@@ -226,6 +252,7 @@ export class RouteFamiliarityOverlay {
         this.route = { resolution: null, route_cells: [] };
         this.sharedCellsSet.clear();
         this.cellMetadata.clear();
+        this.proposedCoords = null;
         this.cancelRender();
         this.setCount('Route cells hidden');
         this.updateLegend(false);
@@ -284,6 +311,86 @@ export class RouteFamiliarityOverlay {
         }
     }
 
+    generateHanoiGrid(bounds = null, resolution = this.resolution) {
+        const res = resolution || this.resolution || 9;
+        const defaultBounds = {
+            south: 20.90,
+            north: 21.15,
+            west: 105.70,
+            east: 106.00
+        };
+        let south = defaultBounds.south;
+        let north = defaultBounds.north;
+        let west = defaultBounds.west;
+        let east = defaultBounds.east;
+
+        if (bounds && typeof bounds.getSouth === 'function') {
+            south = Math.max(bounds.getSouth(), 20.80);
+            north = Math.min(bounds.getNorth(), 21.30);
+            west = Math.max(bounds.getWest(), 105.60);
+            east = Math.min(bounds.getEast(), 106.10);
+            if (south >= north || west >= east) {
+                south = defaultBounds.south;
+                north = defaultBounds.north;
+                west = defaultBounds.west;
+                east = defaultBounds.east;
+            }
+        } else if (this.map?.getBounds) {
+            try {
+                const b = this.map.getBounds();
+                south = Math.max(b.getSouth(), 20.80);
+                north = Math.min(b.getNorth(), 21.30);
+                west = Math.max(b.getWest(), 105.60);
+                east = Math.min(b.getEast(), 106.10);
+                if (south >= north || west >= east) {
+                    south = defaultBounds.south;
+                    north = defaultBounds.north;
+                    west = defaultBounds.west;
+                    east = defaultBounds.east;
+                }
+            } catch {
+                // fallback
+            }
+        }
+
+        const cells = new Set();
+        const stepDeg = res <= 8 ? 0.015 : (res === 9 ? 0.007 : 0.0035);
+
+        for (let lat = south; lat <= north; lat += stepDeg) {
+            for (let lng = west; lng <= east; lng += stepDeg) {
+                try {
+                    const cell = this.h3.latLngToCell(lat, lng, res);
+                    if (cell && this.isResolutionCell(cell, res)) {
+                        cells.add(cell);
+                    }
+                } catch {
+                    // skip
+                }
+                if (cells.size >= this.maxCells) break;
+            }
+            if (cells.size >= this.maxCells) break;
+        }
+
+        return Array.from(cells);
+    }
+
+    renderHanoiBaseline() {
+        this.isBaseline = true;
+        this.comparisonMode = false;
+        this.proposedCoords = null;
+        const res = this.resolution || 9;
+        const cells = this.generateHanoiGrid(null, res);
+        this.route = {
+            resolution: res,
+            route_cells: cells
+        };
+        this.sharedCellsSet.clear();
+        this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
+        this.enabled = true;
+        if (this.toggle) this.toggle.checked = true;
+        this.render();
+    }
+
     _approxDistMeters(lat1, lng1, lat2, lng2) {
         const R = 6371000;
         const φ1 = lat1 * Math.PI / 180;
@@ -296,7 +403,80 @@ export class RouteFamiliarityOverlay {
         return R * c;
     }
 
-    _computeCellMetadata(cells, stations = this.stations, sharedCellsSet = this.sharedCellsSet) {
+    _pointToSegmentDistM(p, a, b) {
+        const latRef = (a[0] + b[0]) / 2;
+        const cosLat = Math.cos(latRef * Math.PI / 180);
+        const mPerDegLat = 111132;
+        const mPerDegLng = 111132 * cosLat;
+
+        const dx = (b[1] - a[1]) * mPerDegLng;
+        const dy = (b[0] - a[0]) * mPerDegLat;
+        const l2 = dx * dx + dy * dy;
+        if (l2 <= 1e-6) {
+            return this._approxDistMeters(p[0], p[1], a[0], a[1]);
+        }
+
+        const px = (p[1] - a[1]) * mPerDegLng;
+        const py = (p[0] - a[0]) * mPerDegLat;
+        const t = Math.max(0, Math.min(1, (px * dx + py * dy) / l2));
+
+        const projLat = a[0] + t * (b[0] - a[0]);
+        const projLng = a[1] + t * (b[1] - a[1]);
+        return this._approxDistMeters(p[0], p[1], projLat, projLng);
+    }
+
+    computeDeviationCellMetadata(cell, cellLatLng, proposedCoords) {
+        if (!proposedCoords || proposedCoords.length < 2) {
+            return {
+                cell,
+                tier: 'ON_TRACK',
+                color: '#10b981',
+                fillColor: '#34d399',
+                label: 'Không có dữ liệu tuyến chuẩn',
+                deviationDistM: 0,
+                deviationWeight: 0
+            };
+        }
+        let minDistM = Infinity;
+        for (let i = 0; i < proposedCoords.length - 1; i++) {
+            const d = this._pointToSegmentDistM(cellLatLng, proposedCoords[i], proposedCoords[i + 1]);
+            if (d < minDistM) minDistM = d;
+        }
+
+        let tier = 'ON_TRACK';
+        let color = '#10b981';
+        let fillColor = '#34d399';
+        let label = 'Đúng lộ trình (≤ 50m)';
+
+        if (minDistM > 500) {
+            tier = 'DEVIATION_SEVERE';
+            color = '#991b1b'; // Deep Crimson
+            fillColor = '#dc2626';
+            label = `Lệch nghiêm trọng (${Math.round(minDistM)}m)`;
+        } else if (minDistM > 200) {
+            tier = 'DEVIATION_MODERATE';
+            color = '#ef4444'; // Red
+            fillColor = '#f87171';
+            label = `Lệch vừa (${Math.round(minDistM)}m)`;
+        } else if (minDistM > 50) {
+            tier = 'DEVIATION_SLIGHT';
+            color = '#f59e0b'; // Amber
+            fillColor = '#fbbf24';
+            label = `Lệch nhẹ (${Math.round(minDistM)}m)`;
+        }
+
+        return {
+            cell,
+            tier,
+            color,
+            fillColor,
+            label,
+            deviationDistM: Math.round(minDistM),
+            deviationWeight: Number((minDistM / 100).toFixed(1))
+        };
+    }
+
+    _computeCellMetadata(cells, stations = this.stations, sharedCellsSet = this.sharedCellsSet, proposedCoords = this.proposedCoords) {
         this.cellMetadata.clear();
         const activeStations = Array.isArray(stations) && stations.length > 0
             ? stations.filter(s => Number.isFinite(s.latitude) && Number.isFinite(s.longitude))
@@ -331,6 +511,51 @@ export class RouteFamiliarityOverlay {
                 }
             }
 
+            if (this.isBaseline) {
+                this.cellMetadata.set(cell, {
+                    cell,
+                    tier: 'BASELINE',
+                    color: '#94a3b8',
+                    fillColor: '#cbd5e1',
+                    label: 'Lưới quy hoạch H3 Hà Nội',
+                    minDistKm: null,
+                    nearestStation: null
+                });
+                continue;
+            }
+
+            if (hasComparison) {
+                if (sharedCellsSet.has(cell)) {
+                    this.cellMetadata.set(cell, {
+                        cell,
+                        tier: 'SHARED',
+                        color: '#10b981',
+                        fillColor: '#34d399',
+                        label: 'Ô chứa đoạn chung đã xác minh',
+                        minDistKm: null,
+                        nearestStation: null
+                    });
+                } else if (proposedCoords && proposedCoords.length > 1) {
+                    const devMeta = this.computeDeviationCellMetadata(cell, [centerLat, centerLng], proposedCoords);
+                    this.cellMetadata.set(cell, {
+                        ...devMeta,
+                        minDistKm: null,
+                        nearestStation: null
+                    });
+                } else {
+                    this.cellMetadata.set(cell, {
+                        cell,
+                        tier: 'DIVERGENT',
+                        color: '#f59e0b',
+                        fillColor: '#fbbf24',
+                        label: 'Đoạn phân kỳ / Khác biệt (Divergent)',
+                        minDistKm: null,
+                        nearestStation: null
+                    });
+                }
+                continue;
+            }
+
             let nearestStation = null;
             let minDistKm = Infinity;
 
@@ -348,30 +573,16 @@ export class RouteFamiliarityOverlay {
             let fillColor = '#34d399';
             let label = 'Vùng an toàn sạc (< 3km)';
 
-            if (hasComparison) {
-                if (sharedCellsSet.has(cell)) {
-                    tier = 'SHARED';
-                    color = '#10b981'; // Green/Emerald: Confirmed shared corridor
-                    fillColor = '#34d399';
-                    label = 'Ô chứa đoạn chung đã xác minh';
-                } else {
-                    tier = 'DIVERGENT';
-                    color = '#f59e0b'; // Amber: Divergent / specific to one route
-                    fillColor = '#fbbf24';
-                    label = 'Đoạn phân kỳ / Khác biệt (Divergent)';
-                }
-            } else {
-                if (minDistKm > 6.0) {
-                    tier = 'ALERT';
-                    color = '#f43f5e'; // Red: Desert (> 6km)
-                    fillColor = '#fb7185';
-                    label = 'Vùng trũng sạc (> 6km)';
-                } else if (minDistKm > 3.0) {
-                    tier = 'CAUTION';
-                    color = '#f59e0b'; // Amber: Buffer (3-6km)
-                    fillColor = '#fbbf24';
-                    label = 'Vùng đệm (3 - 6km)';
-                }
+            if (minDistKm > 6.0) {
+                tier = 'ALERT';
+                color = '#f43f5e'; // Red: Desert (> 6km)
+                fillColor = '#fb7185';
+                label = 'Vùng trũng sạc (> 6km)';
+            } else if (minDistKm > 3.0) {
+                tier = 'CAUTION';
+                color = '#f59e0b'; // Amber: Buffer (3-6km)
+                fillColor = '#fbbf24';
+                label = 'Vùng đệm (3 - 6km)';
             }
 
             this.cellMetadata.set(cell, {
@@ -399,10 +610,35 @@ export class RouteFamiliarityOverlay {
     }
 
     _createPopupContent(cell, meta) {
+        const resLabel = this.resolution || 9;
+        if (meta.tier?.startsWith('DEVIATION')) {
+            return `
+            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 190px; color: #0f172a;">
+                <div style="font-weight: 700; color: ${meta.color}; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                    <span>⚠️ Cảnh Báo Đi Lệch Tuyến</span>
+                    <span style="font-size: 10px; background: ${meta.color}; color: white; padding: 2px 6px; border-radius: 4px;">${meta.tier}</span>
+                </div>
+                <div style="margin-bottom: 4px;"><strong>Chỉ số lệch:</strong> ${meta.label}</div>
+                <div style="margin-bottom: 4px;"><strong>Cự ly lệch:</strong> ${meta.deviationDistM} m</div>
+                <div style="margin-bottom: 4px;"><strong>Trọng số phạt:</strong> <span style="color: ${meta.color}; font-weight: bold;">${meta.deviationWeight}</span></div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 6px;">H3-${resLabel} Index: ${cell}</div>
+            </div>`;
+        }
+
+        if (meta.tier === 'BASELINE') {
+            return `
+            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 170px; color: #0f172a;">
+                <div style="font-weight: 700; color: #475569; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                    <span>⬡ Lưới H3-${resLabel} Hà Nội</span>
+                </div>
+                <div style="margin-bottom: 4px;">Toàn cảnh không gian quy hoạch EV</div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 6px;">H3 Index: ${cell}</div>
+            </div>`;
+        }
+
         const distStr = meta.minDistKm !== null ? `${meta.minDistKm.toFixed(2)} km` : 'Chưa có dữ liệu trạm';
         const stName = meta.nearestStation ? (meta.nearestStation.name || meta.nearestStation.station_id) : 'Không có trạm gần';
         const serviceType = meta.nearestStation?.service_type === 'BATTERY_SWAP' ? 'Đổi pin' : 'Sạc nhanh DC';
-        const resLabel = this.resolution || 9;
 
         return `
             <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 190px; color: #0f172a;">
