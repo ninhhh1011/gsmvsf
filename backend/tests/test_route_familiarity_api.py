@@ -65,19 +65,15 @@ async def test_disabled_ingestion_authenticates_then_returns_disabled_without_st
     service.ingest.assert_not_awaited()
 
 
-def test_compose_passes_route_familiarity_opt_in_to_both_api_services():
+def test_compose_passes_route_familiarity_opt_in_to_all_api_services():
     from pathlib import Path
-    import re
+    import yaml
 
-    compose = Path("docker-compose.yml").read_text()
-    for service_name in ("api_1", "api_2"):
-        match = re.search(rf"(?ms)^  {service_name}:\n(.*?)(?=^  [\w-]+:|\Z)", compose)
-        assert match, f"missing Compose service {service_name}"
-        environment = re.search(r"(?m)^    environment:\n((?:      - .*\n?)+)", match.group(1))
-        assert environment, f"missing environment list for {service_name}"
-        entries = environment.group(1)
-        assert re.search(r"(?m)^      - ENABLE_ROUTE_FAMILIARITY=\$\{ENABLE_ROUTE_FAMILIARITY:-false\}$", entries)
-        assert re.search(r"(?m)^      - ROUTE_FAMILIARITY_IDENTITY_SECRET=\$\{ROUTE_FAMILIARITY_IDENTITY_SECRET:-\}$", entries)
+    services = yaml.safe_load(Path("docker-compose.yml").read_text())['services']
+    for service_name in ("api_1", "api_2", "api_3", "api_4"):
+        entries = services[service_name]['environment']
+        assert 'ENABLE_ROUTE_FAMILIARITY=${ENABLE_ROUTE_FAMILIARITY:-false}' in entries
+        assert 'ROUTE_FAMILIARITY_IDENTITY_SECRET=${ROUTE_FAMILIARITY_IDENTITY_SECRET:-}' in entries
 
 
 @pytest.mark.asyncio
