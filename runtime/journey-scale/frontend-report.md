@@ -83,3 +83,11 @@ Actual model changes with a trip pause replay and use existing destination reset
 Added five regressions: swap-only compatibility, passed B, station-only lookup, rapid pending-profile changes and same-model preservation. Existing power-only tests now explicitly omit a navigation trip rather than triggering routing through incomplete API fixtures.
 
 Verification: covering tests 38 PASS / 0 FAIL (`vehicle-model-focused-tests.txt`); full frontend 244 PASS / 0 FAIL (`vehicle-model-frontend-tests.txt`); `git diff --check` clean. No backend or canonical Dataset edits. Real-browser model-switch verification remains root work.
+
+## Assignment caller regression correction (2026-10-13)
+
+Independent review identified automatic `assignTrip` model initialization being treated as a manual vehicle switch. A failing regression reproduced historical identity replaced by CUSTOM_TRIP, lost causal start time/trajectory and an extra generation reset (`vehicle-assignment-red.txt`).
+
+Automatic assignment now awaits model initialization with navigation replanning explicitly disabled, then checks its generation. User-triggered switches retain the default reset/replan behavior. The regression checks original historical trip identity, causal time, loaded trajectory, new domain route profile and assigned state.
+
+Final covering tests: 39 PASS / 0 FAIL. Full frontend: 245 PASS / 0 FAIL (`vehicle-model-frontend-tests.txt`); diff check clean. Browser verification remains root work.

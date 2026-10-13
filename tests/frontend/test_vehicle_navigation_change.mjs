@@ -68,3 +68,19 @@ test('choosing the same model preserves committed navigation',async()=>{
  await c.selectVehicleModel('VF_3');
  assert.equal(c.selectedStationPlan,plan);assert.equal(c._navigationLocked,true);
 });
+
+test('historical assignment initializes its vehicle without resetting trip identity or trajectory',async()=>{
+ let routeArgs;const c=fixture(async(...args)=>{routeArgs=args;return {geometry:'??_ibE_ibE',distance_m:1000,duration_s:60};});
+ const trip={trip_id:'TRJ_HISTORICAL',vehicle_id:'SWAP_V',driver_id:'HISTORICAL_DRIVER',start_time:'2026-09-01T00:00:00Z',origin:{latitude:21,longitude:105},destination:{latitude:21.02,longitude:105.02}};
+ const observations=[{latitude:21,longitude:105,timestamp:trip.start_time},{latitude:21.01,longitude:105.01}];
+ c.trips=[trip];c.vehicles=[{vehicle_id:'SWAP_V',vehicle_model:'TEST_SWAP_ONLY'}];
+ c.userSelectedVehicleModel=null;c._tripToTrajectory=()=> 'HISTORICAL_TRAJECTORY';
+ c.api.getTrajectory=async()=>observations;
+ const initialGeneration=c.generation;
+ await c.assignTrip(trip.trip_id);
+ assert.equal(c.currentTrip,trip);assert.equal(c.generation,initialGeneration+1);
+ assert.equal(c.offlineEvaluationTime,trip.start_time);
+ assert.deepEqual(c.actualTrajectoryCoords,[[21,105],[21.01,105.01]]);
+ assert.deepEqual(routeArgs,[trip.origin,trip.destination,{vehicle_category:'EV_MOTORBIKE'}]);
+ assert.equal(c.state,'TRIP_ASSIGNED');assert.equal(c.replayPaused,undefined);
+});

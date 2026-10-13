@@ -320,7 +320,7 @@ export class DriverModeController {
         if (this.postTripRoute?.geometry) this.map.renderPostTripRoute(this.postTripRoute.geometry);
         this.map.renderDriver(this.currentPos, this.matchedPos, this.currentObservation?.heading_deg);
     }
-    async selectVehicleModel(modelKey) {
+    async selectVehicleModel(modelKey, replanNavigation = true) {
         this._powerRevision++;
         const spec = VINFAST_MODEL_SPECS[modelKey];
         if (!spec) {
@@ -329,7 +329,7 @@ export class DriverModeController {
             this.bindings?.updateInstantaneousPower?.('— (không khả dụng)');
             return;
         }
-        const replanTrip = this.currentVehicle && this.currentVehicle.vehicle_model !== spec.vehicle_model && this.currentTrip;
+        const replanTrip = replanNavigation && this.currentVehicle && this.currentVehicle.vehicle_model !== spec.vehicle_model && this.currentTrip;
         const origin = replanTrip ? this.planningOrigin : null;
         const destination = replanTrip && !this.navigationStages?.passengerPassed ? this.passengerDestination : null;
         const matchedVehicle = this.vehicles.find(v => v.vehicle_model === spec.vehicle_model) || {
@@ -460,10 +460,11 @@ export class DriverModeController {
         if (!this.userSelectedVehicleModel) {
             const tripVehicle = this.vehicles.find(v => v.vehicle_id === trip.vehicle_id);
             if (tripVehicle) {
-                this.selectVehicleModel(tripVehicle.vehicle_model);
+                await this.selectVehicleModel(tripVehicle.vehicle_model, false);
             } else {
-                this.selectVehicleModel('VF_3');
+                await this.selectVehicleModel('VF_3', false);
             }
+            if (this.generation !== currentGen) return;
         }
         // Scenario energy context matching
         const matchingScenario = this.scenarios.find(s => s.trip_id === trip.trip_id || s.id === trip.scenario_id);
