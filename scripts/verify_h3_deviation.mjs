@@ -9,6 +9,8 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
+  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+  page.on('pageerror', err => console.log('PAGE ERROR:', err.message));
   page.setDefaultTimeout(60000);
 
   try {
@@ -29,9 +31,25 @@ async function main() {
     await page.waitForFunction(() => driverMode._h3Overlay?.enabled && driverMode._h3Overlay?.polygons?.length > 0);
     await page.waitForTimeout(1500);
 
-    const cellCount = await page.evaluate(() => driverMode._h3Overlay?.polygons?.length || 0);
-    console.log('Rendered Hanoi H3 cells count:', cellCount);
+    const tierDist = await page.evaluate(() => {
+      const overlay = driverMode._h3Overlay;
+      const counts = {};
+      for (const meta of overlay.cellMetadata.values()) {
+        counts[meta.tier] = (counts[meta.tier] || 0) + 1;
+      }
+      // Open popup on a high familiarity cell
+      for (const [cell, meta] of overlay.cellMetadata.entries()) {
+        if (meta.tier === 'HIGH_FAMILIARITY') {
+          const poly = overlay.polygons.find(p => p._cellId === cell);
+          if (poly) poly.openPopup();
+          break;
+        }
+      }
+      return counts;
+    });
+    console.log('Baseline H3 grid tier distribution:', tierDist);
 
+    await page.waitForTimeout(500);
     await page.screenshot({ path: `${outputDir}/01_hanoi_wide_h3_grid.png` });
     console.log('Captured 01_hanoi_wide_h3_grid.png');
 

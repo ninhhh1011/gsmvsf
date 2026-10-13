@@ -9,7 +9,8 @@ const cancelScheduledFrame = frame => globalThis.cancelAnimationFrame
 export class RouteFamiliarityOverlay {
     constructor({ map, leaflet, h3, toggle, countElement, supportElement, maxCells = DEFAULT_MAX_CELLS,
         batchSize = DEFAULT_BATCH_SIZE, requestFrame = scheduleFrame,
-        cancelFrame = cancelScheduledFrame, stations = [], resolution = DEFAULT_RESOLUTION }) {
+        cancelFrame = cancelScheduledFrame, stations = [], resolution = DEFAULT_RESOLUTION,
+        hanoiWeights = null }) {
         this.map = map;
         this.L = leaflet;
         this.h3 = h3;
@@ -33,12 +34,26 @@ export class RouteFamiliarityOverlay {
         this.frame = null;
         this.polygons = [];
         this.rendered = 0;
+        this.hanoiWeights = hanoiWeights || null;
+        if (!this.hanoiWeights && typeof fetch === 'function') {
+            fetch('/demo/static/data/hanoi_h3_weights.json')
+                .then(r => r.json())
+                .then(data => {
+                    this.hanoiWeights = data;
+                    if (this.isBaseline && this.enabled) {
+                        this.renderHanoiBaseline();
+                    }
+                })
+                .catch(() => {});
+        }
         this.onMoveEnd = () => {
             if (this.isBaseline && this.enabled) {
-                const res = this.resolution || DEFAULT_RESOLUTION;
-                const cells = this.generateHanoiGrid(null, res);
-                this.route = { resolution: res, route_cells: cells };
-                this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
+                if (!this.hanoiWeights) {
+                    const res = this.resolution || DEFAULT_RESOLUTION;
+                    const cells = this.generateHanoiGrid(null, res);
+                    this.route = { resolution: res, route_cells: cells };
+                    this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
+                }
             }
             this.render();
         };
@@ -164,11 +179,11 @@ export class RouteFamiliarityOverlay {
             const cell = item.cell;
             const coords = item.boundary;
             const meta = this.cellMetadata.get(cell) || this._getDefaultMeta(cell);
-            const isBase = meta.tier === 'BASELINE';
+            const isBase = meta.tier === 'BASELINE' || meta.tier?.endsWith('_FAMILIARITY') || meta.tier === 'RARE_OR_DEVIATION';
             const poly = this.L.polygon(coords, {
                 color: meta.color,
                 fillColor: meta.fillColor,
-                fillOpacity: isBase ? 0.25 : 0.45,
+                fillOpacity: isBase ? 0.35 : 0.45,
                 weight: isBase ? 1.5 : 2.0,
                 interactive: true
             });
@@ -406,7 +421,13 @@ export class RouteFamiliarityOverlay {
         this.comparisonMode = false;
         this.proposedCoords = null;
         const res = this.resolution || 9;
-        const cells = this.generateHanoiGrid(null, res);
+        let cells = [];
+        const weightsForRes = this.hanoiWeights?.[`res${res}`];
+        if (weightsForRes && Object.keys(weightsForRes).length > 0) {
+            cells = Object.keys(weightsForRes);
+        } else {
+            cells = this.generateHanoiGrid(null, res);
+        }
         this.route = {
             resolution: res,
             route_cells: cells
@@ -539,15 +560,34 @@ export class RouteFamiliarityOverlay {
             }
 
             if (this.isBaseline) {
-                this.cellMetadata.set(cell, {
-                    cell,
-                    tier: 'BASELINE',
-                    color: '#059669',
-                    fillColor: '#10b981',
-                    label: 'Vùng phủ lưới H3 Hà Nội (Lộ trình chuẩn)',
-                    minDistKm: null,
-                    nearestStation: null
-                });
+                const res = this.resolution || 9;
+                const wKey = `res${res}`;
+                const weightInfo = this.hanoiWeights?.[wKey]?.[cell];
+                if (weightInfo) {
+                    this.cellMetadata.set(cell, {
+                        cell,
+                        tier: weightInfo.tier,
+                        color: weightInfo.color,
+                        fillColor: weightInfo.fillColor,
+                        label: weightInfo.label,
+                        tripCount: weightInfo.count,
+                        score: weightInfo.score,
+                        minDistKm: null,
+                        nearestStation: null
+                    });
+                } else {
+                    this.cellMetadata.set(cell, {
+                        cell,
+                        tier: 'BASELINE',
+                        color: '#059669',
+                        fillColor: '#10b981',
+                        label: 'Vùng phủ lưới H3 Hà Nội (Lộ trình chuẩn)',
+                        tripCount: 0,
+                        score: 0.0,
+                        minDistKm: null,
+                        nearestStation: null
+                    });
+                }
                 continue;
             }
 
@@ -652,14 +692,18 @@ export class RouteFamiliarityOverlay {
             </div>`;
         }
 
-        if (meta.tier === 'BASELINE') {
+        if (meta.tier === 'BASELINE' || meta.tier?.endsWith('_FAMILIARITY') || meta.tier === 'RARE_OR_DEVIATION') {
+            const countStr = meta.tripCount != null && meta.tripCount > 0 ? Number(meta.tripCount).toLocaleString('vi-VN') : '0';
+            const scoreStr = meta.score != null ? `${meta.score} / 10` : '—';
             return `
-            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 180px; color: #0f172a;">
-                <div style="font-weight: 700; color: #059669; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 210px; color: #0f172a;">
+                <div style="font-weight: 700; color: ${meta.color}; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
                     <span>⬡ Lưới H3-${resLabel} Hà Nội</span>
-                    <span style="font-size: 10px; background: #059669; color: white; padding: 2px 6px; border-radius: 4px;">CHUẨN</span>
+                    <span style="font-size: 10px; background: ${meta.color}; color: white; padding: 2px 6px; border-radius: 4px;">${meta.tier}</span>
                 </div>
                 <div style="margin-bottom: 4px;"><strong>Trạng thái:</strong> ${meta.label}</div>
+                <div style="margin-bottom: 4px;"><strong>Tần suất xe đi vào:</strong> <span style="font-weight: 700; color: ${meta.color};">${countStr} lượt</span></div>
+                <div style="margin-bottom: 4px;"><strong>Trọng số độ quen:</strong> <span style="font-weight: 700; color: ${meta.color};">${scoreStr}</span></div>
                 <div style="font-size: 10px; color: #64748b; margin-top: 6px;">H3 Index: ${cell}</div>
             </div>`;
         }
