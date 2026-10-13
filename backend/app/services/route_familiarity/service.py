@@ -1,7 +1,9 @@
 """Bounded, event-time route familiarity assessment for eligible routes."""
 from dataclasses import dataclass
+import asyncio
+import logging
 from datetime import timedelta
-from time import perf_counter
+from time import perf_counter, thread_time
 
 import h3
 from starlette.concurrency import run_in_threadpool
@@ -19,6 +21,8 @@ from backend.app.services.route_familiarity.similarity import (
     ComparisonBudget,
     SimilarityWorkLimitExceeded,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,7 @@ class RouteFamiliarityService:
                  minimum_support_adherence=None, prior_mean=None, prior_strength=None,
                  minimum_community_drivers=None, confidence_prior_strength=None):
         self.repository = repository
+        self._evaluation_slot = asyncio.Semaphore(1)
         self.lookback = timedelta(days=lookback_days if lookback_days is not None else settings.route_familiarity_lookback_days)
         self.max_penalty_s = max_penalty_s if max_penalty_s is not None else settings.max_familiarity_penalty_s
         if not 0 <= self.max_penalty_s <= 30:
@@ -88,8 +93,26 @@ class RouteFamiliarityService:
         observe_route_familiarity('lookup', perf_counter() - lookup_started)
         record_route_familiarity_event('lookup')
         truncated = personal_truncated or community_truncated
-        result = await run_in_threadpool(self._evaluate, valid, personal, community, as_of,
-                                         truncated, unavailable)
+        def evaluate():
+            started, cpu_started = perf_counter(), thread_time()
+            try:
+                return self._evaluate(valid, personal, community, as_of, truncated, unavailable)
+            finally:
+                logger.info('familiarity_cpu_evaluation elapsed_ms=%.1f thread_cpu_ms=%.1f',
+                            (perf_counter() - started) * 1000, (thread_time() - cpu_started) * 1000)
+        # Python corridor work shares the GIL; concurrent workers delay GPS I/O.
+        async with self._evaluation_slot:
+            work = asyncio.create_task(run_in_threadpool(evaluate))
+            try:
+                result = await asyncio.shield(work)
+            except asyncio.CancelledError:
+                while not work.done():
+                    try:
+                        await asyncio.shield(work)
+                    except asyncio.CancelledError:
+                        continue
+                work.result()  # Finish the worker before admitting another.
+                raise
         observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
         return result
 

@@ -1,4 +1,6 @@
 from datetime import UTC, datetime, timedelta
+import asyncio
+import threading
 
 import pytest
 from pydantic import ValidationError
@@ -47,6 +49,51 @@ class Repository:
     async def community_routes(self, *args):
         self.calls.append(("community", args))
         return self.community
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cancel_first', [False, True])
+async def test_cpu_evaluations_share_one_slot_without_serializing_history_or_blocking_loop(monkeypatch, cancel_first):
+    entered, release = threading.Event(), threading.Event()
+    active = peak = calls = 0
+    repo = Repository()
+    service = RouteFamiliarityService(repo)
+    def evaluate(*args):
+        nonlocal active, peak, calls
+        active += 1
+        peak = max(peak, active)
+        calls += 1
+        entered.set()
+        try:
+            assert release.wait(5)
+            return {}
+        finally:
+            active -= 1
+    monkeypatch.setattr(service, '_evaluate', evaluate)
+    first = asyncio.create_task(service.assess_many('first', {'station': sig(['a'])}, NOW))
+    try:
+        async with asyncio.timeout(2):
+            while not entered.is_set():
+                await asyncio.sleep(0.001)
+        second = asyncio.create_task(service.assess_many('second', {'station': sig(['a'])}, NOW))
+        await asyncio.sleep(0.05)
+        assert len(repo.calls) == 4
+        assert calls == 1
+        if cancel_first:
+            first.cancel()
+            await asyncio.sleep(0.05)
+            assert calls == 1
+            assert not first.done()
+    finally:
+        release.set()
+        if cancel_first:
+            with pytest.raises(asyncio.CancelledError):
+                await first
+        else:
+            await first
+        if 'second' in locals():
+            await second
+    assert peak == 1
 
 
 @pytest.mark.asyncio
