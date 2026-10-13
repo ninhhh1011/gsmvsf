@@ -52,8 +52,10 @@ class RecommendationWorkflow:
         view = (await self.resolver.resolve(keys, request_time)
                 if request.energy_request.request_valid and request.energy_request.need_service else {})
         service = CandidateSearchService(self.routing_engine, SnapshotCatalogView(self.catalog, view))
+        evaluator = self.ranking.familiarity_evaluator if signature_sink is not None else None
         result = await service.search_candidates(request, eligible_only=eligible_only,
-                                                 _signature_sink=signature_sink)
+                                                 _signature_sink=signature_sink,
+                                                 _signature_runner=evaluator._run_cpu if evaluator is not None else None)
         return result, view, baseline_catalog_digest
 
     async def search_candidates(self, request, *, eligible_only=False):

@@ -1,5 +1,7 @@
 """Familiarity integration preserves legacy ranking and the full-search retry."""
 from datetime import timedelta
+import asyncio
+import threading
 from types import SimpleNamespace
 
 import h3
@@ -104,6 +106,90 @@ def search_request(app):
     energy = app.state.demand_service.process_driver_request(context, RequestedServiceType.CHARGING)
     return CandidateSearchRequest(energy_request=energy, destination_latitude=DESTINATION[0],
                                   destination_longitude=DESTINATION[1])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('first_operation,cancel_first', [
+    ('signature', False), ('signature', True), ('evaluation', False), ('evaluation', True),
+])
+async def test_workflow_signatures_share_cpu_admission_with_evaluation_and_drain_cancellation(
+        app, monkeypatch, first_operation, cancel_first):
+    from backend.app.services.route_familiarity import signature
+
+    entered, release = threading.Event(), threading.Event()
+    active = peak = 0
+    evaluator = RouteFamiliarityService(History())
+    original_signature, original_evaluation = signature.create_route_signature, evaluator._evaluate
+    def execute(operation, function, *args):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            if operation == first_operation and not entered.is_set():
+                entered.set()
+                assert release.wait(5)
+            return function(*args)
+        finally:
+            active -= 1
+    monkeypatch.setattr(signature, 'create_route_signature',
+                        lambda lines: execute('signature', original_signature, lines))
+    monkeypatch.setattr(evaluator, '_evaluate',
+                        lambda *args: execute('evaluation', original_evaluation, *args))
+    combined = workflow(evaluator)
+    target = create_route_signature([polyline([ORIGIN, DESTINATION])])
+    async def search():
+        return await combined._search(search_request(app), collect_signatures=True)
+    async def evaluate():
+        return await evaluator.assess_many('driver', {'station': target}, NOW)
+    operations = {'signature': search, 'evaluation': evaluate}
+    first = asyncio.create_task(operations[first_operation]())
+    second = None
+    try:
+        async with asyncio.timeout(2):
+            while not entered.is_set():
+                await asyncio.sleep(.001)
+        second = asyncio.create_task(operations[
+            'evaluation' if first_operation == 'signature' else 'signature']())
+        # Heartbeats still run while an actual worker holds CPU admission.
+        for _ in range(5):
+            await asyncio.sleep(.01)
+        assert not first.done() and not second.done()
+        assert peak == 1
+        if cancel_first:
+            first.cancel()
+            await asyncio.sleep(.02)
+            first.cancel()
+            await asyncio.sleep(.02)
+            assert not first.done() and not second.done()
+            assert peak == 1
+    finally:
+        release.set()
+        outcomes = await asyncio.gather(first, *([second] if second else []), return_exceptions=True)
+    if cancel_first:
+        assert isinstance(outcomes[0], asyncio.CancelledError)
+    else:
+        assert not isinstance(outcomes[0], BaseException)
+    assert not isinstance(outcomes[1], BaseException)
+    assert peak == 1
+
+
+@pytest.mark.asyncio
+async def test_guarded_signature_failure_leaves_geometry_unavailable_without_history_or_cost_change(
+        app, monkeypatch):
+    from backend.app.services.route_familiarity import signature
+
+    history = History()
+    baseline = await workflow().recommend(search_request(app))
+    def invalid_geometry(lines):
+        raise ValueError('invalid geometry')
+    monkeypatch.setattr(signature, 'create_route_signature', invalid_geometry)
+    result = await workflow(RouteFamiliarityService(history)).recommend(search_request(app))
+    assert result.familiarity.status == 'UNAVAILABLE'
+    assert history.calls == []
+    assert result.eligible_count == baseline.eligible_count
+    assert [item.total_completion_time_s for item in result.ranked_candidates] == [
+        item.total_completion_time_s for item in baseline.ranked_candidates]
+    assert all(item.familiarity.penalty_s == 0 for item in result.ranked_candidates)
 
 
 @pytest.mark.asyncio

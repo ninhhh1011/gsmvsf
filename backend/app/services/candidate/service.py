@@ -74,6 +74,7 @@ class CandidateSearchService:
         eligible_only: bool = False,
         *,
         _signature_sink: dict | None = None,
+        _signature_runner=None,
     ) -> CandidateSearchResult:
         """
         Execute full candidate search pipeline for an incoming CandidateSearchRequest.
@@ -271,7 +272,7 @@ class CandidateSearchService:
                     from time import perf_counter
                     signature_started = perf_counter()
                     try:
-                        _signature_sink[key] = await run_in_threadpool(create_route_signature,
+                        _signature_sink[key] = await (_signature_runner or run_in_threadpool)(create_route_signature,
                             ([request.prefix_geometry] if request.prefix_geometry else []) +
                             [leg1.geometry] + ([leg2.geometry] if dest_pos is not None else []))
                         record_route_familiarity_event('signature')
