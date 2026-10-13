@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 import logging
+from time import perf_counter
 from abc import ABC, abstractmethod
 from collections import deque
 from contextvars import ContextVar
@@ -454,11 +455,14 @@ class RedisDriverStateRepository(DriverStateRepository):
         return [k[prefix_len:] for k in keys]
 
     async def health_check(self) -> bool:
+        started = perf_counter()
         try:
             client = await self._get_client()
             await client.ping()
             return True
-        except Exception:
+        except Exception as exc:
+            logger.warning("driver_state_health_check_failed error_type=%s elapsed_ms=%.1f",
+                           type(exc).__name__, (perf_counter() - started) * 1000)
             return False
 
     async def close(self):

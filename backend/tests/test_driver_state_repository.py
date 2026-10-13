@@ -1,13 +1,26 @@
 """Tests for driver state repository and manager."""
 import pytest
+from unittest.mock import AsyncMock
 from datetime import UTC, datetime
 
 from backend.app.services.realtime.driver_state_repository import (
+    RedisDriverStateRepository,
     InMemoryDriverStateRepository,
     DriverTraceStateSnapshot,
     GPSObservation,
     MatchedState,
 )
+
+
+@pytest.mark.asyncio
+async def test_failed_health_check_logs_class_and_duration_without_exception_payload(caplog):
+    client = AsyncMock()
+    client.ping.side_effect = TimeoutError("redis://private-user:private-secret@host")
+    repo = RedisDriverStateRepository(client=client)
+    assert await repo.health_check() is False
+    assert "error_type=TimeoutError" in caplog.text
+    assert "elapsed_ms=" in caplog.text
+    assert "private-secret" not in caplog.text
 
 
 @pytest.mark.asyncio
