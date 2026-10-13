@@ -203,10 +203,16 @@ class MultiLegRouteCalculator:
                 return (station_id, *result)
 
         tasks = [
-            compute_one(station_id, station_pos)
+            asyncio.create_task(compute_one(station_id, station_pos))
             for station_id, station_pos in station_positions.items()
         ]
 
-        results = await asyncio.gather(*tasks)
+        try:
+            results = await asyncio.gather(*tasks)
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
         return {station_id: values for station_id, *values in results}

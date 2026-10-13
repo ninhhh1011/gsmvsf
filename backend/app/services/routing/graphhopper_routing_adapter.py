@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import asyncio
+import logging
 from time import perf_counter
 
 import httpx
@@ -20,6 +21,8 @@ from backend.app.services.routing.models import (
     RouteStatus,
     VehicleRoutingProfile,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _failure(status: RouteStatus, message: str) -> RouteResult:
@@ -47,7 +50,17 @@ class GraphHopperRoutingAdapter(RoutingEngine):
         started = perf_counter()
         # The lifespan adapter shares this budget across concurrent searches.
         async with self._route_slots:
-            result = await self._route(request)
+            admitted = perf_counter()
+            outcome = 'ERROR'
+            try:
+                result = await self._route(request)
+                outcome = result.status.value
+            except asyncio.CancelledError:
+                outcome = 'CANCELLED'
+                raise
+            finally:
+                logger.info('graphhopper_route_admission wait_ms=%.1f work_ms=%.1f status=%s',
+                            (admitted - started) * 1000, (perf_counter() - admitted) * 1000, outcome)
         from backend.app.core.metrics import observe_route_call
         observe_route_call('route', result.status.value.lower(), perf_counter() - started)
         return result
@@ -78,6 +91,7 @@ class GraphHopperRoutingAdapter(RoutingEngine):
         if self._client is None:
             return _failure(RouteStatus.ENGINE_ERROR, "GraphHopper client is not initialized by application lifespan")
         client = self._client
+        http_started = perf_counter()
         try:
             if avoid_areas:
                 features = [
@@ -113,6 +127,8 @@ class GraphHopperRoutingAdapter(RoutingEngine):
                     "details": ["leg_distance", "leg_time"],
                 }
                 response = await client.get(f"{self.base_url}/route", params=params, timeout=self.timeout_seconds)
+            logger.info('graphhopper_http_work operation=route status=%s elapsed_ms=%.1f',
+                        response.status_code, (perf_counter() - http_started) * 1000)
             if response.status_code != 200:
                 status = RouteStatus.ENGINE_ERROR
                 if response.status_code == 400:
@@ -153,7 +169,13 @@ class GraphHopperRoutingAdapter(RoutingEngine):
                                duration_s=duration_ms / 1000, legs=legs, geometry=geometry,
                                engine_name="graphhopper", raw_metadata={"profile": profile})
         except httpx.TimeoutException as exc:
+            logger.info('graphhopper_http_work operation=route status=TIMEOUT elapsed_ms=%.1f',
+                        (perf_counter() - http_started) * 1000)
             return _failure(RouteStatus.TIMEOUT, f"GraphHopper request timed out: {exc}")
+        except asyncio.CancelledError:
+            logger.info('graphhopper_http_work operation=route status=CANCELLED elapsed_ms=%.1f',
+                        (perf_counter() - http_started) * 1000)
+            raise
         except httpx.RequestError as exc:
             return _failure(RouteStatus.ENGINE_ERROR, f"GraphHopper connection failed: {exc}")
         except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:

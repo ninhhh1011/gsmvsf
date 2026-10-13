@@ -205,6 +205,8 @@ class RouteFamiliarityService:
             observe_route_familiarity('comparison', perf_counter() - comparison_started)
             return {key: FamiliarityAssessment("UNAVAILABLE", degraded_reason="SIMILARITY_WORK_LIMIT")
                     for key in valid | unavailable}
+        logger.info('familiarity_comparison_work candidate_routes=%s unique_routes=%s pieces=%s pairs=%s',
+                    len(valid), len(route_cache), sample_budget.used_pairs, budget.used_pairs)
         observe_route_familiarity('comparison', perf_counter() - comparison_started)
         record_route_familiarity_event('comparison')
         for assessment in result.values():

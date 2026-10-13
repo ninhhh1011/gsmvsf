@@ -1,5 +1,8 @@
 """GraphHopper 11 OSS GPX matching with project-defined observation projection."""
 import math
+import asyncio
+import logging
+from time import perf_counter
 import xml.etree.ElementTree as ET
 
 import httpx
@@ -14,6 +17,8 @@ from backend.app.services.map_matching.engine import (
     Matching,
     Tracepoint,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _encode_polyline(coordinates):
@@ -82,6 +87,7 @@ class GraphHopperMapMatchingAdapter:
         if self._client is None:
             raise MapMatchingEngineUnavailableError("GraphHopper client is not initialized by application lifespan")
         client = self._client
+        started = perf_counter()
         try:
             response = await client.post(
                 self.base_url + "/match", content=ET.tostring(gpx),
@@ -89,6 +95,8 @@ class GraphHopperMapMatchingAdapter:
                 params={"profile": profile, "points_encoded": "false", "instructions": "false",
                         "way_point_max_distance": 0, "details": "osm_way_id", "gps_accuracy": 20},
             )
+            logger.info('graphhopper_http_work operation=match status=%s elapsed_ms=%.1f',
+                        response.status_code, (perf_counter() - started) * 1000)
             if response.status_code == 400:
                 message = response.text[:500]
                 if any(s in message.lower() for s in ("sequence is broken", "no candidates", "not found", "cannot find", "no match")):
@@ -134,6 +142,12 @@ class GraphHopperMapMatchingAdapter:
             quality = sum(max(0, 1 - p.distance / 100) for p in tracepoints) / len(tracepoints)
             return Matching(quality, distance, duration, _encode_polyline(geometry), tracepoints, profile), tracepoints
         except httpx.TimeoutException as exc:
+            logger.info('graphhopper_http_work operation=match status=TIMEOUT elapsed_ms=%.1f',
+                        (perf_counter() - started) * 1000)
             raise MapMatchingTimeoutError("GraphHopper matching timed out") from exc
+        except asyncio.CancelledError:
+            logger.info('graphhopper_http_work operation=match status=CANCELLED elapsed_ms=%.1f',
+                        (perf_counter() - started) * 1000)
+            raise
         except httpx.RequestError as exc:
             raise MapMatchingEngineUnavailableError("GraphHopper unavailable") from exc
