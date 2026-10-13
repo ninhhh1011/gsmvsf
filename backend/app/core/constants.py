@@ -26,8 +26,8 @@ MAX_DEDUP_ENTRIES = 10000
 # Maximum concurrent driver states in memory
 MAX_ACTIVE_DRIVERS = 10000
 
-# Default context window for map matching (seconds)
-DEFAULT_CONTEXT_WINDOW_SECONDS = 30.0
+# Retain the preceding 30-second GPS sample despite jitter, within the valid session.
+DEFAULT_CONTEXT_WINDOW_SECONDS = 60.0
 
 # Maximum GPS points to include in context
 DEFAULT_MAX_CONTEXT_POINTS = 50
