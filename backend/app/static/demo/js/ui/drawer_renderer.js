@@ -5,6 +5,7 @@
  */
 
 import { escapeHtml, formatDistanceKm, formatDuration } from '../domain/route-display.js';
+import { renderReplenishmentDetails } from '../components.js';
 
 /**
  * Render a single station card for the drawer list.
@@ -49,6 +50,7 @@ export function renderDrawerStationCard(st, options = {}) {
         </div>
         <div class="station-cost-summary"><span class="total-eta">Tổng thời gian hoàn thành: <strong>${minutes(total)} phút</strong></span>
         ${ranked?.ranking_score != null || ranked?.score != null ? `<span class="cost-score">Điểm xếp hạng 80/10/10: <strong>${(ranked.ranking_score ?? ranked.score).toFixed(3)}</strong></span>` : ''}</div>
+        ${ranked || cand ? `<details><summary>Phân tích pin tại trạm</summary>${renderReplenishmentDetails(ranked?.replenishment ?? features.replenishment ?? cand?.replenishment)}</details>` : ''}
         ${familiar ? `<details><summary>Độ quen và mức phổ biến</summary><p>Cá nhân: ${percentage(familiar.personal_adherence)} · Cộng đồng: ${percentage(familiar.community_adherence)}<br/>${familiar.personal_trip_count ?? 0} chuyến cá nhân · ${familiar.community_driver_count ?? 0} tài xế cùng hành lang</p></details>` : ''}
         ${cand?.eligible === false ? `<div class="badge badge-danger">${escapeHtml(cand.reason || 'Không phù hợp')}</div>` : ''}
         <div class="driver-primary-actions"><button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">Xem vị trí</button>

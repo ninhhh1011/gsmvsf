@@ -205,6 +205,17 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
     `;
 }
 
+export function renderReplenishmentDetails(plan) {
+    const number = (value, digits, unit) => Number.isFinite(value) ? `${value.toFixed(digits)}${unit}` : 'Chưa có dữ liệu';
+    const available = plan?.status === 'AVAILABLE';
+    return `<div class="cost-section"><div class="cost-section-title">Pin dự kiến sau dịch vụ</div>
+      ${available ? `<p>Đến trạm → rời trạm: ${number(plan.arrival_soc_pct, 1, '%')} → ${number(plan.departure_soc_pct, 1, '%')}<br/>
+        Năng lượng cần bổ sung: ${number(plan.added_energy_kwh, 2, ' kWh')}
+        ${plan.destination_soc_pct != null ? `<br/>Pin dự kiến tại B: ${number(plan.destination_soc_pct, 1, '%')}` : ''}</p>
+        <p>Chỉ là kế hoạch; pin hiện tại chưa được bổ sung.</p>` : `<p>${plan?.status === 'INFEASIBLE' ? 'Phương án bổ sung pin không khả thi' : 'Chưa có dữ liệu khả dụng'}${plan?.reason ? `: ${escapeHtml(String(plan.reason))}` : ''}</p>`}
+    </div>`;
+}
+
 export function renderCostBreakdown(candidate) {
     const f = candidate?.features;
     if (!f) return '<p>Không có dữ liệu chi tiết.</p>';
@@ -229,6 +240,7 @@ export function renderCostBreakdown(candidate) {
         ${row('Sạc / đổi pin', minutes(f.service_duration_s))}
         ${row('Vị trí còn trống', f.available_capacity ?? 'Chưa có dữ liệu')}
       </div>
+      ${renderReplenishmentDetails(candidate.replenishment ?? f.replenishment)}
       <div class="cost-section"><div class="cost-section-title">Tổng thời gian hoàn thành</div>
         ${row('Di chuyển + chờ + dịch vụ', minutes(candidate.total_completion_time_s ?? candidate.eta_to_destination_via_station_s ?? candidate.eta_to_service_complete_s))}
         ${row('Điểm xếp hạng 80% thời gian / 10% cá nhân / 10% cộng đồng', candidate.ranking_score?.toFixed(3) ?? 'Chưa có dữ liệu')}
