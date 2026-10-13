@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import asyncio
 from time import perf_counter
 
 import httpx
@@ -40,10 +41,13 @@ class GraphHopperRoutingAdapter(RoutingEngine):
         self.base_url = (base_url or settings.graphhopper_base_url).rstrip("/")
         self.timeout_seconds = timeout_seconds
         self._client = client
+        self._route_slots = asyncio.Semaphore(settings.max_concurrent_routes)
 
     async def route(self, request: RouteRequest) -> RouteResult:
         started = perf_counter()
-        result = await self._route(request)
+        # The lifespan adapter shares this budget across concurrent searches.
+        async with self._route_slots:
+            result = await self._route(request)
         from backend.app.core.metrics import observe_route_call
         observe_route_call('route', result.status.value.lower(), perf_counter() - started)
         return result
