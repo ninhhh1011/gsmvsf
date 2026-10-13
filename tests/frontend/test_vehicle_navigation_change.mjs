@@ -84,3 +84,13 @@ test('historical assignment initializes its vehicle without resetting trip ident
  assert.deepEqual(routeArgs,[trip.origin,trip.destination,{vehicle_category:'EV_MOTORBIKE'}]);
  assert.equal(c.state,'TRIP_ASSIGNED');assert.equal(c.replayPaused,undefined);
 });
+
+for (const [method,pickerMethod] of [['startPickCustomOrigin','startPickOrigin'],['startPickCustomDestination','startPickDestination']]) {
+ test(`${method} closes station drawer before enabling map picking`,()=>{
+  const c=fixture();const calls=[];
+  c.bindings={setStationsDrawerOpen:open=>calls.push(['drawer',open])};
+  c.mapPicker={setMapController:map=>calls.push(['map',map]),[pickerMethod]:()=>calls.push(['pick'])};
+  c[method]();
+  assert.deepEqual(calls,[['drawer',false],['map',c.map],['pick']]);
+ });
+}

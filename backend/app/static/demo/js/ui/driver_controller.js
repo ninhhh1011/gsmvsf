@@ -1130,9 +1130,9 @@ export class DriverModeController {
         });
     }
 
-    startPickCustomOrigin() { this.mapPicker.setMapController(this.map); this.mapPicker.startPickOrigin(); }
+    startPickCustomOrigin() { this.closeStationsDrawer(); this.mapPicker.setMapController(this.map); this.mapPicker.startPickOrigin(); }
     cancelPickCustomOrigin() { this.mapPicker.cancelPickOrigin(); }
-    startPickCustomDestination() { this.mapPicker.setMapController(this.map); this.mapPicker.startPickDestination(); }
+    startPickCustomDestination() { this.closeStationsDrawer(); this.mapPicker.setMapController(this.map); this.mapPicker.startPickDestination(); }
     cancelPickCustomDestination() { this.mapPicker.cancelPickDestination(); }
     cancelAllPicking() { this.mapPicker.cancelAll(); }
     async setCustomOrigin(orig) {
