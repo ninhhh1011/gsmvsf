@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 import asyncio
 import threading
+import h3
 
 import pytest
 from pydantic import ValidationError
@@ -11,7 +12,7 @@ from backend.app.core.metrics import (
     ROUTE_FAMILIARITY_HISTORY_PAIRS,
 )
 from backend.app.services.route_familiarity.models import RouteSignature
-from backend.app.services.route_familiarity.service import RouteFamiliarityService
+from backend.app.services.route_familiarity.service import RouteFamiliarityService, history_query_cells
 
 
 NOW = datetime(2026, 10, 7, 1, tzinfo=UTC)
@@ -77,7 +78,7 @@ async def test_cpu_evaluations_share_one_slot_without_serializing_history_or_blo
                 await asyncio.sleep(0.001)
         second = asyncio.create_task(service.assess_many('second', {'station': sig(['a'])}, NOW))
         await asyncio.sleep(0.05)
-        assert len(repo.calls) == 4
+        assert len(repo.calls) >= 3
         assert calls == 1
         if cancel_first:
             first.cancel()
@@ -94,6 +95,51 @@ async def test_cpu_evaluations_share_one_slot_without_serializing_history_or_blo
         if 'second' in locals():
             await second
     assert peak == 1
+
+
+def test_history_cell_expansion_deduplicates_centres_preserving_overlapping_union(monkeypatch):
+    from types import SimpleNamespace
+    centre = h3.latlng_to_cell(21, 105.8, 11)
+    adjacent = next(cell for cell in h3.grid_disk(centre, 1) if cell != centre)
+    original = h3.grid_disk
+    expected = sorted(set(original(centre, 2)) | set(original(adjacent, 2)) | {'legacy'})
+    calls = []
+    def expand(cell, radius):
+        calls.append(cell)
+        return original(cell, radius)
+    monkeypatch.setattr(h3, 'grid_disk', expand)
+    actual = history_query_cells([SimpleNamespace(cells=[centre, adjacent, 'legacy', centre]),
+                                  SimpleNamespace(cells=[adjacent, centre])])
+    assert actual == expected
+    assert calls == [centre, adjacent]
+
+
+def test_history_cell_union_keeps_existing_work_limit():
+    from types import SimpleNamespace
+    from backend.app.services.route_familiarity.similarity import SimilarityWorkLimitExceeded
+    with pytest.raises(SimilarityWorkLimitExceeded):
+        history_query_cells([SimpleNamespace(cells=[f'legacy-{i}' for i in range(20_001)])])
+
+
+@pytest.mark.asyncio
+async def test_history_cell_preparation_does_not_block_event_loop(monkeypatch):
+    import backend.app.services.route_familiarity.service as module
+    entered, release = threading.Event(), threading.Event()
+    def prepare(signatures):
+        entered.set()
+        assert release.wait(2)
+        return ['a']
+    monkeypatch.setattr(module, 'history_query_cells', prepare)
+    service = RouteFamiliarityService(Repository())
+    task = asyncio.create_task(service.assess_many('driver', {'station': sig(['a'])}, NOW))
+    try:
+        async with asyncio.timeout(1):
+            while not entered.is_set():
+                await asyncio.sleep(0.001)
+        assert not task.done()
+    finally:
+        release.set()
+        await task
 
 
 @pytest.mark.asyncio

@@ -80,9 +80,9 @@ class RouteFamiliarityService:
             return unavailable
         lookup_started = perf_counter()
         personal_rows = await self.repository.personal_routes(driver_id, as_of, self.lookback)
+        query_cells = await self._run_cpu(history_query_cells, valid.values())
         community_rows = await self.repository.community_routes(
-            history_query_cells(valid.values()),
-            driver_id, as_of, self.lookback)
+            query_cells, driver_id, as_of, self.lookback)
         personal_truncated = len(personal_rows) > 50
         community_truncated = (len(community_rows) > 500 or
                                any(row.get("active_rank", 1) > 100 or row.get("driver_rank", 1) > 5
@@ -93,13 +93,20 @@ class RouteFamiliarityService:
         observe_route_familiarity('lookup', perf_counter() - lookup_started)
         record_route_familiarity_event('lookup')
         truncated = personal_truncated or community_truncated
+        result = await self._run_cpu(self._evaluate, valid, personal, community, as_of,
+                                     truncated, unavailable)
+        observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
+        return result
+
+    async def _run_cpu(self, function, *args):
         def evaluate():
             started, cpu_started = perf_counter(), thread_time()
             try:
-                return self._evaluate(valid, personal, community, as_of, truncated, unavailable)
+                return function(*args)
             finally:
-                logger.info('familiarity_cpu_evaluation elapsed_ms=%.1f thread_cpu_ms=%.1f',
-                            (perf_counter() - started) * 1000, (thread_time() - cpu_started) * 1000)
+                logger.info('familiarity_cpu_work operation=%s elapsed_ms=%.1f thread_cpu_ms=%.1f',
+                            function.__name__, (perf_counter() - started) * 1000,
+                            (thread_time() - cpu_started) * 1000)
         # Python corridor work shares the GIL; concurrent workers delay GPS I/O.
         async with self._evaluation_slot:
             work = asyncio.create_task(run_in_threadpool(evaluate))
@@ -113,7 +120,6 @@ class RouteFamiliarityService:
                         continue
                 work.result()  # Finish the worker before admitting another.
                 raise
-        observe_route_familiarity('evaluation', perf_counter() - evaluation_started)
         return result
 
     def _evaluate(self, valid, personal, community, as_of, truncated, unavailable):
@@ -208,9 +214,12 @@ class RouteFamiliarityService:
 
 
 def history_query_cells(signatures):
-    cells = set()
+    cells, centres = set(), set()
     for signature in signatures:
         for cell in signature.cells:
+            if cell in centres:
+                continue
+            centres.add(cell)
             if h3.is_valid_cell(cell):
                 cells.update(h3.grid_disk(cell, 2))
             else:
