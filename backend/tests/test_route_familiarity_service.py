@@ -53,8 +53,8 @@ class Repository:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('cancel_first', [False, True])
-async def test_cpu_evaluations_share_one_slot_without_serializing_history_or_blocking_loop(monkeypatch, cancel_first):
+@pytest.mark.parametrize('cancel_first,fail_worker', [(False, False), (True, False), (True, True)])
+async def test_cpu_evaluations_share_one_slot_without_serializing_history_or_blocking_loop(monkeypatch, cancel_first, fail_worker):
     entered, release = threading.Event(), threading.Event()
     active = peak = calls = 0
     repo = Repository()
@@ -67,6 +67,8 @@ async def test_cpu_evaluations_share_one_slot_without_serializing_history_or_blo
         entered.set()
         try:
             assert release.wait(5)
+            if fail_worker and calls == 1:
+                raise ValueError('worker failed after cancellation')
             return {}
         finally:
             active -= 1
@@ -85,6 +87,9 @@ async def test_cpu_evaluations_share_one_slot_without_serializing_history_or_blo
             await asyncio.sleep(0.05)
             assert calls == 1
             assert not first.done()
+            first.cancel()
+            await asyncio.sleep(0.01)
+            assert calls == 1
     finally:
         release.set()
         if cancel_first:

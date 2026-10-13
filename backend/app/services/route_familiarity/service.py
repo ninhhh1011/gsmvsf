@@ -118,7 +118,10 @@ class RouteFamiliarityService:
                         await asyncio.shield(work)
                     except asyncio.CancelledError:
                         continue
-                work.result()  # Finish the worker before admitting another.
+                    except Exception:
+                        break
+                if not work.cancelled():
+                    work.exception()  # Retrieve failure without replacing cancellation.
                 raise
         return result
 
