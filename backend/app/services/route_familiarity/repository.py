@@ -27,7 +27,7 @@ WHERE driver_id=$1 AND trip_id=$2
 RETURNING driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at
 """
 PERSONAL_ROUTES_QUERY = """
-SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at
+SELECT driver_id, trip_id, completed_at, geometry, started_at
 FROM realtime.route_familiarity_routes
 WHERE driver_id=$1 AND completed_at >= $2 AND completed_at < $3
 ORDER BY completed_at DESC, trip_id DESC LIMIT 51
@@ -50,7 +50,7 @@ WITH active_drivers AS (
     JOIN ranked_drivers d USING (driver_id)
     WHERE r.completed_at >= $2 AND r.completed_at < $3
 )
-SELECT driver_id, trip_id, completed_at, distance_m, resolution, cells, cell_distances_m, geometry, started_at,
+SELECT driver_id, trip_id, completed_at, geometry, started_at,
        active_rank, driver_rank
 FROM bounded WHERE driver_rank <= 6
 ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606

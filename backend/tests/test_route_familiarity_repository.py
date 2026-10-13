@@ -73,6 +73,10 @@ async def test_history_queries_are_as_of_and_bounded():
     assert "ORDER BY r.completed_at DESC, r.trip_id DESC" in calls[1]
     assert "ORDER BY last_completed_at DESC, driver_id" in calls[1]
     assert "PARTITION BY r.driver_id ORDER BY r.completed_at DESC, r.trip_id DESC" in calls[1]
+    projections = [sql.rsplit('SELECT ', 1)[1].split('FROM ', 1)[0] for sql in calls]
+    columns = [[column.strip() for column in projection.split(',')] for projection in projections]
+    required = ['driver_id', 'trip_id', 'completed_at', 'geometry', 'started_at']
+    assert columns == [required, required + ['active_rank', 'driver_rank']]
 
 
 def test_migration_has_constraints_indexes_and_rollback():

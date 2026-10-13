@@ -132,7 +132,8 @@ class RouteFamiliarityService:
         target_window = get_vietnam_time_window(as_of)
         coordinate_cache = {}
         def coordinates(row):
-            key = id(row)
+            geometry = row.get("geometry")
+            key = geometry if isinstance(geometry, str) else id(row)
             if key not in coordinate_cache:
                 coordinate_cache[key] = coordinates_from_row(row)
             return coordinate_cache[key]

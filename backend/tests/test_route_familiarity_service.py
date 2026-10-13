@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 import asyncio
+import json
 import threading
 import h3
 
@@ -50,6 +51,61 @@ class Repository:
     async def community_routes(self, *args):
         self.calls.append(("community", args))
         return self.community
+
+
+@pytest.mark.asyncio
+async def test_repeated_json_geometry_decodes_once_per_unique_string_per_assessment(monkeypatch):
+    from unittest.mock import Mock
+    from backend.app.services.route_familiarity import repository, service as module
+
+    target = sig(['a'])
+    raw = [json.dumps(target.coordinates), json.dumps(geometry(['other']))]
+    def row(driver, trip, index, **ranks):
+        return dict(driver_id=driver, trip_id=trip, geometry=raw[index].encode().decode(),
+                    started_at=NOW - timedelta(minutes=2),
+                    completed_at=NOW - timedelta(minutes=1), **ranks)
+    personal = [row('me', f'p{i}', i % 2) for i in range(51)]
+    community = [row(f'd{i}', f'c{i}-{j}', i % 2, active_rank=i + 1, driver_rank=j + 1)
+                 for i in range(100) for j in range(5)]
+    community.append(row('sentinel', 'extra', 0, active_rank=101, driver_rank=1))
+    def decoded(rows):
+        return [dict(item, geometry=json.loads(item['geometry'])) for item in rows]
+    expected = await RouteFamiliarityService(Repository(decoded(personal), decoded(community))).assess_many(
+        'me', {'station': target}, NOW)
+    convert = Mock(wraps=module.coordinates_from_row)
+    loads = Mock(wraps=repository.json.loads)
+    monkeypatch.setattr(module, 'coordinates_from_row', convert)
+    monkeypatch.setattr(repository.json, 'loads', loads)
+    service = RouteFamiliarityService(Repository(personal, community))
+    before = ROUTE_FAMILIARITY_HISTORY_PAIRS._value.get()
+
+    for assessment_number in (1, 2):
+        actual = await service.assess_many('me', {'station': target}, NOW)
+        assert actual == expected
+        assert actual['station'].personal_history_trip_count == 50
+        assert actual['station'].community_cohort_driver_count == 100
+        assert actual['station'].history_truncated
+        assert ROUTE_FAMILIARITY_HISTORY_PAIRS._value.get() == before + 550 * assessment_number
+        assert convert.call_count == 2 * assessment_number
+        assert loads.call_count == 2 * assessment_number
+
+
+@pytest.mark.asyncio
+async def test_repeated_json_geometry_still_counts_every_trip_toward_point_limit(monkeypatch):
+    from unittest.mock import Mock
+    from backend.app.services.route_familiarity import service as module
+
+    raw = json.dumps([(21, 105.8)] * 2000)
+    rows = [dict(driver_id='me', trip_id=f'p{i}', geometry=raw.encode().decode(),
+                 started_at=NOW - timedelta(minutes=2), completed_at=NOW - timedelta(minutes=1))
+            for i in range(50)]
+    convert = Mock(wraps=module.coordinates_from_row)
+    monkeypatch.setattr(module, 'coordinates_from_row', convert)
+    assessment = (await RouteFamiliarityService(Repository(rows)).assess_many(
+        'me', {'station': sig(['a'])}, NOW))['station']
+    assert assessment.status == 'UNAVAILABLE'
+    assert assessment.degraded_reason == 'SIMILARITY_WORK_LIMIT'
+    assert convert.call_count == 1
 
 
 @pytest.mark.asyncio
