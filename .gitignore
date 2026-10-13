@@ -1,6 +1,7 @@
 # Environment
 .env
 .env.local
+runtime/journey-scale/local.env
 *.log
 
 # Python

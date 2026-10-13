@@ -1,6 +1,6 @@
 """Verify real cross-replica state and journey contracts without mocks."""
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -15,7 +15,7 @@ async def main():
         identity = config['route_familiarity_identity']
         assert identity and len(identity['signature']) == 64
         driver = 'journey-check-' + uuid4().hex
-        timestamp = datetime.now(UTC).isoformat()
+        timestamp = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
         gps = {'vehicle_id': 'V0001', 'timestamp': timestamp, 'observation_id': 'first',
                'latitude': 20.9849, 'longitude': 105.7935, 'speed_kmh': 20}
         response = await client.post(f'http://127.0.0.1:8000/api/v1/drivers/{driver}/location', json=gps)
@@ -30,6 +30,21 @@ async def main():
         response = await client.post(f'http://127.0.0.1:8002/api/v1/drivers/{driver}/demand/evaluate', json=body)
         assert response.status_code == 200 and response.json()['latitude'] is None, response.text
         results.append({'check': 'reset visible on replica2', 'pass': True})
+        for invalid in ['1e309', 'NaN']:
+            raw = json.dumps(gps).replace(str(gps['latitude']), invalid)
+            response = await client.post(f'http://127.0.0.1:8000/api/v1/drivers/{driver}/location',
+                content=raw, headers={'content-type': 'application/json'})
+            assert response.status_code == 422, response.text
+            assert 'detail' in response.json()
+        results.append({'check': 'nonfinite telemetry rejected with JSON 422', 'pass': True})
+        response = await client.post('http://127.0.0.1:8002/api/v1/candidate-search/evaluate',
+            json={**body, 'raw_latitude': gps['latitude'], 'raw_longitude': gps['longitude'],
+                  'requested_service': 'ANY'})
+        assert response.status_code == 200, response.text
+        search = response.json()
+        assert search['total_candidates_evaluated'] > 0, search
+        results.append({'check': 'public candidate evaluation uses live snapshot', 'pass': True,
+                        'eligible_count': search['eligible_count']})
         headers = {'x-driver-identity-signature': identity['signature']}
         for mode, destination in [('STATION_ONLY', {}), ('BEFORE_DESTINATION', {
                 'destination_latitude': 21.0315, 'destination_longitude': 105.7830}),
