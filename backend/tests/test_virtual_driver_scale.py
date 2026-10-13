@@ -113,6 +113,41 @@ def test_staggered_demand_triggers_signed_recommendation_only_for_controlled_sub
     asyncio.run(exercise())
 
 
+def test_history_histograms_use_selected_response_and_preserve_zero_and_missing(monkeypatch):
+    monkeypatch.setattr(scale, 'CADENCE', 0.02)
+
+    async def exercise():
+        async def handler(request):
+            if request.url.path.endswith('/location'):
+                return httpx.Response(200, json={'status': 'MATCHED'})
+            if request.url.path.endswith('/evaluate'):
+                return httpx.Response(200, json={'need_service': False})
+            driver = int(json.loads(request.content)['context']['driver_id'].rsplit('-', 1)[1])
+            selected = {
+                0: {'status': 'AVAILABLE', 'personal_history_trip_count': 5, 'community_cohort_driver_count': 100},
+                2: {'status': 'AVAILABLE', 'personal_history_trip_count': 0, 'community_cohort_driver_count': 0},
+                4: {'status': 'AVAILABLE'},
+                6: None,
+            }[driver]
+            return httpx.Response(200, json={'familiarity': selected, 'ranked_candidates': [
+                {'familiarity': {'personal_history_trip_count': 999, 'community_cohort_driver_count': 999}}]})
+
+        args = Namespace(burst_size=2, intervals=3, drain_seconds=1, concurrency=4,
+                         request_timeout=1, seed=7, noise_m=3, demand_every=1)
+        points = [(21, 105), (21, 105.01)]
+        async with httpx.AsyncClient(base_url='http://test', transport=httpx.MockTransport(handler)) as client:
+            result = await measure_stage(client, [(points, route_distances(points))], args,
+                                         8, 'private-unit-secret', 'synthetic-scale-test')
+        assert result['familiarity_history_counts'] == {
+            'personal_history_trip_count': {'5': 1, '0': 1, 'MISSING': 2},
+            'community_cohort_driver_count': {'100': 1, '0': 1, 'MISSING': 2},
+        }
+        assert result['familiarity_statuses'] == {'AVAILABLE': 3, 'MISSING': 1}
+        assert result['counters']['recommendation_successful'] == 4
+
+    asyncio.run(exercise())
+
+
 @pytest.mark.parametrize('request_timeout', [0.01, 10])
 def test_request_deadline_reports_timeout_and_never_recommends(request_timeout):
     async def exercise():

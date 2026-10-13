@@ -100,6 +100,7 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
     semaphore = asyncio.Semaphore(args.concurrency)
     counters = Counter()
     statuses, matching, familiarity = Counter(), Counter(), Counter()
+    history_counts = {field: Counter() for field in ('personal_history_trip_count', 'community_cohort_driver_count')}
     error_samples = {}
     latency, queue_delay = {}, {}
     peak_pending = 0
@@ -134,7 +135,11 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
                 if kind == 'gps':
                     matching[str(body.get('status', 'MISSING'))] += 1
                 if kind == 'recommendation':
-                    familiarity[str((body.get('familiarity') or {}).get('status', 'MISSING'))] += 1
+                    selected_familiarity = body.get('familiarity') or {}
+                    familiarity[str(selected_familiarity.get('status', 'MISSING'))] += 1
+                    for field, counts in history_counts.items():
+                        value = selected_familiarity.get(field)
+                        counts[str(value) if value is not None else 'MISSING'] += 1
                 return body
             except (httpx.HTTPError, TimeoutError) as exc:
                 counters[f'{kind}_transport_error:{type(exc).__name__}'] += 1
@@ -200,6 +205,7 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
             'http_statuses': dict(statuses), 'matching_statuses': dict(matching),
             'http_error_samples': error_samples,
             'familiarity_statuses': dict(familiarity),
+            'familiarity_history_counts': {field: dict(counts) for field, counts in history_counts.items()},
             'achieved_successful_rates_per_second': {kind: counters[kind + '_successful'] / elapsed
                                                     for kind in ('gps', 'demand', 'recommendation')},
             'request_latency_ms': {k: distribution(v) for k, v in latency.items()},
