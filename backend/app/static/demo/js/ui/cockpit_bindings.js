@@ -130,8 +130,8 @@ export function createCockpitBindings(root = globalThis.document) {
             const slider = get('slider-assigned-soc');
             if (slider && slider !== assignedSlider) {
                 slider.addEventListener('input', event => callbacks.setSoc(parseFloat(event.target.value), false));
-                slider.addEventListener('change', event => callbacks.setSoc(parseFloat(event.target.value), false));
-                each('.btn-preset-assigned-soc', btn => btn.addEventListener('click', event => callbacks.setSoc(parseFloat(event.currentTarget.dataset.soc), false)));
+                slider.addEventListener('change', event => callbacks.setSoc(parseFloat(event.target.value), true));
+                each('.btn-preset-assigned-soc', btn => btn.addEventListener('click', event => callbacks.setSoc(parseFloat(event.currentTarget.dataset.soc), true)));
                 assignedSlider = slider;
             }
             return true;

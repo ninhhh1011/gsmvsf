@@ -35,12 +35,13 @@ export async function selectStationPlan(stationId, serviceType = null, mode = 'B
     const payload = planningRequest(this);
     if (!payload) return false;
     const generation = this.generation, powerRevision = this._powerRevision;
+    const selectedAtRequest = refresh ? this.selectedStationPlan : null;
     const revision = ++this.routeRevision;
     this.bindings.setNavigationButtonState('Đang kiểm tra trạm...', true);
     try {
         const effectiveMode = this.navigationStages?.passengerPassed ? 'BEFORE_DESTINATION' : mode;
         const plan = await this.api.getStationPlan({ ...payload, station_id: stationId, service_type: pair.service_type, plan_mode: effectiveMode });
-        if (this.generation !== generation || this.routeRevision !== revision || this._powerRevision !== powerRevision) return false;
+        if (this.generation !== generation || this.routeRevision !== revision || this._powerRevision !== powerRevision || (refresh && (!this._navigationLocked || this.selectedStationPlan !== selectedAtRequest))) return false;
         if (plan.station_id !== stationId || plan.service_type !== pair.service_type || !plan.route) throw new Error('Kế hoạch trạm không hợp lệ');
         const coords = typeof plan.route.geometry === 'string' ? decodePolyline(plan.route.geometry) : plan.route.geometry?.map(([lng, lat]) => [lat, lng]);
         if (!coords?.length) throw new Error('Chưa có hình học tuyến đường');
@@ -69,7 +70,7 @@ export async function selectStationPlan(stationId, serviceType = null, mode = 'B
         if (this.state === DriverState.TRIP_ACTIVE) this.renderTripActiveUI(); else this.renderTripAssignedUI();
         return true;
     } catch (error) {
-        if (this.generation === generation && this.routeRevision === revision && this._powerRevision === powerRevision) {
+        if (this.generation === generation && this.routeRevision === revision && this._powerRevision === powerRevision && (!refresh || (this._navigationLocked && this.selectedStationPlan === selectedAtRequest))) {
             this.bindings.showRouteUnavailable?.(`Không thể chọn trạm: ${error.message}`);
             this.bindings.setNavigationButtonState('Chọn trạm', false);
         }

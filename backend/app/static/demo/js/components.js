@@ -108,6 +108,7 @@ export function renderRecommendationCard(recResult, onSelectStation = null) {
     }
 
     const topCandidate = recResult.ranked_candidates[0];
+    if (topCandidate?.estimate_unavailable) return `<div class="recommendation-card"><p>Trạm đã chọn: ${escapeHtml(String(topCandidate.station_id))}</p><p>Ước tính pin và tổng thời gian chưa khả dụng; cần xác nhận lại phương án với pin hiện tại.</p></div>`;
     const stId = escapeHtml(recResult.recommended_station_id || topCandidate?.station_id || '');
     const sType = recResult.recommended_service_type || topCandidate?.service_type;
     const isSwap = sType === 'BATTERY_SWAP';

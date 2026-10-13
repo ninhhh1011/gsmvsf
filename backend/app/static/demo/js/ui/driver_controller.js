@@ -411,10 +411,31 @@ export class DriverModeController {
         const val = Math.min(100, Math.max(5, parseFloat(newSoc) || 10));
         this.currentSocPct = val;
         this.updateEstimatedRange();
+        if (this.selectedStationPlan) {
+            const plan = this.selectedStationPlan;
+            this.bindings.closeCostBreakdown?.();
+            this.lastRecommendation = null; this.postTripRecommendation = null;
+            this.stationCandidateDetails = null; this.postTripCandidateDetails = null;
+            this.selectedStationPlan = { ...plan, replenishment: null, ranked_candidate: {
+                station_id: plan.station_id, service_type: plan.service_type, estimate_unavailable: true,
+                features: { replenishment: null }
+            } };
+        }
         this.bindings.updateBattery(renderBatteryView({ soc: this.currentSocPct, range: this.estimatedRangeKm }));
-        if (triggerEvaluation && this.state === DriverState.TRIP_ACTIVE) {
-            this._evaluateAtCurrentPosition().then(() => {
-                this.renderTripActiveUI();
+        if (this.selectedStationPlan) {
+            if (this.state === DriverState.TRIP_ASSIGNED && !triggerEvaluation) this._renderAnalysis();
+            else this.renderCurrentStateUI();
+            if (this.bindings.isStationsDrawerOpen()) this.renderStationsDrawer();
+        }
+        if (triggerEvaluation && [DriverState.TRIP_ACTIVE, DriverState.TRIP_ASSIGNED].includes(this.state)) {
+            const selected = this.selectedStationPlan;
+            const generation = this.generation, powerRevision = this._powerRevision;
+            const refresh = selected ? this._triggerReroute(this.currentPos) : Promise.resolve();
+            return Promise.resolve(refresh).then(async () => {
+                if (this.generation !== generation || this._powerRevision !== powerRevision || (selected && (!this._navigationLocked || this.selectedStationPlan?.station_id !== selected.station_id || this.selectedStationPlan?.service_type !== selected.service_type))) return;
+                await this._evaluateAtCurrentPosition();
+                if (this.generation !== generation || this._powerRevision !== powerRevision) return;
+                this.renderCurrentStateUI();
                 if (this.bindings.isStationsDrawerOpen()) {
                     this.refreshDrawerEvaluations();
                 }
