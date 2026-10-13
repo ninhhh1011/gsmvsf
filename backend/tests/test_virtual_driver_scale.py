@@ -161,3 +161,35 @@ def test_run_output_protection_missing_manifest_and_transport_timeout(tmp_path, 
     monkeypatch.setattr(scale, 'measure_stage', stage)
     asyncio.run(scale.run(args))
     assert json.loads(args.output.read_text())['run_namespace'] == 'synthetic-scale-test'
+
+
+def test_each_stage_reopens_transport_after_prior_cancellation(tmp_path, monkeypatch):
+    monkeypatch.setattr(scale, 'ROOT', tmp_path)
+    monkeypatch.setenv('ROUTE_FAMILIARITY_IDENTITY_SECRET', 'private-unit-secret-01234567890123456789')
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps({'templates': [{'engine': 'graphhopper', 'polyline': '_y~_C_qz_S?o}@'}]}))
+    args = Namespace(output=tmp_path / 'report.json', manifest=manifest, namespace='synthetic-scale-test',
+                     api_url='http://test', seed=7, concurrency=2, noise_m=3, stages=[100, 500])
+    clients = []
+
+    class Client:
+        def __init__(self, **kwargs):
+            assert kwargs['timeout'] is None
+            self.closed = self.cancelled = False
+            clients.append(self)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *unused):
+            self.closed = True
+
+    async def stage(client, *unused, **kwargs):
+        assert not client.cancelled, 'Previous stage cancellation must not affect the next transport'
+        client.cancelled = True
+        return {'completion_deadline_cancelled_events': 1}
+
+    monkeypatch.setattr(scale.httpx, 'AsyncClient', Client)
+    monkeypatch.setattr(scale, 'measure_stage', stage)
+    asyncio.run(scale.run(args))
+    assert len(clients) == 3 and all(client.closed for client in clients)

@@ -242,12 +242,15 @@ async def run(args):
         output.write_text(json.dumps(report, indent=2), encoding='utf-8')
     save()
     try:
-        async with httpx.AsyncClient(base_url=args.api_url, timeout=None,
-                                     limits=httpx.Limits(max_connections=args.concurrency)) as client:
-            for count in args.stages:
+        for count in args.stages:
+            async with httpx.AsyncClient(base_url=args.api_url, timeout=None,
+                                         limits=httpx.Limits(max_connections=args.concurrency)) as client:
                 report['stages'].append(await measure_stage(client, templates, args, count, secret,
                                                             report['run_namespace']))
-                save()
+            save()
+        # A timed-out stage must not leave its transport pool attached to the burst case.
+        async with httpx.AsyncClient(base_url=args.api_url, timeout=None,
+                                     limits=httpx.Limits(max_connections=args.concurrency)) as client:
             report['stages'].append(await measure_stage(client, templates, args, args.stages[-1], secret,
                                                         report['run_namespace'] + '-burst', burst=True))
         report['status'] = 'MEASURED'
