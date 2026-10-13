@@ -34,58 +34,60 @@ Spec: `docs/superpowers/specs/2026-10-12-journey-ranking-scale-up.md`.
 
 Ownership: `backend/app/services/realtime/driver_state_manager.py`, `driver_state_repository.py`, `driver_trace.py`, `location.py`, `backend/app/api/v1/realtime.py`, `backend/app/services/map_matching/service.py/models.py`; corresponding backend tests. Do not edit ranking/candidate/demand API files or lifespan/main; send root the shared-location integration contract.
 
-- [ ] Reproduce lost B update and reset resurrection; implement CAS against the snapshot read, retry mutations on fresh state, withhold stale match commits.
-- [ ] Add an async shared-state location resolver, preserving explicit-coordinate priority and the common freshness policy; no Redis-outage memory fallback.
-- [ ] Normalize/sort batch timestamps by instants, preserve valid external representation, validate malformed timestamps; update invalid legacy fixtures deliberately.
-- [ ] Run focused state/map-matching tests; reproduce interleavings and report API call-site changes root must apply.
-- [ ] Root/reviewer checks invariants before task acceptance.
+- [x] Reproduce lost B update and reset resurrection; implement CAS against the snapshot read, retry mutations on fresh state, withhold stale match commits.
+- [x] Add an async shared-state location resolver, preserving explicit-coordinate priority and the common freshness policy; no Redis-outage memory fallback.
+- [x] Normalize/sort batch timestamps by instants, preserve valid external representation, validate malformed timestamps; update invalid legacy fixtures deliberately.
+- [x] Run focused state/map-matching tests; reproduce interleavings and report API call-site changes root must apply.
+- [x] Root/reviewer checks invariants before task acceptance.
 
 ## Task 2 — Full journey ranking and authoritative station plans (worker ranking)
 
 Ownership: `backend/app/services/ranking/{models,service,context,orchestration}.py`, `backend/app/services/candidate/{models,service}.py`, `backend/app/services/route_familiarity/service.py`, `backend/app/services/snapshots/repository.py`, `backend/app/api/v1/{ranking,candidate}.py`; new focused planning module/API if needed; corresponding tests. Do not edit config/lifespan/main, route history repository or frontend. Coordinate shared-location helper with root/state worker.
 
-- [ ] Regression: earlier service completion loses when onward travel makes full journey later; no-B uses service completion alone; after-B has no return leg.
-- [ ] Implement versioned policy and 80/10/10 score with contribution/reference metadata, physical ETA separate. Replace fixed 30-second ranking semantics; keep history bounds/privacy.
-- [ ] Personal and community each change ranking; sparse/legacy/partial evidence is explicit and neutral. Community frequency counts its comparable cohort, not only supporting drivers.
-- [ ] Fix latest-as-of traffic before threshold/limit, and direct/via constraint consistency.
-- [ ] Provide authoritative selection/plan confirmation: consumes current telemetry, station/service identity, optional passenger B and intent; validates feasibility and current eligibility, returns actual geometry/durations and reason/invalidation. Reuse eligibility/workflow rather than clone business rules.
-- [ ] Block impossible after-B arrival without positive SOC/range floors; reject impossible onward single-stop legs. Do not fabricate replenishment proof.
-- [ ] Send frontend/root precise request/response and score contracts early. Run focused tests including snapshot changes.
+- [x] Regression: earlier service completion loses when onward travel makes full journey later; no-B uses service completion alone; after-B has no return leg.
+- [x] Implement versioned policy and 80/10/10 score with contribution/reference metadata, physical ETA separate. Replace fixed 30-second ranking semantics; keep history bounds/privacy.
+- [x] Personal and community each change ranking; sparse/legacy/partial evidence is explicit and neutral. Community frequency counts its comparable cohort, not only supporting drivers.
+- [x] Fix latest-as-of traffic before threshold/limit, and direct/via constraint consistency.
+- [x] Provide authoritative selection/plan confirmation: consumes current telemetry, station/service identity, optional passenger B and intent; validates feasibility and current eligibility, returns actual geometry/durations and reason/invalidation. Reuse eligibility/workflow rather than clone business rules.
+- [x] Block impossible after-B arrival without positive SOC/range floors; reject impossible onward single-stop legs. Do not fabricate replenishment proof.
+- [x] Send frontend/root precise request/response and score contracts early. Run focused tests including snapshot changes.
 
 ## Task 3 — Optional-B frontend and trustworthy display (worker frontend)
 
 Ownership: `backend/app/static/demo/index.html`, all affected demo JS, frontend tests. CSS remains root-owned until cleanup commit, then worker may add necessary narrowly scoped rules with notice. No backend/source-data changes.
 
-- [ ] No default B; map choose/clear B. Find from accepted/current or explicitly chosen A without assigning a fake trip B.
-- [ ] Keep passenger goal separate from station navigation target, including changing station in station-only mode. Hide/disable after-B without B.
-- [ ] Consume backend authoritative selected plans; reject ineligible/unknown cards and stale replies, preserve station/service identity, reuse actual constrained geometry.
-- [ ] All cost displays use total physical completion and separate weighted score; queue null uses effective wait/provenance, not zero. No hardcoded fallback distances/ETAs.
-- [ ] Show derived personal/community evidence and feature-supported explanations; no new demo badge or historical-trip picker. Receive server-controlled synthetic sample identity/signature; never signing secrets.
-- [ ] Maintain mobile map/actions, native disclosures, all energy states, H3 and current vehicle values. Controller stays DOM-free; split by responsibility if necessary, not by arbitrary line padding.
-- [ ] Focused tests first, full frontend suite and later root browser matrix.
+- [x] No default B; map choose/clear B. Find from accepted/current or explicitly chosen A without assigning a fake trip B.
+- [x] Keep passenger goal separate from station navigation target, including changing station in station-only mode. Hide/disable after-B without B.
+- [x] Consume backend authoritative selected plans; reject ineligible/unknown cards and stale replies, preserve station/service identity, reuse actual constrained geometry.
+- [x] All cost displays use total physical completion and separate weighted score; queue null uses effective wait/provenance, not zero. No hardcoded fallback distances/ETAs.
+- [x] Show derived personal/community evidence and feature-supported explanations; no new demo badge or historical-trip picker. Receive server-controlled synthetic sample identity/signature; never signing secrets.
+- [x] Maintain mobile map/actions, native disclosures, all energy states, H3 and current vehicle values. Controller stays DOM-free; split by responsibility if necessary, not by arbitrary line padding.
+- [x] Focused tests first, full frontend suite and later root browser matrix.
 
 ## Task 4 — Synthetic provenance, protected sample and finite load (root)
 
 Ownership: config/lifespan/main routing and shared-location call-site wiring, route history repository namespace support, new synthetic generation/load scripts, docs. Respect worker-owned files through coordination; no duplicated patches.
 
-- [ ] Add validated isolated synthetic history namespace with explicit additive setup; no writes/deletes to real history or Dataset. Production defaults/privacy unchanged.
-- [ ] Controlled public UI sample read capability uses existing HMAC verifier and fixed synthetic identity only; no arbitrary-ID signer. Config emits only scoped signature, never secrets. Wire frontend identity and signature contract.
-- [ ] Generate deterministic real-network histories and scenario context, with behavioral inputs/seed/batch metadata. Actual overlap/ranking/explanations are computed, not stored expected outputs. Keep evaluation truth separate.
-- [ ] Generate virtual-driver GPS on real geometries with bounded noise/model templates, unique driver namespaces and monotone timestamps; no fake matching success.
-- [ ] Finite workload: 100, 500, 1,000 virtual drivers with staggered 30-second GPS; demand/recommendation tracked independently. Run at least three observed intervals per stage, extend where sample counts are inadequate; record duration, warmup, rates, errors/backlog, distributions, family availability and resource/cap failures. No pass claim for an overloaded stage.
-- [ ] Test synthetic/real namespace isolation, bad signature/arbitrary ID, missing seed, immutable retry and causal history boundaries before local activation.
+- [x] Add validated isolated synthetic history namespace with explicit additive setup; no writes/deletes to real history or Dataset. Production defaults/privacy unchanged.
+- [x] Controlled public UI sample read capability uses existing HMAC verifier and fixed synthetic identity only; no arbitrary-ID signer. Config emits only scoped signature, never secrets. Wire frontend identity and signature contract.
+- [x] Generate deterministic real-network histories and scenario context, with behavioral inputs/seed/batch metadata. Actual overlap/ranking/explanations are computed, not stored expected outputs. Keep evaluation truth separate.
+- [x] Generate virtual-driver GPS on real geometries with bounded noise/model templates, unique driver namespaces and monotone timestamps; no fake matching success.
+- [x] Finite workload: 100, 500, 1,000 virtual drivers with staggered 30-second GPS; demand/recommendation tracked independently. Run at least three observed intervals per stage, extend where sample counts are inadequate; record duration, warmup, rates, errors/backlog, distributions, family availability and resource/cap failures. No pass claim for an overloaded stage.
+- [x] Test synthetic/real namespace isolation, bad signature/arbitrary ID, missing seed, immutable retry and causal history boundaries before local activation.
 
 ## Task 5 — Integration, cleanup and completion (root + reviewer)
 
 - [x] Inspect CSS producers/callers and driver-only decisions; remove dead technical/simulation rules and consolidate overwritten cost styles. Preserve hidden-but-connected and unresolved intended styles.
-- [ ] Close each of eight findings with reproduction, fix, regression and appropriate live evidence.
-- [ ] Full backend/frontend suites, Ruff, validator and 63-file integrity; cross-replica/concurrency/traffic and real routing tests.
-- [ ] Browser both goal modes and after-B, changes during requests, selected route/score consistency, all energy states, map picker, drawer, cost modal and H3 at desktop/mobile.
-- [ ] Preflight/each task scoped review, whole-branch independent review, fix verified findings and update ledger; no blanket bug-free claim.
+- [x] Close each of eight findings with reproduction, fix, regression and appropriate live evidence.
+- [x] Full backend/frontend suites, Ruff, validator and 63-file integrity; cross-replica/concurrency/traffic and real routing tests.
+- [x] Browser both goal modes and after-B, changes during requests, selected route/score consistency, SAFE/ADVISORY/CRITICAL (UNAVAILABLE via API/unit), map picker, drawer, cost modal and H3 at desktop/mobile.
+- [x] Preflight/each task scoped review, whole-branch independent review, fix verified findings and update ledger; no blanket bug-free claim.
 - [ ] Update ADR/architecture/data contract/tracker/report with new policy and remaining limitations. Commit owned files only; integrate authorized local branch; no unrequested remote push.
 
 ## Execution ledger
 
-- Customer approved written spec and autonomous sub-agent execution after choosing both familiarity sources and 80/20 weighting.
-- CSS cleanup removed 654 obsolete/superseded lines; frontend 215 PASS, browser final rerun pending.
-- State/ranking/frontend tasks pending dispatch; their interfaces must be communicated before integration. Model fallback is an orchestration recovery, never a reason to skip failing tests or replace real dependencies with mock results.
+- Customer approved the design and autonomous sub-agent implementation on 2026-10-12.
+- Tasks 1–3 implemented and reviewed; Task 4 namespace/sample/seed/finite-runner implementation complete. Final finite load measured: clean 100-driver stage; explicit dependency failures at 500/1,000, not a capacity pass.
+- Eight original findings have regression fixes; additional integration findings are recorded in the final report.
+- Current suites: backend 666 PASS / 12 skipped; frontend 247 PASS; Ruff PASS. Canonical validation 152 PASS / 0 FAIL, 22/22 scenarios and 63 unchanged hashes.
+- Live API eight checks passed; final load counts and overload are recorded. Expanded browser 32/32 passed; final scoped reviews found no blocker. Documentation reconciled; local integration remains pending. See [current report](../../reports/journey-ranking-scale-up-2026-10-13.md).

@@ -66,3 +66,10 @@ Checks: frontend 205 PASS; backend 561 PASS / 12 skipped; Ruff PASS; real deskto
 Fixed the `VALID_REQUEST` false low-reserve banner through separate backend physical assessment, preserved derived/range-only candidate evidence, rejected nonfinite telemetry, and guarded energy responses after manual/replay updates. Locked station navigation refreshes energy without reranking the selected station. See ADR-024 and [the fix/review report](reports/energy-warning-and-project-review-2026-10-12.md).
 
 Verification: backend 574 PASS / 12 skipped; frontend 215 PASS; Ruff PASS; validator 152 PASS / 0 FAIL and 22/22 assertions; 63 canonical file hashes unchanged; live contract verified on both updated API replicas; desktop/mobile browser 18/18 PASS. Independent review regressions reproduced and fixed. Eight further audit findings remain explicitly open in the report; this is not project-wide bug clearance or Week 6 activation.
+
+
+## 2026-10-13 Journey ranking and synthetic scale-up
+
+Customer-approved ADR-025 implementation replaces the 30-second personal-only preference with full-completion 80/10/10 scoring, supports optional B and authoritative station plans, and closes the eight findings from the prior energy review. Additional source/browser/load-discovered regressions are tracked in the [current report](reports/journey-ranking-scale-up-2026-10-13.md). Historical milestones above retain their original verification scope.
+
+Current checks: backend 666 PASS / 12 skipped; frontend 247 PASS; Ruff PASS; validator 152 PASS / 0 FAIL and 22/22 assertions; 63 canonical hashes unchanged. Real API eight checks passed and final finite load measured (100 clean; 500/1,000 overloaded). Desktop/mobile browser 32/32 passed, independent review has no remaining blocker within scope; authorized local merge remains pending. This extension does not start Week 6 productionization; replenishment evidence and real-world causal motivations remain explicit limitations.

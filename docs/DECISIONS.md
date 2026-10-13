@@ -479,7 +479,7 @@ Propagate detector-derived range to candidate search when range is absent. Expli
 
 ## ADR-025: Complete journey scoring, optional destination and isolated synthetic history
 
-**Date:** 2026-10-12. **Status:** Customer-approved design and implementation in progress.
+**Date:** 2026-10-12. **Status:** Implemented and verified (2026-10-13); local integration pending.
 
 **Decision:** Supersede ADR-021/022's personal-only 30-second ranking preference. Use 80% normalized complete journey time, 10% confidence-adjusted personal mismatch and 10% confidence-adjusted community mismatch. The time reference is the fastest eligible complete journey, floored at one second only for division. Physical ETA excludes preference cost. Personal history uses mean comparable corridor coverage; community includes non-supporting comparable drivers and withholds public support below five drivers. Preserve bounded, causal history and expose truncation.
 
@@ -490,3 +490,8 @@ The current service-time snapshot cannot prove replenished energy. Until such ev
 Use only validated `realtime` or `synthetic` history schemas. Production defaults remain `realtime`, feature disabled and no public profile. The opt-in public sample requires enabled synthetic history and exposes only the existing fixed-ID HMAC read signature, never signing or ingestion secrets. Generated manifests and separate behavioral evaluation truth remain inside the repository, outside Dataset V1. Synthetic observations explain simulated usage; they do not establish real driver motivations. No fake/demo badge is added to the UI at the customer's request.
 
 Measure finite virtual-driver GPS at 30 real seconds separately from demand-triggered recommendations. Keep the existing per-IP limit of 100 requests/minute by default; the local measurement explicitly configures 6,000 to measure application capacity rather than the single load client's protective rate limit. No new infrastructure, numeric production SLA or Week 6 productionization is introduced.
+
+
+ADR-025 implementation pins standalone candidate endpoints to PostgreSQL snapshots, filters stale traffic using existing freshness and an additive fresh-window index, and preserves bounded geometric matching through spatial candidate lookup. GPS/reset uses payload-version-generation compare-and-set and shared location resolution. Nonfinite HTTP numeric input returns serializable 422 errors without committing state. Manual vehicle changes invalidate incompatible navigation; automatic historical assignment preserves original identity and causal time. Shared origin/destination picker entry points close the station drawer before map selection so mobile overlays cannot intercept the intended map click.
+
+**Current evidence:** [Journey ranking and scale-up report](reports/journey-ranking-scale-up-2026-10-13.md). Live API eight checks and desktop/mobile browser 32 checks passed; finite load results are recorded. The measured 500/1,000-driver stages include dependency failures and are not reliable capacity passes.
