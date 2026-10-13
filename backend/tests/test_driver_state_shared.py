@@ -306,8 +306,7 @@ async def test_redis_failure_raises_error():
     # Create a Redis repo that will fail
     repo = RedisDriverStateRepository()
 
-    # Mock health_check to fail
-    repo.health_check = AsyncMock(return_value=False)
+    repo.get = AsyncMock(side_effect=ConnectionError('store unavailable'))
 
     manager = DriverStateManager(repository=repo)
     set_driver_state_manager(manager)
@@ -326,7 +325,7 @@ async def test_save_redis_unavailable_raises():
     reset_driver_state_manager()
 
     repo = RedisDriverStateRepository()
-    repo.health_check = AsyncMock(return_value=False)
+    repo.save_with_expected_version = AsyncMock(side_effect=ConnectionError('store unavailable'))
 
     manager = DriverStateManager(repository=repo)
     set_driver_state_manager(manager)

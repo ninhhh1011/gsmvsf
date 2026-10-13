@@ -177,19 +177,7 @@ class DriverStateManager:
             local = get_state_store()
             return local.get_or_create(driver_id)
 
-        # Redis mode (production) - require Redis to be available
-        try:
-            if not await repo.health_check():
-                raise DriverStateUnavailableError(
-                    "Redis driver state store is not available. "
-                    "Cannot serve stateful driver operations without shared state."
-                )
-        except Exception as e:
-            raise DriverStateUnavailableError(
-                f"Failed to check Redis driver state store: {e}"
-            ) from e
-
-        # Load from Redis
+        # The actual read is the availability check; a PING cannot guarantee it.
         try:
             snapshot = await repo.get(driver_id)
             if snapshot is not None:
@@ -214,8 +202,6 @@ class DriverStateManager:
         if repo is None:
             return
         try:
-            if not await repo.health_check():
-                raise DriverStateUnavailableError("Driver state store is not available")
             version = getattr(state, '_version', 0)
             success, actual = await repo.save_with_expected_version(
                 trace_state_to_snapshot(state), version, getattr(state, '_read_generation', state.generation))
