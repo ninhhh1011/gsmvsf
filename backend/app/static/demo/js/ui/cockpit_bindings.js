@@ -233,6 +233,9 @@ export function createCockpitBindings(root = globalThis.document) {
         bindH3ResCycle(onCycle) {
             listen('btn-h3-res-badge', 'click', onCycle);
         },
+        bindSampleDeviation(onSample) {
+            listen('btn-sample-deviation', 'click', onSample);
+        },
         getH3ResBadge() {
             return get('btn-h3-res-badge');
         },

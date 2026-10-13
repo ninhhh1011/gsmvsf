@@ -173,6 +173,7 @@ export class DriverModeController {
             });
             this.bindings?.bindH3Toggle?.(() => this.onToggleH3());
             this.bindings?.bindH3ResCycle?.(() => this.cycleH3Resolution());
+            this.bindings?.bindSampleDeviation?.(() => this.loadSampleDeviationScenario());
             this.bindings?.setH3ResBadgeText?.(`⬡ Res ${this.h3Resolution}`);
         }
     }
@@ -202,6 +203,67 @@ export class DriverModeController {
             this._h3Overlay.clear();
             this.bindings?.updateH3ComparisonBanner?.({ visible: false });
         }
+    }
+    async loadSampleDeviationScenario() {
+        const proposed = [
+            [20.9849, 105.7935],
+            [20.9950, 105.7900],
+            [21.0050, 105.7870],
+            [21.0180, 105.7840],
+            [21.0315, 105.7830]
+        ];
+        const actual = [
+            [20.9849, 105.7935],
+            [20.9950, 105.7900],
+            [21.0050, 105.8050],
+            [21.0180, 105.8080],
+            [21.0315, 105.7830]
+        ];
+
+        this.offlineProposedGeometry = proposed;
+        this.actualTrajectoryCoords = actual;
+        this.directRouteGeometry = proposed;
+        this.fullRouteCoords = proposed;
+
+        this.map.clearAll();
+        this.map.renderTripEndpoints(proposed[0], proposed[proposed.length - 1]);
+        this.map.renderDirectRoute(proposed);
+        if (typeof this.map.renderRecommendationRoute === 'function') {
+            this.map.renderRecommendationRoute(actual);
+        }
+
+        this._h3Enabled = true;
+        this.bindings?.setH3Checked?.(true);
+        this.bindings?.setH3ResBadgeVisible?.(true);
+        this._comparisonKey = null;
+        this._comparisonCacheKey = null;
+        await this.refreshRouteComparison();
+
+        const allPoints = [...proposed, ...actual];
+        const L = this._h3Overlay?.L || globalThis.L;
+        if (L?.latLngBounds && this.map.map?.fitBounds) {
+            this.map.map.fitBounds(L.latLngBounds(allPoints), {
+                paddingTopLeft: [420, 40],
+                paddingBottomRight: [40, 40],
+                maxZoom: 14
+            });
+        }
+
+        setTimeout(() => {
+            if (this._h3Overlay?.cellMetadata && this._h3Overlay?.polygons) {
+                for (const [cell, meta] of this._h3Overlay.cellMetadata.entries()) {
+                    if (meta.tier === 'DEVIATION_SEVERE' || meta.tier === 'DEVIATION_MODERATE') {
+                        const poly = this._h3Overlay.polygons.find(p => p._cellId === cell);
+                        if (poly && typeof poly.openPopup === 'function') {
+                            poly.openPopup();
+                            break;
+                        }
+                    }
+                }
+            }
+        }, 300);
+
+        this.bindings?.showH3Toast?.('⚠️ Đã tải kịch bản: Tuyến chuẩn vs Xe đi lệch');
     }
     async refreshRouteComparison() {
         if (!this._h3Enabled) return;

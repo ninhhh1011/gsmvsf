@@ -168,8 +168,8 @@ export class RouteFamiliarityOverlay {
             const poly = this.L.polygon(coords, {
                 color: meta.color,
                 fillColor: meta.fillColor,
-                fillOpacity: isBase ? 0.12 : 0.45,
-                weight: isBase ? 1.0 : 1.5,
+                fillOpacity: isBase ? 0.25 : 0.45,
+                weight: isBase ? 1.5 : 2.0,
                 interactive: true
             });
             poly._cellId = cell;
@@ -314,10 +314,10 @@ export class RouteFamiliarityOverlay {
     generateHanoiGrid(bounds = null, resolution = this.resolution) {
         const res = resolution || this.resolution || 9;
         const defaultBounds = {
-            south: 20.90,
-            north: 21.15,
-            west: 105.70,
-            east: 106.00
+            south: 20.94,
+            north: 21.09,
+            west: 105.74,
+            east: 105.89
         };
         let south = defaultBounds.south;
         let north = defaultBounds.north;
@@ -353,8 +353,35 @@ export class RouteFamiliarityOverlay {
             }
         }
 
+        if (typeof this.h3?.polygonToCells === 'function') {
+            try {
+                const poly = [[south, west], [south, east], [north, east], [north, west]];
+                let cells = this.h3.polygonToCells(poly, res);
+                if (Array.isArray(cells) && cells.length > 0) {
+                    if (cells.length > this.maxCells) {
+                        const centerLat = (south + north) / 2;
+                        const centerLng = (west + east) / 2;
+                        cells.sort((a, b) => {
+                            let da = 0, db = 0;
+                            try {
+                                const pa = this.h3.cellToLatLng(a);
+                                const pb = this.h3.cellToLatLng(b);
+                                da = Math.hypot(pa[0] - centerLat, pa[1] - centerLng);
+                                db = Math.hypot(pb[0] - centerLat, pb[1] - centerLng);
+                            } catch {}
+                            return da - db;
+                        });
+                        cells = cells.slice(0, this.maxCells);
+                    }
+                    return cells;
+                }
+            } catch {
+                // fallback to step below
+            }
+        }
+
         const cells = new Set();
-        const stepDeg = res <= 8 ? 0.015 : (res === 9 ? 0.007 : 0.0035);
+        const stepDeg = res <= 8 ? 0.007 : (res === 9 ? 0.0026 : 0.0010);
 
         for (let lat = south; lat <= north; lat += stepDeg) {
             for (let lng = west; lng <= east; lng += stepDeg) {
@@ -515,9 +542,9 @@ export class RouteFamiliarityOverlay {
                 this.cellMetadata.set(cell, {
                     cell,
                     tier: 'BASELINE',
-                    color: '#94a3b8',
-                    fillColor: '#cbd5e1',
-                    label: 'Lưới quy hoạch H3 Hà Nội',
+                    color: '#059669',
+                    fillColor: '#10b981',
+                    label: 'Vùng phủ lưới H3 Hà Nội (Lộ trình chuẩn)',
                     minDistKm: null,
                     nearestStation: null
                 });
@@ -627,11 +654,12 @@ export class RouteFamiliarityOverlay {
 
         if (meta.tier === 'BASELINE') {
             return `
-            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 170px; color: #0f172a;">
-                <div style="font-weight: 700; color: #475569; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 180px; color: #0f172a;">
+                <div style="font-weight: 700; color: #059669; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
                     <span>⬡ Lưới H3-${resLabel} Hà Nội</span>
+                    <span style="font-size: 10px; background: #059669; color: white; padding: 2px 6px; border-radius: 4px;">CHUẨN</span>
                 </div>
-                <div style="margin-bottom: 4px;">Toàn cảnh không gian quy hoạch EV</div>
+                <div style="margin-bottom: 4px;"><strong>Trạng thái:</strong> ${meta.label}</div>
                 <div style="font-size: 10px; color: #64748b; margin-top: 6px;">H3 Index: ${cell}</div>
             </div>`;
         }

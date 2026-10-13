@@ -35,41 +35,11 @@ async function main() {
     await page.screenshot({ path: `${outputDir}/01_hanoi_wide_h3_grid.png` });
     console.log('Captured 01_hanoi_wide_h3_grid.png');
 
-    // 3. Simulate a Route with Driver Deviation
-    console.log('3. Simulating proposed route and deviated driver trajectory...');
-    // Proposed Route: Thanh Xuan to Cau Giay (straight northward)
-    const proposed = [
-      [20.9849, 105.7935],
-      [20.9950, 105.7900],
-      [21.0050, 105.7870],
-      [21.0180, 105.7840],
-      [21.0315, 105.7830]
-    ];
-    // Actual driver trajectory: starts together, then deviates far eastward (+1.2km), then rejoins
-    const actual = [
-      [20.9849, 105.7935],
-      [20.9950, 105.7900],
-      [21.0050, 105.8050], // Deviated eastward (~1.5km east)
-      [21.0180, 105.8080], // Deviated
-      [21.0315, 105.7830]
-    ];
+    // 3. Click btn-sample-deviation to load deviation scenario directly via UI
+    console.log('3. Clicking #btn-sample-deviation to load deviation scenario...');
+    await page.locator('#btn-sample-deviation').click();
+    await page.waitForTimeout(2500);
 
-    await page.evaluate(({ proposed, actual }) => {
-      const overlay = driverMode._h3Overlay;
-      const proposedCells = overlay.computeH3CellsFromGeometry(proposed, 9);
-      const actualCells = overlay.computeH3CellsFromGeometry(actual, 9);
-      const sharedCells = proposedCells.filter(c => actualCells.includes(c));
-      const allCells = [...new Set([...proposedCells, ...actualCells])];
-      
-      overlay.proposedCoords = proposed;
-      overlay.renderFromCells(allCells, sharedCells, true);
-
-      const allPoints = [...proposed, ...actual];
-      const bounds = L.latLngBounds(allPoints);
-      driverMode.map.map.fitBounds(bounds, { paddingTopLeft: [450, 60], paddingBottomRight: [60, 60], maxZoom: 14 });
-    }, { proposed, actual });
-
-    await page.waitForTimeout(2000);
     await page.screenshot({ path: `${outputDir}/02_h3_red_deviation_heatmap.png` });
     console.log('Captured 02_h3_red_deviation_heatmap.png');
 
