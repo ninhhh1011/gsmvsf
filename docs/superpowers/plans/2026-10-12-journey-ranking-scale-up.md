@@ -82,7 +82,7 @@ Ownership: config/lifespan/main routing and shared-location call-site wiring, ro
 - [x] Full backend/frontend suites, Ruff, validator and 63-file integrity; cross-replica/concurrency/traffic and real routing tests.
 - [x] Browser both goal modes and after-B, changes during requests, selected route/score consistency, SAFE/ADVISORY/CRITICAL (UNAVAILABLE via API/unit), map picker, drawer, cost modal and H3 at desktop/mobile.
 - [x] Preflight/each task scoped review, whole-branch independent review, fix verified findings and update ledger; no blanket bug-free claim.
-- [ ] Update ADR/architecture/data contract/tracker/report with new policy and remaining limitations. Commit owned files only; integrate authorized local branch; no unrequested remote push.
+- [x] Update ADR/architecture/data contract/tracker/report with new policy and remaining limitations. Commit owned files only; integrate authorized local branch; no unrequested remote push.
 
 ## Execution ledger
 
@@ -90,4 +90,4 @@ Ownership: config/lifespan/main routing and shared-location call-site wiring, ro
 - Tasks 1–3 implemented and reviewed; Task 4 namespace/sample/seed/finite-runner implementation complete. Final finite load measured: clean 100-driver stage; explicit dependency failures at 500/1,000, not a capacity pass.
 - Eight original findings have regression fixes; additional integration findings are recorded in the final report.
 - Current suites: backend 666 PASS / 12 skipped; frontend 247 PASS; Ruff PASS. Canonical validation 152 PASS / 0 FAIL, 22/22 scenarios and 63 unchanged hashes.
-- Live API eight checks passed; final load counts and overload are recorded. Expanded browser 32/32 passed; final scoped reviews found no blocker. Documentation reconciled; local integration remains pending. See [current report](../../reports/journey-ranking-scale-up-2026-10-13.md).
+- Live API eight checks passed; final load counts and overload are recorded. Expanded browser 32/32 passed; final scoped reviews found no blocker. Documentation reconciled and local main fast-forward merged; post-merge suites retain the counts above. No remote push. See [current report](../../reports/journey-ranking-scale-up-2026-10-13.md).

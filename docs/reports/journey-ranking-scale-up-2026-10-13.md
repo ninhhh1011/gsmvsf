@@ -1,6 +1,6 @@
 # Journey ranking and scale-up — 2026-10-13
 
-Status: implementation and verification complete; authorized local integration pending. Approved scope: [design](../superpowers/specs/2026-10-12-journey-ranking-scale-up.md), [plan](../superpowers/plans/2026-10-12-journey-ranking-scale-up.md), ADR-025.
+Status: implemented, verified and fast-forward merged into local `main` on 2026-10-13. Approved scope: [design](../superpowers/specs/2026-10-12-journey-ranking-scale-up.md), [plan](../superpowers/plans/2026-10-12-journey-ranking-scale-up.md), ADR-025.
 
 ## Delivered behavior
 
@@ -46,7 +46,7 @@ The [original audit](energy-warning-and-project-review-2026-10-12.md) remains hi
 | Desktop/mobile browser | 32/32 PASS; desktop/mobile three goal modes, native map picking, drawer/cost modal, SOC 85/12/5, H3, clearing B and motorcycle model change with outstanding B; no JavaScript page exceptions |
 | 100→500→1,000 drivers and separate burst | Measurement complete; 100 clean, 500/1,000 overloaded. See measured counts below; no reliable 1,000-driver capacity claim. |
 | Independent review | Whole-branch and subsequent scoped changes reviewed; no remaining blocker within reviewed scope. Mobile picker correction independently checked with eight tests. |
-| Local main merge | Pending; no remote push requested |
+| Local main merge | Fast-forward to `2869328`; post-merge backend 666 PASS / 12 skipped, frontend 247 PASS and Ruff PASS. No remote push. |
 
 Browser SAFE/ADVISORY/CRITICAL use actual backend evidence. UNAVAILABLE is covered by API/unit tests because the normal widget cannot supply missing energy; it is not claimed as a live browser interaction. Earlier timeout, invalid route-fixture and legitimate changing-snapshot HTTP 409 logs are retained. The harness uses native visible map clicks after Leaflet animation/size settles, with bounded explicit fresh-drawer reselection on 409; it does not mock responses. External OSM tile delivery is not certified.
 

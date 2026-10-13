@@ -479,7 +479,7 @@ Propagate detector-derived range to candidate search when range is absent. Expli
 
 ## ADR-025: Complete journey scoring, optional destination and isolated synthetic history
 
-**Date:** 2026-10-12. **Status:** Implemented and verified (2026-10-13); local integration pending.
+**Date:** 2026-10-12. **Status:** Implemented, verified and merged into local main (2026-10-13).
 
 **Decision:** Supersede ADR-021/022's personal-only 30-second ranking preference. Use 80% normalized complete journey time, 10% confidence-adjusted personal mismatch and 10% confidence-adjusted community mismatch. The time reference is the fastest eligible complete journey, floored at one second only for division. Physical ETA excludes preference cost. Personal history uses mean comparable corridor coverage; community includes non-supporting comparable drivers and withholds public support below five drivers. Preserve bounded, causal history and expose truncation.
 
