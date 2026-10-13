@@ -98,7 +98,7 @@ class Settings(BaseSettings):
 
     # Week 6 productionization: routing concurrency
     max_concurrent_routes: int = Field(
-        default=8, ge=1, le=32,
+        default=4, ge=1, le=32,
         description="Shared GraphHopper call budget per API adapter; also bounds each candidate search",
     )
 
