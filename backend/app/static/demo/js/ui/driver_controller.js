@@ -320,7 +320,7 @@ export class DriverModeController {
         if (this.postTripRoute?.geometry) this.map.renderPostTripRoute(this.postTripRoute.geometry);
         this.map.renderDriver(this.currentPos, this.matchedPos, this.currentObservation?.heading_deg);
     }
-    selectVehicleModel(modelKey) {
+    async selectVehicleModel(modelKey) {
         this._powerRevision++;
         const spec = VINFAST_MODEL_SPECS[modelKey];
         if (!spec) {
@@ -329,6 +329,9 @@ export class DriverModeController {
             this.bindings?.updateInstantaneousPower?.('— (không khả dụng)');
             return;
         }
+        const replanTrip = this.currentVehicle && this.currentVehicle.vehicle_model !== spec.vehicle_model && this.currentTrip;
+        const origin = replanTrip ? this.planningOrigin : null;
+        const destination = replanTrip && !this.navigationStages?.passengerPassed ? this.passengerDestination : null;
         const matchedVehicle = this.vehicles.find(v => v.vehicle_model === spec.vehicle_model) || {
             vehicle_id: 'V0001',
             vehicle_model: spec.vehicle_model,
@@ -365,6 +368,30 @@ export class DriverModeController {
         // Sync dropdown UI
         this.bindings.setVehicleSelection(spec.vehicle_model);
         console.log(`[VEHICLE SWITCHED] Model: ${spec.vehicle_model} (${spec.usable_kwh} kWh, ${spec.consumption_wh_km} Wh/km), Current Range: ${this.estimatedRangeKm} km`);
+        if (replanTrip) {
+            this.replay.pause();
+            this.clearDestination();
+            this._resetTripEvidence();
+            this.lastDiversionLeg1 = null; this.lastDiversionLeg2 = null;
+            this.lastRecommendedStationId = null; this.postTripCandidateDetails = null;
+            this.stationNavigationTarget = null;
+            this.customOrigin = origin;
+            this.currentPos = origin;
+            this.matchedPos = null; this.currentObservation = null;
+            this.lastPassedSegmentIndex = 0; this.offRouteConsecutiveSamples = 0;
+            this.lastRerouteTimestamp = 0;
+            if (destination && origin) {
+                this.customDestination = destination;
+                // Keep the outstanding goal available while a new profile route is pending.
+                this.currentTrip = { origin, destination, goal_role: 'PASSENGER_DESTINATION' };
+                this.bindings.setDestinationCoordinates(renderCoordinateText(destination));
+                await this._updateCustomRoute(origin, destination);
+            } else {
+                this.map.renderTripEndpoints(origin, null);
+                await this.openStationsDrawer();
+            }
+            return;
+        }
         // Re-render HUD
         this.renderCurrentStateUI();
         // If stations drawer is open, refresh evaluations

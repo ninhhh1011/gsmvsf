@@ -105,6 +105,7 @@ test('SOC editing invalidates pending interval energy response',async()=>{
 });
 test('model switch round trip invalidates pending interval energy response',async()=>{
  let resolve;const {c}=fixture({computePowerStep:()=>new Promise(r=>resolve=r)});c.updateEstimatedRange=()=>{};c.renderCurrentStateUI=()=>{};c.bindings.setVehicleSelection=()=>{};c.bindings.isStationsDrawerOpen=()=>false;
+ c.currentTrip=null;
  const pending=c._updateReplayPower({timestamp:'2026-09-01T00:00:00Z'},c.generation);c.selectVehicleModel('VF_5');c.selectVehicleModel('VF_3');resolve({current_soc_pct:10,estimated_range_km:20,instantaneous_power_kw:2});await pending;
  assert.equal(c.currentSocPct,85);assert.equal(c._lastPowerObservation,null);
 });
@@ -122,6 +123,7 @@ test('comparison omits unavailable vehicle model rather than sending null',async
 });
 for (const change of ['soc','model']) test(`rejected stale power request after ${change} change cannot publish state`,async()=>{
  let reject;const {c,powers}=fixture({computePowerStep:()=>new Promise((_,r)=>reject=r)});
+ c.currentTrip=null;
  c.updateEstimatedRange=()=>{};c.renderCurrentStateUI=()=>{};c.bindings.updateBattery=()=>{};c.bindings.setVehicleSelection=()=>{};c.bindings.isStationsDrawerOpen=()=>false;
  const pending=c._updateReplayPower({timestamp:'2026-09-01T00:00:00Z'},c.generation);
  if(change==='soc')c.setBatterySoc(60,false);else {c.selectVehicleModel('VF_5');c.selectVehicleModel('VF_3');}
