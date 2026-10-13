@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from starlette.concurrency import run_in_threadpool
 
+from backend.app.services.energy.replenishment import estimate_replenishment
 from backend.app.config import settings
 from backend.app.services.candidate.compatibility import check_station_service_compatibility
 from backend.app.services.candidate.eligibility import evaluate_candidate_eligibility
@@ -227,14 +229,18 @@ class CandidateSearchService:
                 service_type=service_type,
                 is_soc_feasible=soc_feasible,
             )
-            if eligible and dest_pos is not None:
-                if route_metrics.duration_station_to_dest_s is None:
+            replenishment = None
+            if eligible:
+                if dest_pos is not None and (route_metrics.duration_station_to_dest_s is None or
+                                            route_metrics.distance_station_to_dest_m is None):
                     eligible, reason = False, 'UNREACHABLE'
-                elif (esr.estimated_remaining_range_km is None or
-                      (net_dist_m + route_metrics.distance_station_to_dest_m) / 1000 +
-                      (esr.safety_reserve_km or 0) > esr.estimated_remaining_range_km):
-                    # Service-time estimates do not prove replenished energy.
-                    eligible, reason = False, 'ONWARD_ENERGY_UNVERIFIED'
+                else:
+                    replenishment = estimate_replenishment(esr, vehicle_cap, service_type, net_dist_m,
+                        route_metrics.distance_station_to_dest_m if dest_pos is not None else None,
+                        op_snapshot.service_time_min)
+                    if replenishment.status != 'AVAILABLE':
+                        eligible, reason = False, ('INSUFFICIENT_DEPARTURE_ENERGY'
+                            if replenishment.status == 'INFEASIBLE' else 'REPLENISHMENT_UNAVAILABLE')
 
             candidate = EvaluatedCandidate(
                 station_id=station.station_id,
@@ -248,6 +254,7 @@ class CandidateSearchService:
                 soc_feasible=soc_feasible,
                 operational=op_snapshot,
                 route_metrics=route_metrics,
+                replenishment=replenishment,
             )
             evaluated_candidates.append(candidate)
             if candidate.eligible and _signature_sink is not None:
@@ -264,7 +271,7 @@ class CandidateSearchService:
                     from time import perf_counter
                     signature_started = perf_counter()
                     try:
-                        _signature_sink[key] = create_route_signature(
+                        _signature_sink[key] = await run_in_threadpool(create_route_signature,
                             ([request.prefix_geometry] if request.prefix_geometry else []) +
                             [leg1.geometry] + ([leg2.geometry] if dest_pos is not None else []))
                         record_route_familiarity_event('signature')

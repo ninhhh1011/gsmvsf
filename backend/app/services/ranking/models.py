@@ -1,4 +1,5 @@
 """Ranking contracts preserve Week 2/3 models and expose costs in seconds."""
+from backend.app.services.energy.replenishment import ReplenishmentEstimate
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
@@ -54,6 +55,7 @@ class CandidateRankingFeatures(FrozenModel):
     observed_queue_wait_s: Nonnegative | None
     effective_queue_wait_s: Nonnegative
     queue_assumption: str | None = None
+    replenishment: ReplenishmentEstimate | None = None
     service_duration_s: Nonnegative
     detour_duration_s: Nonnegative | None
     detour_distance_m: Nonnegative | None

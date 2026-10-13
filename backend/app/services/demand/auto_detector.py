@@ -192,6 +192,10 @@ class AutoDemandDetector:
 
         # Calculate remaining energy in kWh
         remaining_energy_kwh = context.remaining_energy_kwh
+        if remaining_energy_kwh is not None and (remaining_energy_kwh < 0 or
+                usable_cap_kwh is None or remaining_energy_kwh > usable_cap_kwh):
+            return NeedServiceDecision(need_service=False, reason_code=ReasonCode.INVALID_STATE,
+                details='Explicit remaining energy conflicts with usable installed capacity')
         if remaining_energy_kwh is None and usable_cap_kwh is not None:
             remaining_energy_kwh = self.calculate_remaining_energy_kwh(soc_pct, usable_cap_kwh)
 
@@ -202,7 +206,9 @@ class AutoDemandDetector:
             else self._policy.default_minimum_safe_soc_pct
         )
         safe_threshold = min_safe_soc + self._policy.low_soc_warning_margin_pct
-        below_safe = soc_pct <= safe_threshold
+        guard_soc = (remaining_energy_kwh / usable_cap_kwh * 100
+                     if context.remaining_energy_kwh is not None and usable_cap_kwh else soc_pct)
+        below_safe = guard_soc <= safe_threshold
 
         # Determine remaining trip distance
         remaining_trip_km = context.remaining_trip_distance_km
@@ -220,13 +226,9 @@ class AutoDemandDetector:
 
         # Determine remaining range
         remaining_range_km = context.estimated_remaining_range_km
-        if remaining_range_km is None and usable_cap_kwh is not None:
-            remaining_range_km = self.estimate_remaining_range_km(
-                soc_pct=soc_pct,
-                usable_capacity_kwh=usable_cap_kwh,
-                consumption_wh_per_km=(context.consumption_wh_per_km
-                                      or capability.get_effective_consumption_wh_per_km()),
-            )
+        if remaining_range_km is None and remaining_energy_kwh is not None and capability is not None:
+            consumption = context.consumption_wh_per_km or capability.get_effective_consumption_wh_per_km()
+            remaining_range_km = remaining_energy_kwh * 1000 / consumption
 
         # Check range feasibility and compute energy margin
         insufficient_range = False

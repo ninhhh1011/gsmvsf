@@ -129,7 +129,7 @@ async def test_disabled_recommend_preserves_legacy_defaults_and_costs_without_fa
     assert result["history_window_days"] == 7
     assert result["familiarity"]["status"] == "DISABLED"
     assert result["recommended_station_id"] == "S001"
-    assert [c['final_cost_s'] for c in result['ranked_candidates']] == [1431, 1462]
+    assert [c['final_cost_s'] for c in result['ranked_candidates']] == [351, 382]
     assert all(c['final_cost_s'] == c['total_completion_time_s'] and
                c["penalty_components_s"] == {} for c in result["ranked_candidates"])
     assert history.calls == []

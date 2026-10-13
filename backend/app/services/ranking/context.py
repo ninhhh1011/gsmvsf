@@ -7,6 +7,7 @@ from math import isfinite
 from backend.app.services.candidate.eligibility import CANDIDATE_MAX_WAIT_MIN
 from backend.app.services.candidate.models import StationOperationalSnapshot
 from backend.app.services.demand.models import ServiceType
+from backend.app.services.energy.replenishment import refresh_replenishment
 from backend.app.services.ranking.models import CandidateRankingFeatures, CandidateStateChanged
 from backend.app.services.snapshots.models import (
     QueueSnapshot,
@@ -114,6 +115,12 @@ def build_features(evidence, view, request_time, policy, catalog) -> list[Candid
         factor = traffic.snapshot.delay_factor if traffic.snapshot else 1
         prior = evidence.prefix_duration_s * factor if evidence.prefix_traffic_segment_id else evidence.prefix_duration_s
         adjusted = base if evidence.prefix_traffic_segment_id else base * factor
+        replenishment = candidate.replenishment
+        if replenishment is not None:
+            try:
+                replenishment = refresh_replenishment(replenishment, service, op.service_time_min)
+            except ValueError as exc:
+                raise invalid_evidence(str(exc)) from exc
         observed_wait = op.estimated_wait_min * 60 if op.estimated_wait_min is not None else None
         features.append(CandidateRankingFeatures(
             station_id=sid, service_type=service, base_travel_duration_s=base,
@@ -123,7 +130,8 @@ def build_features(evidence, view, request_time, policy, catalog) -> list[Candid
             observed_queue_wait_s=observed_wait,
             effective_queue_wait_s=observed_wait if observed_wait is not None else policy.missing_queue_wait_s,
             queue_assumption='PROJECT_POLICY_MISSING_QUEUE' if observed_wait is None else None,
-            service_duration_s=op.service_time_min * 60,
+            replenishment=replenishment,
+            service_duration_s=replenishment.service_duration_s if replenishment is not None else op.service_time_min * 60,
             detour_duration_s=metrics.detour_duration_s, detour_distance_m=metrics.detour_distance_m,
             distance_to_station_m=metrics.distance_to_station_m + evidence.prefix_distance_m,
             prior_travel_duration_s=prior,

@@ -7,6 +7,7 @@ Maintains strict separation from Week 4 Ranking:
 - Contains NO ranking score, NO rank position, and NO best-station recommendation.
 """
 
+from backend.app.services.energy.replenishment import ReplenishmentEstimate
 from datetime import UTC, datetime
 from enum import Enum
 
@@ -28,6 +29,8 @@ class CandidateEligibilityReason(str, Enum):
     UNREACHABLE = "UNREACHABLE"
     INSUFFICIENT_SOC_TO_REACH = "INSUFFICIENT_SOC_TO_REACH"
     ONWARD_ENERGY_UNVERIFIED = 'ONWARD_ENERGY_UNVERIFIED'
+    REPLENISHMENT_UNAVAILABLE = 'REPLENISHMENT_UNAVAILABLE'
+    INSUFFICIENT_DEPARTURE_ENERGY = 'INSUFFICIENT_DEPARTURE_ENERGY'
 
 
 class StationServiceCandidate(BaseModel):
@@ -103,6 +106,8 @@ class EvaluatedCandidate(BaseModel):
     service_type: ServiceType
     eligible: bool
     reason: CandidateEligibilityReason
+
+    replenishment: ReplenishmentEstimate | None = None
 
     # Geographic location of station
     station_latitude: float

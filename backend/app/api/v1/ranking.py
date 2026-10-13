@@ -175,6 +175,7 @@ async def recommend(request: RecommendRequest, request_obj: Request,
             destination_longitude=request.destination_longitude,
             destination_node_id=request.destination_node_id,
             constraints=constraints)
+        live_energy = energy
         if request.plan_mode == 'AFTER_DESTINATION':
             from backend.app.services.routing.models import Position, RouteRequest, RouteStatus, VehicleRoutingProfile
             from backend.app.services.routing.engine import raise_for_routing_failure
@@ -188,7 +189,16 @@ async def recommend(request: RecommendRequest, request_obj: Request,
             if (prefix.status != RouteStatus.SUCCESS or remaining is None or
                     remaining < prefix.distance_m / 1000 + (energy.safety_reserve_km or 0)):
                 raise StateError('Destination cannot be reached with current energy', 'DESTINATION_ENERGY_INFEASIBLE', 409)
-            energy = energy.model_copy(update={'latitude': request.destination_latitude,
+            from backend.app.services.energy.replenishment import energy_basis
+            from backend.app.services.demand.capability import VehicleCapabilityResolver
+            capability = VehicleCapabilityResolver().resolve_by_model(energy.vehicle_model)
+            try:
+                capacity, current_energy, consumption = energy_basis(energy, capability)
+            except ValueError as exc:
+                raise StateError(str(exc), 'REPLENISHMENT_UNAVAILABLE', 422) from exc
+            after_energy = current_energy - prefix.distance_m / 1000 * consumption
+            energy = energy.model_copy(update={'current_soc_pct': max(0, after_energy) / capacity * 100,
+                'remaining_energy_kwh': max(0, after_energy), 'latitude': request.destination_latitude,
                 'longitude': request.destination_longitude, 'road_segment_id': None,
                 'estimated_remaining_range_km': remaining - prefix.distance_m / 1000,
                 'remaining_trip_distance_km': 0})
@@ -200,7 +210,8 @@ async def recommend(request: RecommendRequest, request_obj: Request,
         metrics.setdefault('timings_ms', {}).update(location_resolution=location_ms, demand=demand_ms,
                                                     total=(perf_counter() - started) * 1000)
         return result.model_copy(update=metrics | {'location_source': location.source,
-                                                 'location_timestamp': location.timestamp})
+                                                 'location_timestamp': location.timestamp,
+                                                 'energy_context': live_energy})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     finally:
@@ -293,6 +304,7 @@ async def station_plan(request: StationPlanRequest, request_obj: Request,
             'route': {'geometry': geometry, 'distance_m': distance, 'duration_s': duration},
             'waypoints': waypoints,
             'ranked_candidate': selected,
+            'replenishment': selected.features.replenishment,
             'projected_station_range_km': (energy.estimated_remaining_range_km -
                 (selected.features.distance_to_station_m - evidence.prefix_distance_m) / 1000
                 if energy.estimated_remaining_range_km is not None else None),

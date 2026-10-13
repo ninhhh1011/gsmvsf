@@ -39,7 +39,19 @@ class DemandService:
 
     def _resolve_vehicle_capability(self, context: DemandContext) -> VehicleCapability:
         """Resolve capability from vehicle_id in context."""
-        return self._resolver.resolve_by_vehicle_id(context.vehicle_id)
+        capability = self._resolver.resolve_by_vehicle_id(context.vehicle_id)
+        if capability.battery_module_capacity_kwh is not None:
+            record = self._resolver.get_vehicle_record(context.vehicle_id)
+            try:
+                installed = float(record.get('installed_battery_modules') or 0)
+            except (ValueError, TypeError):
+                installed = 0
+            if installed.is_integer() and 0 < installed <= (capability.max_battery_modules or 0):
+                nominal = capability.battery_module_capacity_kwh * installed
+                usable_ratio = (capability.usable_capacity_kwh or capability.total_battery_capacity_kwh) / capability.total_battery_capacity_kwh
+                capability = capability.model_copy(update={'battery_capacity_kwh': nominal,
+                    'usable_capacity_kwh': nominal * usable_ratio})
+        return capability
 
     def _populate_vehicle_metadata(
         self,
@@ -96,7 +108,10 @@ class DemandService:
             reason_code=decision.reason_code,
             energy_assessment=decision,
             current_soc_pct=context.current_soc_pct,
-            remaining_energy_kwh=decision.remaining_energy_kwh,
+            energy_source='EXPLICIT_REMAINING_ENERGY' if context.remaining_energy_kwh is not None else 'SOC_DERIVED',
+            range_source='EXPLICIT_REMAINING_RANGE' if context.estimated_remaining_range_km is not None else 'ENERGY_AND_CATALOG_CONSUMPTION',
+            consumption_wh_per_km=context.consumption_wh_per_km or capability.get_effective_consumption_wh_per_km(),
+            remaining_energy_kwh=context.remaining_energy_kwh if context.remaining_energy_kwh is not None else decision.remaining_energy_kwh,
             estimated_remaining_range_km=decision.estimated_remaining_range_km,
             remaining_trip_distance_km=decision.remaining_trip_distance_km,
             safety_reserve_km=decision.safety_reserve_km,
@@ -151,7 +166,10 @@ class DemandService:
             reason_code=decision.reason_code,
             energy_assessment=physical,
             current_soc_pct=context.current_soc_pct,
-            remaining_energy_kwh=physical.remaining_energy_kwh,
+            energy_source='EXPLICIT_REMAINING_ENERGY' if context.remaining_energy_kwh is not None else 'SOC_DERIVED',
+            range_source='EXPLICIT_REMAINING_RANGE' if context.estimated_remaining_range_km is not None else 'ENERGY_AND_CATALOG_CONSUMPTION',
+            consumption_wh_per_km=context.consumption_wh_per_km or capability.get_effective_consumption_wh_per_km(),
+            remaining_energy_kwh=context.remaining_energy_kwh if context.remaining_energy_kwh is not None else physical.remaining_energy_kwh,
             estimated_remaining_range_km=(context.estimated_remaining_range_km if context.estimated_remaining_range_km is not None
                                           else physical.estimated_remaining_range_km),
             remaining_trip_distance_km=(context.remaining_trip_distance_km if context.remaining_trip_distance_km is not None

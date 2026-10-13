@@ -79,6 +79,17 @@ class Settings(BaseSettings):
             raise ValueError("ROUTE_FAMILIARITY_IDENTITY_SECRET must be at least 32 bytes when enabled")
         return self
 
+    # Project charging assumptions, not manufacturer specifications.
+    charge_no_destination_soc_pct: float = Field(80, gt=0, le=100, allow_inf_nan=False)
+    swap_departure_soc_pct: float = Field(90, gt=0, le=100, allow_inf_nan=False)
+    charge_car_station_kw: float = Field(60, gt=0, allow_inf_nan=False)
+    charge_car_vehicle_kw: float = Field(30, gt=0, allow_inf_nan=False)
+    charge_bike_station_kw: float = Field(0.4, gt=0, allow_inf_nan=False)
+    charge_bike_vehicle_kw: float = Field(0.4, gt=0, allow_inf_nan=False)
+    charge_efficiency: float = Field(0.9, gt=0, le=1, allow_inf_nan=False)
+    charge_taper_power_factor: float = Field(0.5, gt=0, le=1, allow_inf_nan=False)
+    charge_setup_s: float = Field(60, ge=0, allow_inf_nan=False)
+
     # Mapping
     mapping_dir: Path = Path("runtime/map_mapping")
 
@@ -88,7 +99,7 @@ class Settings(BaseSettings):
     # Week 6 productionization: routing concurrency
     max_concurrent_routes: int = Field(
         default=8, ge=1, le=32,
-        description="Maximum concurrent GraphHopper route calls per candidate search",
+        description="Shared GraphHopper call budget per API adapter; also bounds each candidate search",
     )
 
     # Realtime operational state simulator (Problem D)

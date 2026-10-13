@@ -123,17 +123,22 @@ async def test_direct_and_station_routes_share_constraints(app):
 
 
 @pytest.mark.asyncio
-async def test_unproven_replenishment_cannot_make_onward_leg_feasible(client, app, monkeypatch):
+async def test_replenishment_can_make_onward_leg_feasible(client, app, monkeypatch):
     from backend.tests.test_route_familiarity_workflow import workflow, body
     from backend.app.config import settings
     monkeypatch.setattr(settings, 'enable_route_familiarity', False)
     app.state.recommendation_workflow = workflow()
     payload = body()
+    payload['context']['current_soc_pct'] = 10
     payload['context']['estimated_remaining_range_km'] = 1.5
     payload['context']['safety_reserve_km'] = 0
     response = await client.post('/api/v1/recommend', json=payload)
     assert response.status_code == 200, response.text
-    assert not response.json()['has_recommendation']
+    assert response.json()['has_recommendation']
+    plan = response.json()['ranked_candidates'][0]['features']['replenishment']
+    assert plan['status'] == 'AVAILABLE'
+    assert plan['added_energy_kwh'] > 0
+    assert plan['destination_energy_kwh'] == pytest.approx(0, abs=1e-8)
     payload.pop('destination_latitude')
     payload.pop('destination_longitude')
     response = await client.post('/api/v1/recommend', json=payload)
@@ -195,7 +200,8 @@ async def test_unselected_station_change_does_not_invalidate_selected_plan(clien
     app.state.recommendation_workflow = workflow(routes=ChangingRoutes(), resolver=resolver)
     response = await client.post('/api/v1/station-plan', json=body() | {'station_id': selected_id, 'service_type': 'CHARGING'})
     assert response.status_code == 200, response.text
-    assert response.json()['ranked_candidate']['time_reference_s'] == 1431
+    # Current SOC already covers onward travel: no flat charging service cost.
+    assert response.json()['ranked_candidate']['time_reference_s'] == 351
 
 
 def test_after_destination_keeps_origin_traffic_on_prefix_once():

@@ -219,6 +219,9 @@ class EnergyServiceRequest(BaseModel):
     energy_assessment: NeedServiceDecision | None = None
 
     # Energy and trip metrics
+    energy_source: str | None = None
+    range_source: str | None = None
+    consumption_wh_per_km: float | None = None
     current_soc_pct: float | None = None
     remaining_energy_kwh: float | None = None
     estimated_remaining_range_km: float | None = None
