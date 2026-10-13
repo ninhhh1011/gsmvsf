@@ -140,11 +140,21 @@ python scripts/validate_external_gps.py  # validate
 
 ## Service Semantics (V1.2)
 
+These are frozen Dataset V1 semantics and historical baselines. Under customer-approved ADR-026, the current runtime replaces flat charging time with predicted energy-based service duration. The canonical snapshots and labels remain unchanged and are not rewritten to match the new runtime.
+
 - CHARGING service time: 18 minutes
 - BATTERY_SWAP service time: 6 minutes
 - CHARGING capacity: available_charging_slots
 - BATTERY_SWAP capacity: min(available_swap_slots, available_swap_batteries)
 - FARTHER_BUT_FASTER threshold: ≥500 m farther AND ≥10 min lower total ETA
+
+## Predicted replenishment contract (2026-10-13)
+
+`EvaluatedCandidate.replenishment`, ranking `features.replenishment` and station-plan `replenishment` expose model status/reason, arrival/departure/destination kWh and SOC, added kWh, effective installed capacity, consumption, reserve, nominal charging power bound, efficiency/taper/setup, service seconds and provenance. Destination energy is null when the station is the final goal. Explicit valid remaining kWh is authoritative over rounded SOC; missing range is derived from that energy and retained consumption. Explicit range keeps its source. Capacity comes from canonical capability and installed modules, not a client override. Nonfinite/out-of-capacity evidence is unavailable.
+
+The customer chose sufficient energy for B plus reserve, 80% for a station-only goal and 90% for swap. The published VF 3 limit is 24 kW; representative charging powers and broad class assumptions are documented separately. Calculated charging service time replaces the flat whole-service time, rather than adding it as setup. Swap service time still follows the operational snapshot. Queue is separate and counted once.
+
+These fields predict a future service plan. They are not accepted GPS/SOC telemetry, charging completion evidence or calibrated charging curves. Live SOC is never raised just because a driver passes the station. After-B planning evidence consumes the prefix once without reporting the projected B SOC as the current live SOC.
 
 ## Current Runtime and Validation (2026-09-21)
 

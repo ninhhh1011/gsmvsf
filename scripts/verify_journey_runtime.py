@@ -14,6 +14,11 @@ async def main():
         config = (await client.get('http://127.0.0.1:8000/api/v1/config')).json()
         identity = config['route_familiarity_identity']
         assert identity and len(identity['signature']) == 64
+        for port in [8003, 8004]:
+            response = await client.get(f'http://127.0.0.1:{port}/api/v1/config')
+            assert response.status_code == 200, response.text
+            assert response.json()['route_familiarity_identity'] == identity
+            results.append({'check': f'replica {port} shares scoped sample identity', 'pass': True})
         driver = 'journey-check-' + uuid4().hex
         timestamp = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
         gps = {'vehicle_id': 'V0001', 'timestamp': timestamp, 'observation_id': 'first',
@@ -21,15 +26,17 @@ async def main():
         response = await client.post(f'http://127.0.0.1:8000/api/v1/drivers/{driver}/location', json=gps)
         assert response.status_code == 200, response.text
         body = {'vehicle_id': 'V0001', 'current_soc_pct': 84}
-        response = await client.post(f'http://127.0.0.1:8002/api/v1/drivers/{driver}/demand/evaluate', json=body)
+        for port in [8002, 8003, 8004]:
+            response = await client.post(f'http://127.0.0.1:{port}/api/v1/drivers/{driver}/demand/evaluate', json=body)
+            assert response.status_code == 200, response.text
+            assert response.json()['latitude'] == gps['latitude']
+            results.append({'check': f'shared GPS visible on replica {port}', 'pass': True})
+        response = await client.delete(f'http://127.0.0.1:8004/api/v1/drivers/{driver}/location')
         assert response.status_code == 200, response.text
-        assert response.json()['latitude'] == gps['latitude']
-        results.append({'check': 'shared accepted GPS visible on replica2', 'pass': True})
-        response = await client.delete(f'http://127.0.0.1:8000/api/v1/drivers/{driver}/location')
-        assert response.status_code == 200, response.text
-        response = await client.post(f'http://127.0.0.1:8002/api/v1/drivers/{driver}/demand/evaluate', json=body)
-        assert response.status_code == 200 and response.json()['latitude'] is None, response.text
-        results.append({'check': 'reset visible on replica2', 'pass': True})
+        for port in [8000, 8002, 8003, 8004]:
+            response = await client.post(f'http://127.0.0.1:{port}/api/v1/drivers/{driver}/demand/evaluate', json=body)
+            assert response.status_code == 200 and response.json()['latitude'] is None, response.text
+            results.append({'check': f'reset from replica4 visible on replica {port}', 'pass': True})
         for invalid in ['1e309', 'NaN']:
             raw = json.dumps(gps).replace(str(gps['latitude']), invalid)
             response = await client.post(f'http://127.0.0.1:8000/api/v1/drivers/{driver}/location',

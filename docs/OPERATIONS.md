@@ -10,7 +10,9 @@ docker compose ps
 docker compose logs -f
 ```
 
-All published ports bind to `127.0.0.1`: PostgreSQL 5432, Redis 6379, GraphHopper 8989, API ports 8000 and 8002, and frontend 3000. The two API containers share one PostgreSQL, Redis, and GraphHopper instance. The data plane is single-node; this setup does not provide host-level failover.
+After recreating API containers, wait for their readiness checks and run `docker compose exec frontend nginx -s reload`. The current upstream configuration resolves container addresses when Nginx loads; an existing frontend container can otherwise retain old API addresses. This local rollout does not guarantee uninterrupted requests.
+
+All published ports bind to `127.0.0.1`: PostgreSQL 5432, Redis 6379, GraphHopper 8989, API ports 8000, 8002, 8003 and 8004, and frontend 3000. The four single-worker API containers share one PostgreSQL, Redis, and GraphHopper instance. Only `api_1` runs the operational simulator. Nginx uses all four replicas; the route budget is four per replica, sixteen in aggregate. The data plane is single-node; this setup does not provide host-level failover.
 
 ## Checks
 
@@ -20,13 +22,15 @@ make test
 make validate-data
 ```
 
-The metrics endpoint is `/metrics`. Readiness is `/readiness`. Runtime dependencies are PostgreSQL, optional Redis cache, and GraphHopper; dependency failures are reported explicitly.
+The metrics endpoint is `/metrics`. Readiness is `/readiness`. Runtime dependencies are PostgreSQL, Redis for shared GPS state, and GraphHopper; dependency failures are reported explicitly. Redis caching of PostgreSQL snapshots is optional, but shared GPS must not fall back to replica-local memory.
 
 ## Maintenance
 
 Use the repository's migration and dataset validation scripts. Dataset V1 is canonical and read-only. Keep generated reports under `runtime/`, never in `dataset_v1/`.
 
-### Route familiarity v2
+### Historical route familiarity v2 baseline
+
+The section below describes the original cell-only/30-second baseline and its microbenchmark. Current geometric 80/10/10 ranking is defined by ADR-025/026 and [ARCHITECTURE.md](ARCHITECTURE.md); it uses both personal and community evidence. Historical benchmark outputs are not capacity evidence for the current runtime.
 
 Route history is opt-in and `ENABLE_ROUTE_FAMILIARITY` defaults to `false`. Enabling it requires a `ROUTE_FAMILIARITY_IDENTITY_SECRET` of at least 32 bytes and an authenticated trusted gateway that signs the exact driver ID in `X-Driver-Identity-Signature`. The gateway signature is required on `/recommend`; the trusted producer token protects route ingestion. Do not expose either secret to the browser. The configured producer and identity secrets must be shared by the API containers on this single host.
 
@@ -53,6 +57,6 @@ Apply `python -B scripts/migrate_route_familiarity.py` explicitly before enablin
 
 Existing cell-only rows are preserved and cannot supply directional geometry evidence. A trusted producer can re-ingest the original polyline with optional aware `started_at`; if the immutable trip signature agrees, only missing evidence is filled. Known geometry/start conflicts remain HTTP 409. Do not use `--rollback` as a migration rollback: it still drops the history table. A nondestructive rollback keeps the additive columns/data and disables the feature.
 
-`ENABLE_ROUTE_FAMILIARITY=false` remains the default. Enabling requires the ingestion token and trusted exact-driver identity signing gateway; never put those secrets in browser JS. Both API replicas must use the migrated database and identical identity configuration. The new comparison endpoint accesses protected history only when a driver is requested and authenticated; otherwise it performs geometric comparison only.
+`ENABLE_ROUTE_FAMILIARITY=false` remains the default. Enabling requires the ingestion token and trusted exact-driver identity signing gateway; never put those secrets in browser JS. All API replicas must use the migrated database and identical identity configuration. The new comparison endpoint accesses protected history only when a driver is requested and authenticated; otherwise it performs geometric comparison only.
 
 The Driver banner evaluates the whole observed trip offline. It does not supply future GPS to realtime recommendation or energy stepping. Energy stepping uses accepted observed timestamps; trip/model/SOC changes invalidate pending updates. HUD power is an estimate, and unsupported physical models display unavailable. Route similarity thresholds and energy coefficients require calibration before claiming real-world accuracy.

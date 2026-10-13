@@ -2,7 +2,7 @@
 
 ## Runtime shape
 
-GSMVSF is a FastAPI modular monolith with a browser demo. Docker Compose runs two API containers on one host, plus one PostgreSQL/PostGIS instance, one Redis instance, and one GraphHopper 11.0 instance. The API containers share the same data-plane services; this is not a multi-host or high-availability deployment. All published ports bind to `127.0.0.1`.
+GSMVSF is a FastAPI modular monolith with a browser demo. ADR-026 scales the existing Docker Compose API tier to four single-worker containers on one host, plus one PostgreSQL/PostGIS instance, one Redis instance, and one GraphHopper 11.0 instance. Only `api_1` runs the operational simulator; the other replicas share its data-plane services. This is not a multi-host or high-availability deployment. All published ports bind to `127.0.0.1`.
 
 PostgreSQL is the authority for candidate and snapshot data. Redis is an optional snapshot cache and the shared authority for accepted GPS state across API replicas; GPS state must not fall back to replica-local memory during an outage. GraphHopper is the only production routing and map-matching engine. Application services are created during lifespan and exposed through `app.state`; routes obtain runtime dependencies from request state. No runtime route may consume evaluation labels.
 
@@ -24,7 +24,15 @@ Total time includes all travel legs, queue and service. Without B there is no on
 
 Traffic avoidance selects the latest snapshot per segment at or before the request, then filters freshness and congestion before result limits. The additive `(kind,timestamp DESC,entity_id)` index bounds fresh-window enumeration. Corridor matching uses cached geometry and a spatial candidate index while preserving geometric verification and existing work caps.
 
-Service duration does not prove added energy. Current onward feasibility requires existing range for represented legs plus reserve; `ONWARD_ENERGY_UNVERIFIED` can exclude a physically useful charging trip. Passing a station waypoint does not prove charging or swapping completed.
+ADR-026 models predicted replenishment with one shared energy calculator for candidate eligibility, ranking refresh and station confirmation. With B, charge enough for onward network travel plus reserve; without B or after B, target 80% without discharging a higher arrival SOC. Swap predicts a 90% battery. Effective installed capacity and authoritative explicit kWh drive energy/range consistently; after-B prefix energy is deducted once while response energy context retains the current live SOC. Charging time replaces the flat historical estimate; swap uses the current operational service duration. Power references and remaining assumptions are in [CHARGING_POWER_REFERENCES.md](CHARGING_POWER_REFERENCES.md). Passing a waypoint still does not prove service or increase accepted SOC.
+
+Manual SOC input invalidates old selected-station energy, completion cost and score immediately. A committed change confirms the same pair from the current position using the existing route refresh and preserves waypoint progress. Failed confirmation leaves estimates unavailable; a passed station is not reintroduced. Physical warnings continue to describe current battery evidence rather than predicted departure energy.
+
+Routing uses an application-lifespan adapter budget shared across recommendation searches (four HTTP route calls per API replica by default; four replicas preserve the previous total of sixteen). Candidate signatures run outside the event loop. CPU-heavy history query preparation and comparison have one shared worker admission slot per familiarity service; database I/O remains concurrent. Repeated history query cell centres are expanded once with the same union, radius and work cap. Default corridor query metadata and unpruned candidate lists are memoized locally without changing geometry, traversal order or pair-budget counts. These corrections target measured fanout and event-loop starvation; dependency timeouts and explicit outage behavior remain unchanged.
+
+History read projections return only the fields consumed by geometric assessment, preserving the same causal rows, ordering, caps and cohort denominator. Identical serialized geometry is decoded once per assessment; per-trip timestamps and raw point/work-limit accounting still apply independently. Ingestion keeps the full signature contract. Failed station searches cancel and drain remaining route tasks rather than continuing abandoned fanout.
+
+Recommendation signature preparation uses the same persistent familiarity CPU admission as query preparation and assessment, through an internal runner passed by the workflow to its snapshot-scoped candidate service. Direct callers retain the existing default. No slot is held across database I/O; cancellation drains actual work before reuse. The measured Landmark experiment was rejected, so production GraphHopper keeps the original CH routing/flexible matching configuration and generated graph directory.
 
 Opt-in synthetic history uses a validated separate schema and fixed public sample read capability. Production defaults remain protected realtime history with familiarity disabled. Separate behavioral evaluation truth never enters runtime predictions. Synthetic choices establish simulator behavior, not real driver motivations.
 
@@ -34,8 +42,10 @@ Whole-trip offline Driver comparison uses frozen initial proposed geometry and t
 
 ## Routing and matching
 
+The default GPS matching context retains up to 50 observations from the preceding 60 seconds, aligned with the existing session-gap boundary. Three accepted observations establish warmup; a gap greater than 60 seconds clears the session. This retains the previous sample under a 30-second cadence with scheduling jitter. Explicit context-window callers retain their selected bounds.
+
 Routing constraints, vehicle capabilities, optimization objectives, and dynamic context are project/domain contracts. GraphHopper is the sole production adapter behind them. `EV_CAR` maps to `car`; `EV_MOTORBIKE` maps to `motorcycle` using GraphHopper's `car_access` model. The canonical patched Hanoi map is primary. Matching quality describes geometric proximity, not calibrated probability. Ambiguous directed traversal withholds road segment and direction.
 
 ## Deployment limits
 
-The data plane is single-node: one PostgreSQL, Redis, and GraphHopper service. Two API containers on the same Docker host do not provide host failure tolerance. No Kubernetes manifests, multi-AZ setup, numeric production SLA, or zero-downtime guarantee is part of the verified system. See [OPERATIONS.md](OPERATIONS.md) for supported local operations and [DECISIONS.md](DECISIONS.md) for recorded decisions.
+The data plane is single-node: one PostgreSQL, Redis, and GraphHopper service. Four API containers on the same Docker host do not provide host failure tolerance. No Kubernetes manifests, multi-AZ setup, numeric production SLA, or zero-downtime guarantee is part of the verified system. See [OPERATIONS.md](OPERATIONS.md) for supported local operations and [DECISIONS.md](DECISIONS.md) for recorded decisions.

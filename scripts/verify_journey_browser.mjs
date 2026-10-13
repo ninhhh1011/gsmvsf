@@ -80,6 +80,8 @@ try {
   await page.waitForFunction(()=>!driverMode._isEvaluating && driverMode.lastRecommendation?.energy_context?.current_soc_pct===12);
   const lowWarning=await page.evaluate(()=>driverMode.lastRecommendation?.energy_context?.energy_assessment?.warning_level);
   check(name+' low SOC advisory or critical evidence',['ADVISORY','CRITICAL'].includes(lowWarning),lowWarning);
+  const changedEnergy=await page.evaluate(()=>driverMode.selectedStationPlan?.ranked_candidate);
+  check(name+' manual SOC does not retain old station energy',changedEnergy?.estimate_unavailable===true || (changedEnergy?.features?.replenishment?.status==='AVAILABLE'&&changedEnergy.features.replenishment.arrival_soc_pct<=12+1e-6),changedEnergy?.features?.replenishment ?? {estimate_unavailable:changedEnergy?.estimate_unavailable});
   await page.locator('.btn-quick-soc[data-soc="85"]').click();await page.waitForFunction(()=>!driverMode._isEvaluating && driverMode.lastRecommendation?.energy_context?.current_soc_pct===85);
   await page.locator('#toggle-route-familiarity').check();await page.locator('#btn-h3-res-badge').click();
   check(name+' H3 controls retained',await page.locator('#btn-h3-res-badge').innerText()==='⬡ Res 10');
