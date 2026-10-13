@@ -430,7 +430,7 @@ export class DriverModeController {
         if (triggerEvaluation && [DriverState.TRIP_ACTIVE, DriverState.TRIP_ASSIGNED].includes(this.state)) {
             const selected = this.selectedStationPlan;
             const generation = this.generation, powerRevision = this._powerRevision;
-            const refresh = selected ? this._triggerReroute(this.currentPos) : Promise.resolve();
+            const refresh = selected ? this._triggerReroute(this.planningOrigin) : Promise.resolve();
             return Promise.resolve(refresh).then(async () => {
                 if (this.generation !== generation || this._powerRevision !== powerRevision || (selected && (!this._navigationLocked || this.selectedStationPlan?.station_id !== selected.station_id || this.selectedStationPlan?.service_type !== selected.service_type))) return;
                 await this._evaluateAtCurrentPosition();

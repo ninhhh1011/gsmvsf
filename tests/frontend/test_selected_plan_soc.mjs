@@ -35,6 +35,13 @@ test('failed confirmation keeps geometry and selection with unknown estimates',a
  const c=fixture(async()=>{throw Error('unreachable');});const geometry=c.fullRouteCoords;await c.setBatterySoc(5,true);
  assert.equal(c.fullRouteCoords,geometry);assert.equal(c.selectedStationPlan.station_id,'S');assert.equal(c.displayedRecommendation.ranked_candidates[0].estimate_unavailable,true);
 });
+test('assigned historical origin refreshes selected plan before first GPS observation',async()=>{
+ let payload;const c=fixture(async p=>{payload=p;return reply();});
+ c.currentTrip.origin={latitude:21,longitude:105};c.currentPos=null;
+ await c.setBatterySoc(5,true);
+ assert.equal(payload.context.raw_latitude,21);assert.equal(payload.context.raw_longitude,105);
+ assert.equal(c.displayedRecommendation.ranked_candidates[0].features.service_duration_s,600);
+});
 test('late replies cannot restore old estimates after another SOC input or unlock',async()=>{
  for(const unlock of [false,true]) {let resolve;const c=fixture(()=>new Promise(r=>resolve=r));const pending=c.setBatterySoc(5,true);
  if(unlock){c._navigationLocked=false;c.selectedStationPlan=null;}else c.setBatterySoc(12,false);
