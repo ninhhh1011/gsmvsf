@@ -90,3 +90,28 @@ def test_near_dateline_neighbor_requires_wrapped_query_fallback():
     proposed = prepare_route([(0, 179.9999), (0.001, 179.9999)])
     actual = prepare_route([(0, -179.9999), (0.001, -179.9999)])
     assert compare_prepared_routes(proposed, actual) == compare_prepared_routes(proposed, replace(actual, spatial_positions=None))
+
+
+@pytest.mark.parametrize('resolution', [8, 9, 10])
+@pytest.mark.parametrize('lateral', [0, 20, 45])
+def test_cached_queries_preserve_full_metrics_and_pair_accounting(resolution, lateral):
+    route = [(21, 105.8), (21.002, 105.8), (21.002, 105.802)]
+    proposed, actual = prepare_route(route, resolution), prepare_route([(lat, lon + 0.0002) for lat, lon in route], resolution)
+    cached, reference = ComparisonBudget(), ComparisonBudget()
+    result = compare_prepared_routes(proposed, actual, max_lateral_m=lateral, budget=cached)
+    fallback = compare_prepared_routes(replace(proposed, query_tiles=None, neighbors=None), actual,
+                                      max_lateral_m=lateral, budget=reference)
+    assert result == fallback
+    assert cached.used_pairs == reference.used_pairs
+
+
+def test_prepared_query_geometry_is_not_recomputed_for_each_historical_route(monkeypatch):
+    import backend.app.services.route_familiarity.route_matcher as matcher
+    proposed = prepare_route([(21, 105.8), (21.002, 105.8)])
+    actual = prepare_route([(21, 105.8002), (21.002, 105.8002)])
+    def unexpected(*args):
+        raise AssertionError('prepared default query was recomputed')
+    monkeypatch.setattr(matcher, '_tiles', unexpected)
+    monkeypatch.setattr(matcher.h3, 'grid_disk', unexpected)
+    for _ in range(2):
+        assert compare_prepared_routes(proposed, actual).shared_distance_m > 0

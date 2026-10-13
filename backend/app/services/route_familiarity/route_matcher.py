@@ -47,6 +47,8 @@ class PreparedRoute:
     resolution: int
     positions: dict[str, tuple[int, ...]]
     spatial_positions: dict[tuple[int, int], tuple[int, ...]] | None = None
+    query_tiles: tuple[tuple[tuple[int, int], ...] | None, ...] | None = None
+    neighbors: dict[str, frozenset[str]] | None = None
 
 
 def _tiles(min_lat, max_lat, min_lon, max_lon):
@@ -70,6 +72,19 @@ def _spatial_index(pieces):
         for tile in tiles:
             positions[tile].append(index)
     return {tile: tuple(indexes) for tile, indexes in positions.items()}
+
+
+def _query_tiles(piece, max_lateral_m):
+    if abs(piece.start[0]) >= 80 or abs(piece.end[1] - piece.start[1]) > 180:
+        return None
+    lat_margin = math.degrees(max_lateral_m / _EARTH_RADIUS_M) + 1e-10
+    lon_margin = lat_margin / math.cos(math.radians(piece.start[0]))
+    min_lon, max_lon = min(piece.start[1], piece.end[1]) - lon_margin, max(piece.start[1], piece.end[1]) + lon_margin
+    if min_lon < -180 or max_lon > 180:
+        return None
+    tiles = _tiles(min(piece.start[0], piece.end[0]) - lat_margin,
+                   max(piece.start[0], piece.end[0]) + lat_margin, min_lon, max_lon)
+    return tuple(tiles) if tiles is not None else None
 
 
 def _haversine_m(p1, p2):
@@ -142,7 +157,8 @@ def prepare_route(coords: Sequence[tuple[float, float]], resolution=9, *, sample
         pieces.append(RoutePiece(a, b, offset, end_offset - offset, _heading_deg(a, b), cell))
     return PreparedRoute(tuple(pieces), total, resolution,
                          {cell: tuple(indexes) for cell, indexes in positions.items()},
-                         _spatial_index(pieces))
+                         _spatial_index(pieces), tuple(_query_tiles(piece, 45) for piece in pieces),
+                         {cell: frozenset(h3.grid_disk(cell, 1)) for cell in positions})
 
 
 def _projected_interval(p: RoutePiece, a: RoutePiece, max_lateral_m):
@@ -188,26 +204,26 @@ def compare_prepared_routes(proposed: PreparedRoute, actual: PreparedRoute, *,
     budget = budget if budget is not None else ComparisonBudget()
     shared, last_actual = 0.0, 0.0
     cells, segments = set(), []
-    neighbors = {}
-    for p in proposed.pieces:
+    neighbors = proposed.neighbors.copy() if proposed.neighbors is not None else {}
+    candidate_cache = {}
+    for piece_index, p in enumerate(proposed.pieces):
         if p.cell not in neighbors:
             neighbors[p.cell] = set(h3.grid_disk(p.cell, 1))
         tiles = None
-        if actual.spatial_positions is not None and abs(p.start[0]) < 80 and abs(p.end[1] - p.start[1]) <= 180:
-            # Projection uses this exact latitude scale; expanded rectangles cannot exclude a valid interval.
-            lat_margin = math.degrees(max_lateral_m / _EARTH_RADIUS_M) + 1e-10
-            lon_margin = lat_margin / math.cos(math.radians(p.start[0]))
-            min_lon, max_lon = min(p.start[1], p.end[1]) - lon_margin, max(p.start[1], p.end[1]) + lon_margin
-            if min_lon >= -180 and max_lon <= 180:
-                tiles = _tiles(min(p.start[0], p.end[0]) - lat_margin, max(p.start[0], p.end[0]) + lat_margin,
-                               min_lon, max_lon)
-        if tiles is not None:
-            candidates = sorted({index for tile in tiles for index in actual.spatial_positions.get(tile, ())
-                                 if actual.pieces[index].cell in neighbors[p.cell]})
-        else:
-            candidates = sorted({index for cell in neighbors[p.cell]
-                                 for index in actual.positions.get(cell, ())})
+        if actual.spatial_positions is not None:
+            tiles = (proposed.query_tiles[piece_index] if max_lateral_m == 45 and proposed.query_tiles is not None
+                     else _query_tiles(p, max_lateral_m))
+        key = p.cell, tiles
+        candidates = candidate_cache.get(key)
+        if candidates is None:
+            if tiles is not None:
+                candidates = tuple(sorted({index for tile in tiles for index in actual.spatial_positions.get(tile, ())
+                                          if actual.pieces[index].cell in neighbors[p.cell]}))
+            else:
+                candidates = tuple(sorted({index for cell in neighbors[p.cell]
+                                          for index in actual.positions.get(cell, ())}))
         budget.consume(len(candidates))
+        candidate_cache[key] = candidates
         intervals = []
         for index in candidates:
             a = actual.pieces[index]
