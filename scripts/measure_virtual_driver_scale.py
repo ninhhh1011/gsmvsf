@@ -158,7 +158,7 @@ async def measure_stage(client, templates, args, count, secret, namespace, burst
             'latitude': lat, 'longitude': lon, 'speed_kmh': 20,
             'heading_deg': heading, 'accuracy_m': args.noise_m}, due)
         # Separate finite demand sample; never one recommendation per GPS update.
-        if burst or cycle != args.intervals - 1 or driver % args.demand_every != 0 or gps is None:
+        if burst or (not getattr(args, 'sample_every_interval', False) and cycle != args.intervals - 1) or driver % args.demand_every != 0 or gps is None:
             return
         context = {'vehicle_id': 'V0001', 'driver_id': driver_id, 'timestamp': datetime.now(UTC).isoformat(),
                    'current_soc_pct': 50, 'estimated_remaining_range_km': 50,
@@ -228,6 +228,7 @@ async def run(args):
                                    'virtual_copies': True, 'unique_driver_ids': True},
               'warmup_intervals': 1, 'noise_bound_m': args.noise_m, 'speed_kmh': 20,
               'observation_age_seconds': OBSERVATION_AGE_SECONDS,
+              'recommendation_sampling': 'EVERY_INTERVAL' if getattr(args, 'sample_every_interval', False) else 'FINAL_INTERVAL',
               'resource_metrics': 'not_measured', 'stages': [],
               'limitations': ['Single client IP; existing API rate limit is retained.',
                               'GPS timestamps use a fixed 1-second observation age; larger clock skew remains an error.',
@@ -235,7 +236,7 @@ async def run(args):
                               'No production SLA; error and matching status counts are evidence.',
                               'Fixed namespace reuses GPS state unless the runtime is independently isolated.',
                               'Personal history requires matching --load-namespace seed inputs; burst identities have none.',
-                              'Latency includes warmup; recommendation sampled once at final interval.']}
+                              'Latency includes warmup; demand sampling cadence is reported separately.']}
     output.parent.mkdir(parents=True, exist_ok=True)
     def save():
         output.write_text(json.dumps(report, indent=2), encoding='utf-8')
@@ -271,6 +272,7 @@ def main():
     parser.add_argument('--request-timeout', type=float, default=20)
     parser.add_argument('--burst-size', type=int, default=100)
     parser.add_argument('--demand-every', type=int, default=20)
+    parser.add_argument('--sample-every-interval', action='store_true', help='Repeat the controlled demand subset each GPS interval for sustained-load measurement')
     parser.add_argument('--seed', type=int, default=20261012)
     parser.add_argument('--noise-m', type=float, default=3)
     args = parser.parse_args()

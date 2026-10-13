@@ -75,7 +75,8 @@ def test_burst_keeps_transport_bounded_and_reports_rate_limit():
     asyncio.run(exercise())
 
 
-def test_staggered_demand_triggers_signed_recommendation_only_for_controlled_subset(monkeypatch):
+@pytest.mark.parametrize('sample_every_interval', [False, True])
+def test_staggered_demand_triggers_signed_recommendation_only_for_controlled_subset(monkeypatch, sample_every_interval):
     monkeypatch.setattr(scale, 'CADENCE', 0.02)  # Test scheduler only; live CLI has fixed 30s cadence.
 
     async def exercise():
@@ -95,17 +96,19 @@ def test_staggered_demand_triggers_signed_recommendation_only_for_controlled_sub
             return httpx.Response(200, json={'familiarity': {'status': 'AVAILABLE'}})
 
         args = Namespace(burst_size=2, intervals=3, drain_seconds=1, concurrency=2,
-                         request_timeout=1, seed=7, noise_m=3, demand_every=1)
+                         request_timeout=1, seed=7, noise_m=3, demand_every=1,
+                         sample_every_interval=sample_every_interval)
         points = [(21, 105), (21, 105.01)]
         async with httpx.AsyncClient(base_url='http://test', transport=httpx.MockTransport(handler)) as client:
             result = await measure_stage(client, [(points, route_distances(points))], args,
                                          2, 'private-unit-secret', 'synthetic-scale-test')
         assert result['counters']['gps_successful'] == 6
-        assert result['counters']['demand_successful'] == 2
-        assert result['counters']['recommendation_successful'] == 1
-        assert result['counters']['demand_without_recommendation'] == 1
-        assert result['familiarity_statuses'] == {'AVAILABLE': 1}
-        assert len(calls) == 9
+        samples = 3 if sample_every_interval else 1
+        assert result['counters']['demand_successful'] == 2 * samples
+        assert result['counters']['recommendation_successful'] == samples
+        assert result['counters']['demand_without_recommendation'] == samples
+        assert result['familiarity_statuses'] == {'AVAILABLE': samples}
+        assert len(calls) == 6 + 3 * samples
 
     asyncio.run(exercise())
 
