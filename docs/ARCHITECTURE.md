@@ -68,3 +68,16 @@ Routing constraints, vehicle capabilities, optimization objectives, and dynamic 
 ## Deployment limits
 
 The data plane is single-node: one PostgreSQL, Redis, and GraphHopper service. Four API containers on the same Docker host do not provide host failure tolerance. No Kubernetes manifests, multi-AZ setup, numeric production SLA, or zero-downtime guarantee is part of the verified system. See [OPERATIONS.md](OPERATIONS.md) for supported local operations and [DECISIONS.md](DECISIONS.md) for recorded decisions.
+
+## H3 history coverage extension (2026-10-14)
+
+The departure endpoint merges separately counted legacy footprints with paired
+observed footprints. Legacy metrics remain null and gray; only paired guided
+exposure supplies departure ratios. Legacy work is bounded to 100,000 trips, 2,000
+signature groups and 100,000 group cells, with explicit 503 on overflow.
+All-region responses already contain the requested resolution/time; map pan only
+re-clips cached cells, while resolution/time/replay changes request new evidence.
+There is no background geographic grid or automatic resolution reduction.
+SQL materializes per-cell causal predicates once and Python deduplicates legacy
+driver IDs, retaining the same snapshot/privacy semantics and five-second query
+budget. This does not introduce a freshness policy, new service or ranking change.

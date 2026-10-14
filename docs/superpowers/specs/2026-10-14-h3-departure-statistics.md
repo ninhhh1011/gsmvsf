@@ -35,9 +35,19 @@ departure as an approximate departure origin, not an exact road-junction ID.
 Keep the user's selected H3 resolution; do not coarsen based on empty viewport area.
 Render only cells returned from journey evidence, clipped to the viewport, with
 an explicit 500-visible-cell cap. No evidence means no invented grid cells. Never
-add child-cell percentages. Whether to add gray footprints from unpaired legacy
-journeys remains an explicit source-selection question; their departure weights
-must stay unavailable, not reconstructed or inferred from visits.
+add child-cell percentages. The owner approved gray footprints from unpaired legacy
+journeys on 2026-10-14; their departure weights stay unavailable, not reconstructed
+or inferred from visits. Merge these footprints with paired observed cells, with
+protected aggregate support and separate visit/eligible/departure counts. Legacy
+footprints use completed-trip time because original per-point times were not saved;
+the resolution-11 signature centres approximate their route footprint. Current
+paired footprints use individual observation times. No new city background grid.
+
+The owner also approved a new separately identified synthetic batch with actual
+GraphHopper road geometry on diverse Hanoi corridors, saved active guidance and
+timestamped GPS. Include follow, exit, return, guidance update, gap and noise cases.
+Preserve all old batches. Record exact templates, seed/time/provenance and independent
+offline truth; count trips, distinct geometries and geographic coverage separately.
 Keep whole-trip offline comparison as a separately selected mode. Production
 aggregate cells require at least five contributing drivers; synthetic statistics
 are explicitly identified. No raw third-party routes/identities in public output.

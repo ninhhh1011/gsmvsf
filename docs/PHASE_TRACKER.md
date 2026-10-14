@@ -99,3 +99,16 @@ and empty history/outage creates no geographic background cells. Correction
 validation: 268 frontend PASS and six backend/API contract tests PASS. Backend
 ratio/data contracts remain unchanged. The sparse 30-case synthetic fixture is
 not citywide behavioral evidence; unpaired history is not assigned departure weights.
+
+Approved branch-only source expansion: all 48,535 in-window old synthetic journeys
+now supply gray footprints (eight repeated signature patterns), without departure
+weights. Added 360 paired trips on 12 real GraphHopper road corridors, 108 distinct
+observed geometries; at resolution 9 the combined sample has 649 cells, 505 with
+known ratios and six red cells. This replaces the sparse 30-control-only demo.
+No merge/push, Dataset changes, ranking change or Week 6 activation.
+
+Latest expansion verification: 742 backend PASS / 12 existing skips, 269 frontend
+PASS, Ruff PASS, canonical validator 152/0 and 22/22, 63 unchanged file hashes,
+nine real engine/isolated DB/API groups, 16/16 desktop/mobile checks. Independent
+review clear within scope. Query optimization retains five-second statement budget;
+no load-capacity or field-accuracy claim. Main remains unchanged.

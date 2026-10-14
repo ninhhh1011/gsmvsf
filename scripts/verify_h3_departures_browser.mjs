@@ -38,7 +38,16 @@ try {
             initial.polygons <= actualCells.size && evidenceOnly && initial.resolution === 9,
             { rendered: initial.polygons, supported: actualCells.size, resolution: initial.resolution });
         check(`${name}: paired synthetic evidence is explicit`, initial.stats.source === 'synthetic' && initial.caption.includes('giả lập'), initial.caption);
-        check(`${name}: legacy histories excluded`, initial.stats.excluded_unpaired_trip_count > 0, initial.stats.excluded_unpaired_trip_count);
+        check(`${name}: legacy footprints retained without weights`, initial.stats.excluded_unpaired_trip_count > 0 &&
+            Object.values(initial.stats.cells).some(c => c.status === 'HISTORY_ONLY' && c.history_trip_count > 0 && c.departure_pct === null),
+            { legacyTrips: initial.stats.excluded_unpaired_trip_count, supportedCells: actualCells.size });
+        const grayPopup = await page.evaluate(() => {
+            const overlay = driverMode._h3Overlay;
+            const gray = overlay.polygons.find(p => overlay.heatmap.cells[p._cellId].status === 'HISTORY_ONLY');
+            return gray?.getPopup()?.getContent();
+        });
+        check(`${name}: gray popup does not invent a percentage`, !!grayPopup && !grayPopup.includes('null%') &&
+            !grayPopup.includes('0%'), grayPopup);
         await page.screenshot({ path: `${output}/${name}-journey-footprint.png` });
         if (name === 'mobile') await page.locator('#btn-driver-sheet-toggle').click();
         await page.evaluate(() => driverMode.map.map.setView([21.001, 105.8], 15, { animate: false }));
@@ -46,11 +55,11 @@ try {
         await page.waitForFunction(() => driverMode._h3Overlay.rendered === driverMode._h3Overlay.polygons.length);
         const details = await page.evaluate(() => {
             const overlay = driverMode._h3Overlay;
-            const event = [...overlay.cellMetadata].find(([, value]) => value.departure_event_count > 0);
-            if (event) overlay.polygons.find(p => p._cellId === event[0])?.openPopup();
-            return { event: event?.[1], cells: overlay.polygons.length };
+            const polygon = overlay.polygons.find(p => overlay.cellMetadata.get(p._cellId)?.departure_event_count > 0);
+            polygon?.openPopup();
+            return { event: overlay.cellMetadata.get(polygon?._cellId), popupOpened: !!polygon?.isPopupOpen(), cells: overlay.polygons.length };
         });
-        check(`${name}: actual event popup`, details.event?.departure_event_count > 0 && details.event.departure_pct > 0, details.event);
+        check(`${name}: actual event popup`, details.popupOpened && details.event?.departure_event_count > 0 && details.event.departure_pct > 0, details.event);
         await page.screenshot({ path: `${output}/${name}-departure-popup.png` });
         if (name === 'mobile') await page.locator('#btn-driver-sheet-toggle').click();
         await page.locator('#h3-analysis-mode').selectOption('COMPARISON');

@@ -560,3 +560,19 @@ resolution, and render only journey evidence. The 500-visible-cell cap remains
 explicit. Do not expand the behavioral coverage of 30 small synthetic test trips by
 painting the city. Unpaired legacy history remains unavailable for departure weights;
 adding its gray footprints is a separate source-selection question.
+
+**Approved history/source extension:** Render gray footprints for all legacy completed
+journeys in the same seven-day window. Resolution-11 signature centres approximate
+footprints; no saved point timestamps or original guidance are invented. Legacy
+visits never enter the guided denominator. Exclude a duplicate legacy identity only
+after its paired completion is available at query time. Gray paired observation
+cells likewise do not prove adherence. Existing cohort privacy remains in force.
+
+Reuse GraphHopper to create a separate seeded synthetic paired batch on 12 road
+corridors: 360 trips, 108 distinct observed geometries. Declared maneuvers stay
+offline; this is simulator evidence, not real drivers or perfect detector accuracy.
+All-region data is fetched at explicit resolution/time and clipped locally on pan.
+Bound legacy work to 100,000 trips, 2,000 signature groups and 100,000 group cells.
+Deduplicate footprint driver IDs in Python to avoid sorting toasted SQL arrays;
+materialize per-cell time predicates once before counting. Keep the five-second
+statement timeout and explicit failures. No cache service or new dependency.

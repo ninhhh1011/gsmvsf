@@ -39,7 +39,7 @@ export class RouteFamiliarityOverlay {
         this.heatmapRequest = 0;
         this.heatmap = null;
         this.onMoveEnd = () => {
-            if (this.heatmapMode && this.enabled) return this.showDepartureHeatmap(this.heatmapTime);
+            if (this.heatmapMode && this.enabled) return this.render();
             if (this.isBaseline && this.enabled) {
                 this.renderHanoiBaseline();
                 return;
@@ -361,12 +361,13 @@ export class RouteFamiliarityOverlay {
         this.cellMetadata.clear();
         for (const cell of this.route.route_cells) {
             const stats = this.heatmap?.cells?.[cell];
-            this.cellMetadata.set(cell, stats ? { cell, tier: 'DEPARTURE_STATS', ...stats,
+            this.cellMetadata.set(cell, stats ? { cell, tier: stats.status === 'HISTORY_ONLY' ? 'HISTORY_ONLY' : 'DEPARTURE_STATS', ...stats,
                 color: stats.color, fillColor: stats.color } : { cell, tier: 'UNKNOWN',
                 color: '#94a3b8', fillColor: '#cbd5e1', label: 'Chưa đủ bằng chứng đối chiếu' });
         }
         if (this.supportElement) {
             const labels = { LOADING: 'Đang tải thống kê', AVAILABLE: 'Nơi bắt đầu bỏ tuyến',
+                HISTORY_ONLY: 'Lịch sử đã đi qua · chưa có tỷ lệ bỏ tuyến',
                 NO_PAIRED_EVIDENCE: 'Chưa có dữ liệu theo cặp chỉ dẫn / thực tế',
                 INSUFFICIENT_EVIDENCE: 'Chưa đủ bằng chứng hoặc mẫu được bảo vệ',
                 DISABLED: 'Thống kê chưa được bật', UNAVAILABLE: 'Thống kê không khả dụng' };
@@ -375,7 +376,7 @@ export class RouteFamiliarityOverlay {
             const uncertain = this.heatmap?.uncertain_intervals || 0;
             this.supportElement.textContent = `${labels[this.heatmap?.status] || 'Chưa đủ bằng chứng'} · 7 ngày${fake}` +
                 (this.heatmap?.as_of_iso ? ` · đến ${this.heatmap.as_of_iso}` : '') +
-                (excluded ? ` · ${excluded} chuyến thiếu cặp chỉ dẫn bị loại` : '') +
+                (excluded ? ` · ${excluded} chuyến chỉ hiện lịch sử, không tính tỷ lệ bỏ tuyến` : '') +
                 (uncertain ? ` · ${uncertain} khoảng chưa xác minh` : '');
         }
     }
@@ -594,6 +595,9 @@ export class RouteFamiliarityOverlay {
 
     _createPopupContent(cell, meta) {
         if (this.heatmapMode) {
+            if (meta.tier === 'HISTORY_ONLY') return '<strong>Đã đi qua · lịch sử 7 ngày</strong><br>' +
+                `Số chuyến đã đi qua ô: ${meta.history_trip_count}<br>` +
+                'Chưa đủ bằng chứng tính tỷ lệ bỏ tuyến tại ô này. Lượt đi qua không phải lượt đi lệch.';
             if (meta.tier !== 'DEPARTURE_STATS') return '<strong>Chưa đủ bằng chứng đối chiếu</strong><br>Ô xám không có nghĩa là không ai bỏ tuyến.';
             return `<strong>Nơi bắt đầu bỏ tuyến · 7 ngày</strong><br>` +
                 `Tỷ lệ chuyến bỏ tuyến: <strong>${meta.departure_pct}%</strong><br>` +

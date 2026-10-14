@@ -53,6 +53,21 @@ test('backend departure percentages and event counts replace visit frequency and
     assert.match(f.supportElement.textContent, /42/);
 });
 
+test('legacy journey footprints are gray and visits never appear as a departure percentage', async () => {
+    const cell = h3.latLngToCell(21, 105.8, 9);
+    const f = fixture(async ({ resolution }) => ({ status: 'HISTORY_ONLY', resolution, source: 'synthetic',
+        excluded_unpaired_trip_count: 48535, cells: { [cell]: { status: 'HISTORY_ONLY',
+            history_trip_count: 1200, departure_pct: null, eligible_trip_count: null,
+            departing_trip_count: null, departure_event_count: null, color: '#94a3b8' } } }));
+    await f.overlay.showDepartureHeatmap(); f.flush();
+    assert.equal(f.added.length, 1);
+    assert.equal(f.added[0].options.fillColor, '#94a3b8');
+    assert.match(f.added[0].popup, /1200/);
+    assert.match(f.added[0].popup, /Chưa đủ bằng chứng/);
+    assert.doesNotMatch(f.added[0].popup, /null%|0%|1200%/);
+    assert.match(f.supportElement.textContent, /chỉ hiện lịch sử/);
+});
+
 test('stale heatmap response cannot replace a newer time or revive a disabled layer', async () => {
     const pending = [];
     const f = fixture(payload => new Promise(resolve => pending.push({ payload, resolve })));
@@ -68,7 +83,7 @@ test('stale heatmap response cannot replace a newer time or revive a disabled la
     assert.equal(f.added.length, 0);
 });
 
-test('panning refreshes journey evidence and dependency failure does not manufacture cells', async () => {
+test('panning only clips existing all-region evidence and outage does not manufacture cells', async () => {
     let calls = 0;
     const f = fixture(async () => { calls++; throw new Error('outage'); });
     await f.overlay.showDepartureHeatmap(); f.flush();
@@ -76,7 +91,7 @@ test('panning refreshes journey evidence and dependency failure does not manufac
     assert.match(f.supportElement.textContent, /không khả dụng/i);
     f.setBounds([21.2, 21.4, 105.3, 105.6]);
     await f.handlers.moveend(); f.flush();
-    assert.equal(calls, 2);
+    assert.equal(calls, 1);
     assert.deepEqual(f.overlay.route.route_cells, []);
 });
 

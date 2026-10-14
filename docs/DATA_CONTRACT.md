@@ -211,3 +211,15 @@ Live routing smoke/benchmark fixtures consume only vehicles, trips, canonical
 road nodes and SOC telemetry. All labels and ranking references remain confined
 to offline evaluation. Neither smoke results nor business-eligibility agreement
 alone establish matching accuracy or recommendation quality.
+
+## Legacy H3 footprint extension (2026-10-14)
+
+Legacy completed histories contribute gray `HISTORY_ONLY` cells, with
+`history_trip_count` and null departure metrics. Convert saved resolution-11 index
+centres to the requested resolution, counting each trip once per cell. Time means
+`COMPLETED_TRIP_COHORT`, because legacy point times are unavailable. Paired observed
+cell timestamps obey the event window, independently of guided exposure. Overlapping
+legacy/paired identities are excluded from legacy only once paired completion is
+available. Visits never enlarge the guided denominator. No raw identity is exposed.
+The new GraphHopper synthetic batch is separate from Dataset V1 and ranking history;
+its offline maneuver declarations are never prediction inputs.

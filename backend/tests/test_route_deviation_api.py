@@ -2,9 +2,10 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import h3
 
 from backend.app.config import settings
-from backend.app.services.route_familiarity.repository import RouteHistoryRepository
+from backend.app.services.route_familiarity.repository import RouteHistoryRepository, aggregate_history_footprints
 from backend.app.services.snapshots.models import StateError
 from backend.tests.test_route_familiarity_repository import Pool
 from backend.tests.test_route_deviations import evidence, point
@@ -82,8 +83,47 @@ async def test_aggregate_query_has_causal_window_distinct_trip_counts_and_privac
     result = await repo.departure_heatmap(datetime(2026, 10, 14, tzinfo=UTC), 9)
     assert result['status'] == 'NO_PAIRED_EVIDENCE'
     assert result['excluded_unpaired_trip_count'] == 12
-    sql, lower, upper, resolution, minimum_drivers = conn.fetch.await_args.args
+    sql, lower, upper, resolution, minimum_drivers = conn.fetch.await_args_list[0].args
     assert 'completed_at <= $2' in sql
     assert 'count(DISTINCT' in sql
     assert 'departure_at' in sql and 'reached_at' in sql
     assert (upper - lower).days == 7 and resolution == '9' and minimum_drivers == 5
+
+
+def test_history_footprints_count_trips_once_per_cell_without_departure_weights():
+    first = h3.latlng_to_cell(21, 105.8, 11)
+    second = h3.latlng_to_cell(21.00001, 105.8, 11)
+    rows = [{'cells': [first, second, first], 'trip_count': 10, 'drivers': ['d1', 'd2', 'd1']},
+            {'cells': [first], 'trip_count': 3, 'drivers': ['d1', 'd3']}]
+    result = aggregate_history_footprints(rows, 9, 1)
+    assert len(result) == 1
+    stats = next(iter(result.values()))
+    assert stats['history_trip_count'] == 13
+    assert stats['history_driver_count'] == 3
+    assert stats['departure_pct'] is None
+    assert stats['eligible_trip_count'] is None
+    assert stats['status'] == 'HISTORY_ONLY'
+    assert not aggregate_history_footprints(rows, 9, 5)
+
+
+def test_history_footprints_reject_malformed_signatures():
+    with pytest.raises(StateError):
+        aggregate_history_footprints([{'cells': ['invalid'], 'trip_count': 10, 'drivers': ['d']}], 9, 1)
+
+
+@pytest.mark.asyncio
+async def test_history_only_heatmap_does_not_turn_visits_into_departures():
+    conn = AsyncMock()
+    conn.transaction = MagicMock(return_value=Pool(conn))
+    conn.fetchrow.return_value = {'paired_trip_count': 0, 'excluded_unpaired_trip_count': 10,
+                                'unknown_trip_count': 0, 'uncertain_intervals': 0}
+    conn.fetch.side_effect = [[], [{'cells': [h3.latlng_to_cell(21, 105.8, 11)],
+                                  'trip_count': 10, 'drivers': ['d1', 'd2']}]]
+    result = await RouteHistoryRepository(Pool(conn), 'synthetic').departure_heatmap(datetime.now(UTC), 9)
+    assert result['status'] == 'HISTORY_ONLY'
+    assert next(iter(result['cells'].values()))['departure_pct'] is None
+    history_sql = conn.fetch.await_args_list[1].args[0]
+    assert 'completed_at <= $2' in history_sql
+    assert 'NOT EXISTS' in history_sql
+    assert 'd.completed_at <= $2' in history_sql
+    assert 'd.completed_at <= $2' in conn.fetchrow.await_args.args[0]

@@ -41,6 +41,8 @@ def test_one_long_departure_is_one_event_at_last_guided_location():
     origin = h3.latlng_to_cell(*point(100), 9)
     assert len(result['cells']['9'][origin]['departures']) == 1
     assert result['cells']['9'][origin]['reached']
+    off_cell = h3.latlng_to_cell(*points[-1], 10)
+    assert result['cells']['10'][off_cell]['observed']
 
 
 def test_return_rearms_and_counts_every_departure_even_in_same_cell():

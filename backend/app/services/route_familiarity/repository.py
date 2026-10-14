@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 import json
 
 import asyncpg
+import h3
+from starlette.concurrency import run_in_threadpool
 
 from backend.app.services.route_familiarity.models import RouteSignature
 from backend.app.services.snapshots.models import StateError
@@ -57,11 +59,14 @@ ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606
 """
 
 DEPARTURE_CELLS_QUERY = """
-WITH cells AS (
+WITH cells AS MATERIALIZED (
     SELECT driver_id, trip_id, c.key AS cell,
            EXISTS (SELECT 1 FROM jsonb_array_elements_text(c.value->'reached') AS reached_at
                    WHERE reached_at::float8 >= extract(epoch FROM $1::timestamptz)
                      AND reached_at::float8 <= extract(epoch FROM $2::timestamptz)) AS reached,
+           EXISTS (SELECT 1 FROM jsonb_array_elements_text(coalesce(c.value->'observed', c.value->'reached')) AS observed_at
+                   WHERE observed_at::float8 >= extract(epoch FROM $1::timestamptz)
+                     AND observed_at::float8 <= extract(epoch FROM $2::timestamptz)) AS observed,
            EXISTS (SELECT 1 FROM jsonb_array_elements_text(coalesce(c.value->'uncertain', '[]'::jsonb)) AS uncertain_at
                    WHERE uncertain_at::float8 >= extract(epoch FROM $1::timestamptz)
                      AND uncertain_at::float8 <= extract(epoch FROM $2::timestamptz)) AS uncertain,
@@ -72,17 +77,62 @@ WITH cells AS (
          LATERAL jsonb_each(t.analysis->'cells'->$3::text) c
     WHERE completed_at >= $1 AND completed_at <= $2
 ), counts AS (
-    SELECT cell, count(DISTINCT (driver_id, trip_id)) AS eligible_trip_count,
-           count(DISTINCT (driver_id, trip_id)) FILTER (WHERE events > 0) AS departing_trip_count,
-           sum(events) AS departure_event_count,
-           count(DISTINCT driver_id) AS reached_drivers,
-           count(DISTINCT driver_id) FILTER (WHERE events > 0) AS departing_drivers
-    FROM cells WHERE reached AND (events > 0 OR NOT uncertain) GROUP BY cell
+    SELECT cell, count(DISTINCT (driver_id, trip_id)) FILTER (WHERE reached AND (events > 0 OR NOT uncertain)) AS eligible_trip_count,
+           count(DISTINCT (driver_id, trip_id)) FILTER (WHERE reached AND events > 0) AS departing_trip_count,
+           coalesce(sum(events) FILTER (WHERE reached), 0) AS departure_event_count,
+           count(DISTINCT driver_id) FILTER (WHERE reached AND (events > 0 OR NOT uncertain)) AS reached_drivers,
+           count(DISTINCT driver_id) FILTER (WHERE reached AND events > 0) AS departing_drivers,
+           count(DISTINCT (driver_id, trip_id)) FILTER (WHERE observed) AS history_trip_count,
+           count(DISTINCT driver_id) FILTER (WHERE observed) AS history_driver_count
+    FROM cells GROUP BY cell
 )
-SELECT cell, eligible_trip_count, departing_trip_count, departure_event_count
-FROM counts WHERE reached_drivers >= $4 AND (departing_drivers = 0 OR departing_drivers >= $4)
+SELECT cell,
+       CASE WHEN reached_drivers >= $4 AND (departing_drivers = 0 OR departing_drivers >= $4)
+            THEN eligible_trip_count END AS eligible_trip_count,
+       CASE WHEN reached_drivers >= $4 AND (departing_drivers = 0 OR departing_drivers >= $4)
+            THEN departing_trip_count END AS departing_trip_count,
+       CASE WHEN reached_drivers >= $4 AND (departing_drivers = 0 OR departing_drivers >= $4)
+            THEN departure_event_count END AS departure_event_count,
+       CASE WHEN history_driver_count >= $4 THEN history_trip_count ELSE 0 END AS history_trip_count,
+       CASE WHEN history_driver_count >= $4 THEN history_driver_count ELSE 0 END AS history_driver_count
+FROM counts WHERE history_driver_count >= $4 OR
+    (reached_drivers >= $4 AND (departing_drivers = 0 OR departing_drivers >= $4))
 ORDER BY cell
 """
+
+# Deduplicate drivers in Python; DISTINCT here forces an expensive sort of toasted cell arrays.
+HISTORY_FOOTPRINT_QUERY = """
+SELECT cells, count(*) AS trip_count, array_agg(driver_id) AS drivers
+FROM realtime.route_familiarity_routes h
+WHERE completed_at >= $1 AND completed_at <= $2 AND resolution=11
+  AND NOT EXISTS (SELECT 1 FROM realtime.route_deviation_trips d
+                  WHERE d.driver_id=h.driver_id AND d.trip_id=h.trip_id AND d.completed_at <= $2)
+GROUP BY cells LIMIT 2001
+"""
+
+
+def aggregate_history_footprints(rows, resolution, minimum_drivers):
+    if len(rows) > 2000 or sum(len(row['cells']) for row in rows) > 100000:
+        raise StateError('History footprint work limit exceeded', 'HISTORY_FOOTPRINT_WORK_LIMIT', 503)
+    cells, converted = {}, {}
+    for row in rows:
+        projected = set()
+        for cell in row['cells']:
+            if cell not in converted:
+                if not h3.is_valid_cell(cell) or h3.get_resolution(cell) != 11:
+                    raise StateError('Invalid stored history signature', 'INVALID_HISTORY_SIGNATURE', 503)
+                # Legacy histories have no per-point times; centres approximate their footprint only.
+                converted[cell] = h3.latlng_to_cell(*h3.cell_to_latlng(cell), resolution)
+            projected.add(converted[cell])
+        for cell in projected:
+            counts = cells.setdefault(cell, {'trips': 0, 'drivers': set()})
+            counts['trips'] += row['trip_count']
+            counts['drivers'].update(row['drivers'])
+    return {cell: {'status': 'HISTORY_ONLY', 'history_trip_count': value['trips'],
+                   'history_driver_count': len(value['drivers']), 'eligible_trip_count': None,
+                   'departing_trip_count': None, 'departure_event_count': None, 'departure_pct': None,
+                   'color': '#94a3b8'}
+            for cell, value in cells.items() if len(value['drivers']) >= minimum_drivers}
 
 DEPARTURE_METADATA_QUERY = """
 SELECT (SELECT count(*) FROM realtime.route_deviation_trips WHERE completed_at >= $1 AND completed_at <= $2)
@@ -90,7 +140,7 @@ SELECT (SELECT count(*) FROM realtime.route_deviation_trips WHERE completed_at >
        (SELECT count(*) FROM realtime.route_familiarity_routes h
         WHERE completed_at >= $1 AND completed_at <= $2
           AND NOT EXISTS (SELECT 1 FROM realtime.route_deviation_trips d
-                          WHERE d.driver_id=h.driver_id AND d.trip_id=h.trip_id)) AS excluded_unpaired_trip_count,
+                          WHERE d.driver_id=h.driver_id AND d.trip_id=h.trip_id AND d.completed_at <= $2)) AS excluded_unpaired_trip_count,
        count(*) FILTER (WHERE NOT (analysis->>'comparable')::boolean) AS unknown_trip_count,
        coalesce(sum((analysis->>'uncertain_intervals')::int), 0) AS uncertain_intervals
 FROM realtime.route_deviation_trips WHERE completed_at >= $1 AND completed_at <= $2
@@ -198,17 +248,27 @@ class RouteHistoryRepository:
                 metadata = dict(await conn.fetchrow(self._query(DEPARTURE_METADATA_QUERY), lower, as_of))
                 if metadata['paired_trip_count'] > 10000:
                     raise StateError('Departure aggregate work limit exceeded', 'DEPARTURE_WORK_LIMIT', 503)
+                if metadata['excluded_unpaired_trip_count'] > 100000:
+                    raise StateError('History footprint work limit exceeded', 'HISTORY_FOOTPRINT_WORK_LIMIT', 503)
                 rows = await conn.fetch(self._query(DEPARTURE_CELLS_QUERY), lower, as_of, str(resolution), minimum_drivers)
-        cells = {}
+                history = await conn.fetch(self._query(HISTORY_FOOTPRINT_QUERY), lower, as_of)
+        cells = await run_in_threadpool(aggregate_history_footprints, history, resolution, minimum_drivers)
         for row in rows:
             eligible, departing = row['eligible_trip_count'], row['departing_trip_count']
-            percentage = round(100 * departing / eligible, 2)
-            color = '#059669' if not departing else '#f59e0b' if percentage < 20 else '#ef4444' if percentage < 50 else '#991b1b'
-            cells[row['cell']] = {'eligible_trip_count': eligible, 'departing_trip_count': departing,
+            percentage = round(100 * departing / eligible, 2) if eligible else None
+            color = '#94a3b8' if percentage is None else '#059669' if not departing else '#f59e0b' if percentage < 20 else '#ef4444' if percentage < 50 else '#991b1b'
+            previous = cells.get(row['cell'], {})
+            cells[row['cell']] = {'status': 'HISTORY_ONLY' if percentage is None else 'AVAILABLE',
+                                 'history_trip_count': previous.get('history_trip_count', 0) + row.get('history_trip_count', 0),
+                                 'eligible_trip_count': eligible, 'departing_trip_count': departing,
                                  'departure_event_count': row['departure_event_count'],
                                  'departure_pct': percentage, 'color': color}
-        return {'status': 'AVAILABLE' if cells else 'NO_PAIRED_EVIDENCE' if not metadata['paired_trip_count'] else 'INSUFFICIENT_EVIDENCE',
+        status = ('AVAILABLE' if any(value['departure_pct'] is not None for value in cells.values()) else
+                  'HISTORY_ONLY' if cells else 'NO_PAIRED_EVIDENCE' if not metadata['paired_trip_count'] else 'INSUFFICIENT_EVIDENCE')
+        return {'status': status,
                 'source': self.namespace, 'minimum_drivers': minimum_drivers, 'cells': cells, **metadata,
+                'history_signature_groups': len(history),
+                'legacy_time_semantics': 'COMPLETED_TRIP_COHORT',
                 'limitations': 'Geometric departure origins; synthetic data does not establish real driver behavior'}
 
 

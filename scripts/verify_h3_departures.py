@@ -156,6 +156,23 @@ async def verify(args):
                 earlier = await client.get('/api/v1/routing/departure-heatmap', params={
                     'as_of_iso': (as_of - timedelta(days=2)).isoformat()})
                 assert earlier.json()['paired_trip_count'] == 0
+                # An overlapping future paired identity must not erase replay-visible legacy evidence.
+                legacy_cell = h3.latlng_to_cell(21.1, 105.9, 11)
+                async with pool.acquire() as conn:
+                    await conn.execute('''INSERT INTO synthetic.route_familiarity_routes
+                        (driver_id,trip_id,completed_at,distance_m,resolution,cells,cell_distances_m)
+                        VALUES ('future-pair','legacy',$1,100,11,$2,$3)''',
+                        as_of - timedelta(hours=1), [legacy_cell], [100.0])
+                future = trips[0].model_copy(update={'driver_id': 'future-pair', 'trip_id': 'legacy',
+                    'completed_at': as_of + timedelta(hours=1)})
+                await repo.ingest_guided_trip(future.model_dump(mode='json'), analyze_guided_trip(future))
+                combined = await repo.departure_heatmap(as_of, 5)
+                assert combined['excluded_unpaired_trip_count'] == 1
+                legacy_stats = combined['cells'][h3.latlng_to_cell(21.1, 105.9, 5)]
+                assert legacy_stats['history_trip_count'] == 1 and legacy_stats['departure_pct'] is None
+                assert combined['cells'][origin_cell]['eligible_trip_count'] == 20
+                assert combined['cells'][origin_cell]['departing_trip_count'] == 10
+                report['checks'].append({'case': 'legacy-footprint-causal-antijoin-no-inferred-weights', 'pass': True})
                 real_repo = RouteHistoryRepository(pool, 'realtime')
                 await real_repo.ensure_schema()
                 await real_repo.ingest_guided_trip(trips[1].model_dump(mode='json'), analyses[1])

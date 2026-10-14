@@ -85,3 +85,16 @@ installs 30 paired fake trips solely in `synthetic`, with stable batch identifie
 it never writes realtime history or Dataset V1. Evaluation truth stays offline.
 The separate branch review API is `http://127.0.0.1:8005/demo`; existing production
 API containers are left in place.
+
+### Road-based synthetic review batch
+
+`python -B -m scripts.seed_guided_hanoi --as-of 2026-10-14T03:00:00Z`
+uses live GraphHopper and writes only synthetic paired evidence. The default
+12 corridors / five drivers / six maneuvers create 360 trips. Generated manifest,
+offline truth and report are under `runtime/h3-road-journeys-20261014/`; manifest
+reuse makes retries stable. Do not delete old history or edit Dataset V1.
+
+The seven-day overlay also displays legacy histories as gray approximate footprints,
+without inferred departure percentages. User map pan reuses all-region cells; change
+resolution/time or reload to fetch refreshed evidence. Controls passing does not
+establish perfect synthetic event-count agreement or real driver behavior.

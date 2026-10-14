@@ -198,7 +198,9 @@ def analyze_guided_trip(trip: GuidedTrip):
         uncertain_origins.append(anchor)
     cells = {}
     for resolution in range(5, 11):
-        values = defaultdict(lambda: {'reached': [], 'departures': [], 'uncertain': []})
+        values = defaultdict(lambda: {'reached': [], 'departures': [], 'uncertain': [], 'observed': []})
+        for observation in trip.observations:
+            values[h3.latlng_to_cell(*observation.coordinates, resolution)]['observed'].append(observation.at.timestamp())
         for coordinates, at in exposures:
             values[h3.latlng_to_cell(*coordinates, resolution)]['reached'].append(at)
         for coordinates, at in departures:
