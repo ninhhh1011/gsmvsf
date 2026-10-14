@@ -197,10 +197,26 @@ export class DemoMap {
         L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
         // Standard OpenStreetMap tiles (no API key required)
-        this.layers.baseTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        this.layers.baseTiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
         }).addTo(this.map);
+
+        const failedTiles = new Set();
+        let tileNoticeVisible = false;
+        const tileNotice = '<span role="status">Không tải được một phần nền bản đồ. Kiểm tra kết nối rồi tải lại.</span>';
+        this.layers.baseTiles.on('tileerror', event => {
+            failedTiles.add(event.tile);
+            if (!tileNoticeVisible) this.map.attributionControl.addAttribution(tileNotice);
+            tileNoticeVisible = true;
+        });
+        this.layers.baseTiles.on('tileload tileunload', event => {
+            failedTiles.delete(event.tile);
+            if (!failedTiles.size && tileNoticeVisible) {
+                this.map.attributionControl.removeAttribution(tileNotice);
+                tileNoticeVisible = false;
+            }
+        });
 
         this.layers.directRoute = L.layerGroup().addTo(this.map);
         this.layers.recommendRoute = L.layerGroup().addTo(this.map);

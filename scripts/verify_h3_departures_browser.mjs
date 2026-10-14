@@ -16,6 +16,9 @@ try {
         const page = await browser.newPage({ viewport });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
+        // Rendering tests isolate remote tiles; live tile failures are recorded separately.
+        await page.route('https://*.tile.openstreetmap.org/**', route => route.abort());
+        await page.route('https://tile.openstreetmap.org/**', route => route.abort());
         await page.goto(url, { waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => !!window.driverMode?._h3Overlay);
         // Fixed replay time matches the documented synthetic verification batch.
@@ -35,7 +38,7 @@ try {
         const evidenceOnly = await page.evaluate(() => driverMode._h3Overlay.polygons.every(
             p => Object.hasOwn(driverMode._h3Overlay.heatmap.cells, p._cellId)));
         check(`${name}: journey evidence without A/B`, initial.mode === 'DEPARTURES' && initial.routeAbsent &&
-            initial.polygons <= actualCells.size && evidenceOnly && initial.resolution === 9,
+            initial.polygons === actualCells.size && evidenceOnly && initial.resolution === 9,
             { rendered: initial.polygons, supported: actualCells.size, resolution: initial.resolution });
         check(`${name}: paired synthetic evidence is explicit`, initial.stats.source === 'synthetic' && initial.caption.includes('giả lập'), initial.caption);
         check(`${name}: legacy footprints retained without weights`, initial.stats.excluded_unpaired_trip_count > 0 &&
@@ -59,19 +62,21 @@ try {
             overlay.layer.clearLayers = clear;
             const retained = overlay.polygons.filter(p => before.has(p._cellId));
             return { clears, retained: retained.length,
-                reused: retained.every(p => before.get(p._cellId) === p), resolution: overlay.route.resolution };
+                reused: retained.every(p => before.get(p._cellId) === p), resolution: overlay.route.resolution,
+                canvas: overlay.polygons.every(p => p._renderer instanceof L.Canvas) };
         });
         check(`${name}: pan and zoom preserve polygons without clearing`, stability.clears === 0 &&
-            stability.retained > 0 && stability.reused && stability.resolution === 9, stability);
+            stability.retained > 0 && stability.reused && stability.resolution === 9 && stability.canvas, stability);
         await page.waitForFunction(() => driverMode._h3Overlay.rendered === driverMode._h3Overlay.polygons.length);
         await page.screenshot({ path: `${output}/${name}-journey-footprint.png` });
         if (name === 'mobile') await page.locator('#btn-driver-sheet-toggle').click();
-        await page.evaluate(() => driverMode.map.map.setView([21.001, 105.8], 15, { animate: false }));
+        await page.evaluate(() => { driverMode.map.map.setView([21.001, 105.8], 15, { animate: false }); });
         await page.waitForFunction(() => driverMode._h3Overlay.heatmap?.status === 'AVAILABLE' && driverMode._h3Overlay.route.resolution >= 9);
         await page.waitForFunction(() => driverMode._h3Overlay.rendered === driverMode._h3Overlay.polygons.length);
         const details = await page.evaluate(() => {
             const overlay = driverMode._h3Overlay;
-            const polygon = overlay.polygons.find(p => overlay.cellMetadata.get(p._cellId)?.departure_event_count > 0);
+            const polygon = overlay.polygons.find(p => driverMode.map.map.getBounds().intersects(p.getBounds()) &&
+                overlay.cellMetadata.get(p._cellId)?.departure_event_count > 0);
             polygon?.openPopup();
             return { event: overlay.cellMetadata.get(polygon?._cellId), popupOpened: !!polygon?.isPopupOpen(), cells: overlay.polygons.length };
         });

@@ -40,10 +40,23 @@ test('pan and zoom retain visible polygons without restarting the batched reveal
     assert.ok(f.added.every(p => before.get(p._cellId) === p), 'Leaflet polygons must survive the viewport change');
     f.setBounds([20.998, 21.003, 105.798, 105.803]);
     f.handlers.moveend(); f.flush();
-    assert.ok(f.added.length > 0 && f.added.length < before.size);
+    assert.equal(f.added.length, before.size, 'heatmap cells stay loaded outside the viewport');
     assert.ok(f.added.every(p => before.get(p._cellId) === p));
     f.overlay.setEnabled(false);
     assert.equal(f.added.length, 0);
+});
+
+test('heatmap loads more than 500 evidence cells once even outside the initial viewport', async () => {
+    const cells = Array.from(h3.gridDisk(h3.latLngToCell(21, 105.8, 9), 14));
+    const f = fixture(async () => ({ status: 'AVAILABLE', resolution: 9,
+        cells: Object.fromEntries(cells.map(cell => [cell, { departure_pct: 0, color: '#059669' }])) }));
+    f.setBounds([21.3, 21.4, 106, 106.1]);
+    await f.overlay.showDepartureHeatmap(); f.flush();
+    assert.ok(cells.length > 500);
+    assert.equal(f.added.length, cells.length);
+    const before = [...f.added];
+    f.setBounds([20.9, 21.1, 105.7, 105.9]); f.handlers.moveend();
+    assert.deepEqual(f.added, before);
 });
 
 test('small pans retain the current visible cells when the display cap is full', async () => {

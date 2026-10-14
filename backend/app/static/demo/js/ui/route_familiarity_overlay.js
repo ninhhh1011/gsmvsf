@@ -1,5 +1,5 @@
 const DEFAULT_RESOLUTION = 9;
-const DEFAULT_MAX_CELLS = 500;
+const DEFAULT_MAX_CELLS = Infinity;
 const DEFAULT_BATCH_SIZE = 50;
 const scheduleFrame = callback => globalThis.requestAnimationFrame
     ? globalThis.requestAnimationFrame(callback) : setTimeout(callback, 0);
@@ -26,6 +26,7 @@ export class RouteFamiliarityOverlay {
         this.sharedCellsSet = new Set();
         this.cellMetadata = new Map();
         this.layer = leaflet.layerGroup().addTo(map);
+        this.renderer = leaflet.canvas?.({ padding: 0.5 });
         this.active = true;
         this.enabled = false;
         this.isBaseline = false;
@@ -39,7 +40,7 @@ export class RouteFamiliarityOverlay {
         this.heatmapRequest = 0;
         this.heatmap = null;
         this.onMoveEnd = () => {
-            if (this.heatmapMode && this.enabled) return this.render(true);
+            if (this.heatmapMode && this.enabled) return;
             if (this.isBaseline && this.enabled) {
                 this.renderHanoiBaseline();
                 return;
@@ -160,8 +161,8 @@ export class RouteFamiliarityOverlay {
                 !Array.isArray(point) || point.length < 2 || !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) continue;
             const lats = boundary.map(point => point[0]);
             const lngs = boundary.map(point => point[1]);
-            if (Math.max(...lats) < south || Math.min(...lats) > north ||
-                Math.max(...lngs) < west || Math.min(...lngs) > east) continue;
+            if (!this.heatmapMode && (Math.max(...lats) < south || Math.min(...lats) > north ||
+                Math.max(...lngs) < west || Math.min(...lngs) > east)) continue;
             visible.push({ cell, boundary: boundary.map(([lat, lng]) => [lat, lng]) });
         }
 
@@ -178,6 +179,7 @@ export class RouteFamiliarityOverlay {
             const meta = this.cellMetadata.get(cell) || this._getDefaultMeta(cell);
             const isBase = meta.tier === 'BASELINE' || meta.tier?.endsWith('_FAMILIARITY') || meta.tier === 'RARE_OR_DEVIATION';
             const poly = this.L.polygon(coords, {
+                renderer: this.renderer,
                 color: meta.color,
                 fillColor: meta.fillColor,
                 fillOpacity: isBase ? 0.35 : 0.45,
@@ -191,7 +193,9 @@ export class RouteFamiliarityOverlay {
             return poly;
         })];
         this.rendered = retained.length;
-        if (this.isBaseline) {
+        if (this.heatmapMode) {
+            this.setCount(`Ô hành trình · ${cappedLength} ô đã nạp · H3-${res}`);
+        } else if (this.isBaseline) {
             this.setCount(`Ô hành trình · ${cappedLength}/${visible.length} ô trong vùng xem · H3-${res}`);
         } else {
             this.setCount(`Showing ${cappedLength} of ${visible.length} route cells (H3-${res})`);
@@ -684,5 +688,6 @@ export class RouteFamiliarityOverlay {
         this.cancelRender();
         this.map.off('moveend', this.onMoveEnd);
         this.map.removeLayer(this.layer);
+        if (this.renderer) this.map.removeLayer(this.renderer);
     }
 }

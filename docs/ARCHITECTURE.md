@@ -28,7 +28,7 @@ Production cells need five reached drivers and, for nonzero departures, five
 departing drivers. Public output contains no identities or third-party raw paths.
 
 The browser renders only journey-supported cells at the user's selected H3 resolution,
-clipped to the viewport with an explicit 500-visible-cell cap. It does not generate
+loaded as one all-region Canvas layer without a display cap. It does not generate
 a geographic baseline or coarsen based on empty map area. Missing evidence does not
 manufacture cells. Synthetic evidence is explicit, and static visit weights
 are no longer consumed. Whole-trip comparison is a separate selected mode. Replay
@@ -81,3 +81,12 @@ There is no background geographic grid or automatic resolution reduction.
 SQL materializes per-cell causal predicates once and Python deduplicates legacy
 driver IDs, retaining the same snapshot/privacy semantics and five-second query
 budget. This does not introduce a freshness policy, new service or ranking change.
+
+Owner removed the H3 display cap on 2026-10-14. Departure cells are loaded once
+at explicit resolution/event time, including offscreen cells; Leaflet Canvas handles
+viewport projection without application culling/rebuilding on moveend. Data/time/
+resolution/mode changes still replace evidence. Backend aggregation/work caps stay
+unchanged. Dedicated Canvas renderer is removed during overlay destruction.
+Base tiles remain a separate external dependency; tile errors are tracked per tile
+until successful load/unload, with a visible attribution notice. No map fallback or
+DNS/system configuration change is introduced.

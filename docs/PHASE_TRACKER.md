@@ -116,3 +116,9 @@ no load-capacity or field-accuracy claim. Main remains unchanged.
 Branch-only H3 pan/zoom stability fix: retain existing visible polygons and batch
 only entering cells; stable subset at the 500 cap. 271 frontend PASS and 18/18
 live desktop/mobile checks. Backend/Dataset unchanged; no merge or push.
+
+Latest owner-approved H3 change removes default display cap and loads all evidence
+with Leaflet Canvas, independent of viewport. 273 frontend PASS, 18/18 browser
+checks, 649 cells retained. Gray background independently traced to external OSM
+tile DNS failure; visible notice/canonical host added, network success unverified.
+Backend/Dataset unchanged; branch remains unmerged.

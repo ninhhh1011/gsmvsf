@@ -67,3 +67,12 @@ distinct-trip aggregation and privacy are tested. Only journey-supported cells
 are rendered, with backend percentages at the selected resolution.
 An audit records actual PostgreSQL data gaps; deterministic synthetic evaluation
 and real PostgreSQL/API/browser verification supply reviewable branch evidence.
+
+## Latest owner correction: no display cap / no viewport-dependent heatmap loading
+
+Supersede prior 500-visible-cell cap and application clipping for departure mode.
+Use existing Leaflet Canvas and load all supported aggregate cells once, independent
+of initial viewport. Pan/zoom must not replace the layer or initiate delayed cell
+loading; data/resolution/time changes still refresh. No blank geographic cells.
+Backend limits remain explicit and separate from display coverage. External tile
+loading errors must remain distinguishable from H3/API failure.

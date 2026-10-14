@@ -1,6 +1,32 @@
 # H3 departure statistics branch report
 
-## Current journey-only coverage and source expansion
+## Latest uncapped Canvas correction
+
+Owner requested removing the display limit and reported zoom-delayed cells plus
+gray background tiles. The current UI loads all evidence cells once, including
+offscreen cells, using installed Leaflet Canvas; departure moveend no longer
+re-filters/rebuilds cells. The default display limit is removed. Dedicated renderer
+shutdown, toggles and explicit data/time/resolution/mode refresh remain intact.
+This supersedes prior viewport clipping and 500-cap behavior recorded below.
+
+Verification: 273 frontend PASS, 18/18 desktop/mobile browser checks; all 649
+resolution-9 cells loaded and preserved through pan/zoom with Canvas. New regression
+loads 631 cells outside the initial viewport before moving into the journey area.
+No backend or Dataset changes; those suites were not rerun for this frontend fix.
+
+A separate live probe found 32/32 background images missing and
+`ERR_NAME_NOT_RESOLVED` for OSM tile domains. This confirms the gray background is
+external tile loading, independently of H3. Use the [canonical tile URL](https://operations.osmfoundation.org/policies/tiles/)
+and expose a notice for failed tiles, retained until that tile loads or unloads.
+Rendering browser tests now explicitly abort external tiles, rather than claim
+network/background success. The network DNS failure remains unresolved; no system
+DNS settings, alternative provider or fake background was installed. Canvas uses
+[Leaflet's existing renderer](https://leafletjs.com/reference.html#canvas).
+Evidence: `runtime/h3-departures/frontend-canvas.txt`, browser results JSON; initial
+live diagnostic script/screenshot under `runtime/h3-departures/tile-probe.*`.
+No numeric FPS/capacity claim or performance guarantee beyond this sample.
+
+## Earlier journey-only coverage and source expansion
 
 The owner approved gray legacy footprints and a separate road-based paired batch.
 The browser renders only journey-supported cells at the chosen resolution, clips

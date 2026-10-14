@@ -581,3 +581,11 @@ statement timeout and explicit failures. No cache service or new dependency.
 viewport changes, give them priority at the existing 500-cell cap, and batch only
 entering cells. Data/time/resolution/mode refreshes still replace old evidence.
 This removes clear-and-reveal flicker without changing H3 or statistics semantics.
+
+**Latest owner correction:** Remove the default H3 display cap. Supersede application
+viewport culling for departure mode: load all aggregate evidence once and reuse
+Leaflet's installed Canvas renderer through pan/zoom. Keep backend work guards,
+causal evidence and resolution unchanged. This replaces the prior visible-subset
+policy; no new dependency. Use OSM's canonical `tile.openstreetmap.org` host and
+report failed background tiles until they successfully load or leave the map.
+A failed external DNS lookup is not an H3 statistics failure or proof of no trips.
