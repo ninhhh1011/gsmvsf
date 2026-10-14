@@ -27,17 +27,13 @@ function fixture(loadHeatmap = async ({ resolution }) => ({ status: 'NO_PAIRED_E
         flush: () => { while (frames.length) frames.shift()(); } };
 }
 
-test('departure grid covers the whole viewport by coarsening instead of cropping to visit cells', async () => {
+test('missing journey evidence never creates geographic grid cells or changes requested resolution', async () => {
     const f = fixture();
     await f.overlay.showDepartureHeatmap();
     f.flush();
-    assert.ok(f.added.length > 0 && f.added.length <= 500);
-    assert.ok(f.overlay.route.resolution < 9);
-    assert.ok(f.added.every(p => p.options.fillColor === '#cbd5e1'));
-    const cells = new Set(f.overlay.route.route_cells);
-    for (const p of [[20.81, 105.51], [20.81, 106.09], [21.29, 105.51], [21.29, 106.09]]) {
-        assert.ok(cells.has(h3.latLngToCell(...p, f.overlay.route.resolution)), `missing corner ${p}`);
-    }
+    assert.equal(f.added.length, 0);
+    assert.equal(f.overlay.route.resolution, 9);
+    assert.deepEqual(f.overlay.route.route_cells, []);
     assert.match(f.supportElement.textContent, /Chưa có.*cặp/i);
 });
 
@@ -72,16 +68,27 @@ test('stale heatmap response cannot replace a newer time or revive a disabled la
     assert.equal(f.added.length, 0);
 });
 
-test('panning refreshes full region and dependency failure keeps gray unknown cells', async () => {
+test('panning refreshes journey evidence and dependency failure does not manufacture cells', async () => {
     let calls = 0;
     const f = fixture(async () => { calls++; throw new Error('outage'); });
     await f.overlay.showDepartureHeatmap(); f.flush();
-    assert.ok(f.added.length);
+    assert.equal(f.added.length, 0);
     assert.match(f.supportElement.textContent, /không khả dụng/i);
     f.setBounds([21.2, 21.4, 105.3, 105.6]);
     await f.handlers.moveend(); f.flush();
     assert.equal(calls, 2);
-    assert.ok(f.overlay.route.route_cells.includes(h3.latLngToCell(21.3, 105.4, f.overlay.route.resolution)));
+    assert.deepEqual(f.overlay.route.route_cells, []);
+});
+
+test('wide views render only journey-supported cells at the selected resolution', async () => {
+    const cells = [h3.latLngToCell(21, 105.8, 9), h3.latLngToCell(21.003, 105.8, 9)];
+    const f = fixture(async ({ resolution }) => ({ status: 'AVAILABLE', resolution,
+        cells: Object.fromEntries(cells.map(cell => [cell, { eligible_trip_count: 100, departing_trip_count: 20,
+            departure_event_count: 28, departure_pct: 20, color: '#ef4444' }])) }));
+    await f.overlay.showDepartureHeatmap(); f.flush();
+    assert.equal(f.overlay.route.resolution, 9);
+    assert.deepEqual(new Set(f.added.map(p => p._cellId)), new Set(cells));
+    assert.ok(f.added.every(p => h3.getResolution(p._cellId) === 9));
 });
 
 test('departure mode remains citywide with an active route and uses replay observation time', async () => {

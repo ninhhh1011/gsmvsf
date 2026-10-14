@@ -1,5 +1,21 @@
 # H3 departure statistics branch report
 
+## Owner screenshot correction — current UI behavior
+
+The owner clarified that coverage must originate from driver journeys, not a blank
+geographic grid. The current UI therefore removes baseline grid generation and
+viewport-driven resolution reduction. It displays only journey evidence at the
+selected resolution. Empty history/outage produces no invented polygons. The 30
+synthetic cases still occupy a small physical area; a few evidence cells do not
+establish citywide behavioral coverage. Adding unpaired history as gray, unweighted
+footprints remains a source-selection question, not assumed departure evidence.
+
+Correction checks: 268 complete frontend tests PASS; six backend/API cross-language
+contract tests PASS. The full backend/data verification recorded below applies to
+the unchanged backend. Historical viewport-grid screenshots below are superseded
+by `runtime/h3-departures/browser/desktop-journey-footprint.png` and
+`mobile-journey-footprint.png` from the correction browser check.
+
 Branch: `feat/h3-departure-statistics-7d`, forked from
 `feat/h3-deviation-heatmap` at `e8b1ede7797711288d60f4b181b72d784d5daacb`.
 Owner requires separate merge permission. No merge or remote push performed.

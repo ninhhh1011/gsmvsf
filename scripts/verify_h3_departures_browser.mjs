@@ -31,10 +31,15 @@ try {
             stats: driverMode._h3Overlay.heatmap,
             caption: document.getElementById('route-familiarity-support').textContent
         }));
-        check(`${name}: city grid without A/B`, initial.mode === 'DEPARTURES' && initial.routeAbsent && initial.polygons > 0 && initial.polygons <= 500, initial.polygons);
+        const actualCells = new Set(Object.keys(initial.stats.cells));
+        const evidenceOnly = await page.evaluate(() => driverMode._h3Overlay.polygons.every(
+            p => Object.hasOwn(driverMode._h3Overlay.heatmap.cells, p._cellId)));
+        check(`${name}: journey evidence without A/B`, initial.mode === 'DEPARTURES' && initial.routeAbsent &&
+            initial.polygons <= actualCells.size && evidenceOnly && initial.resolution === 9,
+            { rendered: initial.polygons, supported: actualCells.size, resolution: initial.resolution });
         check(`${name}: paired synthetic evidence is explicit`, initial.stats.source === 'synthetic' && initial.caption.includes('giả lập'), initial.caption);
         check(`${name}: legacy histories excluded`, initial.stats.excluded_unpaired_trip_count > 0, initial.stats.excluded_unpaired_trip_count);
-        await page.screenshot({ path: `${output}/${name}-city-grid.png` });
+        await page.screenshot({ path: `${output}/${name}-journey-footprint.png` });
         if (name === 'mobile') await page.locator('#btn-driver-sheet-toggle').click();
         await page.evaluate(() => driverMode.map.map.setView([21.001, 105.8], 15, { animate: false }));
         await page.waitForFunction(() => driverMode._h3Overlay.heatmap?.status === 'AVAILABLE' && driverMode._h3Overlay.route.resolution >= 9);

@@ -52,12 +52,12 @@ test('H3 toggle is enabled on startup without requiring route A or B', () => {
     assert.equal(overlay.enabled, true, 'Overlay should be enabled');
 });
 
-test('H3 overlay generates Hanoi city grid when enabled with no route', () => {
+test('H3 without route or history does not generate cells over empty geography', () => {
     const { overlay, added, frames } = createH3OverlayFixture();
     overlay.setEnabled(true);
     // Flush batch rendering
     while (frames.length > 0) frames.shift()();
-    assert.ok(added.length > 0, 'Should render baseline Hanoi cells even when route is null');
+    assert.equal(added.length, 0, 'No journey evidence means no cells');
 });
 
 test('Route deviation calculation colors deviated cells red based on distance', () => {

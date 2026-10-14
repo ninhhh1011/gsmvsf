@@ -27,9 +27,10 @@ and 10,000-trip work cap. Exceeding the cap returns 503, never partial ratios.
 Production cells need five reached drivers and, for nonzero departures, five
 departing drivers. Public output contains no identities or third-party raw paths.
 
-The browser renders backend percentages at the effective H3 resolution, coarsening
-detail to cover the viewport within 500 cells instead of cropping to visit history.
-Unknown cells are gray, synthetic evidence is explicit, and static visit weights
+The browser renders only journey-supported cells at the user's selected H3 resolution,
+clipped to the viewport with an explicit 500-visible-cell cap. It does not generate
+a geographic baseline or coarsen based on empty map area. Missing evidence does not
+manufacture cells. Synthetic evidence is explicit, and static visit weights
 are no longer consumed. Whole-trip comparison is a separate selected mode. Replay
 uses current observation time; mode/time/toggle transitions invalidate old responses.
 No new dependency, ranking behavior, streaming service or Week 6 infrastructure.

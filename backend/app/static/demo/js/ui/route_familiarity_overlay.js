@@ -129,16 +129,9 @@ export class RouteFamiliarityOverlay {
             this.updateLegend(false);
             return;
         }
-        let res = this.route?.resolution || this.resolution;
-        if ((!this.route?.route_cells || this.route.route_cells.length === 0) && this.enabled) {
-            this.isBaseline = true;
-            const cells = this.generateHanoiGrid(null, res);
-            if (cells.length) res = this.h3.getResolution(cells[0]);
-            this.route = { resolution: res, route_cells: cells };
-            this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
-        }
+        const res = this.route?.resolution || this.resolution;
         if (!res || !Array.isArray(this.route?.route_cells) || this.route.route_cells.length === 0) {
-            this.setCount('Route cells unavailable');
+            this.setCount('Chưa có ô hành trình để hiển thị');
             this.updateLegend(false);
             return;
         }
@@ -186,7 +179,7 @@ export class RouteFamiliarityOverlay {
             return poly;
         });
         if (this.isBaseline) {
-            this.setCount(`Lưới vùng đang xem · ${capped.length} ô · H3-${res} (yêu cầu ${this.resolution})`);
+            this.setCount(`Ô hành trình · ${capped.length}/${visible.length} ô trong vùng xem · H3-${res}`);
         } else {
             this.setCount(`Showing ${capped.length} of ${visible.length} route cells (H3-${res})`);
         }
@@ -322,44 +315,19 @@ export class RouteFamiliarityOverlay {
         }
     }
 
-    generateHanoiGrid(bounds = null, resolution = this.resolution) {
-        if (typeof this.h3?.polygonToCells !== 'function') return [];
-        return this._viewportGrid(bounds || this.map.getBounds(), resolution).cells;
-    }
-
     renderHanoiBaseline() {
         this.heatmapMode = false;
         this.heatmapRequest++;
         this.isBaseline = true;
         this.comparisonMode = false;
         this.proposedCoords = null;
-        const cells = this.generateHanoiGrid(null, this.resolution || 9);
-        const res = cells.length ? this.h3.getResolution(cells[0]) : this.resolution;
-        this.route = {
-            resolution: res,
-            route_cells: cells
-        };
+        this.route = { resolution: this.resolution, route_cells: [] };
         this.sharedCellsSet.clear();
-        this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
+        this.cellMetadata.clear();
+        if (this.supportElement) this.supportElement.textContent = 'Chưa có hành trình để đối chiếu';
         this.enabled = true;
         if (this.toggle) this.toggle.checked = true;
         this.render();
-    }
-
-    _viewportGrid(bounds = this.map.getBounds(), requested = this.resolution) {
-        const south = bounds.getSouth(), north = bounds.getNorth();
-        const west = bounds.getWest(), east = bounds.getEast();
-        const area = Math.max(0, north - south) * Math.max(0, east - west) * 12364 * Math.cos((south + north) / 2 * Math.PI / 180);
-        let resolution = Math.min(10, requested);
-        while (resolution > 5 && this.h3.getHexagonAreaAvg && area / this.h3.getHexagonAreaAvg(resolution, 'km2') > this.maxCells * 0.7) resolution--;
-        while (resolution >= 5) {
-            const pad = this.h3.getHexagonEdgeLengthAvg ? this.h3.getHexagonEdgeLengthAvg(resolution, 'km') / 55 : 0.002;
-            const poly = [[south - pad, west - pad], [south - pad, east + pad], [north + pad, east + pad], [north + pad, west - pad]];
-            const cells = Array.from(this.h3.polygonToCells(poly, resolution));
-            if (cells.length <= this.maxCells) return { resolution, cells };
-            resolution--;
-        }
-        return { resolution: 5, cells: [] };
     }
 
     async showDepartureHeatmap(asOf = null) {
@@ -371,19 +339,20 @@ export class RouteFamiliarityOverlay {
         this.enabled = this.active;
         if (this.toggle) this.toggle.checked = this.enabled;
         if (!this.enabled) return;
-        const grid = this._viewportGrid();
-        this.route = { resolution: grid.resolution, route_cells: grid.cells };
+        const resolution = this.resolution;
+        this.route = { resolution, route_cells: [] };
         this.heatmap = { status: 'LOADING', cells: {} };
         this._setDepartureMetadata();
         this.render();
         try {
-            const heatmap = await this.loadHeatmap?.({ resolution: grid.resolution, as_of_iso: asOf });
+            const heatmap = await this.loadHeatmap?.({ resolution, as_of_iso: asOf });
             if (request !== this.heatmapRequest || !this.enabled || !this.heatmapMode) return;
             this.heatmap = heatmap || { status: 'UNAVAILABLE', cells: {} };
         } catch {
             if (request !== this.heatmapRequest || !this.enabled || !this.heatmapMode) return;
             this.heatmap = { status: 'UNAVAILABLE', cells: {} };
         }
+        this.route = { resolution, route_cells: Object.keys(this.heatmap.cells || {}) };
         this._setDepartureMetadata();
         this.render();
     }

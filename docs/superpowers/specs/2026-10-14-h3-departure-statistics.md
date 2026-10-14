@@ -5,7 +5,8 @@ Authorized in this conversation on 2026-10-14. Work only on
 
 ## Product contract
 
-Show a viewport-wide H3 grid over Hanoi without selecting a route. Aggregate all
+Owner's screenshot correction: coverage means cells supported by driver journeys,
+not a geographic grid across the viewport. Show those cells without selecting a route. Aggregate all
 guided trips in the seven days ending at the selected event time. Red indicates
 where trips begin leaving the guidance effective immediately before departure,
 not traffic frequency, familiarity, or the entirety of a divergent path. Count
@@ -31,8 +32,12 @@ do not bridge them. These are transparent project assumptions, not calibrated
 real-driver behavior. Mark the last unambiguous guided location before confirmed
 departure as an approximate departure origin, not an exact road-junction ID.
 
-Grid detail may coarsen automatically to cover the whole viewport within 500 cells;
-request statistics at that effective resolution, never add child-cell percentages.
+Keep the user's selected H3 resolution; do not coarsen based on empty viewport area.
+Render only cells returned from journey evidence, clipped to the viewport, with
+an explicit 500-visible-cell cap. No evidence means no invented grid cells. Never
+add child-cell percentages. Whether to add gray footprints from unpaired legacy
+journeys remains an explicit source-selection question; their departure weights
+must stay unavailable, not reconstructed or inferred from visits.
 Keep whole-trip offline comparison as a separately selected mode. Production
 aggregate cells require at least five contributing drivers; synthetic statistics
 are explicitly identified. No raw third-party routes/identities in public output.
@@ -48,7 +53,7 @@ Dataset V1 changes, or Week 6 infrastructure.
 Paired evidence ingestion is validated and idempotent; conflicting retries fail.
 Noise produces no departure; one long divergence produces one; return then departure
 produces two; guidance changes and gaps produce no invented departure. Window bounds,
-distinct-trip aggregation and privacy are tested. Grid covers the visible region
-with gray unknown cells, backend percentages and honest effective resolution.
+distinct-trip aggregation and privacy are tested. Only journey-supported cells
+are rendered, with backend percentages at the selected resolution.
 An audit records actual PostgreSQL data gaps; deterministic synthetic evaluation
 and real PostgreSQL/API/browser verification supply reviewable branch evidence.

@@ -552,3 +552,11 @@ whole-trip comparison separate and 80/10/10 ranking intact.
 isolated PostgreSQL/API and desktop/mobile browser checks. Synthetic data establishes
 algorithm behavior only. See the [plan](superpowers/plans/2026-10-14-h3-departure-statistics.md)
 and [branch report](reports/h3-departure-statistics-2026-10-14.md).
+
+**Owner screenshot correction:** "Coverage" means footprints originating from driver
+journeys, not covering empty geographic space. Supersede the viewport-grid/coarsening
+portion above: do not generate empty background cells, retain the selected H3
+resolution, and render only journey evidence. The 500-visible-cell cap remains
+explicit. Do not expand the behavioral coverage of 30 small synthetic test trips by
+painting the city. Unpaired legacy history remains unavailable for departure weights;
+adding its gray footprints is a separate source-selection question.

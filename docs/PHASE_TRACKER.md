@@ -92,3 +92,10 @@ and corrected; final review has no material blocker in scope. Evidence and limit
 Branch `feat/h3-departure-statistics-7d` remains unmerged; no remote push. Merge only
 with explicit owner permission. Existing API containers are retained; review uses
 the separate localhost port 8005. This does not start Week 6.
+
+Owner screenshot clarification supersedes the viewport-grid behavior: only
+journey-supported cells are rendered, requested H3 resolution is preserved,
+and empty history/outage creates no geographic background cells. Correction
+validation: 268 frontend PASS and six backend/API contract tests PASS. Backend
+ratio/data contracts remain unchanged. The sparse 30-case synthetic fixture is
+not citywide behavioral evidence; unpaired history is not assigned departure weights.
