@@ -86,18 +86,28 @@ async def seed(args):
     as_of = seed_time(args.as_of)
     output = output_directory(args.output)
     output.mkdir(parents=True, exist_ok=True)
+    hubs = HUBS
+    if args.targets:
+        targets = json.loads(output_directory(args.targets).read_text(encoding='utf-8'))['targets']
+        hubs = [(row['latitude'], row['longitude']) for row in targets]
+        if not 12 <= len(hubs) <= 48:
+            raise ValueError('Gap-target seed requires 12..48 measured targets')
     manifest_path = output / 'manifest.json'
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        if not args.targets and manifest.get('hubs'):
+            hubs = manifest['hubs']
         if (manifest['seed'], manifest['as_of'], manifest['drivers']) != (args.seed, as_of.isoformat(), args.drivers):
             raise ValueError('Use a different output directory for a different seed/time/driver count')
+        if [list(point) for point in manifest.get('hubs', HUBS)] != [list(point) for point in hubs]:
+            raise ValueError('Manifest target geometry differs; use a different output directory')
     else:
         corridors = []
         async with httpx.AsyncClient(timeout=60) as client:
             adapter = GraphHopperRoutingAdapter(client=client)
-            for index, origin in enumerate(HUBS):
-                destination = HUBS[(index + 5) % len(HUBS)]
-                waypoint = HUBS[(index + 2) % len(HUBS)]
+            for index, origin in enumerate(hubs):
+                destination = hubs[(index + 5) % len(hubs)]
+                waypoint = hubs[(index + 2) % len(hubs)]
                 direct = await fetch_route(adapter, origin, destination)
                 points = sampled(direct['coordinates'])
                 if len(points) < 90:
@@ -108,8 +118,8 @@ async def seed(args):
                 loop = await fetch_route(adapter, first, first, [waypoint])
                 corridors.append({'origin': origin, 'destination': destination, 'via': waypoint,
                     'direct': direct, 'tail_first': tail_first, 'tail_second': tail_second, 'loop': loop})
-                print(json.dumps({'prepared_corridor': index + 1, 'total': len(HUBS)}), flush=True)
-        manifest = {'seed': args.seed, 'as_of': as_of.isoformat(), 'drivers': args.drivers,
+                print(json.dumps({'prepared_corridor': index + 1, 'total': len(hubs)}), flush=True)
+        manifest = {'seed': args.seed, 'as_of': as_of.isoformat(), 'drivers': args.drivers, 'hubs': hubs,
             'namespace': 'synthetic', 'corridors': corridors,
             'provenance': 'Real GraphHopper road geometry; synthetic maneuver choices and sampled GPS',
             'limitations': 'Not observed driver behavior; GPS uses the existing 10 m chord approximation'}
@@ -170,6 +180,7 @@ def main():
     parser.add_argument('--as-of', required=True)
     parser.add_argument('--seed', type=int, default=20261014)
     parser.add_argument('--drivers', type=int, default=5)
+    parser.add_argument('--targets', help='Gap targets from the coverage audit, inside this repository')
     parser.add_argument('--output', default='runtime/h3-road-journeys-20261014')
     parser.add_argument('--database-url', default=settings.database_url.replace('postgresql+asyncpg://', 'postgresql://'))
     args = parser.parse_args()

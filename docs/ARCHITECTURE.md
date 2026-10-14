@@ -90,3 +90,13 @@ unchanged. Dedicated Canvas renderer is removed during overlay destruction.
 Base tiles remain a separate external dependency; tile errors are tracked per tile
 until successful load/unload, with a visible attribution notice. No map fallback or
 DNS/system configuration change is introduced.
+
+## Trip inspection and road-coverage audit (ADR-028)
+
+Owner-authorized inspection reuses the deviation analyzer and two-denominator
+corridor comparison. Geometry runs in the thread pool with existing payload/point/
+comparison budgets. Caller inspection is stateless; public examples are explicitly
+synthetic and gated. A separate review screen renders returned intervals, origins,
+version geometry and offline coverage without frontend classification logic.
+The offline PostGIS audit uses temporary tables, subdivided buffered GPS geometry
+and canonical reference lengths; no new database, dependency or runtime fallback.

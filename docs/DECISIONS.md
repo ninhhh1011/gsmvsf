@@ -589,3 +589,27 @@ causal evidence and resolution unchanged. This replaces the prior visible-subset
 policy; no new dependency. Use OSM's canonical `tile.openstreetmap.org` host and
 report failed background tiles until they successfully load or leave the map.
 A failed external DNS lookup is not an H3 statistics failure or proof of no trips.
+
+## ADR-028: Separate coverage, departure origins and observed deviation paths
+
+**Date:** 2026-10-14. **Status:** Owner-approved branch extension; merge separately authorized.
+
+Large trip/hex counts do not establish behavioral coverage. Add bounded per-trip
+active-guidance inspection, confirmed red paths/duration/distance, unknown intervals
+and existing two frozen-route coverage percentages. Never bridge GPS gaps/updates,
+turn unobserved tails into adherence or report undefined stationary percentages.
+Whole-route work limits leave valid interval inspection available and explicitly
+withhold that comparison. Reuse installed geometry/PostGIS/Leaflet.
+
+Public synthetic examples require the existing explicit capability and synthetic
+repository; sanitize identities and offer no arbitrary private history lookup.
+Stateless caller inspection reads no history. Offline road-length auditing targets
+measured gaps for additional real GraphHopper seed routes, preserves every old row
+and Dataset V1, and keeps held-out truth separate.
+
+Canonical CSV lacks complete motorcar access and district borders. Report candidate
+reference proximity coverage, geographic midpoint buckets and null eligible-road
+coverage; never claim authoritative city/drivable coverage. Reports disclose event
+time, bbox, tolerance, deduplication and excluded source batches. Approximate
+boundary attribution and nearby parallel roads remain limitations. Ranking,
+runtime aggregation guards and Week boundaries are unchanged.

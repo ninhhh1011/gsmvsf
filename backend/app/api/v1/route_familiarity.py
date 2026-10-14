@@ -1,6 +1,7 @@
-"""Protected internal route history ingestion. No history read endpoints."""
+"""Protected ingestion, caller inspection, aggregates and gated synthetic evidence."""
 from datetime import UTC, datetime, timedelta
 import json
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import ConfigDict, Field, ValidationError, field_validator
@@ -9,10 +10,48 @@ from starlette.concurrency import run_in_threadpool
 from backend.app.api.v1.ranking import authorize_ingestion
 from backend.app.config import settings
 from backend.app.services.snapshots.models import FrozenModel, StateError, aware_utc
-from backend.app.services.route_familiarity.deviations import GuidedTrip, analyze_guided_trip
+from backend.app.services.route_familiarity.deviations import GuidedTrip, analyze_guided_trip, inspect_guided_trip
 from backend.app.services.route_familiarity.similarity import SimilarityWorkLimitExceeded
 
 router = APIRouter()
+
+
+@router.post('/routing/inspect-guided-trip')
+async def inspect_trip(request: Request):
+    try:
+        body = await _read_bounded_body(request, 2_000_000)
+        payload = GuidedTrip.model_validate(json.loads(body))
+        return await run_in_threadpool(inspect_guided_trip, payload)
+    except (ValueError, ValidationError, UnicodeDecodeError, SimilarityWorkLimitExceeded):
+        raise StateError('Invalid or excessive guided evidence', 'INVALID_GUIDED_EVIDENCE', 422) from None
+
+
+@router.get('/routing/guided-examples')
+async def guided_examples(request: Request):
+    repository = getattr(request.app.state, 'route_history_repository', None)
+    if (not settings.enable_route_familiarity or not settings.public_synthetic_sample or
+            repository is None or repository.namespace != 'synthetic'):
+        raise StateError('Public synthetic examples disabled', 'SYNTHETIC_EXAMPLES_DISABLED', 403)
+    try:
+        return {'source': 'synthetic', 'examples': await repository.guided_examples()}
+    except Exception:
+        raise StateError('Synthetic examples unavailable', 'SYNTHETIC_EXAMPLES_UNAVAILABLE', 503) from None
+
+
+@router.get('/routing/coverage-report')
+async def coverage_report():
+    if not settings.enable_route_familiarity or not settings.public_synthetic_sample or settings.route_history_namespace != 'synthetic':
+        raise StateError('Public synthetic report disabled', 'SYNTHETIC_EXAMPLES_DISABLED', 403)
+    path = Path(__file__).resolve().parents[4] / 'runtime/h3-coverage/coverage-summary.json'
+    try:
+        if path.stat().st_size > 500_000:
+            raise ValueError('Report size exceeded')
+        report = json.loads(path.read_text(encoding='utf-8'))
+        if report.get('status') != 'PASS' or report.get('source') != 'synthetic':
+            raise ValueError('Invalid report provenance')
+        return report
+    except (OSError, ValueError):
+        raise StateError('Coverage report unavailable', 'COVERAGE_REPORT_UNAVAILABLE', 503) from None
 
 
 async def _read_bounded_body(request: Request, limit: int) -> bytes:

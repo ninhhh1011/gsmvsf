@@ -223,3 +223,23 @@ legacy/paired identities are excluded from legacy only once paired completion is
 available. Visits never enlarge the guided denominator. No raw identity is exposed.
 The new GraphHopper synthetic batch is separate from Dataset V1 and ranking history;
 its offline maneuver declarations are never prediction inputs.
+
+## Approved trip-inspection and coverage extension (2026-10-14)
+
+`POST /routing/inspect-guided-trip` accepts bounded caller-supplied GuidedTrip
+without history lookup or persistence. Confirmed ON_ROUTE/OFF_ROUTE runs reuse the
+analyzer. UNKNOWN includes pending runs, ambiguity and continuity/version breaks;
+never draw across those breaks. Unknown time includes missing head/tail; unobserved
+jump distances are withheld. Two frozen initial-guidance coverage percentages are
+separate from active-guidance intervals. Incomplete GPS/boundaries, zero observed
+movement or comparison work limits withhold percentages rather than invalidate
+otherwise usable interval evidence.
+
+Gated synthetic examples sanitize identities and require enabled familiarity,
+public_synthetic_sample and a synthetic repository. No realtime history reader.
+Offline coverage reports are fixed synthetic summaries. Candidate-reference
+coverage uses road class/access, deduplicated physical geometry, 12 m proximity to
+continuous seven-day paired GPS and EPSG:32648 lengths. Entire roads are bucketed
+by approximate geodesic midpoint into H3-5 regions, not clipped at borders or
+assigned districts. Complete motorcar permissions are unavailable; eligible-road
+coverage stays null. Legacy signatures and offline labels never supply coverage.

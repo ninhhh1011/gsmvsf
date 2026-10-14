@@ -157,6 +157,23 @@ class RouteHistoryRepository:
     def _query(self, sql: str) -> str:
         return sql.replace('realtime.', f'{self.namespace}.')
 
+    async def guided_examples(self):
+        if self.namespace != 'synthetic':
+            raise ValueError('Synthetic examples only')
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch('''SELECT DISTINCT ON (split_part(trip_id, '-', 4)) evidence
+                FROM synthetic.route_deviation_trips
+                WHERE driver_id LIKE 'h3-road-%' AND right(driver_id, 2) = '-0'
+                  AND completed_at <= now()
+                ORDER BY split_part(trip_id, '-', 4), completed_at DESC LIMIT 12''')
+        examples = []
+        for row in rows:
+            evidence = json.loads(row['evidence']) if isinstance(row['evidence'], str) else dict(row['evidence'])
+            # Public synthetic capability never returns protected driver/trip identities.
+            evidence.update(driver_id='public-synthetic', trip_id=f'example-{len(examples) + 1}')
+            examples.append(evidence)
+        return examples
+
     async def ensure_schema(self) -> None:
         """Apply the explicit schema file; deliberately not called during app startup."""
         from pathlib import Path

@@ -122,3 +122,22 @@ with Leaflet Canvas, independent of viewport. 273 frontend PASS, 18/18 browser
 checks, 649 cells retained. Gray background independently traced to external OSM
 tile DNS failure; visible notice/canonical host added, network success unverified.
 Backend/Dataset unchanged; branch remains unmerged.
+
+## 2026-10-14 Trip evidence and spatial coverage — branch only
+
+Owner-approved ADR-028 adds stateless active-guidance interval inspection, red
+confirmed deviation paths, unknown timestamps, two initial-guidance percentages
+and gated public synthetic examples. Green-origin copy no longer implies whole-trip
+adherence. New review: `/demo/static/journeys.html`.
+
+Offline candidate-road proximity audit: 331,228 physical reference segments,
+10,048.745 km within configured bbox. Targeted 420-trip/14-corridor GraphHopper
+batch increases measured reference coverage from 3.70% to 7.86%, keeping all old
+rows. Complete motorcar permissions/district boundaries unavailable; eligible-road
+coverage null, midpoint geographic buckets disclosed. Held-out 16 controls remain
+outside runtime history. No ranking, Dataset, dependency or Week 6 change.
+
+Verification/limits: [report](reports/h3-evidence-and-coverage-2026-10-14.md).
+751 backend PASS / 12 existing skips, 274 frontend PASS, Ruff PASS, validator152/0
+and22/22,63 unchanged hashes, inspector18/18 and aggregate18/18 browser checks.
+Independent review clear within scope. No merge/push; existing containers retained.

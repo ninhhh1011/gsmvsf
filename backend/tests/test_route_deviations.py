@@ -4,9 +4,51 @@ import h3
 import pytest
 from pydantic import ValidationError
 
-from backend.app.services.route_familiarity.deviations import GuidedTrip, analyze_guided_trip
+from backend.app.services.route_familiarity.deviations import GuidedTrip, analyze_guided_trip, inspect_guided_trip
 
 BASE = datetime(2026, 10, 14, 0, tzinfo=UTC)
+
+
+def test_inspection_colors_confirmed_off_route_path_but_never_bridges_a_gap():
+    points = [point(i * 20) for i in range(8)] + [point(160 + i * 20, 100) for i in range(8)]
+    result = inspect_guided_trip(evidence(points))
+    assert result['summary']['off_route_distance_m'] > 80
+    assert result['summary']['off_route_seconds'] > 10
+    assert any(item['state'] == 'OFF_ROUTE' and len(item['coordinates']) == 2 for item in result['intervals'])
+    assert result['whole_trip_comparison']['shared_pct_on_actual'] < 100
+    assert result['whole_trip_comparison']['shared_pct_on_proposed'] < 100
+    gap = evidence(points, times=[i * 5 if i < 8 else i * 5 + 100 for i in range(16)])
+    broken = inspect_guided_trip(gap)
+    assert broken['summary']['unknown_seconds'] >= 105
+    assert any(item['state'] == 'UNKNOWN' and item['coordinates'] == [] for item in broken['intervals'])
+
+
+def test_inspection_guidance_change_resets_without_a_red_connector():
+    points = [point(i * 20) for i in range(8)] + [point(160 + i * 20, 100) for i in range(8)]
+    trip = evidence(points, guidance=[{'effective_at': BASE, 'coordinates': [point(0), point(1500)]},
+        {'effective_at': BASE + timedelta(seconds=40), 'coordinates': [point(100, 100), point(1500, 100)]}])
+    result = inspect_guided_trip(trip)
+    assert result['summary']['off_route_distance_m'] == 0
+    assert result['summary']['departure_events'] == 0
+    assert any(item['state'] == 'UNKNOWN' and item['coordinates'] == [] for item in result['intervals'])
+
+
+def test_inspection_withholds_whole_trip_claim_for_unobserved_boundaries_and_zero_distance():
+    trip = evidence([point(i * 20) for i in range(8)])
+    trip.completed_at += timedelta(hours=1)
+    result = inspect_guided_trip(trip)
+    assert result['whole_trip_comparison']['shared_pct_on_actual'] is None
+    assert any(item['coordinates'] == [] and item['to_iso'] == trip.completed_at.isoformat()
+               for item in result['intervals'])
+    stationary = inspect_guided_trip(evidence([point(0)] * 8))
+    assert stationary['whole_trip_comparison']['shared_pct_on_actual'] is None
+
+
+def test_inspection_keeps_valid_intervals_when_whole_route_comparison_exceeds_distance_budget():
+    result = inspect_guided_trip(evidence([point(i * 50) for i in range(2020)]))
+    assert result['whole_trip_comparison']['status'] == 'COMPARISON_WORK_LIMIT'
+    assert result['whole_trip_comparison']['shared_pct_on_actual'] is None
+    assert result['summary']['off_route_distance_m'] > 90000
 
 
 def point(north, east=0):

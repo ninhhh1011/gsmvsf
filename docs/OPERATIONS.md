@@ -98,3 +98,28 @@ The seven-day overlay also displays legacy histories as gray approximate footpri
 without inferred departure percentages. User map pan reuses all-region cells; change
 resolution/time or reload to fetch refreshed evidence. Controls passing does not
 establish perfect synthetic event-count agreement or real driver behavior.
+
+### Trip evidence and coverage review
+
+Open `/demo/static/journeys.html` from the branch API for synthetic examples,
+interval inspection and the fixed offline coverage report. Production/private
+namespaces never supply examples.
+
+Run `python -B -m scripts.audit_guided_coverage --as-of 2026-10-14T07:00:00Z` to
+write `runtime/h3-coverage/coverage-summary.json` and measured `targets.json`.
+Canonical CSV is read-only and PostgreSQL audit tables are temporary. Reports
+measure candidate reference proximity, not verified motorcar permissions.
+`--exclude-batch d1a492ab9705` reproduces the pre-extension cohort without deleting
+stored trips at the same event time.
+
+The gap seed used `python -B -m scripts.seed_guided_hanoi --as-of 2026-10-14T07:00:00Z
+--seed 2026101402 --targets runtime/h3-coverage-before/targets.json
+--output runtime/h3-gap-journeys-20261014`. Retry with the same seed/time/output;
+omit `--targets` to use frozen manifest hubs. Different provided targets fail
+rather than mutate the batch. Seed writes remain synthetic only.
+
+`python -B -m scripts.verify_guided_evidence --as-of 2026-10-14T07:00:00Z` runs
+held-out geometric/live GraphHopper controls without storing evaluation trips.
+`node scripts/verify_guided_browser.mjs` verifies desktop/mobile inspector behavior;
+external tiles are intentionally aborted. Tile network availability is separate
+from rendering/API success.

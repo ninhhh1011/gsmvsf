@@ -620,6 +620,7 @@ export class RouteFamiliarityOverlay {
                 `Tỷ lệ chuyến bỏ tuyến: <strong>${meta.departure_pct}%</strong><br>` +
                 `Chuyến bỏ tuyến / được đối chiếu: ${meta.departing_trip_count}/${meta.eligible_trip_count}<br>` +
                 `Tổng số lần bắt đầu lệch: ${meta.departure_event_count}<br>` +
+                (meta.departure_pct === 0 ? 'Xanh: chưa ghi nhận khởi đầu lệch trong mẫu này; không chứng minh cả chuyến đi đúng.<br>' : '') +
                 'Vị trí bắt đầu là ước lượng từ hành lang tuyến, không phải nút rẽ đã xác minh.';
         }
         const resLabel = this.route?.resolution || this.resolution || 9;

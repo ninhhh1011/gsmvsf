@@ -1,6 +1,7 @@
 """Confirmed guidance-departure origins, never visit-frequency or motivation."""
 from bisect import bisect_right
 from collections import defaultdict
+from dataclasses import asdict
 from datetime import datetime
 import math
 
@@ -9,8 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from backend.app.services.route_familiarity.route_matcher import (
     _EARTH_RADIUS_M, _haversine_m, _heading_deg, _heading_diff, _lerp, _tiles, prepare_route,
+    match_and_compare_routes,
 )
-from backend.app.services.route_familiarity.similarity import ComparisonBudget
+from backend.app.services.route_familiarity.similarity import ComparisonBudget, SimilarityWorkLimitExceeded
 
 LATERAL_M = 45.0
 CONFIRM_SAMPLES = 3
@@ -124,7 +126,7 @@ def _on_corridor(point, route, heading, last_offset, budget):
     return (None, True) if ambiguous else (best, False)
 
 
-def analyze_guided_trip(trip: GuidedTrip):
+def analyze_guided_trip(trip: GuidedTrip, *, include_trace=False):
     sample_budget = ComparisonBudget(200000)
     routes = [prepare_route(version.coordinates, 9, sample_budget=sample_budget) for version in trip.guidance]
     if any(not route.pieces for route in routes):
@@ -136,7 +138,9 @@ def analyze_guided_trip(trip: GuidedTrip):
     run_kind, run_count, run_distance, run_start = None, 0, 0.0, None
     last_offset, uncertain = 0.0, 0
     budget = ComparisonBudget(1000000)
-    for observation in trip.observations:
+    states = ['UNKNOWN'] * len(trip.observations) if include_trace else None
+    run_indices = []
+    for observation_index, observation in enumerate(trip.observations):
         version = bisect_right(times, observation.at) - 1
         distance = _haversine_m(previous.coordinates, observation.coordinates) if previous else 0.0
         gap = (observation.at - previous.at).total_seconds() if previous else 0.0
@@ -150,6 +154,7 @@ def analyze_guided_trip(trip: GuidedTrip):
             run_kind, run_count, run_distance, run_start = None, 0, 0.0, None
             last_offset, previous, distance = 0.0, None, 0.0
             pending_exposures = []
+            run_indices = []
         heading = _heading_deg(previous.coordinates, observation.coordinates) if previous and distance >= 3 else None
         match, ambiguous = _on_corridor(observation.coordinates, routes[version], heading,
                                         0.0 if off_route else last_offset, budget)
@@ -160,6 +165,7 @@ def analyze_guided_trip(trip: GuidedTrip):
             armed, anchor, previous = False, None, None
             run_kind, run_count, run_distance = None, 0, 0.0
             pending_exposures = []
+            run_indices = []
             continue
         on_route = match is not None
         if on_route:
@@ -170,10 +176,17 @@ def analyze_guided_trip(trip: GuidedTrip):
             run_kind, run_count, run_distance = kind, 1, 0.0
             run_start = observation.at.timestamp()
             pending_exposures = []
+            run_indices = []
         else:
             run_count += 1
             run_distance += distance
         confirmed = run_count >= CONFIRM_SAMPLES and run_distance >= CONFIRM_DISTANCE_M
+        if include_trace:
+            run_indices.append(observation_index)
+            if confirmed:
+                for index in run_indices:
+                    states[index] = 'ON_ROUTE' if on_route else 'OFF_ROUTE'
+                run_indices = []
         if on_route:
             pending_exposures.append((projected, observation.at.timestamp()))
             if confirmed:
@@ -208,7 +221,68 @@ def analyze_guided_trip(trip: GuidedTrip):
         for coordinates, at in uncertain_origins:
             values[h3.latlng_to_cell(*coordinates, resolution)]['uncertain'].append(at)
         cells[str(resolution)] = dict(values)
-    return {'cells': cells, 'comparable': bool(exposures), 'uncertain_intervals': uncertain,
+    result = {'cells': cells, 'comparable': bool(exposures), 'uncertain_intervals': uncertain,
             'method': 'DIRECTED_GEOMETRIC_CORRIDOR', 'lateral_m': LATERAL_M,
             'confirmation_samples': CONFIRM_SAMPLES, 'confirmation_distance_m': CONFIRM_DISTANCE_M,
             'max_gap_s': MAX_GAP_S, 'max_jump_m': MAX_JUMP_M}
+    if include_trace:
+        result['states'] = states
+    return result
+
+
+def inspect_guided_trip(trip: GuidedTrip):
+    """Offline inspection of caller-supplied evidence; never reads protected history."""
+    analysis = analyze_guided_trip(trip, include_trace=True)
+    intervals, totals = [], {'ON_ROUTE': [0.0, 0.0], 'OFF_ROUTE': [0.0, 0.0], 'UNKNOWN': [0.0, 0.0]}
+    guidance_times = [version.effective_at for version in trip.guidance]
+    disconnected = ((trip.observations[0].at - trip.started_at).total_seconds() > MAX_GAP_S or
+                    (trip.completed_at - trip.observations[-1].at).total_seconds() > MAX_GAP_S)
+    for index, (first, second) in enumerate(zip(trip.observations, trip.observations[1:])):
+        seconds = (second.at - first.at).total_seconds()
+        distance = _haversine_m(first.coordinates, second.coordinates)
+        broken = seconds > MAX_GAP_S or distance > MAX_JUMP_M or distance / seconds > 55
+        changed = bisect_right(guidance_times, first.at) != bisect_right(guidance_times, second.at)
+        disconnected |= broken
+        state = (analysis['states'][index] if not broken and not changed and
+                 analysis['states'][index] == analysis['states'][index + 1] else 'UNKNOWN')
+        totals[state][0] += 0 if broken or changed else distance
+        totals[state][1] += seconds
+        intervals.append({'state': state, 'from_iso': first.at.isoformat(), 'to_iso': second.at.isoformat(),
+                          'distance_m': round(distance, 2) if not broken and not changed else None,
+                          'seconds': seconds,
+                          'coordinates': [] if broken or changed else [first.coordinates, second.coordinates]})
+    for first_at, second_at in [(trip.started_at, trip.observations[0].at),
+                                 (trip.observations[-1].at, trip.completed_at)]:
+        seconds = (second_at - first_at).total_seconds()
+        if seconds > 0:
+            totals['UNKNOWN'][1] += seconds
+            interval = {'state': 'UNKNOWN', 'from_iso': first_at.isoformat(), 'to_iso': second_at.isoformat(),
+                        'distance_m': None, 'seconds': seconds, 'coordinates': []}
+            if first_at == trip.started_at:
+                intervals.insert(0, interval)
+            else:
+                intervals.append(interval)
+    comparison = {'status': 'UNAVAILABLE_GPS_CONTINUITY', 'shared_pct_on_actual': None,
+                  'shared_pct_on_proposed': None}
+    if not disconnected:
+        try:
+            comparison = {'status': 'AVAILABLE', **asdict(match_and_compare_routes(
+                trip.guidance[0].coordinates, [point.coordinates for point in trip.observations]))}
+        except (ValueError, SimilarityWorkLimitExceeded):
+            comparison = {'status': 'COMPARISON_WORK_LIMIT', 'shared_pct_on_actual': None,
+                          'shared_pct_on_proposed': None}
+        if comparison.get('actual_distance_m') == 0:
+            comparison.update(status='NO_OBSERVED_MOVEMENT', shared_pct_on_actual=None,
+                              shared_pct_on_proposed=None)
+    summary = {'on_route_distance_m': round(totals['ON_ROUTE'][0], 2),
+               'off_route_distance_m': round(totals['OFF_ROUTE'][0], 2),
+               'unknown_distance_m': round(totals['UNKNOWN'][0], 2),
+               'on_route_seconds': totals['ON_ROUTE'][1], 'off_route_seconds': totals['OFF_ROUTE'][1],
+               'unknown_seconds': totals['UNKNOWN'][1],
+               'departure_events': sum(len(cell['departures']) for cell in analysis['cells']['9'].values())}
+    return {'summary': summary, 'intervals': intervals, 'whole_trip_comparison': comparison,
+            'guidance_versions': [version.model_dump(mode='json') for version in trip.guidance],
+            'departure_origin_cells': {cell: len(value['departures']) for cell, value in analysis['cells']['9'].items()
+                                       if value['departures']},
+            'limitations': 'Whole-trip percentages compare initial guidance; interval states use active guidance. '
+                           'Geometric corridor assumptions, not calibrated field accuracy.'}

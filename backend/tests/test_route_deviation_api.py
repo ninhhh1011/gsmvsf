@@ -12,6 +12,38 @@ from backend.tests.test_route_deviations import evidence, point
 
 
 @pytest.mark.asyncio
+async def test_stateless_guided_inspection_and_public_example_boundary(client, app, monkeypatch):
+    payload = evidence([point(i * 20) for i in range(8)]).model_dump(mode='json')
+    response = await client.post('/api/v1/routing/inspect-guided-trip', json=payload)
+    assert response.status_code == 200
+    assert response.json()['summary']['off_route_distance_m'] == 0
+    assert 'driver_id' not in response.text and 'trip_id' not in response.text
+    assert (await client.post('/api/v1/routing/inspect-guided-trip', json={})).status_code == 422
+    monkeypatch.setattr(settings, 'enable_route_familiarity', True)
+    monkeypatch.setattr(settings, 'public_synthetic_sample', True)
+    repo = AsyncMock()
+    repo.namespace = 'realtime'
+    app.state.route_history_repository = repo
+    assert (await client.get('/api/v1/routing/guided-examples')).status_code == 403
+    repo.namespace = 'synthetic'
+    repo.guided_examples.return_value = []
+    assert (await client.get('/api/v1/routing/guided-examples')).status_code == 200
+    monkeypatch.setattr(settings, 'public_synthetic_sample', False)
+    assert (await client.get('/api/v1/routing/guided-examples')).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_public_examples_strip_synthetic_identities():
+    conn = AsyncMock()
+    payload = evidence([point(i * 20) for i in range(8)]).model_dump(mode='json')
+    conn.fetch.return_value = [{'evidence': payload}]
+    result = await RouteHistoryRepository(Pool(conn), 'synthetic').guided_examples()
+    assert result[0]['driver_id'] == 'public-synthetic'
+    assert result[0]['trip_id'] == 'example-1'
+    assert 'fake-driver' not in str(result)
+
+
+@pytest.mark.asyncio
 async def test_guided_evidence_insert_retry_conflict():
     conn = AsyncMock()
     payload = evidence([point(i * 20) for i in range(6)]).model_dump(mode='json')

@@ -98,6 +98,16 @@ test('backend departure percentages and event counts replace visit frequency and
     assert.match(f.supportElement.textContent, /42/);
 });
 
+test('green origin statistics explain the sample and never claim whole-trip adherence', async () => {
+    const cell = h3.latLngToCell(21, 105.8, 9);
+    const f = fixture(async () => ({ status: 'AVAILABLE', resolution: 9, cells: { [cell]: {
+        eligible_trip_count: 5, departing_trip_count: 0, departure_event_count: 0,
+        departure_pct: 0, color: '#059669' } } }));
+    await f.overlay.showDepartureHeatmap(); f.flush();
+    assert.match(f.added[0].popup, /0\/5/);
+    assert.match(f.added[0].popup, /không chứng minh cả chuyến đi đúng/);
+});
+
 test('legacy journey footprints are gray and visits never appear as a departure percentage', async () => {
     const cell = h3.latLngToCell(21, 105.8, 9);
     const f = fixture(async ({ resolution }) => ({ status: 'HISTORY_ONLY', resolution, source: 'synthetic',
