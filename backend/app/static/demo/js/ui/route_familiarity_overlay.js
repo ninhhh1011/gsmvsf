@@ -39,12 +39,12 @@ export class RouteFamiliarityOverlay {
         this.heatmapRequest = 0;
         this.heatmap = null;
         this.onMoveEnd = () => {
-            if (this.heatmapMode && this.enabled) return this.render();
+            if (this.heatmapMode && this.enabled) return this.render(true);
             if (this.isBaseline && this.enabled) {
                 this.renderHanoiBaseline();
                 return;
             }
-            this.render();
+            this.render(true);
         };
         map.on('moveend', this.onMoveEnd);
         toggle?.addEventListener('change', () => this.setEnabled(toggle.checked));
@@ -122,15 +122,21 @@ export class RouteFamiliarityOverlay {
         this.layer.clearLayers();
     }
 
-    render() {
-        this.cancelRender();
+    render(preserveVisible = false) {
+        const previous = preserveVisible ? this.polygons.slice(0, this.rendered) : [];
+        if (preserveVisible) {
+            if (this.frame !== null) this.cancelFrame(this.frame);
+            this.frame = null;
+        } else this.cancelRender();
         if (!this.active || !this.enabled) {
+            if (preserveVisible) this.cancelRender();
             this.setCount('Route cells hidden');
             this.updateLegend(false);
             return;
         }
         const res = this.route?.resolution || this.resolution;
         if (!res || !Array.isArray(this.route?.route_cells) || this.route.route_cells.length === 0) {
+            if (preserveVisible) this.cancelRender();
             this.setCount('Chưa có ô hành trình để hiển thị');
             this.updateLegend(false);
             return;
@@ -159,8 +165,14 @@ export class RouteFamiliarityOverlay {
             visible.push({ cell, boundary: boundary.map(([lat, lng]) => [lat, lng]) });
         }
 
-        const capped = visible.slice(0, this.maxCells);
-        this.polygons = capped.map(item => {
+        const visibleIds = new Set(visible.map(item => item.cell));
+        // Keep visible polygons at the cap so a small pan does not replace the displayed subset.
+        const retained = previous.filter(poly => visibleIds.has(poly._cellId)).slice(0, this.maxCells);
+        const retainedIds = new Set(retained.map(poly => poly._cellId));
+        for (const poly of previous) if (!retainedIds.has(poly._cellId)) this.layer.removeLayer(poly);
+        const entering = visible.filter(item => !retainedIds.has(item.cell)).slice(0, this.maxCells - retained.length);
+        const cappedLength = retained.length + entering.length;
+        this.polygons = [...retained, ...entering.map(item => {
             const cell = item.cell;
             const coords = item.boundary;
             const meta = this.cellMetadata.get(cell) || this._getDefaultMeta(cell);
@@ -177,13 +189,14 @@ export class RouteFamiliarityOverlay {
                 poly.bindPopup(this._createPopupContent(cell, meta));
             }
             return poly;
-        });
+        })];
+        this.rendered = retained.length;
         if (this.isBaseline) {
-            this.setCount(`Ô hành trình · ${capped.length}/${visible.length} ô trong vùng xem · H3-${res}`);
+            this.setCount(`Ô hành trình · ${cappedLength}/${visible.length} ô trong vùng xem · H3-${res}`);
         } else {
-            this.setCount(`Showing ${capped.length} of ${visible.length} route cells (H3-${res})`);
+            this.setCount(`Showing ${cappedLength} of ${visible.length} route cells (H3-${res})`);
         }
-        this.updateLegend(true, capped.length);
+        this.updateLegend(true, cappedLength);
         this.renderBatch();
     }
 

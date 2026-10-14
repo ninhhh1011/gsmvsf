@@ -17,7 +17,8 @@ function fixture(loadHeatmap = async ({ resolution }) => ({ status: 'NO_PAIRED_E
         on: (event, fn) => { handlers[event] = fn; }, off() {}, removeLayer() {}
     };
     const leaflet = {
-        layerGroup: () => ({ addTo() { return this; }, clearLayers() { added.length = 0; }, addLayer(x) { added.push(x); } }),
+        layerGroup: () => ({ addTo() { return this; }, clearLayers() { added.length = 0; },
+            addLayer(x) { added.push(x); }, removeLayer(x) { const i = added.indexOf(x); if (i >= 0) added.splice(i, 1); } }),
         polygon: (coords, options) => ({ coords, options, bindPopup(text) { this.popup = text; } })
     };
     const countElement = { textContent: '' }, supportElement = { textContent: '' };
@@ -26,6 +27,37 @@ function fixture(loadHeatmap = async ({ resolution }) => ({ status: 'NO_PAIRED_E
     return { overlay, added, countElement, supportElement, map, handlers, setBounds: value => { bounds = value; },
         flush: () => { while (frames.length) frames.shift()(); } };
 }
+
+test('pan and zoom retain visible polygons without restarting the batched reveal', async () => {
+    const cells = Array.from(h3.gridDisk(h3.latLngToCell(21, 105.8, 9), 5));
+    const f = fixture(async () => ({ status: 'AVAILABLE', resolution: 9,
+        cells: Object.fromEntries(cells.map(cell => [cell, { departure_pct: 0, color: '#059669' }])) }));
+    await f.overlay.showDepartureHeatmap(); f.flush();
+    const before = new Map(f.added.map(p => [p._cellId, p]));
+    f.setBounds([20.9, 21.1, 105.7, 105.9]);
+    f.handlers.moveend();
+    assert.equal(f.added.length, before.size, 'existing cells must remain before the next animation frame');
+    assert.ok(f.added.every(p => before.get(p._cellId) === p), 'Leaflet polygons must survive the viewport change');
+    f.setBounds([20.998, 21.003, 105.798, 105.803]);
+    f.handlers.moveend(); f.flush();
+    assert.ok(f.added.length > 0 && f.added.length < before.size);
+    assert.ok(f.added.every(p => before.get(p._cellId) === p));
+    f.overlay.setEnabled(false);
+    assert.equal(f.added.length, 0);
+});
+
+test('small pans retain the current visible cells when the display cap is full', async () => {
+    const cells = [105.79, 105.80, 105.81].map(lon => h3.latLngToCell(21, lon, 9));
+    const f = fixture(async () => ({ status: 'AVAILABLE', resolution: 9,
+        cells: Object.fromEntries(cells.map(cell => [cell, { departure_pct: 0, color: '#059669' }])) }));
+    f.overlay.maxCells = 2;
+    f.setBounds([20.99, 21.01, 105.799, 105.82]);
+    await f.overlay.showDepartureHeatmap(); f.flush();
+    const before = [...f.added];
+    f.setBounds([20.99, 21.01, 105.78, 105.82]);
+    f.handlers.moveend(); f.flush();
+    assert.deepEqual(f.added, before, 'an entering cell must not displace still-visible cells at the cap');
+});
 
 test('missing journey evidence never creates geographic grid cells or changes requested resolution', async () => {
     const f = fixture();

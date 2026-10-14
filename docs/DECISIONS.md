@@ -576,3 +576,8 @@ Bound legacy work to 100,000 trips, 2,000 signature groups and 100,000 group cel
 Deduplicate footprint driver IDs in Python to avoid sorting toasted SQL arrays;
 materialize per-cell time predicates once before counting. Keep the five-second
 statement timeout and explicit failures. No cache service or new dependency.
+
+**Pan/zoom correction:** Preserve already drawn still-visible Leaflet polygons on
+viewport changes, give them priority at the existing 500-cell cap, and batch only
+entering cells. Data/time/resolution/mode refreshes still replace old evidence.
+This removes clear-and-reveal flicker without changing H3 or statistics semantics.

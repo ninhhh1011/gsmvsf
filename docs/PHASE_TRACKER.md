@@ -112,3 +112,7 @@ PASS, Ruff PASS, canonical validator 152/0 and 22/22, 63 unchanged file hashes,
 nine real engine/isolated DB/API groups, 16/16 desktop/mobile checks. Independent
 review clear within scope. Query optimization retains five-second statement budget;
 no load-capacity or field-accuracy claim. Main remains unchanged.
+
+Branch-only H3 pan/zoom stability fix: retain existing visible polygons and batch
+only entering cells; stable subset at the 500 cap. 271 frontend PASS and 18/18
+live desktop/mobile checks. Backend/Dataset unchanged; no merge or push.

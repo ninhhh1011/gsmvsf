@@ -48,6 +48,22 @@ try {
         });
         check(`${name}: gray popup does not invent a percentage`, !!grayPopup && !grayPopup.includes('null%') &&
             !grayPopup.includes('0%'), grayPopup);
+        const stability = await page.evaluate(() => {
+            const overlay = driverMode._h3Overlay, map = driverMode.map.map;
+            const before = new Map(overlay.polygons.map(p => [p._cellId, p]));
+            let clears = 0;
+            const clear = overlay.layer.clearLayers;
+            overlay.layer.clearLayers = function (...args) { clears++; return clear.apply(this, args); };
+            map.panBy([30, 20], { animate: false });
+            map.setZoom(map.getZoom() + 1, { animate: false });
+            overlay.layer.clearLayers = clear;
+            const retained = overlay.polygons.filter(p => before.has(p._cellId));
+            return { clears, retained: retained.length,
+                reused: retained.every(p => before.get(p._cellId) === p), resolution: overlay.route.resolution };
+        });
+        check(`${name}: pan and zoom preserve polygons without clearing`, stability.clears === 0 &&
+            stability.retained > 0 && stability.reused && stability.resolution === 9, stability);
+        await page.waitForFunction(() => driverMode._h3Overlay.rendered === driverMode._h3Overlay.polygons.length);
         await page.screenshot({ path: `${output}/${name}-journey-footprint.png` });
         if (name === 'mobile') await page.locator('#btn-driver-sheet-toggle').click();
         await page.evaluate(() => driverMode.map.map.setView([21.001, 105.8], 15, { animate: false }));

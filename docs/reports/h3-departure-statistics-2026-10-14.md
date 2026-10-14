@@ -137,3 +137,19 @@ New source report: `runtime/h3-road-journeys-20261014/seed-report.json`.
 Manifest and offline declarations are kept beside it. Canonical Dataset and old
 history rows remain untouched. The new batch only writes paired synthetic evidence;
 it does not populate ranking history or change production containers.
+
+## Pan/zoom stability correction
+
+Owner reproduced jumping cells while dragging/zooming. Every moveend previously
+cleared all polygons and revealed 50 per animation frame; choosing the first 500
+visible cells also displaced existing cells on small pans at the cap. View changes
+now retain already drawn still-visible Leaflet polygons, remove exited cells and
+batch only entering cells. Retained cells have priority at the unchanged 500 cap.
+Explicit data/time/resolution/mode changes still clear and refresh their evidence.
+
+Two regressions failed before the fix (91 visible cells dropped to 50 immediately;
+small-pan cap replaced the existing subset) and passed after. Complete frontend:
+271 PASS (`runtime/h3-departures/frontend-stable-pan.txt`). Live desktop/mobile:
+18/18 PASS, including real polygon identity reuse and no clearLayers on pan/zoom
+(`runtime/h3-departures/browser/results.json`). Backend/Dataset logic unchanged;
+prior full backend/canonical checks were not rerun for this rendering-only fix.
