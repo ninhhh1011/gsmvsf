@@ -56,6 +56,46 @@ FROM bounded WHERE driver_rank <= 6
 ORDER BY completed_at DESC, trip_id DESC, driver_id LIMIT 606
 """
 
+DEPARTURE_CELLS_QUERY = """
+WITH cells AS (
+    SELECT driver_id, trip_id, c.key AS cell,
+           EXISTS (SELECT 1 FROM jsonb_array_elements_text(c.value->'reached') AS reached_at
+                   WHERE reached_at::float8 >= extract(epoch FROM $1::timestamptz)
+                     AND reached_at::float8 <= extract(epoch FROM $2::timestamptz)) AS reached,
+           EXISTS (SELECT 1 FROM jsonb_array_elements_text(coalesce(c.value->'uncertain', '[]'::jsonb)) AS uncertain_at
+                   WHERE uncertain_at::float8 >= extract(epoch FROM $1::timestamptz)
+                     AND uncertain_at::float8 <= extract(epoch FROM $2::timestamptz)) AS uncertain,
+           (SELECT count(*) FROM jsonb_array_elements_text(c.value->'departures') AS departure_at
+            WHERE departure_at::float8 >= extract(epoch FROM $1::timestamptz)
+              AND departure_at::float8 <= extract(epoch FROM $2::timestamptz)) AS events
+    FROM realtime.route_deviation_trips t,
+         LATERAL jsonb_each(t.analysis->'cells'->$3::text) c
+    WHERE completed_at >= $1 AND completed_at <= $2
+), counts AS (
+    SELECT cell, count(DISTINCT (driver_id, trip_id)) AS eligible_trip_count,
+           count(DISTINCT (driver_id, trip_id)) FILTER (WHERE events > 0) AS departing_trip_count,
+           sum(events) AS departure_event_count,
+           count(DISTINCT driver_id) AS reached_drivers,
+           count(DISTINCT driver_id) FILTER (WHERE events > 0) AS departing_drivers
+    FROM cells WHERE reached AND (events > 0 OR NOT uncertain) GROUP BY cell
+)
+SELECT cell, eligible_trip_count, departing_trip_count, departure_event_count
+FROM counts WHERE reached_drivers >= $4 AND (departing_drivers = 0 OR departing_drivers >= $4)
+ORDER BY cell
+"""
+
+DEPARTURE_METADATA_QUERY = """
+SELECT (SELECT count(*) FROM realtime.route_deviation_trips WHERE completed_at >= $1 AND completed_at <= $2)
+           AS paired_trip_count,
+       (SELECT count(*) FROM realtime.route_familiarity_routes h
+        WHERE completed_at >= $1 AND completed_at <= $2
+          AND NOT EXISTS (SELECT 1 FROM realtime.route_deviation_trips d
+                          WHERE d.driver_id=h.driver_id AND d.trip_id=h.trip_id)) AS excluded_unpaired_trip_count,
+       count(*) FILTER (WHERE NOT (analysis->>'comparable')::boolean) AS unknown_trip_count,
+       coalesce(sum((analysis->>'uncertain_intervals')::int), 0) AS uncertain_intervals
+FROM realtime.route_deviation_trips WHERE completed_at >= $1 AND completed_at <= $2
+"""
+
 
 class RouteHistoryRepository:
     def __init__(self, pool: asyncpg.Pool, namespace: str = 'realtime'):
@@ -117,6 +157,59 @@ class RouteHistoryRepository:
         async with self.pool.acquire() as conn:
             return await conn.fetch(
                 self._query(COMMUNITY_ROUTES_QUERY), exclude_driver_id, as_of - lookback, as_of)
+
+    async def ingest_guided_trip(self, evidence: dict, analysis: dict) -> bool:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(self._query("""
+                INSERT INTO realtime.route_deviation_trips
+                    (driver_id, trip_id, started_at, completed_at, evidence, analysis)
+                VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+                ON CONFLICT (driver_id, trip_id) DO NOTHING RETURNING trip_id
+                """), evidence['driver_id'], evidence['trip_id'],
+                datetime.fromisoformat(evidence['started_at']), datetime.fromisoformat(evidence['completed_at']),
+                json.dumps(evidence), json.dumps(analysis))
+            if row:
+                return True
+            row = await conn.fetchrow(self._query("""
+                SELECT evidence FROM realtime.route_deviation_trips WHERE driver_id=$1 AND trip_id=$2
+                """), evidence['driver_id'], evidence['trip_id'])
+        existing = row['evidence'] if row else None
+        if isinstance(existing, str):
+            existing = json.loads(existing)
+        if existing != evidence:
+            raise StateError('Guided trip conflicts with existing evidence', 'ROUTE_CONFLICT', 409)
+        # Raw evidence is immutable; retries refresh derived analysis after detector fixes.
+        async with self.pool.acquire() as conn:
+            await conn.execute(self._query("""
+                UPDATE realtime.route_deviation_trips SET analysis=$4::jsonb
+                WHERE driver_id=$1 AND trip_id=$2 AND evidence=$3::jsonb
+                """), evidence['driver_id'], evidence['trip_id'], json.dumps(evidence), json.dumps(analysis))
+        return False
+
+    async def departure_heatmap(self, as_of: datetime, resolution: int):
+        if not 5 <= resolution <= 10 or as_of.tzinfo is None:
+            raise ValueError('Invalid aggregate resolution or time')
+        lower = as_of - timedelta(days=7)
+        minimum_drivers = 1 if self.namespace == 'synthetic' else 5
+        async with self.pool.acquire() as conn:
+            # One snapshot keeps denominator/metadata consistent with concurrent ingestion.
+            async with conn.transaction(isolation='repeatable_read', readonly=True):
+                await conn.execute("SELECT set_config('statement_timeout', '5000', true)")
+                metadata = dict(await conn.fetchrow(self._query(DEPARTURE_METADATA_QUERY), lower, as_of))
+                if metadata['paired_trip_count'] > 10000:
+                    raise StateError('Departure aggregate work limit exceeded', 'DEPARTURE_WORK_LIMIT', 503)
+                rows = await conn.fetch(self._query(DEPARTURE_CELLS_QUERY), lower, as_of, str(resolution), minimum_drivers)
+        cells = {}
+        for row in rows:
+            eligible, departing = row['eligible_trip_count'], row['departing_trip_count']
+            percentage = round(100 * departing / eligible, 2)
+            color = '#059669' if not departing else '#f59e0b' if percentage < 20 else '#ef4444' if percentage < 50 else '#991b1b'
+            cells[row['cell']] = {'eligible_trip_count': eligible, 'departing_trip_count': departing,
+                                 'departure_event_count': row['departure_event_count'],
+                                 'departure_pct': percentage, 'color': color}
+        return {'status': 'AVAILABLE' if cells else 'NO_PAIRED_EVIDENCE' if not metadata['paired_trip_count'] else 'INSUFFICIENT_EVIDENCE',
+                'source': self.namespace, 'minimum_drivers': minimum_drivers, 'cells': cells, **metadata,
+                'limitations': 'Geometric departure origins; synthetic data does not establish real driver behavior'}
 
 
 def coordinates_from_row(row):

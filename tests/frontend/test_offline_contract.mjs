@@ -9,6 +9,7 @@ function fixture(api = {}) {
  const toggle = {checked:true};
  const bindings = {getH3Toggle:()=>toggle,updateH3ComparisonBanner:x=>banners.push(x),setH3Checked:x=>toggle.checked=x,updateInstantaneousPower:x=>powers.push(x)};
  const c = new DriverModeController(api, {}, {bindings});
+ c.h3Mode = 'COMPARISON';
  c.offlineProposedGeometry = A; c.directRouteGeometry = [[21.005,105.005],[21.01,105.01]];
  c.actualTrajectoryCoords = A; c._h3Enabled = true;
  c._h3Overlay = {renderFromCells:(...x)=>renders.push(x),setEnabled(){},clear(){},setResolution(){}};

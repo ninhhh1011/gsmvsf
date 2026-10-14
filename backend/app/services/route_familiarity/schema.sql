@@ -42,3 +42,18 @@ DO $$ BEGIN
             started_at IS NULL OR started_at <= completed_at);
     END IF;
 END $$;
+
+-- Paired evidence is separate: legacy completed paths do not establish guidance.
+CREATE TABLE IF NOT EXISTS realtime.route_deviation_trips (
+    driver_id text NOT NULL,
+    trip_id text NOT NULL,
+    started_at timestamptz NOT NULL,
+    completed_at timestamptz NOT NULL,
+    evidence jsonb NOT NULL CHECK (jsonb_typeof(evidence) = 'object'),
+    analysis jsonb NOT NULL CHECK (jsonb_typeof(analysis) = 'object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (driver_id, trip_id),
+    CHECK (started_at < completed_at)
+);
+CREATE INDEX IF NOT EXISTS route_deviation_completion_idx
+    ON realtime.route_deviation_trips (completed_at);

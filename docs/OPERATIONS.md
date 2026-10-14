@@ -60,3 +60,28 @@ Existing cell-only rows are preserved and cannot supply directional geometry evi
 `ENABLE_ROUTE_FAMILIARITY=false` remains the default. Enabling requires the ingestion token and trusted exact-driver identity signing gateway; never put those secrets in browser JS. All API replicas must use the migrated database and identical identity configuration. The new comparison endpoint accesses protected history only when a driver is requested and authenticated; otherwise it performs geometric comparison only.
 
 The Driver banner evaluates the whole observed trip offline. It does not supply future GPS to realtime recommendation or energy stepping. Energy stepping uses accepted observed timestamps; trip/model/SOC changes invalidate pending updates. HUD power is an estimate, and unsupported physical models display unavailable. Route similarity thresholds and energy coefficients require calibration before claiming real-world accuracy.
+
+## H3 departure statistics (2026-10-14)
+
+Run `python -B -m scripts.migrate_route_familiarity --namespace realtime` (or
+`--namespace synthetic`) explicitly against the intended database. This adds
+`route_deviation_trips` and its completion index without editing old history.
+Startup does not migrate. `--rollback` is destructive and now drops both history
+and paired evidence in the selected namespace. Disable the feature for a
+nondestructive rollback.
+
+Trusted producers submit paired evidence to
+`POST /api/v1/internal/route-deviations/trips` with the existing ingestion token;
+never expose that token to the browser. `GET /api/v1/routing/departure-heatmap`
+accepts resolution 5–10 and optional aware `as_of_iso`, fixes lookback to seven days,
+and returns aggregate evidence only. Missing schema/dependencies/work budget is an
+explicit outage. Existing `ENABLE_ROUTE_FAMILIARITY` and server history namespace
+control the optional feature; no automatic synthetic fallback or legacy backfill.
+
+`python -B -m scripts.verify_h3_departures` audits actual paired/unpaired history
+counts and verifies independent fake cases in a UUID-named disposable database.
+Supply the local PostgreSQL URL explicitly when needed. `--seed-demo` additionally
+installs 30 paired fake trips solely in `synthetic`, with stable batch identifiers;
+it never writes realtime history or Dataset V1. Evaluation truth stays offline.
+The separate branch review API is `http://127.0.0.1:8005/demo`; existing production
+API containers are left in place.

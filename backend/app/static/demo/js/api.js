@@ -237,5 +237,11 @@ export class ApiClient {
             body: JSON.stringify(payload)
         });
     }
+
+    async getDepartureHeatmap({ resolution, as_of_iso = null }) {
+        const query = new URLSearchParams({ resolution });
+        if (as_of_iso) query.set('as_of_iso', as_of_iso);
+        return this._request(`/api/v1/routing/departure-heatmap?${query}`);
+    }
 }
 

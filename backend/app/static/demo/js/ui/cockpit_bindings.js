@@ -203,6 +203,13 @@ export function createCockpitBindings(root = globalThis.document) {
         bindH3Toggle(onToggle) {
             listen('toggle-route-familiarity', 'change', onToggle);
         },
+        bindH3Mode(onChange) {
+            listen('h3-analysis-mode', 'change', event => onChange(event.target.value));
+        },
+        setH3Mode(mode) {
+            const el = get('h3-analysis-mode');
+            if (el) el.value = mode;
+        },
         getH3Toggle() {
             return get('toggle-route-familiarity');
         },

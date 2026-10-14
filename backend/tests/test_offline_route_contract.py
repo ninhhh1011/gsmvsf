@@ -18,6 +18,7 @@ const controller = new DriverModeController({compareRoutes: async body => {
     payload = body; return input.response;
 }}, {}, {bindings: {updateH3ComparisonBanner: data => {banner = data;}}});
 controller._h3Enabled = true;
+controller.h3Mode = 'COMPARISON';
 controller.offlineProposedGeometry = input.coordinates;
 controller.actualTrajectoryCoords = input.coordinates;
 controller.currentVehicle = {vehicle_model: 'VF_3'};

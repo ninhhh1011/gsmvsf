@@ -1,5 +1,25 @@
 # DATA_CONTRACT
 
+## Paired guidance-departure evidence (2026-10-14)
+
+The authorized H3 extension stores paired evidence separately in the configured
+`realtime.route_deviation_trips` or `synthetic.route_deviation_trips` namespace.
+Trusted producers submit driver/trip identity, aware start/completion times,
+ordered guidance versions (`effective_at`, coordinates), and strictly ordered
+timestamped observations. Raw evidence is immutable; matching retries may refresh
+derived analysis after detector corrections. Conflicting evidence is HTTP 409.
+Legacy paths cannot prove a departure and are not backfilled with today's routes.
+
+Only completed trips available at query time contribute. Individual reached,
+departure and uncertainty timestamps also obey the seven-day event window.
+Per cell, a trip counts once in the reached denominator/departure numerator; all
+confirmed events count separately. Uncertain no-event trip/cell contributions are
+excluded rather than reported as zero. This denominator measures sampled guided
+corridor exposure, not all planned trips or all GPS points. The last unambiguous
+guided position preceding confirmation approximates the departure origin, not a
+verified junction or a driver's motivation. Synthetic offline truth never enters
+runtime analysis. See the [contract](superpowers/specs/2026-10-14-h3-departure-statistics.md).
+
 ## Approved synthetic journey extension (2026-10-12)
 
 Dataset V1 remains immutable. Optional generated journey histories live in PostgreSQL `synthetic.route_familiarity_routes`; production history defaults to `realtime.route_familiarity_routes`. Namespace selection is server configuration, never a client-supplied SQL identifier. The fixed public example identity is exposed only with enabled synthetic history.

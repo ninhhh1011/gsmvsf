@@ -126,6 +126,7 @@ export class DriverModeController {
         this._comparisonKey = null;
         // H3 Multi-Resolution & Direction-Aware Route Comparison
         this.h3Resolution = 9;
+        this.h3Mode = 'DEPARTURES';
         this.actualTrajectoryCoords = null;
         this.latestRouteComparison = null;
         this._h3Overlay = null;
@@ -169,11 +170,13 @@ export class DriverModeController {
                 countElement: this.bindings?.getH3CountElement?.(),
                 supportElement: this.bindings?.getH3SupportElement?.(),
                 stations: this.stations,
-                resolution: this.h3Resolution
+                resolution: this.h3Resolution,
+                loadHeatmap: payload => this.api.getDepartureHeatmap(payload)
             });
             this.bindings?.bindH3Toggle?.(() => this.onToggleH3());
             this.bindings?.bindH3ResCycle?.(() => this.cycleH3Resolution());
             this.bindings?.bindSampleDeviation?.(() => this.loadSampleDeviationScenario());
+            this.bindings?.bindH3Mode?.(mode => this.changeH3Mode(mode));
             this.bindings?.setH3ResBadgeText?.(`⬡ Res ${this.h3Resolution}`);
         }
     }
@@ -186,6 +189,13 @@ export class DriverModeController {
         if (this._h3Enabled) {
             await this.refreshRouteComparison();
         }
+    }
+    async changeH3Mode(mode) {
+        this.h3Mode = mode;
+        this._comparisonRequest++;
+        this._comparisonKey = null;
+        this._h3Overlay?.clear();
+        if (this._h3Enabled) await this.refreshRouteComparison();
     }
     async onToggleH3() {
         if (!this._h3Overlay) return;
@@ -205,6 +215,9 @@ export class DriverModeController {
         }
     }
     async loadSampleDeviationScenario() {
+        this.h3Mode = 'COMPARISON';
+        this._h3Overlay?.clear();
+        this.bindings?.setH3Mode?.('COMPARISON');
         const proposed = [
             [20.9849, 105.7935],
             [20.9950, 105.7900],
@@ -267,6 +280,13 @@ export class DriverModeController {
     }
     async refreshRouteComparison() {
         if (!this._h3Enabled) return;
+        if (this.h3Mode === 'DEPARTURES') {
+            this.bindings?.updateH3ComparisonBanner?.({ visible: false });
+            const at = this.currentObservation?.timestamp ?? this.currentObservation?.timestamp_iso ??
+                this.offlineEvaluationTime ?? this.currentTrip?.start_time ?? null;
+            await this._h3Overlay?.showDepartureHeatmap(at);
+            return;
+        }
         const proposed = this.offlineProposedGeometry;
         const actual = this.actualTrajectoryCoords;
         if (proposed?.length > 1 && actual?.length > 1) {
@@ -707,6 +727,8 @@ export class DriverModeController {
         try {
             if (observation) {
                 this.currentObservation = observation;
+                if (this._h3Enabled && this.h3Mode === 'DEPARTURES') await this.refreshRouteComparison();
+                if (this.generation !== currentGen) return;
             }
 
             if (locResp?.matched_position) {

@@ -16,6 +16,24 @@ An explicit station request and a physical battery warning have separate semanti
 
 ## Route familiarity v2
 
+The separate H3 departure overlay (ADR-027) does not alter familiarity ranking.
+It reads `/routing/departure-heatmap`, a seven-day aggregate over trusted paired
+guidance/observation evidence. Analysis runs at ingestion using existing geometric
+corridor helpers and installed H3; PostgreSQL remains the evidence authority.
+Confirmed returns can rearm at earlier route positions; guidance updates reset
+comparison state. Gaps/ambiguity/unconfirmed exits cannot establish zero departures.
+Queries use one read-only repeatable-read snapshot, five-second statement timeout,
+and 10,000-trip work cap. Exceeding the cap returns 503, never partial ratios.
+Production cells need five reached drivers and, for nonzero departures, five
+departing drivers. Public output contains no identities or third-party raw paths.
+
+The browser renders backend percentages at the effective H3 resolution, coarsening
+detail to cover the viewport within 500 cells instead of cropping to visit history.
+Unknown cells are gray, synthetic evidence is explicit, and static visit weights
+are no longer consumed. Whole-trip comparison is a separate selected mode. Replay
+uses current observation time; mode/time/toggle transitions invalidate old responses.
+No new dependency, ranking behavior, streaming service or Week 6 infrastructure.
+
 When explicitly enabled, the combined `/recommend` workflow compares candidate GraphHopper geometry against protected completed-route geometry using directed, ordered corridor overlap at H3 Resolution 9. Resolution 11 signatures remain the persisted spatial index; neighboring index cells retrieve possible matches. PostgreSQL stores optional geometry/start time alongside existing history; missing evidence is unavailable and preserved rather than reconstructed. The route producer is trusted through the existing ingestion token. Because `/recommend` has no end-user authentication, enabling familiarity also requires a trusted authenticated gateway to HMAC-sign the exact driver ID; the API verifies that signature before history access. API replicas on one host share these secrets and the same PostgreSQL data plane, which remains single-node.
 
 The default lookback is seven days. Personal history is capped at 50 trips; community considers at most 100 drivers with up to five trips each. Comparable completed history is causal and bounded, with explicit unavailable/truncated evidence. Personal familiarity uses mean corridor coverage; community includes non-supporting comparable drivers and withholds public support below five drivers. Both affect ranking under ADR-025: 80% normalized complete journey time, 10% confidence-adjusted personal mismatch and 10% confidence-adjusted community mismatch. Missing evidence is neutral. Physical ETA and eligibility exclude preference cost. The prior personal-only 30-second penalty is superseded. See [OPERATIONS.md](OPERATIONS.md) for migration and privacy operations.

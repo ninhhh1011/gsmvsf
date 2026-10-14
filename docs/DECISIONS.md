@@ -521,3 +521,34 @@ Remove unused signature-array fields from history read projections and decode id
 **Experiment outcome — rejected:** Same-server alternating controls retained matching/route/directed-resolution results, including 390 ambiguous observations with IDs/direction withheld. LM was slower: original matching samples mean 54.62 ms versus Dijkstra 12.37 ms; sampled actual-load traces mean 23.07 versus 17.28 ms. Restore the prior graph configuration and congestion request; retain the isolated generated graph and evidence. A long environment/tool pause invalidated one route's wall-time sample and overall probe duration, not the completed paired matching comparison. This experiment is not an adopted runtime change or a capacity pass.
 
 **Complete CPU admission:** Signature preparation previously used the general thread pool outside the evaluator's admission, allowing GIL-heavy signature and comparison jobs to overlap on one API. The recommendation workflow now passes the persistent evaluator's existing runner to its snapshot-scoped candidate service. Signature, query and comparison work share the same slot/cancellation drain; no new per-request semaphore, global thread-pool policy, timeout or workload reduction is introduced. Standalone/feature-off behavior and invalid-geometry semantics are unchanged. Existing timing logs now record signature CPU separately, and the load runner records actual selected personal-history/community-cohort counts rather than treating AVAILABLE alone as proof of both evidence sources.
+
+## ADR-027: Seven-day departure origins instead of visit weights
+
+**Date:** 2026-10-14. **Status:** Owner-authorized on
+`feat/h3-departure-statistics-7d`; separate permission required to merge.
+
+**Problem:** The Hanoi-wide overlay selects 425 resolution-9 cells from static
+visit weights. These are not spatial coverage or evidence of leaving an instructed
+route. Existing completed histories do not record corresponding active guidance.
+
+**Decision:** Preserve legacy history and add separately protected paired guidance
+versions/observations using existing PostgreSQL/H3. Count every confirmed exit,
+rearming after confirmed return. Guidance changes do not manufacture exits.
+Aggregate all comparable completed guided trips in seven days ending at event time.
+Color by distinct departing trips / distinct reached guided trips per cell and
+show total confirmed events separately. Missing evidence is gray; never infer
+departure or motivation from visits or today's reconstructed routing result.
+
+Reuse the 45 m lateral / 60 degree heading corridor assumptions. Three samples and
+30 m confirm exits/returns. Gaps above 60 s, jumps above 200 m, implausible movement
+and ambiguous projections break continuity. The last unambiguous guided position
+approximates the exit origin; it is not a verified junction. Exclude uncertain
+no-event cell contributions from denominators. Preserve production cohort privacy
+and explicitly describe synthetic data. Coarsen grid detail to cover the viewport
+within 500 cells, aggregate at that resolution, never sum child percentages. Keep
+whole-trip comparison separate and 80/10/10 ranking intact.
+
+**Evidence:** Independent fake maneuver truth, real GraphHopper identity control,
+isolated PostgreSQL/API and desktop/mobile browser checks. Synthetic data establishes
+algorithm behavior only. See the [plan](superpowers/plans/2026-10-14-h3-departure-statistics.md)
+and [branch report](reports/h3-departure-statistics-2026-10-14.md).

@@ -10,7 +10,7 @@ export class RouteFamiliarityOverlay {
     constructor({ map, leaflet, h3, toggle, countElement, supportElement, maxCells = DEFAULT_MAX_CELLS,
         batchSize = DEFAULT_BATCH_SIZE, requestFrame = scheduleFrame,
         cancelFrame = cancelScheduledFrame, stations = [], resolution = DEFAULT_RESOLUTION,
-        hanoiWeights = null }) {
+        loadHeatmap = null }) {
         this.map = map;
         this.L = leaflet;
         this.h3 = h3;
@@ -34,26 +34,15 @@ export class RouteFamiliarityOverlay {
         this.frame = null;
         this.polygons = [];
         this.rendered = 0;
-        this.hanoiWeights = hanoiWeights || null;
-        if (!this.hanoiWeights && typeof fetch === 'function') {
-            fetch('/demo/static/data/hanoi_h3_weights.json')
-                .then(r => r.json())
-                .then(data => {
-                    this.hanoiWeights = data;
-                    if (this.isBaseline && this.enabled) {
-                        this.renderHanoiBaseline();
-                    }
-                })
-                .catch(() => {});
-        }
+        this.loadHeatmap = loadHeatmap;
+        this.heatmapMode = false;
+        this.heatmapRequest = 0;
+        this.heatmap = null;
         this.onMoveEnd = () => {
+            if (this.heatmapMode && this.enabled) return this.showDepartureHeatmap(this.heatmapTime);
             if (this.isBaseline && this.enabled) {
-                if (!this.hanoiWeights) {
-                    const res = this.resolution || DEFAULT_RESOLUTION;
-                    const cells = this.generateHanoiGrid(null, res);
-                    this.route = { resolution: res, route_cells: cells };
-                    this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
-                }
+                this.renderHanoiBaseline();
+                return;
             }
             this.render();
         };
@@ -64,6 +53,7 @@ export class RouteFamiliarityOverlay {
 
     setStations(stations) {
         this.stations = Array.isArray(stations) ? stations : [];
+        if (this.heatmapMode) return;
         if (this.route?.route_cells?.length > 0) {
             this._computeCellMetadata(this.route.route_cells, this.stations, this.sharedCellsSet, this.proposedCoords);
             if (this.enabled) this.render();
@@ -109,6 +99,7 @@ export class RouteFamiliarityOverlay {
 
     setEnabled(enabled) {
         this.enabled = Boolean(enabled) && this.active;
+        if (!this.enabled) this.heatmapRequest++;
         if (this.toggle) this.toggle.checked = this.enabled;
         this.render();
     }
@@ -138,10 +129,11 @@ export class RouteFamiliarityOverlay {
             this.updateLegend(false);
             return;
         }
-        const res = this.route?.resolution || this.resolution;
+        let res = this.route?.resolution || this.resolution;
         if ((!this.route?.route_cells || this.route.route_cells.length === 0) && this.enabled) {
             this.isBaseline = true;
             const cells = this.generateHanoiGrid(null, res);
+            if (cells.length) res = this.h3.getResolution(cells[0]);
             this.route = { resolution: res, route_cells: cells };
             this._computeCellMetadata(cells, this.stations, this.sharedCellsSet, this.proposedCoords);
         }
@@ -194,7 +186,7 @@ export class RouteFamiliarityOverlay {
             return poly;
         });
         if (this.isBaseline) {
-            this.setCount(`Lưới H3 Hà Nội (${capped.length} ô - H3-${res})`);
+            this.setCount(`Lưới vùng đang xem · ${capped.length} ô · H3-${res} (yêu cầu ${this.resolution})`);
         } else {
             this.setCount(`Showing ${capped.length} of ${visible.length} route cells (H3-${res})`);
         }
@@ -219,6 +211,8 @@ export class RouteFamiliarityOverlay {
      * @param {Array|null} [sharedOrStations] - Optional shared cell IDs or stations
      */
     renderFromCells(cells, sharedOrStations = null, comparison = false, proposedCoords = null) {
+        this.heatmapMode = false;
+        this.heatmapRequest++;
         if (!this.active || !Array.isArray(cells) || cells.length === 0) {
             this.clear();
             return;
@@ -264,6 +258,8 @@ export class RouteFamiliarityOverlay {
      * Clear the H3 overlay.
      */
     clear() {
+        this.heatmapRequest++;
+        this.heatmapMode = false;
         this.route = { resolution: null, route_cells: [] };
         this.sharedCellsSet.clear();
         this.cellMetadata.clear();
@@ -327,107 +323,18 @@ export class RouteFamiliarityOverlay {
     }
 
     generateHanoiGrid(bounds = null, resolution = this.resolution) {
-        const res = resolution || this.resolution || 9;
-        const defaultBounds = {
-            south: 20.94,
-            north: 21.09,
-            west: 105.74,
-            east: 105.89
-        };
-        let south = defaultBounds.south;
-        let north = defaultBounds.north;
-        let west = defaultBounds.west;
-        let east = defaultBounds.east;
-
-        if (bounds && typeof bounds.getSouth === 'function') {
-            south = Math.max(bounds.getSouth(), 20.80);
-            north = Math.min(bounds.getNorth(), 21.30);
-            west = Math.max(bounds.getWest(), 105.60);
-            east = Math.min(bounds.getEast(), 106.10);
-            if (south >= north || west >= east) {
-                south = defaultBounds.south;
-                north = defaultBounds.north;
-                west = defaultBounds.west;
-                east = defaultBounds.east;
-            }
-        } else if (this.map?.getBounds) {
-            try {
-                const b = this.map.getBounds();
-                south = Math.max(b.getSouth(), 20.80);
-                north = Math.min(b.getNorth(), 21.30);
-                west = Math.max(b.getWest(), 105.60);
-                east = Math.min(b.getEast(), 106.10);
-                if (south >= north || west >= east) {
-                    south = defaultBounds.south;
-                    north = defaultBounds.north;
-                    west = defaultBounds.west;
-                    east = defaultBounds.east;
-                }
-            } catch {
-                // fallback
-            }
-        }
-
-        if (typeof this.h3?.polygonToCells === 'function') {
-            try {
-                const poly = [[south, west], [south, east], [north, east], [north, west]];
-                let cells = this.h3.polygonToCells(poly, res);
-                if (Array.isArray(cells) && cells.length > 0) {
-                    if (cells.length > this.maxCells) {
-                        const centerLat = (south + north) / 2;
-                        const centerLng = (west + east) / 2;
-                        cells.sort((a, b) => {
-                            let da = 0, db = 0;
-                            try {
-                                const pa = this.h3.cellToLatLng(a);
-                                const pb = this.h3.cellToLatLng(b);
-                                da = Math.hypot(pa[0] - centerLat, pa[1] - centerLng);
-                                db = Math.hypot(pb[0] - centerLat, pb[1] - centerLng);
-                            } catch {}
-                            return da - db;
-                        });
-                        cells = cells.slice(0, this.maxCells);
-                    }
-                    return cells;
-                }
-            } catch {
-                // fallback to step below
-            }
-        }
-
-        const cells = new Set();
-        const stepDeg = res <= 8 ? 0.007 : (res === 9 ? 0.0026 : 0.0010);
-
-        for (let lat = south; lat <= north; lat += stepDeg) {
-            for (let lng = west; lng <= east; lng += stepDeg) {
-                try {
-                    const cell = this.h3.latLngToCell(lat, lng, res);
-                    if (cell && this.isResolutionCell(cell, res)) {
-                        cells.add(cell);
-                    }
-                } catch {
-                    // skip
-                }
-                if (cells.size >= this.maxCells) break;
-            }
-            if (cells.size >= this.maxCells) break;
-        }
-
-        return Array.from(cells);
+        if (typeof this.h3?.polygonToCells !== 'function') return [];
+        return this._viewportGrid(bounds || this.map.getBounds(), resolution).cells;
     }
 
     renderHanoiBaseline() {
+        this.heatmapMode = false;
+        this.heatmapRequest++;
         this.isBaseline = true;
         this.comparisonMode = false;
         this.proposedCoords = null;
-        const res = this.resolution || 9;
-        let cells = [];
-        const weightsForRes = this.hanoiWeights?.[`res${res}`];
-        if (weightsForRes && Object.keys(weightsForRes).length > 0) {
-            cells = Object.keys(weightsForRes);
-        } else {
-            cells = this.generateHanoiGrid(null, res);
-        }
+        const cells = this.generateHanoiGrid(null, this.resolution || 9);
+        const res = cells.length ? this.h3.getResolution(cells[0]) : this.resolution;
         this.route = {
             resolution: res,
             route_cells: cells
@@ -437,6 +344,71 @@ export class RouteFamiliarityOverlay {
         this.enabled = true;
         if (this.toggle) this.toggle.checked = true;
         this.render();
+    }
+
+    _viewportGrid(bounds = this.map.getBounds(), requested = this.resolution) {
+        const south = bounds.getSouth(), north = bounds.getNorth();
+        const west = bounds.getWest(), east = bounds.getEast();
+        const area = Math.max(0, north - south) * Math.max(0, east - west) * 12364 * Math.cos((south + north) / 2 * Math.PI / 180);
+        let resolution = Math.min(10, requested);
+        while (resolution > 5 && this.h3.getHexagonAreaAvg && area / this.h3.getHexagonAreaAvg(resolution, 'km2') > this.maxCells * 0.7) resolution--;
+        while (resolution >= 5) {
+            const pad = this.h3.getHexagonEdgeLengthAvg ? this.h3.getHexagonEdgeLengthAvg(resolution, 'km') / 55 : 0.002;
+            const poly = [[south - pad, west - pad], [south - pad, east + pad], [north + pad, east + pad], [north + pad, west - pad]];
+            const cells = Array.from(this.h3.polygonToCells(poly, resolution));
+            if (cells.length <= this.maxCells) return { resolution, cells };
+            resolution--;
+        }
+        return { resolution: 5, cells: [] };
+    }
+
+    async showDepartureHeatmap(asOf = null) {
+        const request = ++this.heatmapRequest;
+        this.heatmapMode = true;
+        this.heatmapTime = asOf;
+        this.isBaseline = true;
+        this.comparisonMode = false;
+        this.enabled = this.active;
+        if (this.toggle) this.toggle.checked = this.enabled;
+        if (!this.enabled) return;
+        const grid = this._viewportGrid();
+        this.route = { resolution: grid.resolution, route_cells: grid.cells };
+        this.heatmap = { status: 'LOADING', cells: {} };
+        this._setDepartureMetadata();
+        this.render();
+        try {
+            const heatmap = await this.loadHeatmap?.({ resolution: grid.resolution, as_of_iso: asOf });
+            if (request !== this.heatmapRequest || !this.enabled || !this.heatmapMode) return;
+            this.heatmap = heatmap || { status: 'UNAVAILABLE', cells: {} };
+        } catch {
+            if (request !== this.heatmapRequest || !this.enabled || !this.heatmapMode) return;
+            this.heatmap = { status: 'UNAVAILABLE', cells: {} };
+        }
+        this._setDepartureMetadata();
+        this.render();
+    }
+
+    _setDepartureMetadata() {
+        this.cellMetadata.clear();
+        for (const cell of this.route.route_cells) {
+            const stats = this.heatmap?.cells?.[cell];
+            this.cellMetadata.set(cell, stats ? { cell, tier: 'DEPARTURE_STATS', ...stats,
+                color: stats.color, fillColor: stats.color } : { cell, tier: 'UNKNOWN',
+                color: '#94a3b8', fillColor: '#cbd5e1', label: 'Chưa đủ bằng chứng đối chiếu' });
+        }
+        if (this.supportElement) {
+            const labels = { LOADING: 'Đang tải thống kê', AVAILABLE: 'Nơi bắt đầu bỏ tuyến',
+                NO_PAIRED_EVIDENCE: 'Chưa có dữ liệu theo cặp chỉ dẫn / thực tế',
+                INSUFFICIENT_EVIDENCE: 'Chưa đủ bằng chứng hoặc mẫu được bảo vệ',
+                DISABLED: 'Thống kê chưa được bật', UNAVAILABLE: 'Thống kê không khả dụng' };
+            const fake = this.heatmap?.source === 'synthetic' ? ' · Dữ liệu giả lập' : '';
+            const excluded = this.heatmap?.excluded_unpaired_trip_count || 0;
+            const uncertain = this.heatmap?.uncertain_intervals || 0;
+            this.supportElement.textContent = `${labels[this.heatmap?.status] || 'Chưa đủ bằng chứng'} · 7 ngày${fake}` +
+                (this.heatmap?.as_of_iso ? ` · đến ${this.heatmap.as_of_iso}` : '') +
+                (excluded ? ` · ${excluded} chuyến thiếu cặp chỉ dẫn bị loại` : '') +
+                (uncertain ? ` · ${uncertain} khoảng chưa xác minh` : '');
+        }
     }
 
     _approxDistMeters(lat1, lng1, lat2, lng2) {
@@ -560,34 +532,9 @@ export class RouteFamiliarityOverlay {
             }
 
             if (this.isBaseline) {
-                const res = this.resolution || 9;
-                const wKey = `res${res}`;
-                const weightInfo = this.hanoiWeights?.[wKey]?.[cell];
-                if (weightInfo) {
-                    this.cellMetadata.set(cell, {
-                        cell,
-                        tier: weightInfo.tier,
-                        color: weightInfo.color,
-                        fillColor: weightInfo.fillColor,
-                        label: weightInfo.label,
-                        tripCount: weightInfo.count,
-                        score: weightInfo.score,
-                        minDistKm: null,
-                        nearestStation: null
-                    });
-                } else {
-                    this.cellMetadata.set(cell, {
-                        cell,
-                        tier: 'BASELINE',
-                        color: '#059669',
-                        fillColor: '#10b981',
-                        label: 'Vùng phủ lưới H3 Hà Nội (Lộ trình chuẩn)',
-                        tripCount: 0,
-                        score: 0.0,
-                        minDistKm: null,
-                        nearestStation: null
-                    });
-                }
+                this.cellMetadata.set(cell, { cell, tier: 'UNKNOWN', color: '#94a3b8',
+                    fillColor: '#cbd5e1', label: 'Chưa đủ bằng chứng đối chiếu',
+                    minDistKm: null, nearestStation: null });
                 continue;
             }
 
@@ -677,7 +624,15 @@ export class RouteFamiliarityOverlay {
     }
 
     _createPopupContent(cell, meta) {
-        const resLabel = this.resolution || 9;
+        if (this.heatmapMode) {
+            if (meta.tier !== 'DEPARTURE_STATS') return '<strong>Chưa đủ bằng chứng đối chiếu</strong><br>Ô xám không có nghĩa là không ai bỏ tuyến.';
+            return `<strong>Nơi bắt đầu bỏ tuyến · 7 ngày</strong><br>` +
+                `Tỷ lệ chuyến bỏ tuyến: <strong>${meta.departure_pct}%</strong><br>` +
+                `Chuyến bỏ tuyến / được đối chiếu: ${meta.departing_trip_count}/${meta.eligible_trip_count}<br>` +
+                `Tổng số lần bắt đầu lệch: ${meta.departure_event_count}<br>` +
+                'Vị trí bắt đầu là ước lượng từ hành lang tuyến, không phải nút rẽ đã xác minh.';
+        }
+        const resLabel = this.route?.resolution || this.resolution || 9;
         if (meta.tier?.startsWith('DEVIATION')) {
             return `
             <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 190px; color: #0f172a;">
@@ -692,21 +647,7 @@ export class RouteFamiliarityOverlay {
             </div>`;
         }
 
-        if (meta.tier === 'BASELINE' || meta.tier?.endsWith('_FAMILIARITY') || meta.tier === 'RARE_OR_DEVIATION') {
-            const countStr = meta.tripCount != null && meta.tripCount > 0 ? Number(meta.tripCount).toLocaleString('vi-VN') : '0';
-            const scoreStr = meta.score != null ? `${meta.score} / 10` : '—';
-            return `
-            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.45; min-width: 210px; color: #0f172a;">
-                <div style="font-weight: 700; color: ${meta.color}; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-                    <span>⬡ Lưới H3-${resLabel} Hà Nội</span>
-                    <span style="font-size: 10px; background: ${meta.color}; color: white; padding: 2px 6px; border-radius: 4px;">${meta.tier}</span>
-                </div>
-                <div style="margin-bottom: 4px;"><strong>Trạng thái:</strong> ${meta.label}</div>
-                <div style="margin-bottom: 4px;"><strong>Tần suất xe đi vào:</strong> <span style="font-weight: 700; color: ${meta.color};">${countStr} lượt</span></div>
-                <div style="margin-bottom: 4px;"><strong>Trọng số độ quen:</strong> <span style="font-weight: 700; color: ${meta.color};">${scoreStr}</span></div>
-                <div style="font-size: 10px; color: #64748b; margin-top: 6px;">H3 Index: ${cell}</div>
-            </div>`;
-        }
+        if (meta.tier === 'UNKNOWN') return '<strong>Chưa đủ bằng chứng đối chiếu</strong>';
 
         const distStr = meta.minDistKm !== null ? `${meta.minDistKm.toFixed(2)} km` : 'Chưa có dữ liệu trạm';
         const stName = meta.nearestStation ? (meta.nearestStation.name || meta.nearestStation.station_id) : 'Không có trạm gần';
@@ -751,6 +692,9 @@ export class RouteFamiliarityOverlay {
     }
 
     destroy() {
+        this.heatmapRequest++;
+        this.enabled = false;
+        this.active = false;
         this.cancelRender();
         this.map.off('moveend', this.onMoveEnd);
         this.map.removeLayer(this.layer);

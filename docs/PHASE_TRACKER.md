@@ -73,3 +73,22 @@ Verification: backend 574 PASS / 12 skipped; frontend 215 PASS; Ruff PASS; valid
 Customer-approved ADR-025 implementation replaces the 30-second personal-only preference with full-completion 80/10/10 scoring, supports optional B and authoritative station plans, and closes the eight findings from the prior energy review. Additional source/browser/load-discovered regressions are tracked in the [current report](reports/journey-ranking-scale-up-2026-10-13.md). Historical milestones above retain their original verification scope.
 
 Current checks: backend 666 PASS / 12 skipped; frontend 247 PASS; Ruff PASS; validator 152 PASS / 0 FAIL and 22/22 assertions; 63 canonical hashes unchanged. Real API eight checks passed and final finite load measured (100 clean; 500/1,000 overloaded). Desktop/mobile browser 32/32 passed, independent review has no remaining blocker within scope. Merged into local main with backend/frontend/Ruff rerun passing; no remote push. This extension does not start Week 6 productionization; replenishment evidence and real-world causal motivations remain explicit limitations.
+
+## 2026-10-14 H3 departure origins — branch only
+
+Owner-authorized ADR-027 replaces static visit-weight rendering with seven-day
+paired-guidance departure-origin statistics and an adaptive full-viewport H3 grid.
+Every confirmed exit counts; ratios use distinct trips, current guidance and causal
+event time. Unknown outcomes remain gray. Legacy histories stay unpaired and intact;
+30 new synthetic paired cases support review, not real behavior claims.
+
+Verified: 737 backend PASS / 12 existing skips (main batch plus separate evaluation
+process), 267 frontend PASS, Ruff PASS, canonical validator 152/0 and 22/22 scenarios,
+63 identical canonical hashes, eight real engine/DB/API verification groups and
+14/14 desktop/mobile browser checks. Independent review findings were reproduced
+and corrected; final review has no material blocker in scope. Evidence and limits:
+[branch report](reports/h3-departure-statistics-2026-10-14.md).
+
+Branch `feat/h3-departure-statistics-7d` remains unmerged; no remote push. Merge only
+with explicit owner permission. Existing API containers are retained; review uses
+the separate localhost port 8005. This does not start Week 6.
