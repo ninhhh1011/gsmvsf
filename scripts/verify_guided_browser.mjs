@@ -20,6 +20,8 @@ try {
         await page.waitForFunction(() => document.getElementById('status').textContent.startsWith('Đã đối chiếu'));
         await page.waitForFunction(() => document.querySelector('#coverage table'));
         check(`${name}: examples and coverage loaded`, await page.locator('#trip option').count() >= 6);
+        check(`${name}: partial map scope disclosed`,
+            (await page.locator('#coverage').innerText()).includes('chưa thể phủ toàn Hà Nội'));
         const examples = await page.locator('#trip option').count();
         for (let index = 0; index < examples; index++) {
             await page.locator('#trip').selectOption(String(index));

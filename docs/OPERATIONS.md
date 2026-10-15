@@ -123,3 +123,31 @@ held-out geometric/live GraphHopper controls without storing evaluation trips.
 `node scripts/verify_guided_browser.mjs` verifies desktop/mobile inspector behavior;
 external tiles are intentionally aborted. Tile network availability is separate
 from rendering/API success.
+
+### Local road coverage and stress cohorts (2026-10-15)
+
+Review the unmerged branch at `http://127.0.0.1:8005/demo`: enable H3 and select
+`Bộ phủ đường` or `Bộ kiểm thử lệch`. The inspector remains at
+`/demo/static/journeys.html`. Existing container UI on port 3000 is not this review
+process. The local API must use the synthetic namespace and explicit public sample
+capability; production history is not exposed. External OSM tile failures remain
+independent of H3/API behavior.
+
+Frozen batch `6c688ea447a7` uses event time `2026-10-15T04:30:00Z`. Retry without
+rerouting or duplicating IDs:
+
+```powershell
+python -B -m scripts.seed_local_guided --targets runtime/h3-local-20261015/seed/source-targets.json --as-of 2026-10-15T04:30:00Z
+```
+
+The manifest rejects a different source/seed/time. Do not replace it to force a
+retry. New audit targets change after ingestion, so use the frozen source above.
+Reproduce baseline without deleting records and compare the same method/time:
+
+```powershell
+python -B -m scripts.audit_guided_coverage --as-of 2026-10-15T04:30:00Z --exclude-batch 6c688ea447a7 --output runtime/h3-local-20261015/before
+python -B -m scripts.audit_guided_coverage --as-of 2026-10-15T04:30:00Z
+```
+
+Seven-day evidence expires normally. This seed is bounded to the current imported
+graph, not all Hanoi. See the [measured report](reports/h3-local-coverage-2026-10-15.md).

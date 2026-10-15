@@ -243,3 +243,20 @@ continuous seven-day paired GPS and EPSG:32648 lengths. Entire roads are buckete
 by approximate geodesic midpoint into H3-5 regions, not clipped at borders or
 assigned districts. Complete motorcar permissions are unavailable; eligible-road
 coverage stays null. Legacy signatures and offline labels never supply coverage.
+
+## Local synthetic cohorts (2026-10-15)
+
+`GET /routing/departure-heatmap?cohort=all|coverage|stress` keeps `all` as default.
+Non-default filters require a synthetic repository; realtime rejects them with
+HTTP 403. The seed owns IDs `h3-road-{batch}-{coverage|stress}-{driver}`; the
+fourth ID component selects these generated cohorts. Other IDs and legacy-only
+footprints remain in `all`. Filtered metadata and cells use the same transaction,
+event-time window and cohort. Counts distinguish trips, drivers and departure events.
+
+Local generation artifacts under `runtime/h3-local-20261015/seed` include immutable
+manifest, source targets, separate cohort inputs and offline maneuver declarations.
+Held-out trip records are never ingested; geographical independence is not claimed.
+Declarations are evaluation-only and never aggregate/ranking inputs. No Dataset V1
+labels or canonical files are modified. Coverage summaries disclose configured,
+imported and intersected map bounds and missing-map area; candidate-reference
+proximity remains an approximation with unknown full motorcar eligibility.

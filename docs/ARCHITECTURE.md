@@ -100,3 +100,15 @@ synthetic and gated. A separate review screen renders returned intervals, origin
 version geometry and offline coverage without frontend classification logic.
 The offline PostGIS audit uses temporary tables, subdivided buffered GPS geometry
 and canonical reference lengths; no new database, dependency or runtime fallback.
+
+## Measured local synthetic cohorts (ADR-029)
+
+The offline audit compares configured/imported graph bounds and selects local gaps.
+The local seed freezes native GraphHopper geometry and rejects routes leaving their
+intersection, long journeys or remote endpoint/via snaps. Cohort inputs and offline
+truth stay separate from canonical data. Only non-held-out paired inputs enter the
+existing synthetic repository; ingestion never updates ranking histories.
+Optional coverage/stress aggregation applies the same cohort predicate to metadata
+and cells in the existing snapshot transaction. The default remains all-source;
+realtime rejects synthetic-only selectors. Frontend changes only request selection
+and explain returned evidence; all classification remains backend-owned.

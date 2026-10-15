@@ -108,6 +108,17 @@ test('green origin statistics explain the sample and never claim whole-trip adhe
     assert.match(f.added[0].popup, /không chứng minh cả chuyến đi đúng/);
 });
 
+test('stress cohort is requested explicitly and its designed departure rate is disclosed', async () => {
+    let requested;
+    const f = fixture(async payload => { requested = payload; return {
+        status: 'AVAILABLE', resolution: 9, source: 'synthetic', cohort: 'stress', cells: {} }; });
+    f.overlay.heatmapCohort = 'stress';
+    await f.overlay.showDepartureHeatmap(); f.flush();
+    assert.equal(requested.cohort, 'stress');
+    assert.match(f.supportElement.textContent, /cố ý tăng lệch/);
+    assert.match(f.supportElement.textContent, /không phải tỷ lệ thực tế/);
+});
+
 test('legacy journey footprints are gray and visits never appear as a departure percentage', async () => {
     const cell = h3.latLngToCell(21, 105.8, 9);
     const f = fixture(async ({ resolution }) => ({ status: 'HISTORY_ONLY', resolution, source: 'synthetic',

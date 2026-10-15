@@ -2,6 +2,7 @@
 from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import ConfigDict, Field, ValidationError, field_validator
@@ -135,7 +136,7 @@ async def ingest_guided_trip(request: Request, response: Response):
 
 @router.get('/routing/departure-heatmap')
 async def departure_heatmap(request: Request, resolution: int = Query(default=9, ge=5, le=10),
-                            as_of_iso: datetime | None = None):
+                            as_of_iso: datetime | None = None, cohort: Literal['all', 'coverage', 'stress'] = 'all'):
     as_of = as_of_iso or datetime.now(UTC)
     if as_of.tzinfo is None:
         raise StateError('As-of time requires a timezone', 'INVALID_AS_OF', 422)
@@ -148,7 +149,9 @@ async def departure_heatmap(request: Request, resolution: int = Query(default=9,
     if repository is None:
         raise StateError('Departure statistics unavailable', 'DEPARTURE_HISTORY_UNAVAILABLE', 503)
     try:
-        return {**metadata, **await repository.departure_heatmap(as_of, resolution)}
+        result = (await repository.departure_heatmap(as_of, resolution) if cohort == 'all' else
+                  await repository.departure_heatmap(as_of, resolution, cohort))
+        return {**metadata, **result}
     except StateError:
         raise
     except Exception:

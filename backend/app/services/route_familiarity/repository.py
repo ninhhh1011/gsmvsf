@@ -163,7 +163,8 @@ class RouteHistoryRepository:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch('''SELECT DISTINCT ON (split_part(trip_id, '-', 4)) evidence
                 FROM synthetic.route_deviation_trips
-                WHERE driver_id LIKE 'h3-road-%' AND right(driver_id, 2) = '-0'
+                WHERE driver_id LIKE 'h3-road-%' AND (right(driver_id, 2) = '-0' OR
+                    split_part(driver_id,'-',4) = 'stress')
                   AND completed_at <= now()
                 ORDER BY split_part(trip_id, '-', 4), completed_at DESC LIMIT 12''')
         examples = []
@@ -253,7 +254,11 @@ class RouteHistoryRepository:
                 """), evidence['driver_id'], evidence['trip_id'], json.dumps(evidence), json.dumps(analysis))
         return False
 
-    async def departure_heatmap(self, as_of: datetime, resolution: int):
+    async def departure_heatmap(self, as_of: datetime, resolution: int, cohort: str = 'all'):
+        if cohort not in ('all', 'coverage', 'stress'):
+            raise ValueError('Invalid synthetic cohort')
+        if cohort != 'all' and self.namespace != 'synthetic':
+            raise StateError('Synthetic cohort unavailable', 'SYNTHETIC_COHORT_DISABLED', 403)
         if not 5 <= resolution <= 10 or as_of.tzinfo is None:
             raise ValueError('Invalid aggregate resolution or time')
         lower = as_of - timedelta(days=7)
@@ -262,13 +267,26 @@ class RouteHistoryRepository:
             # One snapshot keeps denominator/metadata consistent with concurrent ingestion.
             async with conn.transaction(isolation='repeatable_read', readonly=True):
                 await conn.execute("SELECT set_config('statement_timeout', '5000', true)")
-                metadata = dict(await conn.fetchrow(self._query(DEPARTURE_METADATA_QUERY), lower, as_of))
+                metadata_sql = DEPARTURE_METADATA_QUERY
+                metadata_args = (lower, as_of)
+                cells_sql = DEPARTURE_CELLS_QUERY
+                cells_args = (lower, as_of, str(resolution), minimum_drivers)
+                if cohort != 'all':
+                    metadata_sql = metadata_sql.replace('FROM realtime.route_deviation_trips WHERE',
+                        "FROM realtime.route_deviation_trips WHERE split_part(driver_id,'-',4)=$3 AND")
+                    metadata_args += (cohort,)
+                    cells_sql = cells_sql.replace('WHERE completed_at >=',
+                        "WHERE split_part(driver_id,'-',4)=$5 AND completed_at >=")
+                    cells_args += (cohort,)
+                metadata = dict(await conn.fetchrow(self._query(metadata_sql), *metadata_args))
+                if cohort != 'all':
+                    metadata['excluded_unpaired_trip_count'] = 0
                 if metadata['paired_trip_count'] > 10000:
                     raise StateError('Departure aggregate work limit exceeded', 'DEPARTURE_WORK_LIMIT', 503)
                 if metadata['excluded_unpaired_trip_count'] > 100000:
                     raise StateError('History footprint work limit exceeded', 'HISTORY_FOOTPRINT_WORK_LIMIT', 503)
-                rows = await conn.fetch(self._query(DEPARTURE_CELLS_QUERY), lower, as_of, str(resolution), minimum_drivers)
-                history = await conn.fetch(self._query(HISTORY_FOOTPRINT_QUERY), lower, as_of)
+                rows = await conn.fetch(self._query(cells_sql), *cells_args)
+                history = await conn.fetch(self._query(HISTORY_FOOTPRINT_QUERY), lower, as_of) if cohort == 'all' else []
         cells = await run_in_threadpool(aggregate_history_footprints, history, resolution, minimum_drivers)
         for row in rows:
             eligible, departing = row['eligible_trip_count'], row['departing_trip_count']
@@ -283,7 +301,7 @@ class RouteHistoryRepository:
         status = ('AVAILABLE' if any(value['departure_pct'] is not None for value in cells.values()) else
                   'HISTORY_ONLY' if cells else 'NO_PAIRED_EVIDENCE' if not metadata['paired_trip_count'] else 'INSUFFICIENT_EVIDENCE')
         return {'status': status,
-                'source': self.namespace, 'minimum_drivers': minimum_drivers, 'cells': cells, **metadata,
+                'source': self.namespace, 'cohort': cohort, 'minimum_drivers': minimum_drivers, 'cells': cells, **metadata,
                 'history_signature_groups': len(history),
                 'legacy_time_semantics': 'COMPLETED_TRIP_COHORT',
                 'limitations': 'Geometric departure origins; synthetic data does not establish real driver behavior'}

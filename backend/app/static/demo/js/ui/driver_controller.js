@@ -175,6 +175,12 @@ export class DriverModeController {
             });
             this.bindings?.bindH3Toggle?.(() => this.onToggleH3());
             this.bindings?.bindH3ResCycle?.(() => this.cycleH3Resolution());
+            this.bindings?.bindH3Cohort?.(async cohort => {
+                this._h3Overlay.heatmapCohort = cohort;
+                if (this.h3Mode !== 'DEPARTURES') return;
+                this._h3Overlay.clear();
+                if (this._h3Enabled) await this.refreshRouteComparison();
+            });
             this.bindings?.bindSampleDeviation?.(() => this.loadSampleDeviationScenario());
             this.bindings?.bindH3Mode?.(mode => this.changeH3Mode(mode));
             this.bindings?.setH3ResBadgeText?.(`⬡ Res ${this.h3Resolution}`);

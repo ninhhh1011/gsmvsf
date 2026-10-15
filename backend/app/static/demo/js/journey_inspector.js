@@ -83,6 +83,10 @@ try {
     metric('Chiều dài đường tham chiếu', `${number(report.reference_length_m / 1000)} km`, container);
     metric('Độ phủ đường được phép đi', 'chưa xác minh toàn bộ quyền đi ô tô', container);
     metric('Thời điểm báo cáo', report.as_of, container);
+    if (report.scope?.missing_map_area) metric('Phạm vi bản đồ',
+        'Bản đồ đang nhập nhỏ hơn vùng đánh giá; chưa thể phủ toàn Hà Nội.', container);
+    if (report.available_reference_coverage_pct != null) metric('Phủ tham chiếu trong khung có bản đồ',
+        `${number(report.available_reference_coverage_pct)}% · vẫn chưa xác minh mọi quyền đi ô tô`, container);
     const table = document.createElement('table');
     const head = table.insertRow(); ['Vùng địa lý', 'Phủ tham chiếu', 'Còn thiếu (km)'].forEach(text => {
         const cell = document.createElement('th'); cell.textContent = text; head.append(cell);

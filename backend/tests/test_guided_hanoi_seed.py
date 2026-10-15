@@ -26,3 +26,14 @@ def test_follow_and_updated_guidance_have_causal_times_and_no_future_observation
             assert trip.guidance[1].effective_at == trip.observations[len(sampled(points)) // 3].at
         if kind == 'GAP':
             assert max((b.at - a.at).total_seconds() for a, b in zip(trip.observations, trip.observations[1:])) > 60
+
+
+def test_seed_uses_template_departure_indices_instead_of_fixed_thirds():
+    points = [[21 + i * 0.0003, 105.8] for i in range(120)]
+    direct = sampled(points)
+    first, second = 12, 45
+    template = {'direct': points, 'first_index': first, 'second_index': second,
+                'tail_first': direct[first:], 'tail_second': direct[second:],
+                'loop': [direct[first], [direct[first][0], 105.801], direct[first]]}
+    trip = build_trip('REROUTE', template, 'd', 'vary', datetime(2026, 10, 14, tzinfo=UTC), random.Random(8))
+    assert trip.guidance[1].effective_at == trip.observations[first].at

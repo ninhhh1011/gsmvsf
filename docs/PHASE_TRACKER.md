@@ -141,3 +141,24 @@ Verification/limits: [report](reports/h3-evidence-and-coverage-2026-10-14.md).
 751 backend PASS / 12 existing skips, 274 frontend PASS, Ruff PASS, validator152/0
 and22/22,63 unchanged hashes, inspector18/18 and aggregate18/18 browser checks.
 Independent review clear within scope. No merge/push; existing containers retained.
+
+## 2026-10-15 Local-road coverage and departure cohorts — branch only
+
+Owner-authorized planning/implementation, ADR-029, no Week 6 activation. Live imported
+map is smaller than configured service bounds; new routes validate every point
+inside their intersection. No canonical map expansion or all-Hanoi claim.
+
+93 accepted local templates / 27 rejected targets. New runtime: 77 coverage controls
+and 308 stress trips across 110 drivers; stress detects 231 departing trips across
+60 drivers and 320 events. Stress prevalence is intentionally designed. 80 held-out
+records remain outside history; geography may overlap runtime. New cohort selector
+isolates evidence and labels synthetic stress explicitly.
+
+Same-time candidate-reference coverage 7.86% -> 12.32%, 789.767 -> 1,237.731 km;
+paired trips 810 -> 1,195, distinct continuous paths 267 -> 575. Complete motorcar
+permissions/administrative coverage remain unknown. Existing records preserved.
+
+760 backend PASS / 12 existing skips, 275 frontend PASS, Ruff and canonical validator
+152/0 +22/22 PASS, 63 unchanged canonical hashes. Live browser 22/22 aggregate and
+30/30 inspector; independent review clear. External tiles isolated during rendering
+checks. [Report](reports/h3-local-coverage-2026-10-15.md). No merge/push.

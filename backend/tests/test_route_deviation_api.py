@@ -12,6 +12,35 @@ from backend.tests.test_route_deviations import evidence, point
 
 
 @pytest.mark.asyncio
+async def test_stress_cohort_filters_paired_evidence_without_legacy_or_private_rows():
+    conn = AsyncMock()
+    conn.transaction = MagicMock(return_value=Pool(conn))
+    conn.fetch.return_value = []
+    conn.fetchrow.return_value = {'paired_trip_count': 5, 'excluded_unpaired_trip_count': 40,
+                                'unknown_trip_count': 0, 'uncertain_intervals': 0}
+    repo = RouteHistoryRepository(Pool(conn), 'synthetic')
+    result = await repo.departure_heatmap(datetime.now(UTC), 9, 'stress')
+    assert result['cohort'] == 'stress' and result['excluded_unpaired_trip_count'] == 0
+    assert conn.fetch.await_count == 1
+    assert conn.fetch.await_args.args[-1] == 'stress'
+    assert "split_part(driver_id,'-',4)=$5" in conn.fetch.await_args.args[0]
+    assert "split_part(driver_id,'-',4)=$3" in conn.fetchrow.await_args.args[0]
+    with pytest.raises(StateError):
+        await RouteHistoryRepository(Pool(conn), 'realtime').departure_heatmap(datetime.now(UTC), 9, 'stress')
+
+
+@pytest.mark.asyncio
+async def test_cohort_api_rejects_unknown_and_passes_valid_selection(client, app, monkeypatch):
+    monkeypatch.setattr(settings, 'enable_route_familiarity', True)
+    repo = AsyncMock()
+    repo.departure_heatmap.return_value = {'status': 'NO_PAIRED_EVIDENCE', 'cells': {}}
+    app.state.route_history_repository = repo
+    assert (await client.get('/api/v1/routing/departure-heatmap?cohort=invalid')).status_code == 422
+    assert (await client.get('/api/v1/routing/departure-heatmap?cohort=stress')).status_code == 200
+    assert repo.departure_heatmap.await_args.args[-1] == 'stress'
+
+
+@pytest.mark.asyncio
 async def test_stateless_guided_inspection_and_public_example_boundary(client, app, monkeypatch):
     payload = evidence([point(i * 20) for i in range(8)]).model_dump(mode='json')
     response = await client.post('/api/v1/routing/inspect-guided-trip', json=payload)

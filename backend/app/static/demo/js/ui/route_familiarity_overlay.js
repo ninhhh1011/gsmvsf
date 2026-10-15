@@ -362,7 +362,8 @@ export class RouteFamiliarityOverlay {
         this._setDepartureMetadata();
         this.render();
         try {
-            const heatmap = await this.loadHeatmap?.({ resolution, as_of_iso: asOf });
+            const heatmap = await this.loadHeatmap?.({ resolution, as_of_iso: asOf,
+                ...(this.heatmapCohort && this.heatmapCohort !== 'all' ? { cohort: this.heatmapCohort } : {}) });
             if (request !== this.heatmapRequest || !this.enabled || !this.heatmapMode) return;
             this.heatmap = heatmap || { status: 'UNAVAILABLE', cells: {} };
         } catch {
@@ -389,9 +390,12 @@ export class RouteFamiliarityOverlay {
                 INSUFFICIENT_EVIDENCE: 'Chưa đủ bằng chứng hoặc mẫu được bảo vệ',
                 DISABLED: 'Thống kê chưa được bật', UNAVAILABLE: 'Thống kê không khả dụng' };
             const fake = this.heatmap?.source === 'synthetic' ? ' · Dữ liệu giả lập' : '';
+            const cohort = this.heatmap?.cohort === 'stress' ? ' · Bộ kiểm thử cố ý tăng lệch; không phải tỷ lệ thực tế' :
+                this.heatmap?.cohort === 'coverage' ? ' · Bộ phủ đường' :
+                this.heatmap?.source === 'synthetic' ? ' · Gộp các bộ giả lập, gồm kiểm thử lệch' : '';
             const excluded = this.heatmap?.excluded_unpaired_trip_count || 0;
             const uncertain = this.heatmap?.uncertain_intervals || 0;
-            this.supportElement.textContent = `${labels[this.heatmap?.status] || 'Chưa đủ bằng chứng'} · 7 ngày${fake}` +
+            this.supportElement.textContent = `${labels[this.heatmap?.status] || 'Chưa đủ bằng chứng'} · 7 ngày${fake}${cohort}` +
                 (this.heatmap?.as_of_iso ? ` · đến ${this.heatmap.as_of_iso}` : '') +
                 (excluded ? ` · ${excluded} chuyến chỉ hiện lịch sử, không tính tỷ lệ bỏ tuyến` : '') +
                 (uncertain ? ` · ${uncertain} khoảng chưa xác minh` : '');

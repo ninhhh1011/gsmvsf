@@ -613,3 +613,26 @@ coverage; never claim authoritative city/drivable coverage. Reports disclose eve
 time, bbox, tolerance, deduplication and excluded source batches. Approximate
 boundary attribution and nearby parallel roads remain limitations. Ranking,
 runtime aggregation guards and Week boundaries are unchanged.
+
+## ADR-029: Measured local-road cohorts within imported map bounds
+
+**Date:** 2026-10-15. **Status:** Owner-approved branch extension; merge separately authorized.
+
+Audit configured bounds against live GraphHopper `/info`; restrict new synthetic
+routes, including every intermediate geometry point, to their intersection.
+Availability bounds are not administrative borders. Do not change canonical PBFs
+or claim all-Hanoi coverage from a partial imported graph.
+
+Reuse canonical reference roads to select uncovered local origins in H3-7 and
+nearby vias in H3-9. Real GraphHopper routes must meet length and 35 m snap limits;
+unroutable targets are reported, dependency outages propagate. Freeze manifests,
+inputs and maneuver declarations before analysis. Preserve existing records and
+use deterministic IDs/schedules for reproducible synthetic-only ingestion.
+
+Separate coverage FOLLOW controls from deviation-rich stress cases. Expose an
+optional synthetic aggregate cohort filter, retaining default all-source behavior
+and existing causal/privacy/work guards. Stress is a designed distribution, never
+an estimate of real departure prevalence. Held-out journey records are excluded
+from storage; their roads may overlap runtime geography. Neither maneuver intent
+nor same-generator held-out success establishes field accuracy. No new dependency,
+ranking change, runtime label consumption or Week 6 scope.

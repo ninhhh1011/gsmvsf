@@ -46,7 +46,10 @@ def checked_join(*chunks):
 
 def build_trip(kind, template, driver_id, trip_id, started, rng):
     direct = sampled(template['direct'])
-    first, second = len(direct) // 3, len(direct) * 2 // 3
+    first = template.get('first_index', len(direct) // 3)
+    second = template.get('second_index', len(direct) * 2 // 3)
+    if not 0 < first < second < len(direct) - 1:
+        raise ValueError('Invalid template departure indices')
     guidance = [{'effective_at': started, 'coordinates': template['direct']}]
     coordinates = direct
     if kind in ('EXIT', 'REROUTE'):
@@ -76,6 +79,8 @@ async def fetch_route(adapter, origin, destination, via=()):
         return Position(latitude=p[0], longitude=p[1])
     route = await adapter.route(RouteRequest(origin=position(origin), destination=position(destination),
         via=[position(p) for p in via], profile=VehicleRoutingProfile(vehicle_category='EV_CAR')))
+    if route.status in (RouteStatus.NO_ROUTE, RouteStatus.UNREACHABLE, RouteStatus.INVALID_REQUEST):
+        raise ValueError(f'GraphHopper route rejected: {route.status.value}')
     if route.status != RouteStatus.SUCCESS or not route.geometry or route.engine_name != 'graphhopper':
         raise RuntimeError('Real GraphHopper route required; no mock or straight-line fallback')
     return {'polyline': route.geometry, 'coordinates': create_route_signature([route.geometry]).coordinates,

@@ -22,7 +22,7 @@ try {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => !!window.driverMode?._h3Overlay);
         // Fixed replay time matches the documented synthetic verification batch.
-        await page.evaluate(() => { driverMode.offlineEvaluationTime = '2026-10-14T03:00:00Z'; });
+        await page.evaluate(() => { driverMode.offlineEvaluationTime = '2026-10-15T04:30:00Z'; });
         if (!await page.locator('#toggle-route-familiarity').isVisible()) await page.locator('#btn-driver-sheet-toggle').click();
         if (!await page.locator('#toggle-route-familiarity').isVisible()) await page.locator('#driver-analysis-tools > summary').click();
         await page.locator('#toggle-route-familiarity').check();
@@ -88,6 +88,18 @@ try {
         check(`${name}: comparison mode is separate`, await page.evaluate(() => !driverMode._h3Overlay.comparisonMode && !driverMode.directRouteGeometry));
         await page.locator('#h3-analysis-mode').selectOption('DEPARTURES');
         await page.waitForFunction(() => driverMode._h3Overlay.heatmap?.status === 'AVAILABLE' && driverMode._h3Overlay.heatmapMode);
+        for (const [cohort, count] of [['coverage', 77], ['stress', 308]]) {
+            await page.locator('#h3-cohort').selectOption(cohort);
+            await page.waitForFunction(c => driverMode._h3Overlay.heatmap?.cohort === c, cohort);
+            const stats = await page.evaluate(() => ({
+                trips: driverMode._h3Overlay.heatmap.paired_trip_count,
+                legacy: driverMode._h3Overlay.heatmap.excluded_unpaired_trip_count,
+                events: Object.values(driverMode._h3Overlay.heatmap.cells).reduce((n, c) => n + (c.departure_event_count || 0), 0),
+                caption: document.getElementById('route-familiarity-support').textContent
+            }));
+            check(`${name}: ${cohort} isolates designed cohort`, stats.trips === count && stats.legacy === 0 &&
+                (cohort === 'stress' ? stats.events > 0 && stats.caption.includes('thực tế') : stats.events === 0), stats);
+        }
         await page.locator('#toggle-route-familiarity').uncheck();
         check(`${name}: toggle hides grid`, await page.evaluate(() => !driverMode._h3Overlay.enabled && !driverMode._h3Overlay.layer.getLayers().length));
         check(`${name}: no browser errors`, errors.length === 0, errors);
