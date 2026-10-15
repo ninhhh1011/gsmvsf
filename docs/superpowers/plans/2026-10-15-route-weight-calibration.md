@@ -16,7 +16,8 @@
 - Each request has one fastest candidate at `T/T_min = 1`; slower candidates have ratios in `[1.03, 1.20]`.
 - Personal and community confidence are `n / (n + 3)`, with zero confidence when `n = 0`.
 - Candidate features are `[T/T_min, (1-F_personal)C_personal, (1-F_community)C_community]`.
-- Synthetic labels use latent weights `[0.68, 0.20, 0.12]` and seeded Gaussian score noise, independently of prior `[0.80, 0.10, 0.10]`.
+- Synthetic labels use latent weights `[0.60, 0.27, 0.13]` and seeded Gaussian score noise, independently of prior `[0.80, 0.10, 0.10]`.
+- A small deterministic subset of slower alternatives has zero evidence for one familiarity signal and positive evidence for the other; the fastest candidate retains 8–15 counts for both signals.
 - Split whole requests 80/20 and fit only on the training split.
 - Train listwise softmin cross-entropy with `beta = 8`, `lambda = 0.05`, and projected gradient descent.
 - Enforce `sum(w) = 1` and `w_i >= 0.01` after every update.
@@ -44,13 +45,13 @@
 - Internal candidate record: feature triple, `chosen_idx` at request level, and stable request ID for split checks.
 - Report JSON: generator and optimizer parameters, split sizes, initial and learned weights, epoch log, held-out before/after metrics, and synthetic-data limitation.
 
-- [x] **Step 1: Generate deterministic candidate lists and labels.** Use one `random.Random(seed)` instance. Generate 400 requests; make candidate 0 the unique fastest route and sample the remaining time ratios from `[1.03, 1.20]`. Bias the fastest candidate's familiarity lower than slower alternatives. Sample separate personal-trip and community-driver counts, calculate `C = n / (n + 3)`, and form the three features exactly as specified. Choose `chosen_idx` by minimizing latent weighted cost plus seeded Gaussian noise. Shuffle request IDs once and split 320 train / 80 held-out; assert split disjointness and feature/count bounds.
+- [x] **Step 1: Generate deterministic candidate lists and labels.** Use one `random.Random(seed)` instance. Generate 400 requests; make candidate 0 the unique fastest route and sample the remaining time ratios from `[1.03, 1.20]`. Bias the fastest candidate's familiarity lower than slower alternatives. Sample separate personal-trip and community-driver counts, with a small deterministic zero-evidence subset among slower alternatives; calculate `C = n / (n + 3)` and assert zero-count confidence and feature terms are zero. Choose `chosen_idx` by minimizing latent weighted cost plus seeded Gaussian noise. Shuffle request IDs once and split 320 train / 80 held-out; assert split disjointness and feature/count bounds.
 
 - [x] **Step 2: Implement stable loss, gradient, and constrained projection.** Compute each request's softmin cross-entropy at `beta = 8`; use max-shifted exponentials. Average the data gradient and add `2 * lambda * (w - w0)` for `lambda = 0.05`. Project the update onto the simplex with coordinate floor `0.01` by projecting `w - 0.01` onto a simplex of mass `0.97`, then adding the floor. Assert finite probabilities, sum tolerance, and floor after every projection.
 
 - [x] **Step 3: Train from the exact prior and print every epoch.** Start at `[0.80, 0.10, 0.10]`, use learning rate `0.2`, cap training at 250 updates, and stop after the weight-vector change stays below `1e-8` for 10 consecutive updates. The rate and cap were increased after fixed-seed probes showed `0.02` had not converged at its 200-update cap while `0.2` converged to the same solution as `0.05` in 169 updates. Print epoch 0 and each subsequent epoch with weights, regularized training loss, and training top-1 accuracy.
 
-- [x] **Step 4: Evaluate and write the report.** On held-out requests, calculate top-1 accuracy, mismatch-based simulated abandonment rate, and mean `T/T_min` of the recommended candidate for both prior and learned weights. Serialize the epoch log, final weights, parameters, metrics, and synthetic limitation to `weights_calibration_report.json`; print the before/after comparison.
+- [x] **Step 4: Evaluate and write the report.** On held-out requests, calculate top-1 accuracy, mismatch-based simulated abandonment rate, and mean `T/T_min` of the recommended candidate for both prior and learned weights. Serialize the epoch log, final weights, parameters, metrics, and synthetic limitation to `weights_calibration_report.json`; print before/after values and explicit deltas with documented sign conventions.
 
 - [x] **Step 5: Execute and inspect the requested artifact.** Run `python scripts/train_route_weights.py` from the worktree root. Parse the JSON with Python's standard library; assert the report has 400 requests, an 80-request held-out set, finite metrics, matching prior/learned weights and simplex constraints, and printed/logged evaluation values agree. Confirm `git status` shows only the script and generated report beyond the already committed design/plan documents.
 

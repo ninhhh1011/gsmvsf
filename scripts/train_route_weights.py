@@ -9,7 +9,7 @@ import random
 SEED = 26015
 REQUESTS = 400
 PRIOR = [0.80, 0.10, 0.10]
-LATENT_WEIGHTS = [0.68, 0.20, 0.12]
+LATENT_WEIGHTS = [0.60, 0.27, 0.13]
 BETA = 8.0
 L2 = 0.05
 LEARNING_RATE = 0.2
@@ -43,6 +43,10 @@ def generate_data(seed=SEED):
                 community_f = rng.uniform(0.55, 0.98)
                 personal_n = rng.randint(3, 15)
                 community_n = rng.randint(3, 15)
+                if request_id % 50 == 0 and index == 1:
+                    personal_n = 0
+                elif request_id % 50 == 0 and index == 2:
+                    community_n = 0
             personal_c = confidence(personal_n)
             community_c = confidence(community_n)
             candidates.append({
@@ -56,6 +60,8 @@ def generate_data(seed=SEED):
                 "features": [ratio, (1 - personal_f) * personal_c,
                              (1 - community_f) * community_c],
             })
+            assert personal_c != 0 or candidates[-1]["features"][1] == 0.0
+            assert community_c != 0 or candidates[-1]["features"][2] == 0.0
 
         # Choices come from a separate latent policy; the training prior is not used.
         noisy_costs = [sum(w * x for w, x in zip(LATENT_WEIGHTS, candidate["features"]))
@@ -211,6 +217,10 @@ def main():
         print(f"{name:<12} [{weight_text}]   {metrics['top1_accuracy'] * 100:>7.2f}%"
               f"             {metrics['simulated_abandonment_rate'] * 100:>7.2f}%"
               f"                 {metrics['mean_recommended_T_over_T_min']:.4f}")
+    print("Change (accuracy/time = optimized - prior; abandonment reduction = prior - optimized)")
+    print(f"Accuracy change: {(after['top1_accuracy'] - before['top1_accuracy']) * 100:+.2f} pp | "
+          f"Abandonment reduction: {(before['simulated_abandonment_rate'] - after['simulated_abandonment_rate']) * 100:+.2f} pp | "
+          f"Mean T/T_min change: {after['mean_recommended_T_over_T_min'] - before['mean_recommended_T_over_T_min']:+.4f}")
 
     report = {
         "experiment": "controlled_synthetic_route_weight_calibration",

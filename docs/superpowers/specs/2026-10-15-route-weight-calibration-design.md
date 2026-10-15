@@ -17,7 +17,8 @@ The project already has route-familiarity history, ranking services, and a synth
 - Each request has one fastest candidate with normalized journey time `T/T_min = 1`. Other candidates have ratios in `[1.03, 1.20]`.
 - Generate personal and community familiarity in `[0, 1]`; alternatives are biased toward higher familiarity and usable evidence counts. Draw personal history trips and community driver counts as nonnegative integers, and calculate each confidence as `n / (n + 3)` (zero when `n = 0`).
 - Build each candidate's three features as `[T/T_min, (1-F_personal)C_personal, (1-F_community)C_community]`.
-- Produce `chosen_idx` from a latent preference `[0.68, 0.20, 0.12]` and seeded Gaussian score noise. This latent preference is independent of the prior `[0.80, 0.10, 0.10]`; the observed choice labels are then fixed before training.
+- Produce `chosen_idx` from a latent preference `[0.60, 0.27, 0.13]` and seeded Gaussian score noise. This latent preference is independent of the prior `[0.80, 0.10, 0.10]`; the observed choice labels are then fixed before training.
+- In a small deterministic subset of slower alternatives, set one evidence count to zero while retaining positive evidence on the other signal. Keep the fastest candidate's personal and community counts in `[8, 15]`; assert zero confidence and a zero corresponding feature term.
 - Split whole requests 80/20 into train and held-out evaluation sets with the seeded generator. Fit only on training requests. Report final before/after metrics on held-out requests; epoch accuracy is on the training requests.
 
 The selected synthetic route represents the route the driver completes. A recommendation counts as a simulated abandonment when its top-ranked candidate differs from `chosen_idx`. This is a controlled label definition, not an estimate of real-world abandonment.
@@ -30,7 +31,7 @@ After every update, project onto the constrained simplex: each coordinate is at 
 
 ## Output and evaluation
 
-The terminal log contains epoch/step, all three weights, training loss, and training top-1 accuracy. The before/after held-out comparison contains top-1 accuracy, simulated abandonment rate, and mean recommended `T/T_min`. The JSON report also records seed, generator/training parameters, split sizes, prior and learned weights, metric definitions, and the explicit limitation that controlled synthetic results do not establish field behavior.
+The terminal log contains epoch/step, all three weights, training loss, and training top-1 accuracy. The before/after held-out comparison contains top-1 accuracy, simulated abandonment rate, and mean recommended `T/T_min`, followed by explicit accuracy, abandonment-reduction, and normalized-time deltas. The JSON report also records seed, generator/training parameters, split sizes, prior and learned weights, metric definitions, and the explicit limitation that controlled synthetic results do not establish field behavior.
 
 ## Files and verification
 
