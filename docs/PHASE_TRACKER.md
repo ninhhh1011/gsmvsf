@@ -1,5 +1,28 @@
 # Phase 0–3 Production Shape Tracker
 
+## Current owner-directed data-quality work (2026-10-16)
+
+Implemented on `feat/route-weight-calibration`; keep runtime 80/10/10.
+Historical Week 6 productionization exists at tag `week6-productionization-complete`
+(`be5a9c2`); current single-host readiness does not establish production capacity.
+The historical phase records below retain their recorded scope.
+
+- [x] Coverage-driven real GraphHopper template selection: 240 targets, 189 valid,
+  51 rejected, 120 selected across 83 origin groups.
+- [x] Seven paired maneuver/control strata, frozen grouped train/validation/test,
+  disjoint drivers/later times, 462 train records stored and zero held-out records.
+- [x] Same-time measured reference coverage 12.32% -> 15.81%, +351.310 km;
+  575 -> 1,037 continuous paths. Directed eligibility/citywide coverage remains unknown.
+- [x] GAP regression reproduced/fixed; own defective batch retired against backup.
+- [x] 765 backend PASS / 12 skipped, 32 focused PASS, Ruff PASS, 63 unchanged
+  canonical file hashes, four API readiness 200. Independent implementation review
+  found no important defect; no ranking-runtime change or application redeployment.
+
+Evidence and limits: [data-quality report](reports/guided-data-quality-2026-10-16.md).
+The earlier weight experiment is exploratory due generation changes after held-out
+inspection. Real-driver effects, geographically disjoint testing and production
+capacity remain separate unproven claims. No merge or remote push.
+
 **Branch:** `fix/phase-0-3-production-shape`
 **Status:** All locked gates pass locally; whole-branch review passed and final verification is green.
 

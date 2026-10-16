@@ -33,24 +33,24 @@ Files: create `scripts/guided_benchmark.py`, `backend/tests/test_guided_benchmar
 
 Interfaces: `select_templates(templates, maximum, seed)` returns frozen selected templates with split/group/held_out metadata; `benchmark_inputs(manifest, batch)` returns GuidedTrip records and offline declarations; `evaluation_report(rows)` returns split/scenario confusion counts and event count discrepancies.
 
-- [ ] Write/run failing tests for deterministic novelty selection, grouped splits, driver isolation, all seven maneuver types, preserved GAP/REROUTE chronology, and confusion accounting.
-- [ ] Implement versioned benchmark mode with cases FOLLOW, EXIT, EXIT_LATE, RETURN_EXIT, REROUTE, GAP, NOISE. Keep original seeder mode and manifests usable.
-- [ ] Run `python -m pytest backend/tests/test_guided_benchmark.py backend/tests/test_local_guided_seed.py backend/tests/test_route_deviations.py -q` and Ruff. Expect all passing; commit.
+- [x] Write/run failing tests for deterministic novelty selection, grouped splits, driver isolation, all seven maneuver types, preserved GAP/REROUTE chronology, and confusion accounting.
+- [x] Implement versioned benchmark mode with cases FOLLOW, EXIT, EXIT_LATE, RETURN_EXIT, REROUTE, GAP, NOISE. Keep original seeder mode and manifests usable.
+- [x] Run `python -m pytest backend/tests/test_guided_benchmark.py backend/tests/test_local_guided_seed.py backend/tests/test_route_deviations.py -q` and Ruff. Expect all passing; commit.
 
 ### Task 2: Coverage-driven targets and real generation
 
 Files: modify `scripts/audit_guided_coverage.py`, `backend/tests/test_guided_coverage.py`; generated files under `runtime/guided-quality-20261015/`.
 
-- [ ] Test configurable target resolution/count validation, retaining old default 120/H3-7.
-- [ ] Add bounded CLI selection of H3-8 targets and up to 240 candidates. Reuse uncovered reference roads; retain all rejection evidence.
-- [ ] Run a same-time pre-audit, prepare real GraphHopper routes, greedily retain at most 120 templates, generate paired records and freeze train/validation/test before detector evaluation. Ingest train only.
-- [ ] Run same-time post-audit. Report actual improvement, rejections, scenario metrics and split sizes even when outcomes are unfavorable; no outcome-based generator tuning.
+- [x] Test configurable target resolution/count validation, retaining old default 120/H3-7.
+- [x] Add bounded CLI selection of H3-8 targets and up to 240 candidates. Reuse uncovered reference roads; retain all rejection evidence.
+- [x] Run a same-time pre-audit, prepare real GraphHopper routes, greedily retain at most 120 templates, generate paired records and freeze train/validation/test before detector evaluation. Ingest train only.
+- [x] Run same-time post-audit. Report actual improvement, rejections, scenario metrics and split sizes even when outcomes are unfavorable; no outcome-based generator tuning.
 
 ### Task 3: Honest status and verification
 
 Files: `AGENTS.md`, `README.md`, `docs/PHASE_TRACKER.md`, `docs/DATA_CONTRACT.md`, `docs/DECISIONS.md`, and a results report under `docs/reports/`.
 
-- [ ] Correct tracker path and historical Week 6 status while separating local operational checks from current production readiness.
-- [ ] Document coverage proxy, grouped holdout limits, synthetic stress semantics and unchanged ranking. Mark prior calibration report exploratory due generator changes after held-out inspection.
-- [ ] Run focused regression, lint, data/report checks and unchanged-ranking diff; run appropriate wider backend checks. Verify direct API readiness without redeploying.
-- [ ] Fresh whole-change review, fix material findings, commit and report measurements and limits.
+- [x] Correct tracker path and historical Week 6 status while separating local operational checks from current production readiness.
+- [x] Document coverage proxy, grouped holdout limits, synthetic stress semantics and unchanged ranking. Mark prior calibration report exploratory due generator changes after held-out inspection.
+- [x] Run focused regression, lint, data/report checks and unchanged-ranking diff; run appropriate wider backend checks. Verify direct API readiness without redeploying.
+- [x] Fresh whole-change review, fix material findings, commit and report measurements and limits.
