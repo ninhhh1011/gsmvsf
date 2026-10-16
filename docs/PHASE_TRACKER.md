@@ -1,5 +1,14 @@
 # Phase 0–3 Production Shape Tracker
 
+## Local main integration (2026-10-16)
+
+Owner authorized merging `feat/route-weight-calibration`; local main fast-forwarded
+to `7f6346d`. Post-merge verification: 765 backend PASS / 12 skipped, Ruff PASS;
+frontend H3 HTTP 200 / AVAILABLE with 2,950 cells at verification time. Versioned
+benchmark artifacts were copied to the main checkout's `runtime/guided-quality-20261015/`
+and the frozen manifest hash matches. No remote push. Earlier branch-only/no-merge
+statements below and in reports describe their recorded pre-integration state.
+
 ## Current owner-directed data-quality work (2026-10-16)
 
 Implemented on `feat/route-weight-calibration`; keep runtime 80/10/10.
