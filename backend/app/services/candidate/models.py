@@ -7,7 +7,8 @@ Maintains strict separation from Week 4 Ranking:
 - Contains NO ranking score, NO rank position, and NO best-station recommendation.
 """
 
-from datetime import datetime
+from backend.app.services.energy.replenishment import ReplenishmentEstimate
+from datetime import UTC, datetime
 from enum import Enum
 
 from backend.app.services.demand.models import EnergyServiceRequest, ServiceType
@@ -27,6 +28,9 @@ class CandidateEligibilityReason(str, Enum):
     EXCESSIVE_QUEUE = "EXCESSIVE_QUEUE"
     UNREACHABLE = "UNREACHABLE"
     INSUFFICIENT_SOC_TO_REACH = "INSUFFICIENT_SOC_TO_REACH"
+    ONWARD_ENERGY_UNVERIFIED = 'ONWARD_ENERGY_UNVERIFIED'
+    REPLENISHMENT_UNAVAILABLE = 'REPLENISHMENT_UNAVAILABLE'
+    INSUFFICIENT_DEPARTURE_ENERGY = 'INSUFFICIENT_DEPARTURE_ENERGY'
 
 
 class StationServiceCandidate(BaseModel):
@@ -103,6 +107,8 @@ class EvaluatedCandidate(BaseModel):
     eligible: bool
     reason: CandidateEligibilityReason
 
+    replenishment: ReplenishmentEstimate | None = None
+
     # Geographic location of station
     station_latitude: float
     station_longitude: float
@@ -134,6 +140,10 @@ class CandidateSearchRequest(BaseModel):
     destination_node_id: str | None = None
     max_candidates: int | None = None
     constraints: RouteConstraints | None = None
+    prefix_duration_s: float = Field(0, ge=0, allow_inf_nan=False)
+    prefix_distance_m: float = Field(0, ge=0, allow_inf_nan=False)
+    prefix_geometry: str | None = None
+    prefix_traffic_segment_id: str | None = None
 
 
 class CandidateSearchResult(BaseModel):
@@ -143,7 +153,7 @@ class CandidateSearchResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     service_request_id: str
-    search_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    search_timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     search_status: str = "SUCCESS"  # SUCCESS, NO_SERVICE_NEEDED, INVALID_REQUEST, ERROR
     total_candidates_evaluated: int
     eligible_count: int

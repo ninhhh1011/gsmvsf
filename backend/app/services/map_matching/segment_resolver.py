@@ -1,4 +1,4 @@
-"""Resolve real matched positions/OSM ways to frozen Dataset segment identities."""
+"""Resolve real matched positions/OSM ways to frozen Dataset segment identities using asyncpg."""
 from dataclasses import dataclass
 from enum import Enum
 
@@ -31,37 +31,28 @@ class SegmentInfo:
 
 
 class RouteConstrainedSegmentResolver:
-    def __init__(self, database_url, mapping_dir=None):
-        self.database_url = database_url
-        self._conn = None
+    """Async segment resolver using asyncpg connection pool."""
 
-    def _get_connection(self):
-        if self._conn is None or getattr(self._conn, "closed", False):
-            try:
-                import psycopg2
-                self._conn = psycopg2.connect(self.database_url, connect_timeout=5)
-                self._conn.autocommit = True
-            except Exception as exc:
-                raise SegmentResolverUnavailableError(f"Database connection failed: {exc}") from exc
-        return self._conn
+    def __init__(self, db_pool):
+        self._pool = db_pool
 
-    def resolve_matched(self, lat, lon, osm_way_id=None, bearing=None, max_distance_m=100.0):
+    async def resolve_matched(self, lat, lon, osm_way_id=None, bearing=None, max_distance_m=100.0):
         """Use actual way identity when supplied; otherwise expose spatial ambiguity."""
         try:
-            with self._get_connection().cursor() as cursor:
-                cursor.execute("""
+            pool = self._pool
+            async with pool.acquire() as conn:
+                rows = await conn.fetch("""
                     SELECT segment_id, from_node_id, to_node_id, osm_way_id, travel_direction,
-                        ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography),
+                        ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint($1,$2),4326)::geography),
                         degrees(ST_Azimuth(ST_StartPoint(geom), ST_EndPoint(geom))) +
                             CASE WHEN travel_direction = 'REVERSE' THEN 180 ELSE 0 END
                     FROM road_segments
-                    WHERE (%s IS NULL OR osm_way_id = %s)
-                      AND geom && ST_Expand(ST_SetSRID(ST_MakePoint(%s,%s),4326), %s)
-                      AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography, %s)
+                    WHERE ($3::bigint IS NULL OR osm_way_id = $3)
+                      AND geom && ST_Expand(ST_SetSRID(ST_MakePoint($4,$5),4326), $6)
+                      AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint($7,$8),4326)::geography, $9)
                     ORDER BY 6, segment_id LIMIT 8
-                """, (lon, lat, osm_way_id, osm_way_id, lon, lat, max_distance_m / 100000,
-                      lon, lat, max_distance_m))
-                rows = cursor.fetchall()
+                """, lon, lat, osm_way_id, lon, lat, max_distance_m / 100000,
+                      lon, lat, max_distance_m)
         except SegmentResolverUnavailableError:
             raise
         except Exception as exc:
@@ -78,13 +69,8 @@ class RouteConstrainedSegmentResolver:
             ResolutionStatus.ROUTE_SPATIAL if osm_way_id else ResolutionStatus.GLOBAL_SPATIAL)
         return SegmentInfo(*best[:6], resolution)
 
-    def resolve(self, lat, lon, max_distance_m=100.0):
-        return self.resolve_matched(lat, lon, max_distance_m=max_distance_m)
-
-    def close(self):
-        if self._conn and not self._conn.closed:
-            self._conn.close()
-        self._conn = None
+    async def resolve(self, lat, lon, max_distance_m=100.0):
+        return await self.resolve_matched(lat, lon, max_distance_m=max_distance_m)
 
 
 PostGISSegmentResolver = RouteConstrainedSegmentResolver

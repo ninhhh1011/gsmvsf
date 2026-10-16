@@ -7,11 +7,14 @@ shared state across multiple API processes.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 import logging
+from time import perf_counter
 from abc import ABC, abstractmethod
 from collections import deque
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,21 +23,20 @@ if TYPE_CHECKING:
 import redis.asyncio as redis
 from backend.app.config import settings
 
+from backend.app.core.constants import (
+    EARTH_RADIUS_M,
+    MAX_ACTIVE_DRIVERS,
+    MAX_OBSERVATIONS_PER_DRIVER,
+    DRIVER_STATE_TTL_SECONDS,
+)
+
 logger = logging.getLogger(__name__)
-
-
-# Constants matching state.py
-DEFAULT_CONTEXT_WINDOW_SECONDS = 30.0
-DEFAULT_MAX_CONTEXT_POINTS = 50
-DEFAULT_GAP_THRESHOLD_SECONDS = 60.0
-DEFAULT_STATIONARY_THRESHOLD = 3
-DEFAULT_STATIONARY_DISTANCE_M = 5.0
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two points in meters."""
     import math
-    R = 6371000
+    R = EARTH_RADIUS_M
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
@@ -93,7 +95,7 @@ class MatchedState:
     direction: str | None = None
     confidence: float | None = None
     route_geometry: str | None = None
-    matched_at: datetime = field(default_factory=datetime.utcnow)
+    matched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         return {
@@ -120,7 +122,7 @@ class MatchedState:
             direction=data.get("direction"),
             confidence=data.get("confidence"),
             route_geometry=data.get("route_geometry"),
-            matched_at=matched_at or datetime.utcnow(),
+            matched_at=matched_at or datetime.now(UTC),
         )
 
 
@@ -163,7 +165,7 @@ class DriverTraceStateSnapshot:
     def to_observations_deque(self) -> deque[GPSObservation]:
         """Reconstruct the observations deque."""
         obs = [GPSObservation.from_dict(d) for d in self.observations]
-        result = deque(maxlen=1000)
+        result = deque(maxlen=MAX_OBSERVATIONS_PER_DRIVER)
         result.extend(obs)
         return result
 
@@ -194,7 +196,7 @@ class DriverStateRepository(ABC):
 
     @abstractmethod
     async def save_with_expected_version(
-        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int, expected_generation: int | None = None
     ) -> tuple[bool, int]:
         """
         Conditional save: only save if current version matches expected_version.
@@ -223,9 +225,10 @@ class InMemoryDriverStateRepository(DriverStateRepository):
 
     def __init__(self):
         self._states: dict[str, DriverTraceStateSnapshot] = {}
+        self._local_states = {}
 
     async def get(self, driver_id: str) -> DriverTraceStateSnapshot | None:
-        return self._states.get(driver_id)
+        return deepcopy(self._states.get(driver_id))
 
     async def save(self, snapshot: DriverTraceStateSnapshot) -> bool:
         current = self._states.get(snapshot.driver_id)
@@ -234,51 +237,45 @@ class InMemoryDriverStateRepository(DriverStateRepository):
             snapshot.version = current.version + 1
         else:
             snapshot.version = 1
-        self._states[snapshot.driver_id] = snapshot
+        self._states[snapshot.driver_id] = deepcopy(snapshot)
         return True
 
     async def save_with_expected_version(
-        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int, expected_generation: int | None = None
     ) -> tuple[bool, int]:
         current = self._states.get(snapshot.driver_id)
         actual_version = current.version if current else 0
 
-        if actual_version != expected_version:
+        if actual_version != expected_version or (expected_generation is not None and
+                (current.generation if current else 1) != expected_generation):
             # Conflict - state changed since we read it
             return False, actual_version
 
         # Save with incremented version
         snapshot.version = expected_version + 1
-        self._states[snapshot.driver_id] = snapshot
+        self._states[snapshot.driver_id] = deepcopy(snapshot)
         return True, snapshot.version
 
     async def delete(self, driver_id: str) -> bool:
+        self._local_states.pop(driver_id, None)
         if driver_id in self._states:
             del self._states[driver_id]
             return True
         return False
 
     async def list_drivers(self) -> list[str]:
-        return list(self._states.keys())
+        return list(dict.fromkeys([*self._states, *self._local_states]))
 
     async def health_check(self) -> bool:
         return True
 
     async def get_or_create_local(self, driver_id: str):
-        """
-        Get or create driver state using the global in-memory store.
-
-        This is used when InMemoryDriverStateRepository is the configured store.
-        """
-        from backend.app.services.realtime.state import get_state_store
-        local = get_state_store()
-        return local.get_or_create(driver_id)
+        from backend.app.services.realtime.state import DriverTraceState
+        return self._local_states.setdefault(driver_id, DriverTraceState(driver_id=driver_id))
 
     async def save_local(self, state: DriverTraceState) -> None:
-        """Save state to the global in-memory store."""
-        from backend.app.services.realtime.state import get_state_store
-        local = get_state_store()
-        local._states[state.driver_id] = state
+        """Save state in this repository instance."""
+        self._local_states[state.driver_id] = state
 
 
 class RedisDriverStateRepository(DriverStateRepository):
@@ -297,11 +294,12 @@ class RedisDriverStateRepository(DriverStateRepository):
     def __init__(
         self,
         redis_url: str | None = None,
-        driver_state_ttl: int = 3600,  # 1 hour
-        max_drivers: int = 10000,
+        driver_state_ttl: int = DRIVER_STATE_TTL_SECONDS,
+        max_drivers: int = MAX_ACTIVE_DRIVERS,
+        client: redis.Redis | None = None,
     ):
         self._redis_url = redis_url or settings.redis_url
-        self._client: redis.Redis | None = None
+        self._client = client
         self._driver_state_ttl = driver_state_ttl
         self._max_drivers = max_drivers
 
@@ -371,7 +369,7 @@ class RedisDriverStateRepository(DriverStateRepository):
             raise
 
     async def save_with_expected_version(
-        self, snapshot: DriverTraceStateSnapshot, expected_version: int
+        self, snapshot: DriverTraceStateSnapshot, expected_version: int, expected_generation: int | None = None
     ) -> tuple[bool, int]:
         """
         Conditional save using CAS (Compare-And-Swap).
@@ -391,6 +389,7 @@ class RedisDriverStateRepository(DriverStateRepository):
         local new_value = ARGV[1]
         local ttl = tonumber(ARGV[2])
         local expected_version = tonumber(ARGV[3])
+        local expected_generation = tonumber(ARGV[4])
 
         local current = redis.call('GET', key)
 
@@ -399,7 +398,8 @@ class RedisDriverStateRepository(DriverStateRepository):
             local current_version = current_snapshot.version or 0
 
             -- Check if version matches
-            if current_version ~= expected_version then
+            if current_version ~= expected_version or (expected_generation ~= -1 and
+                (current_snapshot.generation or 1) ~= expected_generation) then
                 -- Conflict: return current version
                 return {0, current_version}
             end
@@ -412,7 +412,7 @@ class RedisDriverStateRepository(DriverStateRepository):
         else
             -- No existing state, this is a new driver
             -- Only save if expected_version is 0 (meaning no state existed)
-            if expected_version ~= 0 then
+            if expected_version ~= 0 or (expected_generation ~= -1 and expected_generation ~= 1) then
                 return {0, 0}
             end
 
@@ -431,6 +431,7 @@ class RedisDriverStateRepository(DriverStateRepository):
                 snapshot.to_json(),
                 self._driver_state_ttl,
                 expected_version,
+                expected_generation if expected_generation is not None else -1,
             )
             success = bool(result[0])
             actual_version = int(result[1])
@@ -454,11 +455,14 @@ class RedisDriverStateRepository(DriverStateRepository):
         return [k[prefix_len:] for k in keys]
 
     async def health_check(self) -> bool:
+        started = perf_counter()
         try:
             client = await self._get_client()
             await client.ping()
             return True
-        except Exception:
+        except Exception as exc:
+            logger.warning("driver_state_health_check_failed error_type=%s elapsed_ms=%.1f",
+                           type(exc).__name__, (perf_counter() - started) * 1000)
             return False
 
     async def close(self):
@@ -467,26 +471,14 @@ class RedisDriverStateRepository(DriverStateRepository):
             self._client = None
 
 
-# Global repository instance
-_driver_state_repo: DriverStateRepository | None = None
+_test_repository: ContextVar[DriverStateRepository | None] = ContextVar('test_driver_state_repository', default=None)
 
 
-def get_driver_state_repository() -> DriverStateRepository:
-    """Get the global driver state repository instance."""
-    global _driver_state_repo
-    if _driver_state_repo is None:
-        # Default to Redis in production, can be overridden for testing
-        _driver_state_repo = RedisDriverStateRepository()
-    return _driver_state_repo
+def set_driver_state_repository(repo: DriverStateRepository) -> None:
+    _test_repository.set(repo)
 
 
-def set_driver_state_repository(repo: DriverStateRepository):
-    """Set the global driver state repository (for testing)."""
-    global _driver_state_repo
-    _driver_state_repo = repo
+def reset_driver_state_repository() -> None:
+    _test_repository.set(None)
 
 
-def reset_driver_state_repository():
-    """Reset global repository (for testing)."""
-    global _driver_state_repo
-    _driver_state_repo = None

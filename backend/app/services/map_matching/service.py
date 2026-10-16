@@ -5,6 +5,7 @@ from backend.app.services.map_matching.models import (
     MapMatchResponse,
     MatchedObservation,
     ResolutionStatus,
+    timestamp_instant,
 )
 
 
@@ -15,7 +16,7 @@ class MapMatchingService:
 
     async def match_trajectory(self, request):
         category = resolve_vehicle_category(request.vehicle_category, request.vehicle_id, request.trip_id)
-        observations = sorted(request.observations, key=lambda obs: obs.timestamp)
+        observations = sorted(request.observations, key=lambda obs: timestamp_instant(obs.timestamp))
         matching, points = await self.engine.match(
             [(obs.longitude, obs.latitude) for obs in observations], vehicle_category=category)
         if len(points) != len(observations):
@@ -24,7 +25,7 @@ class MapMatchingService:
         for obs, point in zip(observations, points):
             segment = None
             if point.matched and self._segment_resolver is not None:
-                segment = self._segment_resolver.resolve_matched(
+                segment = await self._segment_resolver.resolve_matched(
                     point.location[1], point.location[0], point.osm_way_id, point.bearing)
             ambiguous = point.matched and (point.bearing is None or
                 (segment is not None and segment.status.value == "AMBIGUOUS"))

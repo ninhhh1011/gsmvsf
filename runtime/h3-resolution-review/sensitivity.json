@@ -1,0 +1,206 @@
+{
+  "scope": "Synthetic sensitivity experiment using unchanged production signature and similarity functions; resolution and sample step overridden only in this process. No real-road or GPS accuracy claim.",
+  "h3_version": "4.5.0",
+  "route_length_m": 2000,
+  "locations": 10,
+  "bearings": [
+    0,
+    45,
+    90
+  ],
+  "route_pairs_per_offset_per_resolution": 30,
+  "results": [
+    {
+      "resolution": 8,
+      "route_cells_median": 3.0,
+      "offset_overlap_pct": {
+        "0": {
+          "median": 100.0,
+          "min": 100.0,
+          "max": 100.0
+        },
+        "10": {
+          "median": 100.0,
+          "min": 87.45,
+          "max": 100.0
+        },
+        "25": {
+          "median": 100.0,
+          "min": 87.5,
+          "max": 100.0
+        },
+        "40": {
+          "median": 100.0,
+          "min": 75.0,
+          "max": 100.0
+        },
+        "100": {
+          "median": 100.0,
+          "min": 50.0,
+          "max": 100.0
+        },
+        "200": {
+          "median": 81.25,
+          "min": 37.5,
+          "max": 100.0
+        },
+        "400": {
+          "median": 56.25,
+          "min": 12.5,
+          "max": 100.0
+        }
+      },
+      "reverse_overlap_pct_median": 50.0,
+      "same_geometry_different_sampling_pct": {
+        "median": 94.31,
+        "min": 85.8
+      },
+      "different_10m_routes_inside_same_cell_pct": 93.36,
+      "reversed_10m_route_inside_same_cell_pct": 100.0
+    },
+    {
+      "resolution": 9,
+      "route_cells_median": 7.0,
+      "offset_overlap_pct": {
+        "0": {
+          "median": 100.0,
+          "min": 100.0,
+          "max": 100.0
+        },
+        "10": {
+          "median": 95.0,
+          "min": 84.97,
+          "max": 100.0
+        },
+        "25": {
+          "median": 90.0,
+          "min": 80.0,
+          "max": 100.0
+        },
+        "40": {
+          "median": 85.0,
+          "min": 75.0,
+          "max": 95.0
+        },
+        "100": {
+          "median": 67.5,
+          "min": 55.0,
+          "max": 85.0
+        },
+        "200": {
+          "median": 35.0,
+          "min": 25.0,
+          "max": 45.01
+        },
+        "400": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "reverse_overlap_pct_median": 20.0,
+      "same_geometry_different_sampling_pct": {
+        "median": 93.43,
+        "min": 90.65
+      },
+      "different_10m_routes_inside_same_cell_pct": 93.36,
+      "reversed_10m_route_inside_same_cell_pct": 100.0
+    },
+    {
+      "resolution": 10,
+      "route_cells_median": 18.5,
+      "offset_overlap_pct": {
+        "0": {
+          "median": 100.0,
+          "min": 100.0,
+          "max": 100.0
+        },
+        "10": {
+          "median": 90.57,
+          "min": 84.91,
+          "max": 98.11
+        },
+        "25": {
+          "median": 79.25,
+          "min": 66.04,
+          "max": 84.91
+        },
+        "40": {
+          "median": 66.97,
+          "min": 56.6,
+          "max": 75.47
+        },
+        "100": {
+          "median": 20.75,
+          "min": 13.21,
+          "max": 26.42
+        },
+        "200": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "400": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "reverse_overlap_pct_median": 7.55,
+      "same_geometry_different_sampling_pct": {
+        "median": 93.07,
+        "min": 88.46
+      },
+      "different_10m_routes_inside_same_cell_pct": 93.36,
+      "reversed_10m_route_inside_same_cell_pct": 100.0
+    },
+    {
+      "resolution": 11,
+      "route_cells_median": 47.0,
+      "offset_overlap_pct": {
+        "0": {
+          "median": 100.0,
+          "min": 100.0,
+          "max": 100.0
+        },
+        "10": {
+          "median": 75.69,
+          "min": 72.12,
+          "max": 78.57
+        },
+        "25": {
+          "median": 44.64,
+          "min": 40.71,
+          "max": 47.14
+        },
+        "40": {
+          "median": 16.07,
+          "min": 14.29,
+          "max": 20.0
+        },
+        "100": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "200": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "400": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "reverse_overlap_pct_median": 2.86,
+      "same_geometry_different_sampling_pct": {
+        "median": 92.53,
+        "min": 90.32
+      },
+      "different_10m_routes_inside_same_cell_pct": 100.0,
+      "reversed_10m_route_inside_same_cell_pct": 100.0
+    }
+  ]
+}

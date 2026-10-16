@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS state_snapshots (
     UNIQUE (kind, entity_id, timestamp)
 );
 
+-- Fresh-window enumeration complements the per-entity timestamp head index.
+CREATE INDEX IF NOT EXISTS state_snapshots_fresh_window_idx
+    ON state_snapshots (kind, timestamp DESC, entity_id);
+
 CREATE TABLE IF NOT EXISTS candidate_searches (
     candidate_search_id text PRIMARY KEY,
     payload jsonb NOT NULL,

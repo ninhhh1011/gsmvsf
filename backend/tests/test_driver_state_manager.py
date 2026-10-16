@@ -32,9 +32,10 @@ async def test_local_manager_allows_local_operations():
 @pytest.mark.asyncio
 async def test_production_manager_requires_redis():
     """Production manager with failing Redis should raise error."""
-    # Create a mock Redis repo that fails health check
+    # Fail the actual operation rather than a redundant preflight.
     mock_repo = AsyncMock(spec=RedisDriverStateRepository)
     mock_repo.health_check = AsyncMock(return_value=False)
+    mock_repo.get = AsyncMock(side_effect=ConnectionError('store not available'))
 
     manager = DriverStateManager(repository=mock_repo)
 
@@ -48,8 +49,9 @@ async def test_production_manager_requires_redis():
 async def test_production_manager_with_healthy_redis():
     """Production manager with healthy Redis should work."""
     mock_repo = AsyncMock(spec=RedisDriverStateRepository)
-    mock_repo.health_check = AsyncMock(return_value=True)
+    mock_repo.health_check = AsyncMock(side_effect=AssertionError('preflight must not run'))
     mock_repo.get = AsyncMock(return_value=None)  # No existing state
+    mock_repo.save_with_expected_version = AsyncMock(return_value=(True, 1))
 
     manager = DriverStateManager(repository=mock_repo)
 
@@ -59,6 +61,7 @@ async def test_production_manager_with_healthy_redis():
 
     # Save should work
     await manager.save(state)
+    mock_repo.health_check.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -66,6 +69,7 @@ async def test_production_manager_save_requires_redis():
     """Production manager save should fail when Redis unavailable."""
     mock_repo = AsyncMock(spec=RedisDriverStateRepository)
     mock_repo.health_check = AsyncMock(return_value=False)
+    mock_repo.save_with_expected_version = AsyncMock(side_effect=ConnectionError('store unavailable'))
 
     manager = DriverStateManager(repository=mock_repo)
     state = DriverTraceState(driver_id="D001")

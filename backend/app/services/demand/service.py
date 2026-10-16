@@ -9,10 +9,7 @@ import logging
 import uuid
 
 from backend.app.services.demand.auto_detector import AutoDemandDetector
-from backend.app.services.demand.capability import (
-    VehicleCapabilityResolver,
-    get_capability_resolver,
-)
+from backend.app.services.demand.capability import VehicleCapabilityResolver
 from backend.app.services.demand.driver_requester import DriverRequestProcessor
 from backend.app.services.demand.models import (
     DemandContext,
@@ -32,17 +29,29 @@ class DemandService:
 
     def __init__(
         self,
-        capability_resolver: VehicleCapabilityResolver | None = None,
+        capability_resolver: VehicleCapabilityResolver,
         auto_detector: AutoDemandDetector | None = None,
         driver_requester: DriverRequestProcessor | None = None,
     ):
-        self._resolver = capability_resolver or get_capability_resolver()
+        self._resolver = capability_resolver
         self._auto_detector = auto_detector or AutoDemandDetector(self._resolver)
         self._driver_requester = driver_requester or DriverRequestProcessor(self._resolver)
 
     def _resolve_vehicle_capability(self, context: DemandContext) -> VehicleCapability:
         """Resolve capability from vehicle_id in context."""
-        return self._resolver.resolve_by_vehicle_id(context.vehicle_id)
+        capability = self._resolver.resolve_by_vehicle_id(context.vehicle_id)
+        if capability.battery_module_capacity_kwh is not None:
+            record = self._resolver.get_vehicle_record(context.vehicle_id)
+            try:
+                installed = float(record.get('installed_battery_modules') or 0)
+            except (ValueError, TypeError):
+                installed = 0
+            if installed.is_integer() and 0 < installed <= (capability.max_battery_modules or 0):
+                nominal = capability.battery_module_capacity_kwh * installed
+                usable_ratio = (capability.usable_capacity_kwh or capability.total_battery_capacity_kwh) / capability.total_battery_capacity_kwh
+                capability = capability.model_copy(update={'battery_capacity_kwh': nominal,
+                    'usable_capacity_kwh': nominal * usable_ratio})
+        return capability
 
     def _populate_vehicle_metadata(
         self,
@@ -97,9 +106,13 @@ class DemandService:
             resolved_service_type=resolved_service,
             request_valid=True,
             reason_code=decision.reason_code,
+            energy_assessment=decision,
             current_soc_pct=context.current_soc_pct,
-            remaining_energy_kwh=decision.remaining_energy_kwh,
-            estimated_remaining_range_km=context.estimated_remaining_range_km,
+            energy_source='EXPLICIT_REMAINING_ENERGY' if context.remaining_energy_kwh is not None else 'SOC_DERIVED',
+            range_source='EXPLICIT_REMAINING_RANGE' if context.estimated_remaining_range_km is not None else 'ENERGY_AND_CATALOG_CONSUMPTION',
+            consumption_wh_per_km=context.consumption_wh_per_km or capability.get_effective_consumption_wh_per_km(),
+            remaining_energy_kwh=context.remaining_energy_kwh if context.remaining_energy_kwh is not None else decision.remaining_energy_kwh,
+            estimated_remaining_range_km=decision.estimated_remaining_range_km,
             remaining_trip_distance_km=decision.remaining_trip_distance_km,
             safety_reserve_km=decision.safety_reserve_km,
             energy_margin_km=decision.energy_margin_km,
@@ -117,6 +130,7 @@ class DemandService:
         )
         return request
 
+
     def process_driver_request(
         self,
         context: DemandContext,
@@ -132,30 +146,10 @@ class DemandService:
         vmeta = self._populate_vehicle_metadata(capability, vrow)
 
         decision = self._driver_requester.process_request(capability, requested_service)
+        physical = self._auto_detector.evaluate_need(context, capability)
 
         # In explicit driver requests, need_service is True
         need_service = True
-
-        safety_reserve = context.safety_reserve_km
-        if safety_reserve is None and context.remaining_trip_distance_km is not None:
-            safety_reserve = self._auto_detector.compute_safety_reserve_km(context.remaining_trip_distance_km)
-
-        usable_cap = capability.usable_capacity_kwh or capability.total_battery_capacity_kwh
-        rem_energy = (
-            round(usable_cap * (context.current_soc_pct / 100.0), 3)
-            if context.current_soc_pct is not None and usable_cap is not None
-            else None
-        )
-        energy_margin = None
-        if (
-            context.estimated_remaining_range_km is not None
-            and context.remaining_trip_distance_km is not None
-            and safety_reserve is not None
-        ):
-            energy_margin = round(
-                context.estimated_remaining_range_km - (context.remaining_trip_distance_km + safety_reserve),
-                3,
-            )
 
         request = EnergyServiceRequest(
             service_request_id=req_id,
@@ -170,12 +164,19 @@ class DemandService:
             resolved_service_type=decision.resolved_service_type,
             request_valid=decision.request_valid,
             reason_code=decision.reason_code,
+            energy_assessment=physical,
             current_soc_pct=context.current_soc_pct,
-            remaining_energy_kwh=rem_energy,
-            estimated_remaining_range_km=context.estimated_remaining_range_km,
-            remaining_trip_distance_km=context.remaining_trip_distance_km,
-            safety_reserve_km=safety_reserve,
-            energy_margin_km=energy_margin,
+            energy_source='EXPLICIT_REMAINING_ENERGY' if context.remaining_energy_kwh is not None else 'SOC_DERIVED',
+            range_source='EXPLICIT_REMAINING_RANGE' if context.estimated_remaining_range_km is not None else 'ENERGY_AND_CATALOG_CONSUMPTION',
+            consumption_wh_per_km=context.consumption_wh_per_km or capability.get_effective_consumption_wh_per_km(),
+            remaining_energy_kwh=context.remaining_energy_kwh if context.remaining_energy_kwh is not None else physical.remaining_energy_kwh,
+            estimated_remaining_range_km=(context.estimated_remaining_range_km if context.estimated_remaining_range_km is not None
+                                          else physical.estimated_remaining_range_km),
+            remaining_trip_distance_km=(context.remaining_trip_distance_km if context.remaining_trip_distance_km is not None
+                                        else physical.remaining_trip_distance_km),
+            safety_reserve_km=(context.safety_reserve_km if context.safety_reserve_km is not None
+                              else physical.safety_reserve_km),
+            energy_margin_km=physical.energy_margin_km,
             vehicle_model=vmeta["vehicle_model"],
             vehicle_type=vmeta["vehicle_type"],
             battery_capacity_kwh=vmeta["battery_capacity_kwh"],
@@ -191,21 +192,6 @@ class DemandService:
         return request
 
 
-# Global service instance
-_global_service: DemandService | None = None
-
-
-def get_demand_service(request: object | None = None) -> DemandService:
-    """Get DemandService instance, resolving from request.app.state if available."""
-    if request and hasattr(request, "app") and getattr(request.app.state, "demand_service", None) is not None:
-        return request.app.state.demand_service
-    global _global_service
-    if _global_service is None:
-        _global_service = DemandService()
-    return _global_service
-
-
-def reset_demand_service():
-    """Reset global DemandService for testing."""
-    global _global_service
-    _global_service = None
+def create_demand_service() -> DemandService:
+    """Create a standalone service for offline evaluation and unit tests."""
+    return DemandService(VehicleCapabilityResolver())

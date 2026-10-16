@@ -1,0 +1,95 @@
+diff --git a/backend/app/static/demo/js/ui/driver_controller.js b/backend/app/static/demo/js/ui/driver_controller.js
+index 134837c..34a8367 100644
+--- a/backend/app/static/demo/js/ui/driver_controller.js
++++ b/backend/app/static/demo/js/ui/driver_controller.js
+@@ -1072,7 +1072,6 @@ export class DriverModeController {
+         if (!st) return;
+         const currentGen = this.generation;
+ 
+-        this.postTripStation = st;
+         this.closeStationsDrawer();
+ 
+         const dest = this.customDestination || this.currentTrip?.destination || { latitude: 21.0150, longitude: 105.7800 };
+@@ -1083,6 +1082,8 @@ export class DriverModeController {
+             // Compute onward route from Destination B to Station
+             const routeBToSt = await this.api.computeRoute(dest, stationPos, { vehicle_category: vCat });
+             if (this.generation !== currentGen) return;
++            if (!routeBToSt?.geometry || !decodePolyline(routeBToSt.geometry).length) return;
++            this.postTripStation = st;
+             this.postTripRoute = routeBToSt;
+ 
+             // Render direct route A -> B, plus onward connection B -> Station
+diff --git a/tests/frontend/test_mode_isolation.mjs b/tests/frontend/test_mode_isolation.mjs
+index bfd312e..58dfce2 100644
+--- a/tests/frontend/test_mode_isolation.mjs
++++ b/tests/frontend/test_mode_isolation.mjs
+@@ -16,7 +16,9 @@ function driverFixture(api) {
+         renderStations(stations, recommended) { this.scene = 'DRIVER'; this.highlightedStation = recommended; },
+         clearAll() { this.scene = 'EMPTY'; }, clearRecommendationRoute() { this.scene = 'DRIVER'; },
+         renderRecommendationRoute() { this.scene = 'DRIVER'; }, renderDirectRoute() { this.scene = 'DRIVER'; },
+-        renderTripEndpoints() { this.scene = 'DRIVER'; }, highlightStation() { this.scene = 'DRIVER'; },
++        renderTripEndpoints() { this.scene = 'DRIVER'; },
++        highlightStation(stationId) { this.scene = 'DRIVER'; this.highlightedStation = stationId; },
++        renderPostTripRoute(geometry) { this.scene = 'DRIVER'; this.postTripGeometry = geometry; },
+         fitBoundsToActive() { this.scene = 'DRIVER'; }, onMapClick() {}
+     };
+     const driver = new DriverModeController({ getRecommendation: async () => ({ has_recommendation: false }), ...api }, map);
+@@ -206,6 +208,58 @@ for (const geometry of [null, '']) test(`station routing with ${geometry === nul
+     assert.equal(map.highlightedStation, undefined);
+ });
+ 
++for (const hasPreviousSelection of [false, true]) {
++    for (const outcome of ['canceled', 'failed', 'missing geometry', 'empty geometry']) {
++        test(`post-trip ${outcome} routing preserves ${hasPreviousSelection ? 'the committed pair' : 'no selection'}`, async t => {
++            t.mock.method(console, 'warn', () => {});
++            const response = deferred();
++            const { driver, map, enterDebug } = driverFixture({ computeRoute: () => response.promise });
++            driver.stations = [{ station_id: 'S001', latitude: 21.01, longitude: 105.82 },
++                { station_id: 'S002', latitude: 21.03, longitude: 105.83 }];
++            const previousStation = hasPreviousSelection ? driver.stations[0] : null;
++            const previousRoute = hasPreviousSelection ? { geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@', distance_m: 300 } : null;
++            driver.postTripStation = previousStation;
++            driver.postTripRoute = previousRoute;
++            const running = driver.setPostTripStation('S002');
++            assert.equal(driver.postTripStation, previousStation, 'a pending choice must not change the committed station');
++            assert.equal(driver.postTripRoute, previousRoute);
++            if (outcome === 'canceled') enterDebug();
++            if (outcome === 'failed') response.reject(new Error('routing unavailable'));
++            else response.resolve({ geometry: outcome === 'missing geometry' ? null : outcome === 'empty geometry' ? '' : '_p~iF~ps|U_ulLnnqC_mqNvxq`@', distance_m: 300 });
++            await running;
++            assert.equal(driver.postTripStation, previousStation);
++            assert.equal(driver.postTripRoute, previousRoute);
++            if (outcome === 'canceled') assert.equal(map.scene, 'DEBUG');
++        });
++    }
++
++    test(`successful post-trip routing commits station and route together ${hasPreviousSelection ? 'over a prior pair' : 'from no selection'}`, async () => {
++        const response = deferred();
++        const { driver, map } = driverFixture({ computeRoute: () => response.promise });
++        driver.stations = [{ station_id: 'S001', latitude: 21.01, longitude: 105.82 },
++            { station_id: 'S002', latitude: 21.03, longitude: 105.83 }];
++        const previousStation = hasPreviousSelection ? driver.stations[0] : null;
++        const previousRoute = hasPreviousSelection ? { geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@', distance_m: 300 } : null;
++        driver.postTripStation = previousStation;
++        driver.postTripRoute = previousRoute;
++        const running = driver.setPostTripStation('S002');
++        assert.equal(driver.postTripStation, previousStation);
++        assert.equal(driver.postTripRoute, previousRoute);
++        const route = { geometry: '??_ibE_ibE', distance_m: 400 };
++        response.resolve(route);
++        await running;
++        assert.equal(driver.postTripStation, driver.stations[1]);
++        assert.equal(driver.postTripRoute, route);
++        assert.equal(map.highlightedStation, 'S002');
++        assert.equal(map.postTripGeometry, route.geometry);
++        map.layers = { recommendRoute: { clearLayers() { map.postTripGeometry = null; } } };
++        driver.cancelPostTripStation();
++        assert.equal(driver.postTripStation, null);
++        assert.equal(driver.postTripRoute, null);
++        assert.equal(map.postTripGeometry, null);
++    });
++}
++
+ test('a trajectory load canceled by Debug returns to idle and the Driver Play action retries loading', async t => {
+     for (const name of ['log', 'group', 'groupEnd', 'warn']) t.mock.method(console, name, () => {});
+     const firstLoad = deferred();

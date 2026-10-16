@@ -6,14 +6,14 @@ import { ApiClient } from './api.js';
 import { DemoMap } from './map.js';
 import { DriverModeController } from './driver_mode.js';
 import { TrajectoryReplayController } from './replay.js';
-import { SimModeController } from './sim_mode.js';
+import { fetchVehicleCatalog } from './domain/vehicle-catalog.js';
+import { FALLBACK_MODEL_SPECS } from './domain/vehicle_model.js';
 
 class DemoApp {
     constructor() {
         this.api = new ApiClient();
         this.map = null;
         this.driverMode = null;
-        this.simMode = null;
         this.replay = null;
 
         // Shared session context across all controllers
@@ -44,19 +44,19 @@ class DemoApp {
             // Initial station plot
             this.map.renderStations(this.stations);
 
+            const config = await this.api.getConfig();
+            this.api.driverIdentity = config.route_familiarity_identity || null;
+            this.session.driver_id = this.api.driverIdentity?.driver_id || null;
+
             // Initialize Driver Mode Controller
             this.driverMode = new DriverModeController(this.api, this.map, {
                 session: this.session
             });
-            this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios);
+            this.driverMode.setCatalogs(this.trips, this.vehicles, this.stations, this.scenarios, this.vehicleCatalog);
             await this.driverMode.init();
+            // Initialize H3 overlay (was previously initialized by Simulation mode controller)
+            this.driverMode.initH3Overlay();
             window.driverMode = this.driverMode;
-
-            // Initialize Simulation Mode Controller
-            this.simMode = new SimModeController(this.api, this.map);
-            this.simMode.setCatalogs(this.scenarios, this.vehicles, this.stations);
-            this.simMode.init();
-            window.simMode = this.simMode;
 
             // Link app.replay to driverMode.replay to maintain single replay instance
             this.replay = this.driverMode.replay;
@@ -81,6 +81,22 @@ class DemoApp {
         ]);
 
         const [stResult, vResult, scResult, trResult] = results;
+        try {
+            this.vehicleCatalog = await fetchVehicleCatalog();
+        } catch (error) {
+            console.warn('[App] Vehicle catalog API unavailable; using fallback model specifications:', error);
+            this.vehicleCatalog = Object.values(FALLBACK_MODEL_SPECS).map(spec => ({
+                id: spec.vehicle_model,
+                name: spec.display_name,
+                battery_kwh: spec.usable_kwh,
+                efficiency_kwh_per_km: spec.consumption_wh_km / 1000,
+                vehicle_type: spec.vehicle_type,
+                supported_services: [
+                    ...(spec.charging_supported ? ['charging'] : []),
+                    ...(spec.swap_supported ? ['battery_swap'] : [])
+                ]
+            }));
+        }
 
         // Check each catalog and report failures
         const errors = [];
@@ -92,7 +108,18 @@ class DemoApp {
             this.stations = [];
         }
         if (vResult.status === 'fulfilled') {
-            this.vehicles = vResult.value || [];
+            const specs = new Map(this.vehicleCatalog.map(item => [item.id, item]));
+            this.vehicles = (vResult.value || []).map(vehicle => {
+                const spec = specs.get(vehicle.vehicle_model);
+                return spec ? {
+                    ...vehicle,
+                    vehicle_type: spec.vehicle_type,
+                    usable_capacity_kwh: spec.battery_kwh,
+                    consumption_wh_per_km: spec.efficiency_kwh_per_km * 1000,
+                    charging_supported: spec.supported_services.includes('charging'),
+                    swap_supported: spec.supported_services.includes('battery_swap')
+                } : vehicle;
+            });
         } else {
             errors.push(`Vehicles: ${vResult.reason?.message || 'load failed'}`);
             this.vehicles = [];
@@ -100,16 +127,17 @@ class DemoApp {
         if (scResult.status === 'fulfilled') {
             this.scenarios = scResult.value || [];
         } else {
-            errors.push(`Scenarios: ${scResult.reason?.message || 'load failed'}`);
+            console.warn(`[App] Scenarios unavailable: ${scResult.reason?.message || 'load failed'} — continuing without scenarios`);
             this.scenarios = [];
         }
         if (trResult.status === 'fulfilled') {
             this.trips = trResult.value || [];
         } else {
-            errors.push(`Trips: ${trResult.reason?.message || 'load failed'}`);
+            console.warn(`[App] Trips unavailable: ${trResult.reason?.message || 'load failed'} — continuing without trips`);
             this.trips = [];
         }
 
+        // Only throw if stations (critical) or vehicles fail; scenarios/trips degrade gracefully
         if (errors.length > 0) {
             const msg = `Catalog load failed: ${errors.join('; ')}`;
             console.error(msg);

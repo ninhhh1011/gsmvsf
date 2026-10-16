@@ -9,6 +9,7 @@ Before beginning any implementation work, read these documents in order:
 3. **[docs/DATA_CONTRACT.md](./docs/DATA_CONTRACT.md)** — Dataset structure, relationships, runtime vs evaluation data
 4. **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — Current system, planned architecture, stack
 5. **[docs/DECISIONS.md](./docs/DECISIONS.md)** — Architecture decisions and their rationale
+6. **[docs/PHASE_TRACKER.md](./docs/PHASE_TRACKER.md)** — Current phase and progress tracking
 
 Also read the active-week documentation when it exists (e.g., `docs/WEEK_1.md`).
 
@@ -40,6 +41,20 @@ Also read the active-week documentation when it exists (e.g., `docs/WEEK_1.md`).
 
 ## Current Milestone
 
+**Current owner direction (2026-10-15/16):** Retain runtime ranking at 80/10/10.
+Improve road coverage, paired guidance/deviation data and independent evaluation;
+the owner authorizes necessary data and documentation changes. This implementation
+uses versioned synthetic batches and preserves the canonical comparison baseline.
+Do not treat the old Week boundaries below as a prohibition on this authorized work.
+
+**Week 6 historical status:** `week6-productionization-complete` at `be5a9c2`
+(2026-09-23) is in main's history. Redis shared state, bounded routing concurrency,
+metrics and readiness were implemented. Retrieve the historical report with
+`git show week6-productionization-complete:docs/WEEK_6.md`. Current local deployment
+is four API replicas on one host with a single-node data plane. Historical completion
+does not certify current production capacity, public deployment or recovery gates;
+see `docs/OPERATIONS.md` and the route-data research audit.
+
 **Milestone 0**: Project Foundation — COMPLETE
 **Weeks 1–3**: Implemented; historical completion/freeze records describe the prior runtime.
 **Week 4**: Snapshot-aware ranking/recommendation verified: 302 tests, canonical
@@ -63,8 +78,7 @@ Evidence: `docs/WEEK_5.md`, `docs/WEEK_5_IMPLEMENTATION_PLAN.md`, and
 Continuous means client/request-driven refresh; no streaming/push/daemon. Replay
 must use fresh isolated history/cache and consume only information available at
 event time. Labels remain offline evaluation-only. No numeric production SLA or
-durable recommendation lifecycle is introduced. Do not start Week 6 without
-explicit authorization. Prior migration evidence and historical completion tags
+durable recommendation lifecycle is introduced in that Week 5 baseline. Prior migration evidence and historical completion tags
 remain valid for their recorded baselines.
 **Week 5.5**: Demo / Integration UI complete: 350 backend tests PASS, 4 Node.js
 frontend unit tests PASS, canonical validator 152 PASS / 0 FAIL and 22/22
@@ -75,7 +89,7 @@ table, ranking explanation, pipeline latency, trajectory replay). All 8 canonica
 demo scenarios verified live against real FastAPI, GraphHopper, PostgreSQL, and
 Redis. No business logic in frontend. Evidence: `docs/DEMO_UI_IMPLEMENTATION_PLAN.md`
 and `docs/WEEK_5_5_DEMO_REPORT.md`; freeze tag `demo-ui-integration-complete`.
-Do not start Week 6 without explicit authorization.
+These Week 5.5 records are historical; use the Week 6 status above for subsequent work.
 
 ---
 

@@ -1,6 +1,7 @@
-from backend.app.config import settings
+"""Map matching endpoints using GraphHopper and PostGIS segment resolver."""
+
+from backend.app.dependencies import get_map_matching_service
 from backend.app.services.map_matching import (
-    GraphHopperMapMatchingAdapter,
     MapMatchingEngineError,
     MapMatchingInvalidRequestError,
     MapMatchingNoMatchError,
@@ -8,32 +9,11 @@ from backend.app.services.map_matching import (
     MapMatchingTimeoutError,
     MapMatchRequest,
     MapMatchResponse,
-    RouteConstrainedSegmentResolver,
     SegmentResolverUnavailableError,
 )
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 router = APIRouter()
-_segment_resolver = None
-
-
-def get_map_matching_adapter():
-    return GraphHopperMapMatchingAdapter(base_url=settings.graphhopper_base_url)
-
-
-def get_segment_resolver(request: Request = None, database_url=None, mapping_dir=None):
-    if request is not None and hasattr(request, "app") and getattr(request.app.state, "segment_resolver", None) is not None:
-        return request.app.state.segment_resolver
-    global _segment_resolver
-    if _segment_resolver is None:
-        _segment_resolver = RouteConstrainedSegmentResolver(database_url or settings.database_url_sync)
-    return _segment_resolver
-
-
-def get_map_matching_service(request: Request = None):
-    if request is not None and hasattr(request, "app") and getattr(request.app.state, "map_matching_service", None) is not None:
-        return request.app.state.map_matching_service
-    return MapMatchingService(get_map_matching_adapter(), get_segment_resolver(request))
 
 
 @router.post("/map-match", response_model=MapMatchResponse)

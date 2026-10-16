@@ -1,0 +1,84 @@
+# Browser verification and frontend review
+
+Date: 2026-10-10. Tested running Nginx frontend at `http://127.0.0.1:3000` using installed Playwright 1.63 / Chromium. The direct browser connector had no connected browsers, so testing used an isolated browser process rather than the user's open browser. Desktop viewport 1440×900; mobile layout 390×844.
+
+No production source, Dataset, feature flag or authentication settings were changed. Browser actions used normal controls. JavaScript evaluation was limited to reading state, DOM/layout and existing distance calculation for evidence; it did not force application state or inject route/recommendation responses. The API-outage check aborted requests only in a separate test browser page. It did not stop the running backend.
+
+## Version and verification
+
+Served Driver controller SHA matched the merged source. Running API exposed the new comparison schema, power-step endpoint and 22-model catalog with physical metadata. Therefore the results below concern the current implementation, not an old frontend bundle.
+
+The 20-check primary run recorded **15 PASS / 5 FAIL**. Four failed checks were blocked by overlapping UI panels; one failed because the visible motor capability remained stale after model change. These are not five independent algorithm bugs. A focused fresh desktop run passed station filters, post-trip intent selection, navigation through an eligible station and navigation unlock after explicitly dismissing the recommendation popup.
+
+| Functional area | Result |
+|---|---|
+| Bootstrap, catalog, no JS page errors | PASS, 22 models |
+| Driver offline/online transitions | PASS |
+| Model selection VF3/VF5/Evo200 | PASS for selection; active HUD capability has a bug below |
+| Map selection/cancellation and real route generation | PASS after picker event binding was ready |
+| Create/cancel assignment; second trip | PASS |
+| Assigned SOC presets | PASS |
+| H3 checkbox and 9→10→8→9 | PASS for single-route overlay |
+| Whole-trip offline comparison via normal UI | BLOCKED: no historical trip selection entry |
+| Start, pause, manual step, speed controls | PASS |
+| Power-step responses | PASS, actual backend returned estimated power |
+| Low SOC recommendation | PASS, real HTTP 200 with eligible candidates |
+| Station drawer/filtering/mobile close | FAIL in primary flow due overlay obstruction; desktop filters pass after popup close |
+| Post-trip intent selection | PASS in focused run |
+| Station navigation and unlock | PASS in focused desktop run after popup close |
+| Complete trip / return to ready | PASS |
+| Backend request failure indication | PASS when `/ready` and API requests aborted in isolated browser page |
+
+Evidence: `runtime/browser-review-20261010/results.json`, `navigation-result.json`, `metrics-result.json`, `post-trip-result.json`, and the screenshots/script files in that directory. Tests never selected an exact expected station based on Dataset labels; they verified the returned eligible recommendation and visible state transitions. A supplementary run opened/closed the real cost breakdown modal successfully, but selecting post-trip charging did not publish the selected-state/cancel UI; downstream post-trip cancel and navigation could not be completed through normal UI.
+
+## Confirmed issues to fix
+
+### 1. Recommendation popup obstructs station drawer and mobile controls
+
+Reproduce: create/start a trip, lower SOC to 12%, then open the station drawer while the automatic Top-5 popup is visible. The popup covers filters; on mobile it also intercepts the drawer close action and covers the cockpit. Locator click logs identify `#recommendation-panel` and `#driver-view-container` as the intercepting elements. This also blocks subsequent navigation actions in the affected flow.
+
+Sources: `driver_controller.js:_showRecommendationPanel`, `openStationsDrawer`, and recommendation/drawer responsive styles. Smallest functional correction: use one station-selection panel or make opening the drawer dismiss/suppress the popup; ensure the refresh timer cannot reopen a dismissed popup over active controls. Define mobile panel exclusivity rather than increasing every z-index.
+
+### 2. Motor capability on the active HUD is stale after model change
+
+Reproduce: start as VF3, pause, select VF5. Browser state reports `vehicle_model=VF_5` and `maxMotorPowerKw=100`, but `.powertrain-strip` still reads `Động cơ (Max): 30 kW`.
+
+Source: `cockpit_bindings.js:renderActive` updates existing metric fields but does not patch the static motor-capability part. Update capability/model/provenance through the same prepared renderer/bindings boundary on every relevant render; do not duplicate physics or rebuild the entire interactive HUD.
+
+### 3. Remaining distance is overwritten with straight-line distance
+
+Real browser evidence: HUD state reports **7.910 km**, while its remaining route geometry measures **9.370 km**. The initial route was generated by real GraphHopper. `driver_controller.js:_onReplayStep` first computes remaining route distance, then executes its straight-line fallback unconditionally whenever current position and destination exist.
+
+Use straight-line distance only when valid route geometry is unavailable, and label it approximate. This affects displayed distance and the remaining-trip distance supplied to demand evaluation.
+
+### 4. Destination ETA displays time to the recommended station
+
+Real browser evidence: destination label is `Điểm trả khách`, navigation is unlocked, HUD reads **8 minutes**, and the recommendation's station ETA is **7.602 minutes**. Source `cockpit_renderer.js:renderTripActiveEta` takes `ranked_candidates[0].eta_to_station_s` when a recommendation exists, regardless of whether that station has been selected.
+
+Separate ETA to destination from ETA to station. Switch the primary destination/time only after a committed navigation choice; keep physical travel ETA, service completion cost and full via-station arrival time explicitly named.
+
+### 5. Post-trip station selection calls a missing map method and stops before rendering
+
+Reproduce: during an active paused trip, open the cost modal (works), select the after-destination intent, then choose the top eligible station returned for that intent. Real route responses were HTTP 200/SUCCESS with geometry. Browser state already has `postTripStation=S002`, but the selection/cancel banner never appears.
+
+Source: `driver_controller.js:setPostTripStation` assigns station/route and renders the route, then calls `this.map.highlightStation(...)`. `DemoMap` does not implement that method. The error is caught and logged as a route failure, and `renderTripActiveUI()` is skipped. Existing mocks provide this method, concealing the missing production boundary. Use the existing marker-rendering contract or implement the genuine map operation; publish state/UI only after the operation succeeds and keep failures visible. The test cannot verify cancellation or completed-trip onward navigation until selection is usable.
+
+## Product gap: offline evaluation cannot be reached normally
+
+The available UI calls `assignTrip()` without a trip ID and creates `TRIP_<timestamp>` custom trips. `_tripToTrajectory` handles only dataset `T<digits>` / `TRJ...` IDs, so these custom trips have no observed Route B. In the H3 browser run the comparison banner remained hidden and `/compare-routes` was never requested.
+
+Add a clearly labelled historical trip picker inside the existing Driver interface for offline evaluation. Display the selected trip/date, proposal, observed route and the two denominators. Keep custom route simulation labelled separately; do not treat the synthetic polyline replay as observed GPS. This is an entry-flow gap, not evidence the backend matcher failed.
+
+## Frontend improvements based on screenshots
+
+1. Consolidate duplicate station selection into the existing drawer; prevent three simultaneous surfaces (cockpit, drawer, Top-5 popup) from covering the map.
+2. Mobile: use one expandable bottom panel with a compact driving summary. Keep close/back and primary navigation reachable; collapse detailed station costs and simulation controls.
+3. Normalize light/dark styling. Current white cockpit contains gray/dark inline panels whose tiny muted text is difficult to read. Increase contrast in motor power, SOC controls, cost details and secondary metrics.
+4. Make destination/ETA/remaining road distance and SOC the main information. Put raw road IDs, coordinates, replay speed and H3 controls in a collapsible analysis section, retaining the current Driver-only page.
+5. Reduce H3 fill opacity and show verified shared segments distinctly so road names, turns and the vehicle remain legible. The current green fill covers substantial map detail.
+6. Remove duplicated A/B actions between the floating toolbar and the ready card; use one clear selection flow. The picker currently binds map clicks after a 50 ms delay, so rapid automated/keyboard-like selection can miss the first click; bind readiness deterministically.
+7. Correct small copy errors such as the ready badge reading `ẴN SÀNG`. Distinguish total displayed station count from eligible station count and ranking cost from physical ETA. Top-5 popup labels `eta_to_service_complete_s` as `Sạc ... phút`, although that value includes travel, queue and service; use a completion-time label or the actual service duration.
+
+## Limits
+
+No production fixes were applied in this review. Personal history weighting remained opt-in/disabled and was not tested through an authenticated browser gateway. Full-trip observed-GPS UI evaluation needs the entry point above. A desktop viewport resized to mobile verified layout behavior; it is not a physical-device touch/performance test. Cost modal was verified; post-trip charging selection failed and blocked downstream cancellation/onward navigation verification. API-outage checking was browser-local fault injection, not a live service shutdown.

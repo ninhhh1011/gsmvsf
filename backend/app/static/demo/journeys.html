@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kiểm chứng chuyến đi và độ phủ</title>
+  <link rel="stylesheet" href="/demo/static/vendor/leaflet/leaflet.css">
+  <style>
+    body{margin:0;font:15px system-ui;color:#0f172a;background:#f8fafc}
+    header{padding:14px 20px;background:#0f172a;color:white}header a{color:#a7f3d0}
+    main{display:grid;grid-template-columns:minmax(280px,390px) 1fr;height:calc(100vh - 56px)}
+    aside{padding:18px;overflow:auto}h1{font-size:20px;margin:0 0 8px}h2{font-size:17px}
+    select,button{padding:10px;border:1px solid #cbd5e1;border-radius:6px;background:white;max-width:100%}
+    select{width:100%}p{line-height:1.5}.metric{padding:10px 0;border-bottom:1px solid #e2e8f0}
+    #map{min-height:360px}#status{color:#475569}table{border-collapse:collapse;width:100%;font-size:13px}
+    td,th{padding:7px;border-bottom:1px solid #e2e8f0;text-align:left}details{margin-top:18px}
+    .blue{color:#2563eb}.red{color:#dc2626}.green{color:#059669}.gray{color:#64748b}
+    @media(max-width:700px){main{display:flex;flex-direction:column;height:auto}aside{order:2}#map{height:55vh;order:1}}
+  </style>
+</head>
+<body>
+  <header><a href="/demo">← Bản đồ H3</a> · Kiểm chứng dữ liệu giả lập</header>
+  <main>
+    <aside>
+      <h1>Chuyến đi có bằng chứng</h1>
+      <p>Dữ liệu giả lập trên đường GraphHopper. Không đại diện hành vi tài xế thật.</p>
+      <label for="trip">Chọn chuyến mẫu</label><select id="trip" disabled></select>
+      <p id="status" role="status">Đang tải chuyến mẫu…</p>
+      <label for="guidance">Phiên bản chỉ dẫn trên bản đồ</label><select id="guidance"></select>
+      <div id="summary" aria-live="polite"></div>
+      <p><span class="blue">Xanh dương: chỉ dẫn.</span> <span class="green">Xanh lá: đoạn được đối chiếu.</span>
+        <span class="red">Đỏ: đoạn lệch được xác nhận.</span> <span class="gray">Xám: chưa xác minh.</span>
+        Chấm tím là ô chứa điểm bắt đầu lệch; khác với đoạn đường đỏ.</p>
+      <p>Hai phần trăm so sánh toàn tuyến dùng chỉ dẫn ban đầu. Các đoạn và thời gian lệch dùng chỉ dẫn đang có hiệu lực.
+        Không nối đường qua mất GPS hoặc đổi chỉ dẫn.</p>
+      <details><summary>Các khoảng chưa xác minh</summary><div id="unknown"></div></details>
+      <details open><summary>Độ phủ bằng chứng theo vùng</summary><div id="coverage">Đang tải báo cáo…</div></details>
+    </aside>
+    <div id="map" aria-label="Chỉ dẫn và các đoạn hành trình được đối chiếu"></div>
+  </main>
+  <script src="/demo/static/vendor/leaflet/leaflet.js"></script>
+  <script src="/demo/static/vendor/h3/h3-js.umd.js"></script>
+  <script type="module" src="/demo/static/js/journey_inspector.js"></script>
+</body>
+</html>

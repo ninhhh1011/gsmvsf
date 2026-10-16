@@ -1,6 +1,7 @@
 ﻿"""Week 3 preserves candidate semantics while surfacing real routing failures."""
 from datetime import datetime
 from unittest.mock import AsyncMock
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -13,6 +14,13 @@ from backend.app.services.demand.models import EnergyServiceRequest
 from backend.app.services.routing.engine import RoutingInvalidRequestError
 from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from backend.app.services.routing.models import RouteResult, RouteStatus
+
+
+@pytest.fixture(autouse=True)
+def explicit_test_candidate_workflow(monkeypatch):
+    from backend.app.api.v1 import candidate
+    monkeypatch.setattr(candidate, 'get_recommendation_workflow', lambda request: SimpleNamespace(
+        search_candidates=get_candidate_service(request).search_candidates))
 
 
 def candidate_request(**changes):
@@ -58,10 +66,15 @@ def test_candidate_service_requires_injected_engine():
         CandidateSearchService()
 
 
-def test_candidate_factory_uses_graphhopper_only():
+def test_candidate_getter_requires_lifespan_state():
+    # Runtime service access is app-scoped and never creates a lazy adapter.
     set_candidate_service(None)
     try:
-        assert isinstance(get_candidate_service().routing_engine, GraphHopperRoutingAdapter)
+        from types import SimpleNamespace
+        from fastapi import HTTPException
+        from backend.app.dependencies import get_candidate_service as dep_get
+        with pytest.raises(HTTPException):
+            dep_get(SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(candidate_service=None))))
     finally:
         set_candidate_service(None)
 

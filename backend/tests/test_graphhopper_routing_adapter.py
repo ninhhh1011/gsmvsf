@@ -1,5 +1,6 @@
 ﻿"""GraphHopper 11 HTTP contract and failure regression checks."""
 from unittest.mock import AsyncMock
+import asyncio
 
 import httpx
 import pytest
@@ -16,6 +17,39 @@ PATH = {
     "distance": 3200.5, "time": 480200, "points": "_p~iF~ps|U_ulLnnqC_mqNvxq`@",
     "details": {"leg_distance": [[0, 12, 3200.5]], "leg_time": [[0, 12, 480200]]},
 }
+
+
+@pytest.mark.asyncio
+async def test_shared_adapter_bounds_cross_request_http_work_and_releases_cancelled_slot(monkeypatch):
+    from backend.app.config import settings
+    monkeypatch.setattr(settings, 'max_concurrent_routes', 1)
+    entered, release = asyncio.Event(), asyncio.Event()
+    active = peak = calls = 0
+    async def handler(req):
+        nonlocal active, peak, calls
+        active += 1
+        peak = max(peak, active)
+        calls += 1
+        entered.set()
+        try:
+            await release.wait()
+            return httpx.Response(200, json={'paths': [PATH]})
+        finally:
+            active -= 1
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = GraphHopperRoutingAdapter(base_url='http://gh', client=client)
+        first = asyncio.create_task(adapter.route(request()))
+        await entered.wait()
+        second = asyncio.create_task(adapter.route(request()))
+        await asyncio.sleep(0)
+        assert calls == 1
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        release.set()
+        assert (await second).status == RouteStatus.SUCCESS
+        assert (await adapter.route(request())).status == RouteStatus.SUCCESS
+    assert peak == 1
 
 
 def request(category="EV_CAR", **kwargs):

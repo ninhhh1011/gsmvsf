@@ -25,7 +25,7 @@ from backend.app.services.candidate.models import CandidateSearchRequest
 from backend.app.services.candidate.service import CandidateSearchService
 from backend.app.services.demand.capability import get_capability_resolver
 from backend.app.services.demand.models import DemandContext, RequestedServiceType
-from backend.app.services.demand.service import get_demand_service
+from backend.app.services.demand.service import create_demand_service
 from backend.app.services.routing.engine import raise_for_routing_failure
 from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from backend.app.services.routing.models import Position, RouteRequest, RouteStatus, VehicleRoutingProfile
@@ -65,7 +65,7 @@ def dataset_cases():
             if previous is None or row["timestamp"] < previous["timestamp"]:
                 telemetry[row["trip_id"]] = row
     cases = []
-    demand = get_demand_service()
+    demand = create_demand_service()
     for group, trip in selected:
         origin, destination = nodes[trip["origin_node_id"]], nodes[trip["destination_node_id"]]
         soc = telemetry[trip["trip_id"]]

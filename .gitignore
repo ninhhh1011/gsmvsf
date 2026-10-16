@@ -1,6 +1,7 @@
 # Environment
 .env
 .env.local
+runtime/journey-scale/local.env
 *.log
 
 # Python
@@ -86,3 +87,12 @@ runtime/week5/
 tools/
 *.exe
 docs/DAILY_REPORT_*.md
+
+# Graphify knowledge graph output
+graphify-out/
+
+# Local Git worktrees
+.worktrees/
+
+# Reproducible paired-road benchmark artifacts (summary is committed in docs/reports)
+runtime/guided-quality-20261015/

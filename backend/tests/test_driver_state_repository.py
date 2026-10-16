@@ -1,13 +1,26 @@
 """Tests for driver state repository and manager."""
 import pytest
-from datetime import datetime
+from unittest.mock import AsyncMock
+from datetime import UTC, datetime
 
 from backend.app.services.realtime.driver_state_repository import (
+    RedisDriverStateRepository,
     InMemoryDriverStateRepository,
     DriverTraceStateSnapshot,
     GPSObservation,
     MatchedState,
 )
+
+
+@pytest.mark.asyncio
+async def test_failed_health_check_logs_class_and_duration_without_exception_payload(caplog):
+    client = AsyncMock()
+    client.ping.side_effect = TimeoutError("redis://private-user:private-secret@host")
+    repo = RedisDriverStateRepository(client=client)
+    assert await repo.health_check() is False
+    assert "error_type=TimeoutError" in caplog.text
+    assert "elapsed_ms=" in caplog.text
+    assert "private-secret" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -20,12 +33,12 @@ async def test_in_memory_repository_save_and_get():
             {
                 "observation_id": "obs1",
                 "driver_id": "D001",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "latitude": 21.0,
                 "longitude": 105.8,
             }
         ],
-        last_match_time=datetime.utcnow().isoformat(),
+        last_match_time=datetime.now(UTC).isoformat(),
         last_matched_state={
             "matched_latitude": 21.001,
             "matched_longitude": 105.801,
@@ -106,7 +119,7 @@ async def test_gps_observation_roundtrip():
     obs = GPSObservation(
         observation_id="obs1",
         driver_id="D001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         latitude=21.0,
         longitude=105.8,
         speed_kmh=30.0,

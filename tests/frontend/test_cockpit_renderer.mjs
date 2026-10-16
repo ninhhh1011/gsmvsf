@@ -4,25 +4,70 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
     renderAvailableCardHTML,
+    renderDriverAnalysisHTML,
     renderOfflineCardHTML,
-    renderTripCompleteCardHTML
+    renderTripCompleteCardHTML,
+    renderPositionStatusHTML,
+    renderPostTripBannerHTML,
+    renderStatusBadge,
+    renderReplayControls
 } from '../../backend/app/static/demo/js/ui/cockpit_renderer.js';
+import { renderEnergyWarningBanner } from '../../backend/app/static/demo/js/components.js';
 
-test('renderAvailableCardHTML renders complete cockpit ready state with origin and dest', () => {
-    const origin = { latitude: 20.9849, longitude: 105.7935 };
-    const dest = { latitude: 21.0285, longitude: 105.8542 };
+test('cockpit renderer owns driver-state labels and replay presentation', () => {
+    assert.equal(renderStatusBadge('TRIP_ACTIVE').label, '\u0110ANG DI CHUY\u1ec2N');
+    assert.equal(renderStatusBadge('UNKNOWN').label, 'UNKNOWN');
+    const initial = renderReplayControls({ isPlaying: false, currentIndex: 0 });
+    const resumed = renderReplayControls({ isPlaying: false, currentIndex: 2 });
+    const playing = renderReplayControls({ isPlaying: true, currentIndex: 2 });
+    assert.equal(initial.playText, '\u25b6 B\u1eaft \u0111\u1ea7u');
+    assert.equal(resumed.playText, '\u25b6 Ti\u1ebfp t\u1ee5c');
+    assert.equal(playing.playText, '\u25b6 \u0110ang ch\u1ea1y...');
+    assert.equal(initial.playClass, 'btn btn-primary btn-sm flex-1');
+    assert.equal(initial.pauseClass, 'btn btn-outline btn-sm flex-1');
+    assert.equal(playing.playClass, 'btn btn-outline btn-sm flex-1');
+    assert.equal(playing.pauseClass, 'btn btn-primary btn-sm flex-1');
+});
 
-    const html = renderAvailableCardHTML(origin, dest);
+test('driver controller coordinates replay facts without owning labels or button presentation', async () => {
+    const source = await readFile(new URL('../../backend/app/static/demo/js/ui/driver_controller.js', import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /SẴN SÀNG|ĐÃ NHẬN CHUYẾN|ĐANG DI CHUYỂN|HOÀN THÀNH|NGOẠI TUYẾN/);
+    assert.doesNotMatch(source, /▶ (?:Đang chạy|Tiếp tục|Bắt đầu)|btn-(?:outline|primary) btn-sm flex-1/);
+});
 
-    assert.ok(html.includes('Sẵn sàng bắt đầu hành trình'), 'Contains ready title');
-    assert.ok(html.includes('20.9849, 105.7935'), 'Contains origin coords');
-    assert.ok(html.includes('21.0285, 105.8542'), 'Contains dest coords');
-    assert.ok(html.includes('btn-pick-origin-map'), 'Contains pick origin button');
-    assert.ok(html.includes('btn-pick-dest-map'), 'Contains pick dest button');
-    assert.ok(html.includes('btn-go-offline'), 'Contains go offline button');
+test('energy warning renderer treats unknown external reasons as unavailable', () => {
+    const html = renderEnergyWarningBanner({
+        need_service: true,
+        reason_code: '<img src=x onerror=alert(1)>',
+        estimated_remaining_range_km: 10,
+        remaining_trip_distance_km: 20
+    });
+    assert.match(html, /Chưa có đánh giá năng lượng/);
+    assert.doesNotMatch(html, /<img src=x/);
+});
+
+test('position renderer escapes external road IDs and preserves raw GPS presentation', () => {
+    assert.match(renderPositionStatusHTML({ road_segment_id: '<img src=x>' }, null), /&lt;img src=x&gt;/);
+    assert.doesNotMatch(renderPositionStatusHTML({ road_segment_id: '<img src=x>' }, null), /<img src=x>/);
+    assert.match(renderPositionStatusHTML(null, { latitude: 0, longitude: 1 }), /0\.0000, 1\.0000/);
+});
+
+test('post trip banner renderer escapes station supplied markup', () => {
+    const html = renderPostTripBannerHTML({ station_id: '<script>x</script>' }, { distance_m: 1200 });
+    assert.match(html, /&lt;script&gt;x&lt;\/script&gt;/);
+    assert.doesNotMatch(html, /<script>/);
+    assert.match(html, /1\.2 km/);
+});
+
+test('ready primary card keeps action while analysis contains coordinates', () => {
+    const html = renderAvailableCardHTML();
+    assert.match(html, /btn-accept-trip/); assert.doesNotMatch(html, /text-origin-coords|btn-pick-origin-map/);
+    const analysis = renderDriverAnalysisHTML({state: 'AVAILABLE', currentSocPct: 50, estimatedRangeKm: 80, customOrigin: {latitude: 0, longitude: 1}, customDestination: {latitude: 2, longitude: 3}});
+    assert.match(analysis, /0\.0000, 1\.0000/); assert.match(analysis, /2\.0000, 3\.0000/);
 });
 
 test('renderOfflineCardHTML renders offline cockpit state with reconnect button', () => {

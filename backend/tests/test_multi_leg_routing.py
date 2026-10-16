@@ -11,6 +11,57 @@ from backend.app.services.routing.multi_leg import MultiLegRouteCalculator
 
 
 @pytest.mark.asyncio
+async def test_failed_search_cancels_and_drains_station_siblings_before_return():
+    from backend.app.services.routing.engine import RoutingTimeoutError
+    started = asyncio.Event()
+    active = 0
+    failure = RoutingTimeoutError('engine timed out')
+    class Engine:
+        async def route(self, request):
+            nonlocal active
+            if request.destination.latitude == 21.001:
+                await started.wait()
+                raise failure
+            active += 1
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                active -= 1
+    calculator = MultiLegRouteCalculator(Engine(), max_concurrent_routes=2)
+    with pytest.raises(RoutingTimeoutError) as raised:
+        await calculator.compute_all_station_metrics_concurrent(
+            Position(latitude=21, longitude=105.8),
+            {str(i): Position(latitude=21.001 + i * 0.001, longitude=105.8) for i in range(5)}, None)
+    assert raised.value is failure
+    assert active == 0
+
+
+@pytest.mark.asyncio
+async def test_cancelled_search_drains_active_station_work():
+    started = asyncio.Event()
+    active = 0
+    class Engine:
+        async def route(self, request):
+            nonlocal active
+            active += 1
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                active -= 1
+    calculator = MultiLegRouteCalculator(Engine(), max_concurrent_routes=2)
+    task = asyncio.create_task(calculator.compute_all_station_metrics_concurrent(
+        Position(latitude=21, longitude=105.8),
+        {str(i): Position(latitude=21.001 + i * 0.001, longitude=105.8) for i in range(5)}, None))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert active == 0
+
+
+@pytest.mark.asyncio
 async def test_multi_leg_with_destination_and_detour():
     # Setup coordinates: Driver at (21.00, 105.80), Station at (21.01, 105.81), Destination at (21.02, 105.80)
     driver_pos = Position(latitude=21.00, longitude=105.80)

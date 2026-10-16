@@ -6,9 +6,6 @@
     <title>VinFast EV — Điều Hướng & Đề Xuất Năng Lượng (Driver Cockpit)</title>
     <!-- Leaflet 1.9.4 Local CSS -->
     <link rel="stylesheet" href="/demo/static/vendor/leaflet/leaflet.css" />
-    <!-- H3-js Hexagonal Spatial Indexing -->
-    <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
-    <script src="https://unpkg.com/h3-js@4.1.0/h3-js.min.js"></script>
     <!-- App Design System Stylesheet -->
     <link rel="stylesheet" href="/demo/static/style.css" />
 </head>
@@ -87,19 +84,17 @@
             <div id="map"></div>
 
             <!-- Floating Map Actions: Find Station & Custom Origin / Destination -->
-            <div class="map-floating-controls">
+            <div id="driver-map-controls" class="map-floating-controls">
                 <button id="btn-open-stations-drawer" class="btn btn-fab-station" title="Tìm trạm sạc xung quanh">
                     ⚡ Tìm trạm sạc
                 </button>
                 <button id="btn-pick-custom-origin" class="btn btn-fab-origin" title="Chọn điểm xuất phát (A) trên bản đồ">
-                    📍 Đổi xuất phát (A)
+                    📍 Điểm A
                 </button>
                 <button id="btn-pick-custom-dest" class="btn btn-fab-dest" title="Chọn điểm đến (B) trên bản đồ">
-                    🏁 Đổi điểm đến (B)
+                    🏁 Điểm B
                 </button>
-                <button id="btn-h3-overlay" class="btn btn-fab-h3 btn-outline-secondary" title="Hiện Familiar Routes (H3 Hex Overlay)">
-                    🔷 H3 Overlay
-                </button>
+
             </div>
 
             <!-- Map Picker Instruction Toast Banner (hidden by default) -->
@@ -113,17 +108,18 @@
                 <div class="drawer-header">
                     <div class="drawer-title">
                         <h4>⚡ Trạm sạc & Đổi pin</h4>
-                        <span class="text-xs text-muted" id="drawer-station-count">30 trạm khả dụng</span>
+                        <span class="text-xs text-muted" id="drawer-station-count">30 trạm trong danh sách</span>
                     </div>
-                    <button id="btn-close-stations-drawer" class="btn btn-sm btn-outline">✕</button>
+                    <button id="btn-close-stations-drawer" class="btn btn-sm btn-outline" type="button" aria-label="Đóng danh sách trạm">✕</button>
                 </div>
                 <!-- Charging Intent Selector: En-route vs Post-trip -->
+                <button id="btn-clear-custom-dest" class="btn btn-outline btn-sm" type="button" style="display:none" disabled>Bỏ điểm B</button>
                 <div class="charging-intent-selector">
                     <button class="intent-tab active" data-intent="EN_ROUTE" id="tab-intent-enroute">
-                        <span>🔀 Ghé sạc giữa đường</span>
-                        <small>A ➔ Trạm ➔ B (Sạc ngay)</small>
+                        <span id="station-enroute-label">Tìm trạm từ vị trí A</span>
+                        <small id="station-enroute-path">A ➔ Trạm</small>
                     </button>
-                    <button class="intent-tab" data-intent="AT_DESTINATION" id="tab-intent-dest">
+                    <button class="intent-tab" data-intent="AT_DESTINATION" id="tab-intent-dest" disabled>
                         <span>🏁 Đến B xong mới sạc</span>
                         <small>A ➔ B thẳng, sau đó B ➔ Trạm</small>
                     </button>
@@ -147,48 +143,72 @@
 
         <!-- DRIVER MODE COCKPIT (Floating HUD over Map) -->
         <div id="driver-view-container" class="driver-mode-container">
-            <div class="driver-container-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span class="text-xs font-semibold text-muted" style="letter-spacing: 0.5px;">KHOANG LÁI ĐIỆN TỬ VINFAST</span>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.25); font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600;" title="Thời gian kẹt xe và độ trễ giao thông được tự động tính vào Cost và đề xuất trạm">🚦 Tự động tính tắc đường</span>
-                    <label for="cockpit-vehicle-select" class="text-xs text-muted" style="font-size: 11px; margin: 0;">Mẫu xe:</label>
-                    <select id="cockpit-vehicle-select" class="form-control form-control-sm" style="background: #1e293b; color: #38bdf8; border: 1px solid #334155; font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight: 600; cursor: pointer;" title="Đổi mẫu xe VinFast">
-                        <option value="VF_3">VF 3 (17.2 kWh · 95 Wh/km)</option>
-                        <option value="VF_5">VF 5 (34.3 kWh · 125 Wh/km)</option>
-                        <option value="VF_6">VF 6 (54.8 kWh · 145 Wh/km)</option>
-                        <option value="VF_7_ECO">VF 7 Eco (54.8 kWh · 155 Wh/km)</option>
-                        <option value="VF_7_PLUS">VF 7 Plus (69.3 kWh · 170 Wh/km)</option>
-                        <option value="VF_8">VF 8 (80.7 kWh · 195 Wh/km)</option>
-                        <option value="VF_9">VF 9 (113.2 kWh · 235 Wh/km)</option>
-                        <option value="VF_E34">VF e34 (38.6 kWh · 135 Wh/km)</option>
-                        <option value="EVO200">Evo200 [Xe máy] (3.2 kWh · 40 Wh/km)</option>
-                        <option value="FELIZ_S">Feliz S [Xe máy] (3.2 kWh · 42 Wh/km)</option>
-                        <option value="KLARA_S_2022">Klara S [Xe máy] (3.2 kWh · 45 Wh/km)</option>
-                        <option value="EVO">Evo [Pin đổi] (2.8 kWh · 38 Wh/km)</option>
-                        <option value="FELIZ_II">Feliz II [Pin đổi] (2.8 kWh · 40 Wh/km)</option>
+            <div class="driver-container-header">
+                <div class="driver-vehicle-control">
+                    <label for="cockpit-vehicle-select">Mẫu xe</label>
+                    <select id="cockpit-vehicle-select" class="form-control form-control-sm" title="Đổi mẫu xe">
+                        <option value="VF_3">Loading models...</option>
                     </select>
-                    <span class="status-indicator-dot online"></span>
                 </div>
+                <button id="btn-driver-sheet-toggle" class="btn btn-outline btn-sm" type="button" aria-expanded="false" aria-controls="driver-panel-content" data-expanded-label="Thu gọn" data-collapsed-label="Mở rộng">Mở rộng</button>
             </div>
 
             <!-- Dynamic Content Rendered by DriverModeController -->
             <div id="driver-panel-content">
                 <!-- Initial content rendered via JS -->
             </div>
+            <details id="driver-analysis-tools" open>
+                <summary>Phân tích hành trình</summary>
+                <div id="driver-analysis-content"></div>
+                <div class="analysis-controls">
+                    <a class="btn btn-sm btn-outline" href="/demo/static/journeys.html" target="_blank" rel="noopener">Kiểm chứng chuyến &amp; độ phủ</a>
+                    <label class="btn btn-fab-h3 route-familiarity-toggle" title="Hiện/Ẩn thống kê nơi bắt đầu bỏ tuyến trong 7 ngày">
+                        <input id="toggle-route-familiarity" type="checkbox">
+                        ⬡ H3
+                    </label>
+                    <select id="h3-analysis-mode" aria-label="Chế độ phân tích H3" class="btn btn-sm btn-outline">
+                        <option value="DEPARTURES">Điểm bắt đầu lệch · 7 ngày</option>
+                        <option value="COMPARISON">So sánh 2 tuyến</option>
+                    </select>
+                    <select id="h3-cohort" aria-label="Bộ dữ liệu H3" class="btn btn-sm btn-outline">
+                        <option value="all">Tất cả dữ liệu</option>
+                        <option value="coverage">Bộ phủ đường</option>
+                        <option value="stress">Bộ kiểm thử lệch</option>
+                    </select>
+                    <button id="btn-h3-res-badge" class="btn btn-fab-h3-res" title="Chuyển đổi độ phân giải H3: 9 -> 10 -> 8" style="display: none;">
+                        ⬡ Res 9
+                    </button>
+                    <button id="btn-sample-deviation" class="btn btn-sm btn-outline" type="button" style="font-size: 11px; padding: 4px 8px; border-color: #ef4444; color: #dc2626; font-weight: 600; cursor: pointer; border-radius: 4px;" title="Tải kịch bản so sánh 2 tuyến có đoạn xe đi lệch để kiểm tra ô H3 đỏ">
+                        ⚠️ Thử lệch tuyến
+                    </button>
+                    <div id="h3-comparison-banner" class="h3-comparison-banner" style="display: none;">
+                        <span>So sánh toàn chuyến offline · GPS quan sát</span>
+                        <span class="comparison-title">⬡ So sánh 2 tuyến:</span>
+                        <span id="h3-pct-proposed-badge" class="badge-overlap-prop" title="Tỷ lệ trùng trên tuyến đề xuất">Đề xuất: 0%</span>
+                        <span id="h3-pct-actual-badge" class="badge-overlap-act" title="Tỷ lệ trùng trên tuyến thực tế">GPS quan sát: 0%</span>
+                        <span id="h3-shared-dist-badge" class="badge-overlap-dist" title="Chiều dài đoạn đi chung">Chung: 0.0 km</span>
+                        <span id="h3-cells-count-badge" class="legend-count" title="Ô chứa đoạn chung đã xác minh; không phải toàn bộ ô trùng">0 ô có đoạn chung</span>
+                    </div>
+                    <div aria-live="polite" style="flex-basis: 100%; font-size: 12px; line-height: 1.5;">
+                        <span id="route-familiarity-count"></span><br>
+                        <span id="route-familiarity-support"></span><br>
+                        <span>Chỉ hiện ô có hành trình · Xám: đã đi qua, chưa đủ bằng chứng bỏ tuyến · Đỏ: tỷ lệ bắt đầu bỏ tuyến cao.</span>
+                    </div>
+                </div>
+            </details>
         </div>
 
 
+
         <!-- Cost Breakdown Modal (Driver Cockpit) -->
-        <div id="cost-breakdown-modal" class="cost-breakdown-modal" style="display: none;">
+        <div id="cost-breakdown-modal" class="cost-breakdown-modal" role="dialog" aria-modal="true" aria-labelledby="cost-modal-title" style="display: none;">
             <div class="cost-modal-backdrop" id="cost-modal-backdrop"></div>
             <div class="cost-modal-content">
-                <div class="cost-modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #334155; background: #0f172a;">
-                    <h4 style="margin: 0; font-size: 15px; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-                        <span>📊</span> Phân tích chi tiết chi phí đề xuất
-                    </h4>
-                    <button id="btn-close-cost-modal" class="btn btn-outline btn-xs" style="color: #94a3b8; border-color: #475569; padding: 2px 8px;">✕</button>
+                <div class="cost-modal-header">
+                    <h4 id="cost-modal-title">Phân tích chi tiết chi phí đề xuất</h4>
+                    <button id="btn-close-cost-modal" class="btn btn-outline btn-sm" type="button" aria-label="Đóng phân tích chi phí">✕</button>
                 </div>
-                <div class="cost-modal-body" id="cost-modal-body" style="padding: 16px; max-height: 70vh; overflow-y: auto;">
+                <div class="cost-modal-body" id="cost-modal-body">
                     <!-- Populated dynamically -->
                 </div>
             </div>
@@ -196,6 +216,7 @@
     </main>
 
     <script src="/demo/static/vendor/leaflet/leaflet.js"></script>
+    <script src="/demo/static/vendor/h3/h3-js.umd.js"></script>
     <script type="module" src="/demo/static/js/app.js"></script>
 </body>
 </html>

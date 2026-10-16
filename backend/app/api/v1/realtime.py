@@ -8,11 +8,10 @@ GET /api/v1/drivers/{driver_id}/history - Get recent matched history
 
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Literal
 
-from backend.app.api.v1.map_match import get_map_matching_service
 from backend.app.services.graphhopper import resolve_vehicle_category
 from backend.app.services.map_matching import SegmentResolverUnavailableError
 from backend.app.services.map_matching.engine import MapMatchingEngineError, MapMatchingNoMatchError
@@ -20,9 +19,10 @@ from backend.app.services.map_matching.models import GPSObservation as ServiceGP
 from backend.app.services.map_matching.models import MapMatchRequest
 from backend.app.services.realtime.driver_state_manager import (
     DriverStateUnavailableError,
-    get_driver_state_manager,
     trace_state_to_snapshot,
+    DriverStateConflictError,
 )
+from backend.app.dependencies import get_driver_state_manager
 from backend.app.services.realtime.state import (
     DriverTraceState,
     GPSObservation,
@@ -30,8 +30,8 @@ from backend.app.services.realtime.state import (
     ensure_utc,
 )
 from backend.app.services.realtime.trigger import get_default_policy
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class MatchingStatus(str, Enum):
 # Request/Response Models
 class LocationIngestionRequest(BaseModel):
     """Request to ingest a GPS observation."""
+    model_config = ConfigDict(allow_inf_nan=False)
     vehicle_id: str | None = None
     vehicle_category: Literal["EV_CAR", "EV_MOTORBIKE"] | None = None
     observation_id: str | None = None
@@ -91,7 +92,7 @@ def _validate_observation(req: LocationIngestionRequest) -> tuple[bool, str | No
         return False, "Invalid longitude"
 
     # Check timestamp is not in the future (UTC normalized for consistent comparison)
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     ts = ensure_utc(req.timestamp)
     if ts > now:
         return False, "Timestamp in the future"
@@ -99,7 +100,7 @@ def _validate_observation(req: LocationIngestionRequest) -> tuple[bool, str | No
     return True, None
 
 
-async def _call_map_match(observations, vehicle_category=None, vehicle_id=None):
+async def _call_map_match(observations, request_obj, vehicle_category=None, vehicle_id=None):
     if len(observations) < 2:
         return None, 0.0
     category = resolve_vehicle_category(vehicle_category, vehicle_id, driver_id=observations[0].driver_id)
@@ -113,27 +114,26 @@ async def _call_map_match(observations, vehicle_category=None, vehicle_id=None):
     )
     start = time.perf_counter()
     try:
-        result = await get_map_matching_service().match_trajectory(request)
+        result = await request_obj.app.state.map_matching_service.match_trajectory(request)
         return result, (time.perf_counter() - start) * 1000
     except MapMatchingNoMatchError:
         return None, (time.perf_counter() - start) * 1000
 
 
-async def _persist_state(driver_id: str, state: DriverTraceState):
+async def _persist_state(driver_id: str, state: DriverTraceState, state_manager):
     """Persist driver state to shared store. Raises error if unavailable."""
-    state_manager = get_driver_state_manager()
     await state_manager.save(state)
 
 
-async def _persist_state_with_retry(driver_id: str, state: DriverTraceState):
+async def _persist_state_with_retry(driver_id: str, state: DriverTraceState, state_manager):
     """Persist driver state with CAS retry. Raises error if unavailable or retries exhausted."""
-    state_manager = get_driver_state_manager()
     await state_manager.save_with_retry(state)
 
 
 async def _add_observation_with_cas(
     driver_id: str,
     obs: GPSObservation,
+    state_manager,
     max_retries: int = 3,
 ) -> tuple[DriverTraceState, bool, bool, str]:
     """
@@ -154,7 +154,6 @@ async def _add_observation_with_cas(
     Raises:
         DriverStateUnavailableError: When Redis unavailable or retries exhausted
     """
-    state_manager = get_driver_state_manager()
 
     # Normalize timestamp to UTC BEFORE any business logic
     normalized_ts = ensure_utc(obs.timestamp)
@@ -168,16 +167,7 @@ async def _add_observation_with_cas(
         if attempt == 0:
             base_generation = current.generation
         elif current.generation != base_generation:
-            # Reset occurred during processing - start with fresh state but keep new generation
-            logger.debug(
-                f"Driver {driver_id}: generation changed from {base_generation} to {current.generation}, "
-                f"reset detected, starting fresh"
-            )
-            # Read the new generation BEFORE creating fresh state
-            new_generation = current.generation
-            current = DriverTraceState(driver_id=driver_id)
-            current.generation = new_generation  # Preserve generation from reset
-            base_generation = new_generation
+            return current, True, False, "RESET_DURING_INGEST"
 
         # Step 3: Normalize last timestamp for comparison
         last_ts = current.last_observation_timestamp
@@ -202,23 +192,19 @@ async def _add_observation_with_cas(
                 detail=f"Observation conflict: {e!s}",
             )
 
-        # Step 6: Get base version for CAS from repository
-        # Note: state objects don't have version; it's stored in the snapshot
         repo = state_manager._get_repo()
-        current_snapshot = await repo.get(driver_id)
-        base_version = current_snapshot.version if current_snapshot else 0
-
-        # Step 7: Prepare snapshot for CAS
+        base_version = getattr(current, '_version', 0)
         snapshot = trace_state_to_snapshot(current, version=base_version)
 
         # Step 8: Attempt CAS save
         try:
             if hasattr(repo, 'save_with_expected_version'):
-                success, actual_version = await repo.save_with_expected_version(snapshot, base_version)
+                success, actual_version = await repo.save_with_expected_version(snapshot, base_version, current.generation)
                 if success:
                     logger.debug(
                         f"Driver {driver_id} observation added at version {actual_version}"
                     )
+                    current._version = actual_version
                     return current, False, gap_reset, gap_reason
                 else:
                     logger.debug(
@@ -249,6 +235,7 @@ async def _add_observation_with_cas(
 async def ingest_location(
     driver_id: str,
     request: LocationIngestionRequest,
+    request_obj: Request,
 ) -> LocationResponse:
     """
     Ingest a single GPS observation for a driver.
@@ -282,7 +269,8 @@ async def ingest_location(
 
     # Add observation with CAS to prevent lost updates
     try:
-        state, is_stale, gap_reset, gap_reason = await _add_observation_with_cas(driver_id, obs)
+        state_manager = get_driver_state_manager(request_obj)
+        state, is_stale, gap_reset, gap_reason = await _add_observation_with_cas(driver_id, obs, state_manager)
     except DriverStateUnavailableError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -308,7 +296,7 @@ async def ingest_location(
         state.current_status = MatchingStatus.WARMING_UP.value
         # Persist state (in case it was modified by gap reset)
         try:
-            await _persist_state_with_retry(driver_id, state)
+            await _persist_state_with_retry(driver_id, state, state_manager)
         except DriverStateUnavailableError:
             pass
         return LocationResponse(
@@ -327,7 +315,7 @@ async def ingest_location(
         state.last_trigger_reason = "STATIONARY_SUPPRESSED"
         # Persist state
         try:
-            await _persist_state_with_retry(driver_id, state)
+            await _persist_state_with_retry(driver_id, state, state_manager)
         except DriverStateUnavailableError:
             pass
         return LocationResponse(
@@ -367,7 +355,7 @@ async def ingest_location(
         state.current_status = MatchingStatus.GPS_ACCEPTED.value
         # Persist state
         try:
-            await _persist_state_with_retry(driver_id, state)
+            await _persist_state_with_retry(driver_id, state, state_manager)
         except DriverStateUnavailableError:
             pass
         return LocationResponse(
@@ -403,14 +391,15 @@ async def ingest_location(
 
     # Call map matching
     try:
-        response, latency_ms = await _call_map_match(context, request.vehicle_category, request.vehicle_id)
+        response, latency_ms = await _call_map_match(
+            context, request_obj, request.vehicle_category, request.vehicle_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except (MapMatchingEngineError, SegmentResolverUnavailableError) as exc:
         state.current_status = MatchingStatus.ENGINE_UNAVAILABLE.value
         # Try to persist ENGINE_UNAVAILABLE state, but return even if fails
         try:
-            await _persist_state_with_retry(driver_id, state)
+            await _persist_state_with_retry(driver_id, state, state_manager)
         except DriverStateUnavailableError:
             pass  # Best effort
         return LocationResponse(
@@ -428,7 +417,7 @@ async def ingest_location(
         state.last_trigger_reason = f"NO_MATCH({reason})"
         # Persist NO_MATCH state to maintain observation continuity
         try:
-            await _persist_state_with_retry(driver_id, state)
+            await _persist_state_with_retry(driver_id, state, state_manager)
         except DriverStateUnavailableError:
             pass  # Best effort
         return LocationResponse(
@@ -469,7 +458,9 @@ async def ingest_location(
     # Persist the matched state to shared store
     # This MUST succeed - we cannot ACK MATCHED if final state wasn't committed
     try:
-        await _persist_state_with_retry(driver_id, state)
+        await _persist_state_with_retry(driver_id, state, state_manager)
+    except DriverStateConflictError as exc:
+        raise HTTPException(409, "Driver state changed while matching; stale match withheld") from exc
     except DriverStateUnavailableError as e:
         # Match was successful but state couldn't be persisted
         # Return error - cannot ACK final state that wasn't committed
@@ -509,11 +500,12 @@ async def ingest_location(
 @router.get("/drivers/{driver_id}/location", response_model=LocationResponse)
 async def get_driver_location(
     driver_id: str,
+    request: Request,
 ) -> LocationResponse:
     """
     Get current state for a driver.
     """
-    state_manager = get_driver_state_manager()
+    state_manager = get_driver_state_manager(request)
     try:
         state = await state_manager.get_or_create(driver_id)
     except DriverStateUnavailableError as e:
@@ -550,9 +542,9 @@ async def get_driver_location(
 
 
 @router.delete("/drivers/{driver_id}/location")
-async def reset_driver_state(driver_id: str) -> dict:
+async def reset_driver_state(driver_id: str, request: Request) -> dict:
     """Reset driver's trace state."""
-    state_manager = get_driver_state_manager()
+    state_manager = get_driver_state_manager(request)
     try:
         await state_manager.delete(driver_id)
         removed = True
@@ -565,9 +557,9 @@ async def reset_driver_state(driver_id: str) -> dict:
 
 
 @router.get("/drivers")
-async def list_drivers() -> dict:
+async def list_drivers(request: Request) -> dict:
     """List all active drivers."""
-    state_manager = get_driver_state_manager()
+    state_manager = get_driver_state_manager(request)
     try:
         drivers = await state_manager.list_drivers()
     except DriverStateUnavailableError:

@@ -1,5 +1,28 @@
 # DECISIONS
 
+## ADR-030: Coverage-driven paired benchmark with fixed ranking policy
+
+**Date:** 2026-10-15/16. **Status:** Owner authorized planning and immediate implementation.
+
+Keep 80/10/10 in runtime. Reuse imported GraphHopper geometry and uncovered local
+reference targets within the existing map intersection. An opt-in versioned seeder
+selects at most 120 templates by incremental sampled H3-11 footprint; the offline
+PostGIS audit separately measures actual reference-length proximity before/after.
+Selection-cell gains are not authoritative directed-road or junction coverage.
+
+Freeze H3-7 origin-group splits and disjoint synthetic driver identities before
+running detection. Keep all variants of a template in one split and schedule
+validation/test later than train. Only train enters synthetic history. Whole paths
+can cross group boundaries, so do not claim unseen-road or spatially disjoint tests.
+FOLLOW, EXIT, EXIT_LATE, RETURN_EXIT, REROUTE, GAP and NOISE are designed strata.
+Report false positives/negatives and event-count discrepancies; never discard a
+case because the detector disagrees. Independent maneuver declarations remain offline.
+
+The prior weight experiment changed generation assumptions after held-out inspection;
+its measured gain is exploratory, not an independent validation of learned weights.
+Historical Week 6 work exists and must not be called unimplemented. Current
+production readiness remains distinct from historical completion and local health.
+
 ## ADR-013: Week 4 snapshot persistence and eligibility ownership
 
 **Date:** 2026-09-21. **Status:** Approved by the user for Week 4.
@@ -382,9 +405,11 @@ hardening remain Week 6/future scope.
 3. Demonstrate dynamic recommendation cost variance where station rankings evolve between timestamps $T_0$ and $T_1$ based on live operational changes.
 
 
-## ADR-019: Multi-Replica API & Nginx Upstream Load Balancing
+## ADR-019: Multi-Replica API & Nginx Upstream Load Balancing (Superseded)
 
-**Date:** 2026-09-29. **Status:** Approved.
+**Date:** 2026-09-29. **Status:** Historical proposal; deployment claims are not verified.
+
+The deployed Compose topology runs two API containers on one host. The data plane remains single-node. This ADR does not establish host-level failover, zero-downtime resilience, or a production SLA.
 
 **Context:** A single API container was a single point of failure (SPOF) for the application tier. High concurrency could exhaust process worker threads, and an API restart interrupted incoming client traffic.
 
@@ -423,3 +448,214 @@ hardening remain Week 6/future scope.
 6. **Automated Frontend Testing:** Establish 54 pure Node.js automated unit and scenario tests (`node --test tests/frontend/*.mjs`), executable via `npm test` and `make test-frontend`, testing all domain logic without browser DOM overhead.
 
 
+## ADR-021: Route Familiarity v2 as an Opt-in Explanation and Ranking Tie-breaker
+
+**Date:** 2026-10-07. **Status:** Approved for Phase 4 implementation.
+
+**Context:** Route history and familiarity were removed in ADR-020 because the previous code mixed synchronous database access into async requests, used hidden globals, and did not apply its placeholder similarity to ranking. The product requirement for personal and community route familiarity remains.
+
+**Decision:** Rebuild the capability with ordered, distance-weighted H3 Resolution 11 signatures, asyncpg persistence, protected trusted-producer ingestion, and an opt-in `ENABLE_ROUTE_FAMILIARITY=false` default. Personal familiarity may add only a configurable nonnegative penalty capped at 30 seconds after eligibility and physical service-completion costs are established. Community evidence is explanatory only. No familiarity input changes eligibility, physical ETA, queue/service semantics, or the existing 409 retry. No personal-history read API or raw route logging is added. A local H3 v4 browser bundle may render resolution-11 explanation cells.
+
+The current `/recommend` boundary does not authenticate end users. When enabled, V2 therefore requires a configured identity HMAC secret and a trusted gateway signature over the request's exact driver ID; requests without a valid signature are rejected before history access. Ingestion remains restricted to a trusted producer token. Event-time queries must exclude route records completed after the evaluated request time. History lookup and route-signature sizes are bounded and truncation is explicit. This ADR authorizes Phase 4 only and does not authorize Week 6 infrastructure or unrelated work.
+
+Operations remain limited to the current single-host topology: API replicas on one host share one single-node data plane. Route familiarity schema changes are explicit; `make migrate-route-familiarity` applies the additive table/index DDL and `make rollback-route-familiarity` drops that table and its history. The opt-in local benchmark measures production signature/similarity/evaluation code at bounded logical data sizes. For PostgreSQL evidence it creates and drops a UUID-named disposable database, seeds only synthetic rows there, and records the actual asyncpg repository query plans; the configured application database is never written by the benchmark.
+
+## ADR-022: Offline geometric comparison and causal familiarity weighting
+
+**Date:** 2026-10-10. **Status:** Authorized by the user for implementation following review; runtime activation remains opt-in.
+
+**Decision:** Whole-trip offline evaluation freezes the initial GraphHopper proposal and uses the whole observed GPS trajectory. Replay progress does not change the comparison extent. Raw observed geometry is labelled explicitly and is not asserted to be a successful map match or ground truth. Comparison defaults to H3 resolution 9, with 8/9/10 available for evaluation; the existing resolution-11 signature remains a persistence/search index, not the similarity metric. Directed geometric projection, ordered one-use distance accounting and neighboring-cell lookup replace exact-cell overlap in familiarity ranking. A 10 m global sampling grid reduces vertex-density dependence; the result is a corridor approximation with project assumptions of 45 m lateral tolerance and 60 degree heading tolerance. It is not proof that adjacent streets are the same road.
+
+Bound vertices/distance, resampled geometry, query-cell expansion and comparison-pair work; return unavailable/reject work exhaustion explicitly. One assessment can prepare at most 50,000 pieces across its unique routes; this budget is consumed before resampling allocation. CPU comparison runs outside the request event loop. Reuse prepared geometry and comparison results only within one assessment batch. No new infrastructure or cross-user cache.
+
+Add optional geometry and started_at to completed history using additive, idempotent migration. Preserve existing rows. Trusted retries can fill previously null evidence if the immutable trip signature agrees, but cannot replace known evidence. Missing geometry/start is unavailable evidence; no cell-center reconstruction or destructive backfill. Only records completed strictly before the request time are usable. The 7-day default and 30-day option group comparable history by trip start in Vietnam time. Community remains suppressed below five supporting drivers and never changes ranking.
+
+The existing personal penalty remains nonnegative and capped at 30 seconds; it changes final ranking cost only, not eligibility, physical ETA or HTTP 409 retry. Protected driver history still requires the exact-driver HMAC identity boundary and trusted ingestion token. Anonymous route comparisons do not access history. Feature-off remains the default, and this change does not authorize exposing signing/ingestion secrets to the browser.
+
+**Energy:** Backend power-step owns observed-interval energy estimation and SOC updates; frontend displays those results. Catalog boot preserves nullable physical metadata and per-field provenance. VF3 maximum motor power 30 kW has a brochure citation; the remaining physics coefficients are project assumptions, not officially verified or hardware-calibrated. Unsupported models return an explicit unavailable estimate instead of being mapped to VF3. Interval integration assumes linear speed change, uses midpoint power, and supports auxiliary load at rest and bounded regenerative braking. Capability exceedance is explicit rather than silent clipping. Range remains the labelled catalog Wh/km estimate pending independent energy calibration.
+
+**Evidence:** See `docs/reports/offline-route-weighting-fixes-2026-10-10.md`. Historical ADR-021 acceptance records describe their earlier baseline and are not overwritten. No Dataset V1 edits, new production SLA, new routing engine or streaming worker are introduced.
+
+
+
+## ADR-023: One station chooser and compact Driver cockpit
+
+**Date:** 2026-10-10. **Status:** Authorized by the user.
+
+**Decision:** Reuse the station drawer as the sole station chooser. Show up to five unique stations in backend-ranked order, followed by the remaining catalog in a native disclosure. Recommendation refresh does not open another panel or select a station. Keep the drawer disclosure, scroll and focused station action across updates. The cockpit recommendation is a compact summary with a cost-detail action.
+
+Mobile starts with a compact cockpit containing destination, remaining distance, estimated driving ETA, SOC and primary actions. A semantic button expands it; opening the station bottom sheet hides the cockpit so its controls cannot obstruct the chooser. Native details contains coordinates, road identity, replay speed, simulation SOC and H3 analysis. Preserve its state and controls across replay updates; update model/power values incrementally. No new dependencies or historical trip picker.
+
+Remaining road distance comes from the untraveled route geometry; straight-line fallback is explicitly labelled. ETA scales the active engine route duration by remaining distance and is labelled an estimate; it excludes station queue/service and is never taken from an unselected station recommendation. Combined selected legs include driving to the station and onward to B. Unknown timing remains unavailable. This is not a live traffic or segment-speed forecast. Backend ranking, eligibility, offline comparison and Dataset V1 are unchanged.
+
+**Evidence:** [Driver UI verification](reports/driver-ui-panels-2026-10-10.md).
+
+## ADR-024: Separate station intent from physical energy warnings
+
+**Date:** 2026-10-12. **Status:** User-authorized bug fix and project review.
+
+**Decision:** Preserve the canonical `need_service`, `request_valid` and `reason_code` service-intent contract. An explicit valid station request remains `VALID_REQUEST` even with ample battery. Add optional `energy_assessment` carrying the existing backend demand detector's physical decision and warning level. The backend owns thresholds; the UI maps warning level/reason to presentation. Missing/invalid/unsupported evidence must not default to a safe battery or a low-reserve warning. Legacy manual-request evidence without a physical assessment is unavailable; no database migration is needed.
+
+Propagate detector-derived range to candidate search when range is absent. Explicit requests retain valid supplied range/trip/reserve even when physical assessment is unavailable due to missing SOC. Reject nonfinite telemetry at demand/candidate HTTP boundaries. During locked station navigation, reuse `/demand/evaluate` to refresh energy without reranking or changing the selected station. Manual SOC/model changes, accepted power steps and newer drawer requests invalidate outstanding assessment results. Failed stale requests must not clear newer evidence. No second threshold policy, new dependency, background server process or Week 6 infrastructure.
+
+**Evidence and limits:** [Energy warning fix and project review](reports/energy-warning-and-project-review-2026-10-12.md). The warning patch is verified separately from eight still-open runtime/UI findings. Physical thresholds and the uncalibrated catalog/physics estimate remain unchanged; no claim of exhaustive project correctness.
+
+## ADR-025: Complete journey scoring, optional destination and isolated synthetic history
+
+**Date:** 2026-10-12. **Status:** Implemented, verified and merged into local main (2026-10-13).
+
+**Decision:** Supersede ADR-021/022's personal-only 30-second ranking preference. Use 80% normalized complete journey time, 10% confidence-adjusted personal mismatch and 10% confidence-adjusted community mismatch. The time reference is the fastest eligible complete journey, floored at one second only for division. Physical ETA excludes preference cost. Personal history uses mean comparable corridor coverage; community includes non-supporting comparable drivers and withholds public support below five drivers. Preserve bounded, causal history and expose truncation.
+
+With B, include A→station→B travel, queue and service. Without B, include A→station, queue and service. After-B includes A→B→station once. Backend confirms the station/service pair, current operational eligibility and constrained geometry; waypoint indices preserve navigation progress when rerouting. Passing a waypoint does not prove that charging or swapping occurred. No durable charger workflow is added.
+
+The current service-time snapshot cannot prove replenished energy. Until such evidence exists, onward feasibility conservatively requires current range to cover the represented legs and reserve. This can exclude feasible charging journeys; it must remain explicit rather than inventing a full battery.
+
+Use only validated `realtime` or `synthetic` history schemas. Production defaults remain `realtime`, feature disabled and no public profile. The opt-in public sample requires enabled synthetic history and exposes only the existing fixed-ID HMAC read signature, never signing or ingestion secrets. Generated manifests and separate behavioral evaluation truth remain inside the repository, outside Dataset V1. Synthetic observations explain simulated usage; they do not establish real driver motivations. No fake/demo badge is added to the UI at the customer's request.
+
+Measure finite virtual-driver GPS at 30 real seconds separately from demand-triggered recommendations. Keep the existing per-IP limit of 100 requests/minute by default; the local measurement explicitly configures 6,000 to measure application capacity rather than the single load client's protective rate limit. No new infrastructure, numeric production SLA or Week 6 productionization is introduced.
+
+
+ADR-025 implementation pins standalone candidate endpoints to PostgreSQL snapshots, filters stale traffic using existing freshness and an additive fresh-window index, and preserves bounded geometric matching through spatial candidate lookup. GPS/reset uses payload-version-generation compare-and-set and shared location resolution. Nonfinite HTTP numeric input returns serializable 422 errors without committing state. Manual vehicle changes invalidate incompatible navigation; automatic historical assignment preserves original identity and causal time. Shared origin/destination picker entry points close the station drawer before map selection so mobile overlays cannot intercept the intended map click.
+
+**Current evidence:** [Journey ranking and scale-up report](reports/journey-ranking-scale-up-2026-10-13.md). Live API eight checks and desktop/mobile browser 32 checks passed; finite load results are recorded. The measured 500/1,000-driver stages include dependency failures and are not reliable capacity passes.
+
+## ADR-026: Model replenishment and resolve measured capacity failures
+
+**Date:** 2026-10-13. **Status:** Customer-authorized implementation in progress.
+
+**Decision:** Complete the unfinished ADR-025 journey model. Before B, charge only enough for onward network travel plus safety reserve. Without B, and after B when the station is the final goal, target 80% without reducing existing charge. Battery swap predicts receiving 90% of effective usable installed capacity. The customer explicitly selected these defaults; expose them as validated configuration. Current station arrival must remain physically feasible.
+
+Canonical catalogs do not include charging power or charging curves. Use explicit application assumptions for station/vehicle charging limits, efficiency and taper; never reuse motor power. Return arrival, departure and destination energy/SOC, added kWh, computed service duration and provenance. Charging duration replaces the old flat whole-service estimate; it is not added on top of that estimate. Swap duration still comes from the operational snapshot. Candidate search, ranking refresh and selected-plan confirmation use one shared energy model. Deduct after-B prefix energy exactly once. Missing evidence and infeasible replenishment remain explicit.
+
+This predicts a plan, not proof of service: reaching a station waypoint must not manufacture accepted SOC. Keep physical battery warnings separate from predicted post-service energy. Ranking retains 80/10/10 and queue remains counted once. Do not edit canonical data or consume evaluation labels. Old flat-duration ranking baselines remain historical evidence rather than ground truth for the new service model.
+
+Resolve the measured 500/1,000-driver dependency failures by first recording sanitized exception type and duration and measuring the actual bottleneck. A successful measurement with errors is not a capacity pass. Do not use arbitrary timeout increases or new infrastructure to conceal failures. Repeat real 30-second GPS workloads and independently sampled recommendations, including a longer observation of backlog and memory. Work plan: [completion plan](superpowers/plans/2026-10-13-replenishment-scale-completion.md).
+
+**Measured capacity ruling:** Two single-worker API replicas passed the finite workload but failed the sustained stress workload of 1,000 GPS sources and 25 recommendations every 30 seconds. CPU profiles and locally equivalent matcher caching reduced wasted work, yet the sustained queue still grew. Scale the existing modular-monolith API tier to four single-worker replicas behind the existing Nginx `least_conn` gateway, using available local CPU and shared Redis/PostgreSQL. This avoids multiple simulator producers and changing per-process Prometheus semantics. Only `api_1` is the simulator producer. Set each adapter's configurable route budget to four so the aggregate remains sixteen. Redis's 0.2-second budget and GraphHopper's 10-second network timeout remain unchanged. No new service technology, engine fallback, cloud resource or distributed database is introduced.
+
+The existing per-IP rate limiter remains 100/minute **per API replica**, not a cluster-wide quota; this was already local to each of the previous two replicas. Capacity tests explicitly use the existing local 6,000/minute setting. Repeat the sustained measurement after this deployment; do not infer success from the replica count or turn the stress rate into an unapproved production SLA.
+
+**GPS cadence correction:** The measured 30-second cadence exposed a 30-second default matching-context window: slight scheduling jitter removed the preceding point and returned WARMING_UP despite an established valid session. Set the default context window to the existing 60-second session-gap boundary; retain the 50-point cap, explicit caller-selected windows, three-observation warmup and reset on a gap greater than 60 seconds. This restores matching at the approved cadence rather than lowering the workload. Earlier measurements must disclose their high warmup counts and cannot establish full matching capacity. New boundary regressions cover 30.001/59.999/60 seconds and a session break above 60 seconds; rerun real measurements after this change.
+
+Remove unused signature-array fields from history read projections and decode identical serialized geometry once per assessment. This reuses the existing request-local memoization pattern; it does not change causal SQL selection, community denominator, caps, per-trip point accounting, ingestion schema or ranking results. Keep the current history-cell work guard even though the community query now uses cells only as a nonempty gate. Independent review and full-assessment regressions verify equivalence before new load measurements.
+
+**Matching acceleration experiment:** The final full-matching finite stages passed, but recurring 1,000-driver GPS plus 25 recommendations/30 seconds still overloaded the eight-logical-CPU host. GraphHopper 11's [matching implementation](https://raw.githubusercontent.com/graphhopper/graphhopper/11.0/map-matching/src/main/java/com/graphhopper/matching/MapMatching.java) uses edge-based Dijkstra without prepared landmarks; CH preparations do not accelerate this matching path. Prepare separate car/motorcycle landmarks in a new generated graph directory, retaining the closed baseline graph and unchanged canonical PBF, profiles, weights and turn restrictions. Matching then uses GraphHopper's supported edge-based A* with landmark lower bounds. This is the same production engine, not a fallback or a new service technology. Ordinary routing remains CH; explicitly disable LM in the existing congestion POST to preserve its flexible solver and custom-model behavior. Compare real geometry, costs, OSM details, directed resolution/ambiguity and timings before adopting the preparation and rerunning sustained load. Preparation alone is not a capacity pass; nearby observations can be faster with Dijkstra.
+
+**Experiment outcome — rejected:** Same-server alternating controls retained matching/route/directed-resolution results, including 390 ambiguous observations with IDs/direction withheld. LM was slower: original matching samples mean 54.62 ms versus Dijkstra 12.37 ms; sampled actual-load traces mean 23.07 versus 17.28 ms. Restore the prior graph configuration and congestion request; retain the isolated generated graph and evidence. A long environment/tool pause invalidated one route's wall-time sample and overall probe duration, not the completed paired matching comparison. This experiment is not an adopted runtime change or a capacity pass.
+
+**Complete CPU admission:** Signature preparation previously used the general thread pool outside the evaluator's admission, allowing GIL-heavy signature and comparison jobs to overlap on one API. The recommendation workflow now passes the persistent evaluator's existing runner to its snapshot-scoped candidate service. Signature, query and comparison work share the same slot/cancellation drain; no new per-request semaphore, global thread-pool policy, timeout or workload reduction is introduced. Standalone/feature-off behavior and invalid-geometry semantics are unchanged. Existing timing logs now record signature CPU separately, and the load runner records actual selected personal-history/community-cohort counts rather than treating AVAILABLE alone as proof of both evidence sources.
+
+## ADR-027: Seven-day departure origins instead of visit weights
+
+**Date:** 2026-10-14. **Status:** Owner-authorized on
+`feat/h3-departure-statistics-7d`; separate permission required to merge.
+
+**Problem:** The Hanoi-wide overlay selects 425 resolution-9 cells from static
+visit weights. These are not spatial coverage or evidence of leaving an instructed
+route. Existing completed histories do not record corresponding active guidance.
+
+**Decision:** Preserve legacy history and add separately protected paired guidance
+versions/observations using existing PostgreSQL/H3. Count every confirmed exit,
+rearming after confirmed return. Guidance changes do not manufacture exits.
+Aggregate all comparable completed guided trips in seven days ending at event time.
+Color by distinct departing trips / distinct reached guided trips per cell and
+show total confirmed events separately. Missing evidence is gray; never infer
+departure or motivation from visits or today's reconstructed routing result.
+
+Reuse the 45 m lateral / 60 degree heading corridor assumptions. Three samples and
+30 m confirm exits/returns. Gaps above 60 s, jumps above 200 m, implausible movement
+and ambiguous projections break continuity. The last unambiguous guided position
+approximates the exit origin; it is not a verified junction. Exclude uncertain
+no-event cell contributions from denominators. Preserve production cohort privacy
+and explicitly describe synthetic data. Coarsen grid detail to cover the viewport
+within 500 cells, aggregate at that resolution, never sum child percentages. Keep
+whole-trip comparison separate and 80/10/10 ranking intact.
+
+**Evidence:** Independent fake maneuver truth, real GraphHopper identity control,
+isolated PostgreSQL/API and desktop/mobile browser checks. Synthetic data establishes
+algorithm behavior only. See the [plan](superpowers/plans/2026-10-14-h3-departure-statistics.md)
+and [branch report](reports/h3-departure-statistics-2026-10-14.md).
+
+**Owner screenshot correction:** "Coverage" means footprints originating from driver
+journeys, not covering empty geographic space. Supersede the viewport-grid/coarsening
+portion above: do not generate empty background cells, retain the selected H3
+resolution, and render only journey evidence. The 500-visible-cell cap remains
+explicit. Do not expand the behavioral coverage of 30 small synthetic test trips by
+painting the city. Unpaired legacy history remains unavailable for departure weights;
+adding its gray footprints is a separate source-selection question.
+
+**Approved history/source extension:** Render gray footprints for all legacy completed
+journeys in the same seven-day window. Resolution-11 signature centres approximate
+footprints; no saved point timestamps or original guidance are invented. Legacy
+visits never enter the guided denominator. Exclude a duplicate legacy identity only
+after its paired completion is available at query time. Gray paired observation
+cells likewise do not prove adherence. Existing cohort privacy remains in force.
+
+Reuse GraphHopper to create a separate seeded synthetic paired batch on 12 road
+corridors: 360 trips, 108 distinct observed geometries. Declared maneuvers stay
+offline; this is simulator evidence, not real drivers or perfect detector accuracy.
+All-region data is fetched at explicit resolution/time and clipped locally on pan.
+Bound legacy work to 100,000 trips, 2,000 signature groups and 100,000 group cells.
+Deduplicate footprint driver IDs in Python to avoid sorting toasted SQL arrays;
+materialize per-cell time predicates once before counting. Keep the five-second
+statement timeout and explicit failures. No cache service or new dependency.
+
+**Pan/zoom correction:** Preserve already drawn still-visible Leaflet polygons on
+viewport changes, give them priority at the existing 500-cell cap, and batch only
+entering cells. Data/time/resolution/mode refreshes still replace old evidence.
+This removes clear-and-reveal flicker without changing H3 or statistics semantics.
+
+**Latest owner correction:** Remove the default H3 display cap. Supersede application
+viewport culling for departure mode: load all aggregate evidence once and reuse
+Leaflet's installed Canvas renderer through pan/zoom. Keep backend work guards,
+causal evidence and resolution unchanged. This replaces the prior visible-subset
+policy; no new dependency. Use OSM's canonical `tile.openstreetmap.org` host and
+report failed background tiles until they successfully load or leave the map.
+A failed external DNS lookup is not an H3 statistics failure or proof of no trips.
+
+## ADR-028: Separate coverage, departure origins and observed deviation paths
+
+**Date:** 2026-10-14. **Status:** Owner-approved branch extension; merge separately authorized.
+
+Large trip/hex counts do not establish behavioral coverage. Add bounded per-trip
+active-guidance inspection, confirmed red paths/duration/distance, unknown intervals
+and existing two frozen-route coverage percentages. Never bridge GPS gaps/updates,
+turn unobserved tails into adherence or report undefined stationary percentages.
+Whole-route work limits leave valid interval inspection available and explicitly
+withhold that comparison. Reuse installed geometry/PostGIS/Leaflet.
+
+Public synthetic examples require the existing explicit capability and synthetic
+repository; sanitize identities and offer no arbitrary private history lookup.
+Stateless caller inspection reads no history. Offline road-length auditing targets
+measured gaps for additional real GraphHopper seed routes, preserves every old row
+and Dataset V1, and keeps held-out truth separate.
+
+Canonical CSV lacks complete motorcar access and district borders. Report candidate
+reference proximity coverage, geographic midpoint buckets and null eligible-road
+coverage; never claim authoritative city/drivable coverage. Reports disclose event
+time, bbox, tolerance, deduplication and excluded source batches. Approximate
+boundary attribution and nearby parallel roads remain limitations. Ranking,
+runtime aggregation guards and Week boundaries are unchanged.
+
+## ADR-029: Measured local-road cohorts within imported map bounds
+
+**Date:** 2026-10-15. **Status:** Owner-approved branch extension; merge separately authorized.
+
+Audit configured bounds against live GraphHopper `/info`; restrict new synthetic
+routes, including every intermediate geometry point, to their intersection.
+Availability bounds are not administrative borders. Do not change canonical PBFs
+or claim all-Hanoi coverage from a partial imported graph.
+
+Reuse canonical reference roads to select uncovered local origins in H3-7 and
+nearby vias in H3-9. Real GraphHopper routes must meet length and 35 m snap limits;
+unroutable targets are reported, dependency outages propagate. Freeze manifests,
+inputs and maneuver declarations before analysis. Preserve existing records and
+use deterministic IDs/schedules for reproducible synthetic-only ingestion.
+
+Separate coverage FOLLOW controls from deviation-rich stress cases. Expose an
+optional synthetic aggregate cohort filter, retaining default all-source behavior
+and existing causal/privacy/work guards. Stress is a designed distribution, never
+an estimate of real departure prevalence. Held-out journey records are excluded
+from storage; their roads may overlap runtime geography. Neither maneuver intent
+nor same-generator held-out success establishes field accuracy. No new dependency,
+ranking change, runtime label consumption or Week 6 scope.

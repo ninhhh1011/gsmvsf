@@ -12,8 +12,6 @@ from backend.app.services.demand.models import (
 )
 from backend.app.services.demand.service import (
     DemandService,
-    get_demand_service,
-    reset_demand_service,
 )
 
 __all__ = [
@@ -27,6 +25,4 @@ __all__ = [
     "ServiceType",
     "VehicleCapability",
     "VehicleCategory",
-    "get_demand_service",
-    "reset_demand_service",
 ]

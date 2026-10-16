@@ -2,7 +2,7 @@
 Tests for Week 3 Candidate domain models.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
@@ -27,7 +27,7 @@ def sample_energy_request() -> EnergyServiceRequest:
     return EnergyServiceRequest(
         service_request_id="REQ-001",
         vehicle_id="V001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         request_source=RequestSource.AUTO_DETECTED,
         need_service=True,
         allowed_service_types=[ServiceType.CHARGING],

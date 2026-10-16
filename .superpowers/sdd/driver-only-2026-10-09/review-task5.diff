@@ -1,0 +1,897 @@
+# Review package: dd098a1..21ad778
+
+## Commits
+21ad778 feat(ui): add H3 display-only overlay from route geometry
+63f7ed7 feat(driver): add _top5Result sharing, auto-refresh, explicit service request
+
+## Files changed
+ backend/app/static/demo/js/ui/drawer_renderer.js   |   4 +-
+ backend/app/static/demo/js/ui/driver_controller.js | 134 +++++++++
+ .../static/demo/js/ui/route_familiarity_overlay.js | 110 ++++++++
+ tests/frontend/test_h3_display.mjs                 | 298 +++++++++++++++++++++
+ tests/frontend/test_station_tooltip.mjs            |   4 +-
+ 5 files changed, 545 insertions(+), 5 deletions(-)
+
+## Diff
+diff --git a/backend/app/static/demo/js/ui/drawer_renderer.js b/backend/app/static/demo/js/ui/drawer_renderer.js
+index e6ce80a..177f02c 100644
+--- a/backend/app/static/demo/js/ui/drawer_renderer.js
++++ b/backend/app/static/demo/js/ui/drawer_renderer.js
+@@ -200,23 +200,21 @@ export function renderDrawerStationCard(st, options = {}) {
+                 ${ranked?.score ? `<span class="cost-score">Cost Score: <strong>${ranked.score.toFixed(3)}</strong></span>` : ''}
+             </div>
+             <div style="font-size: 11px; color: #475569; padding: 4px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 4px;">
+                 📊 <strong>Chi tiết chi phí (Cost):</strong> ${baseTravelMin}p lái xe + ${parseFloat(trafficAdjMin) > 0 ? `<span style="color:#d97706; font-weight:700;">+${trafficAdjMin}p tắc đường</span>` : '<span style="color:#059669; font-weight:600;">0p tắc</span>'} + ${waitMin > 0 ? `<span style="color:#dc2626; font-weight:700;">+${waitMin}p chờ</span>` : '<span style="color:#059669; font-weight:600;">0p chờ (trống)</span>'} + ${serviceMin}p sạc
+             </div>
+ 
+             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                 <button class="btn btn-outline btn-xs btn-zoom-station" data-lat="${st.latitude}" data-lng="${st.longitude}">
+                     Xem vị trí
+                 </button>
+-                <button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${escapeHtml(st.station_id)}">
+-                    🔀 Dẫn đường ghé trạm
+-                </button>
++                ${ranked?.eligible !== false ? `<button class="btn btn-primary btn-sm btn-nav-drawer-station" data-station-id="${escapeHtml(st.station_id)}">🔀 Dẫn đường ghé trạm</button>` : ''}
+             </div>
+         `;
+     }
+ 
+     return `
+         <div class="station-drawer-card ${isRec ? 'is-recommended' : ''}" data-station-id="${escapeHtml(st.station_id)}">
+             <div class="station-card-top">
+                 <div>
+                     <div style="display:flex; align-items:center; gap:6px;">
+                         <span class="station-card-name">Trạm ${escapeHtml(st.station_id)}</span>
+diff --git a/backend/app/static/demo/js/ui/driver_controller.js b/backend/app/static/demo/js/ui/driver_controller.js
+index 3674ef1..06e46e0 100644
+--- a/backend/app/static/demo/js/ui/driver_controller.js
++++ b/backend/app/static/demo/js/ui/driver_controller.js
+@@ -63,20 +63,21 @@ import {
+     renderEnergyWarningHTML,
+     renderVehicleOptions,
+     renderCoordinateText,
+     renderCostBreakdownHTML,
+     renderPostTripBannerHTML
+ } from './cockpit_renderer.js';
+ import { renderDrawerStationsListHTML } from './drawer_renderer.js';
+ import { renderDriverRecommendation, renderRecommendationPanelHTML } from './driver_recommendation_renderer.js';
+ import { MapPicker } from './map_picker.js';
+ import { createCockpitBindings } from './cockpit_bindings.js';
++import { RouteFamiliarityOverlay } from './route_familiarity_overlay.js';
+ 
+ export class DriverModeController {
+     constructor(apiClient, mapEngine, options = {}) {
+         this.api = apiClient;
+         this.map = mapEngine;
+         this.options = options;
+         this.bindings = options.bindings || createCockpitBindings();
+         this.mapPicker = new MapPicker({
+             mapController: this.map,
+             onOriginSelected: async (coords) => await this.setCustomOrigin(coords),
+@@ -128,20 +129,28 @@ export class DriverModeController {
+         this.lastRecommendation = null;
+         this.lastRecommendedStationId = null;
+         this.lastDiversionLeg1 = null;
+         this.lastDiversionLeg2 = null;
+ 
+         // Navigation lock — khoá route khi user đã chọn trạm
+         this._navigationLocked = false;
+         this._selectedStationId = null;   // station_id user đã chọn
+         this.routeRevision = 0;           // Revision token to prevent stale async overwrites
+ 
++        // Top 5 recommendation result sharing
++        this._top5Result = null;
++        this._top5Revision = 0;
++
++        // Auto-refresh timer for recommendations
++        this._recommendRefreshInterval = options.recommendRefreshInterval ?? 30000;
++        this._recommendTimer = null;
++
+         // Proactive Station Search & Destination Picking
+         this.isPickingDestination = false;
+         this.currentStationsFilter = 'ALL';
+         this.chargingIntent = 'EN_ROUTE'; // 'EN_ROUTE' (A -> Station -> B) | 'AT_DESTINATION' (B -> Station)
+         this.customOrigin = { latitude: 20.9849, longitude: 105.7935, node_id: "ORIGIN_A" };
+         this.customDestination = { latitude: 21.0285, longitude: 105.8542, node_id: "DEST_B" };
+         this.postTripStation = null;
+         this.postTripRoute = null;
+         this.postTripRecommendation = null;
+         this.postTripCandidateDetails = null;
+@@ -152,40 +161,101 @@ export class DriverModeController {
+         this.lastEvalPos = null;
+         this.lastEvalTimestamp = 0;
+ 
+         // Trajectory Replay Controller
+         this.replay = new TrajectoryReplayController(apiClient, mapEngine, {
+             onStep: async (stepData) => await this._onReplayStep(stepData),
+             onStateChange: () => this.renderTripActiveUI(),
+             session: this.session
+         });
+ 
++        // H3 Display-Only Overlay
++        this._h3Overlay = null;
++        this._h3Enabled = false;
++        this._h3Initialized = false;
++
+         this.onStateChange = options.onStateChange || (() => {});
+     }
+ 
+     setCatalogs(trips, vehicles, stations, scenarios = [], vehicleCatalog = []) {
+         this.trips = trips || [];
+         this.vehicles = vehicles || [];
+         this.stations = stations || [];
+         this.scenarios = scenarios || [];
+         this.vehicleCatalog = vehicleCatalog || [];
+         if (!this.currentVehicle) {
+             this.selectVehicleModel('VF_3');
+         }
+         this.bindings.setVehicleCatalog(renderVehicleOptions(this.vehicleCatalog), this.currentVehicle?.vehicle_model || 'VF_3');
+     }
+ 
+     async init() {
+         this.setState(DriverState.AVAILABLE);
+         this.renderAvailableUI();
+         this.bindGlobalControls();
+         this.bindings.setVehicleSelection(this.currentVehicle?.vehicle_model || 'VF_3');
++        this.initH3Overlay();
++    }
++
++    initH3Overlay() {
++        if (this._h3Initialized) return;
++        this._h3Initialized = true;
++
++        // H3 overlay only available in browser with h3 library
++        if (typeof window === 'undefined' || !window.h3 || !this.map?.map) return;
++
++        const toggle = document.getElementById('toggle-route-familiarity');
++        const countElement = document.getElementById('route-familiarity-count');
++        const supportElement = document.getElementById('route-familiarity-support');
++
++        if (toggle) {
++            this._h3Overlay = new RouteFamiliarityOverlay({
++                map: this.map.map,
++                leaflet: window.L,
++                h3: window.h3,
++                toggle,
++                countElement,
++                supportElement
++            });
++            // Bind toggle handler
++            toggle.addEventListener('change', () => this.onToggleH3());
++        }
++    }
++
++    onToggleH3() {
++        if (!this._h3Overlay) return;
++        this._h3Enabled = !this._h3Enabled;
++        if (this._h3Enabled) {
++            const cells = this._h3Overlay.computeH3CellsFromGeometry(this.directRouteGeometry);
++            this._h3Overlay.setEnabled(true);
++            this._h3Overlay.renderFromCells(cells);
++        } else {
++            this._h3Overlay.setEnabled(false);
++            this._h3Overlay.clear();
++        }
++    }
++
++    /**
++     * Clear H3 overlay when route changes.
++     * Called by route update methods.
++     */
++    _clearH3OnRouteChange() {
++        if (this._h3Enabled && this._h3Overlay) {
++            this._h3Overlay.clear();
++            this._h3Overlay.setEnabled(false);
++            this._h3Enabled = false;
++            // Uncheck the toggle if in browser environment
++            if (typeof document !== 'undefined') {
++                const toggle = document.getElementById('toggle-route-familiarity');
++                if (toggle) toggle.checked = false;
++            }
++        }
+     }
+ 
+     renderCurrentStateUI() {
+         if (this.state === DriverState.AVAILABLE) {
+             this.renderAvailableUI();
+         } else if (this.state === DriverState.TRIP_ASSIGNED) {
+             this.renderTripAssignedUI();
+         } else if (this.state === DriverState.TRIP_ACTIVE) {
+             this.renderTripActiveUI();
+         } else if (this.state === DriverState.TRIP_COMPLETE) {
+@@ -402,20 +472,21 @@ export class DriverModeController {
+             }
+         }
+ 
+         if (this.generation !== currentGen) return;
+ 
+         if (routeResult?.geometry) {
+             const coords = decodePolyline(routeResult.geometry);
+             if (coords && coords.length > 0) {
+                 this.fullRouteCoords = coords;
+                 this.directRouteGeometry = coords;
++                this._clearH3OnRouteChange();
+                 this.map.renderDirectRoute(coords);
+                 this.map.fitBoundsToActive(coords);
+             } else {
+                 this.map.fitBoundsToActive();
+             }
+         } else {
+             this.map.fitBoundsToActive();
+         }
+ 
+         if (routeResult?.distance_m) {
+@@ -571,20 +642,21 @@ export class DriverModeController {
+ 
+                 // Route slicing: shrink route ahead of the car
+                 if (this.fullRouteCoords && this.fullRouteCoords.length > 1) {
+                     this.lastPassedSegmentIndex = Math.max(this.lastPassedSegmentIndex, progress.segmentIndex);
+                     const remainingCoords = sliceRouteFromProgress(this.fullRouteCoords, {
+                         segmentIndex: this.lastPassedSegmentIndex,
+                         projPoint: progress.projPoint
+                     });
+ 
+                     this.directRouteGeometry = remainingCoords;
++                    this._clearH3OnRouteChange();
+                     this.map.updateDirectRoute?.(remainingCoords);
+ 
+                     const remainingMeters = computePolylineDistanceMeters(remainingCoords);
+                     this.remainingTripDistanceKm = parseFloat((remainingMeters / 1000).toFixed(2));
+                 }
+             } else if (this.currentPos && this.currentTrip?.destination) {
+                 this.remainingTripDistanceKm = straightLineDistanceKm(
+                     this.currentPos.latitude,
+                     this.currentPos.longitude,
+                     this.currentTrip.destination.latitude,
+@@ -649,20 +721,21 @@ export class DriverModeController {
+                 this.currentTrip.destination,
+                 { vehicle_category: vCat }
+             );
+             if (this.generation !== currentGen) return;
+             if (rerouteResult?.geometry) {
+                 const coords = decodePolyline(rerouteResult.geometry);
+                 if (coords && coords.length > 0) {
+                     this.fullRouteCoords = coords;
+                     this.lastPassedSegmentIndex = 0;
+                     this.directRouteGeometry = coords;
++                    this._clearH3OnRouteChange();
+                     this.map.updateDirectRoute?.(coords);
+                 }
+             }
+         } catch (err) {
+             console.warn('Rerouting error:', err);
+         }
+     }
+ 
+     // ─── Evaluation ─────────────────────────────────────────────────────
+ 
+@@ -743,20 +816,43 @@ export class DriverModeController {
+                     : null
+             });
+             console.groupEnd();
+             if (this.generation !== currentGen || this.routeRevision !== evalRev || this._navigationLocked) {
+                 this._isEvaluating = false;
+                 return;
+             }
+ 
+             this.lastRecommendation = rec;
+ 
++            // Update _top5Result with revision guard
++            const responseRevision = this.routeRevision;
++            const top5Candidates = (rec.ranked_candidates || []).slice(0, 5).map((c, idx) => {
++                const stMatch = this.stations?.find(s => s.station_id === c.station_id);
++                return {
++                    ...c,
++                    rank: c.rank ?? (idx + 1),
++                    station_id: c.station_id,
++                    latitude: c.latitude ?? stMatch?.latitude,
++                    longitude: c.longitude ?? stMatch?.longitude,
++                };
++            }).filter(c => c.latitude != null && c.longitude != null);
++
++            if (responseRevision === this.routeRevision) {
++                this._top5Revision++;
++                this._top5Result = {
++                    has_recommendation: rec.has_recommendation,
++                    candidates: top5Candidates,
++                    energy_context: rec.energy_context
++                };
++                this._notifyTop5Updated(this._top5Result);
++            }
++
+             // Nếu đang khoá navigation → skip hoàn toàn, KHÔNG re-evaluate
+             if (this._navigationLocked) {
+                 this._isEvaluating = false;
+                 return;
+             }
+ 
+             let leg1Result = null;
+             let leg2Result = null;
+ 
+             if (rec.has_recommendation && rec.ranked_candidates?.length > 0) {
+@@ -860,20 +956,55 @@ export class DriverModeController {
+             close: () => this._hideRecommendationPanel(),
+             selectStation: stationId => {
+                 this._hideRecommendationPanel();
+                 this._selectStationAndNavigate(stationId);
+             }
+         });
+     }
+ 
+     _hideRecommendationPanel() { this.bindings.hideRecommendationPanel(); }
+ 
++    _notifyTop5Updated(result) {
++        if (!result || !result.candidates) return;
++        // Update map markers with top 5 candidates
++        if (this.map?.updateStationMarkers) {
++            this.map.updateStationMarkers(result.candidates);
++        }
++    }
++
++    startRecommendRefresh() {
++        this.stopRecommendRefresh();
++        this._recommendTimer = setInterval(
++            () => this._refreshRecommendation(),
++            this._recommendRefreshInterval
++        );
++    }
++
++    stopRecommendRefresh() {
++        if (this._recommendTimer) {
++            clearInterval(this._recommendTimer);
++            this._recommendTimer = null;
++        }
++    }
++
++    async _refreshRecommendation() {
++        if (this.state !== DriverState.TRIP_ACTIVE) {
++            this.stopRecommendRefresh();
++            return;
++        }
++        if (this._navigationLocked) {
++            // Don't refresh while user is navigating to a station
++            return;
++        }
++        await this._evaluateAtCurrentPosition();
++    }
++
+     async _selectStationAndNavigate(stationId) {
+         const currentGen = this.generation;
+         await this.navigateViaStationId(stationId);
+         if (this.generation !== currentGen) return;
+         this.renderTripActiveUI();
+     }
+ 
+     // ─── Controls ──────────────────────────────────────────────────────
+ 
+     async stepTrip() {
+@@ -1004,20 +1135,21 @@ export class DriverModeController {
+ 
+                 if (!leg1?.geometry || !leg2?.geometry) return;
+                 const coords1 = decodePolyline(leg1.geometry);
+                 const coords2 = decodePolyline(leg2.geometry);
+                 if (!coords1.length || !coords2.length) return;
+                 const combined = [...coords1, ...coords2];
+                 this._navigationLocked = true;
+                 this._selectedStationId = stationId;
+                 this.fullRouteCoords = combined;
+                 this.directRouteGeometry = combined;
++                this._clearH3OnRouteChange();
+                 this.lastPassedSegmentIndex = 0;
+                 this.lastRecommendedStationId = st.station_id;
+                 this.lastDiversionLeg1 = leg1;
+                 this.lastDiversionLeg2 = leg2;
+                 const top5Candidates = (this.lastRecommendation?.ranked_candidates || []).slice(0, 5).map((c, idx) => {
+                     const stMatch = this.stations?.find(s => s.station_id === c.station_id);
+                     return {
+                         ...c,
+                         rank: c.rank ?? (idx + 1),
+                         station_id: c.station_id,
+@@ -1041,20 +1173,21 @@ export class DriverModeController {
+                 const route = await this.api.computeRoute(currentPos, stationPos, { vehicle_category: vCat });
+                 if (this.generation !== currentGen || this.routeRevision !== navRev) return;
+                 if (!route?.geometry) return;
+                 const coords = decodePolyline(route.geometry);
+                 if (!coords.length) return;
+                 this._navigationLocked = true;
+                 this._selectedStationId = stationId;
+                 this.lastRecommendedStationId = st.station_id;
+                 this.fullRouteCoords = coords;
+                 this.directRouteGeometry = coords;
++                this._clearH3OnRouteChange();
+                 this.map.clearAll();
+                 this.map.renderTripEndpoints(currentPos, stationPos);
+                 this.map.renderDirectRoute(coords);
+                 this.map.fitBoundsToActive(coords);
+                 this.currentTrip = {
+                     trip_id: `NAVI_${st.station_id}`,
+                     origin: currentPos,
+                     destination: stationPos,
+                     planned_distance_m: route.distance_m
+                 };
+@@ -1397,20 +1530,21 @@ export class DriverModeController {
+     async _updateCustomRoute(origin, dest) {
+         const currentGen = this.generation;
+         const vCat = this.currentVehicle?.vehicle_type || 'EV_CAR';
+         try {
+             const routeResult = await this.api.computeRoute(origin, dest, { vehicle_category: vCat });
+             if (this.generation !== currentGen) return;
+             if (routeResult?.geometry) {
+                 const coords = decodePolyline(routeResult.geometry);
+                 this.fullRouteCoords = coords;
+                 this.directRouteGeometry = coords;
++                this._clearH3OnRouteChange();
+                 this.map.clearAll();
+                 this._renderEndpointsWithDrag(origin, dest);
+                 this.map.renderDirectRoute(coords);
+                 this.map.fitBoundsToActive(coords);
+                 this.map.renderStations(this.stations);
+ 
+                 const plannedKm = routeResult.distance_m ? parseFloat((routeResult.distance_m / 1000).toFixed(2)) : 5.0;
+                 this.remainingTripDistanceKm = plannedKm;
+ 
+                 this.currentTrip = {
+diff --git a/backend/app/static/demo/js/ui/route_familiarity_overlay.js b/backend/app/static/demo/js/ui/route_familiarity_overlay.js
+index 11addca..f1b37b4 100644
+--- a/backend/app/static/demo/js/ui/route_familiarity_overlay.js
++++ b/backend/app/static/demo/js/ui/route_familiarity_overlay.js
+@@ -131,16 +131,126 @@ export class RouteFamiliarityOverlay {
+         const end = Math.min(this.rendered + this.batchSize, this.polygons.length);
+         for (; this.rendered < end; this.rendered++) this.layer.addLayer(this.polygons[this.rendered]);
+         if (this.rendered < this.polygons.length) {
+             this.frame = this.requestFrame(() => {
+                 this.frame = null;
+                 this.renderBatch();
+             });
+         }
+     }
+ 
++    /**
++     * Render H3 cells computed from geometry (display-only, no backend calls).
++     * @param {string[]} cells - Array of H3 cell IDs
++     */
++    renderFromCells(cells) {
++        if (!this.active || !this.enabled || !Array.isArray(cells) || cells.length === 0) {
++            this.setCount('Route cells hidden');
++            return;
++        }
++        this.cancelRender();
++
++        const bounds = this.map.getBounds();
++        const west = bounds.getWest();
++        const east = bounds.getEast();
++        const south = bounds.getSouth();
++        const north = bounds.getNorth();
++        const visible = [];
++
++        for (const cell of cells) {
++            if (!this.isResolution11Cell(cell)) continue;
++            let boundary;
++            try {
++                boundary = this.h3.cellToBoundary(cell);
++            } catch {
++                continue;
++            }
++            if (!Array.isArray(boundary) || boundary.length < 3 || boundary.some(point =>
++                !Array.isArray(point) || point.length < 2 || !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) continue;
++            const lats = boundary.map(point => point[0]);
++            const lngs = boundary.map(point => point[1]);
++            if (Math.max(...lats) < south || Math.min(...lats) > north ||
++                Math.max(...lngs) < west || Math.min(...lngs) > east) continue;
++            visible.push(boundary.map(([lat, lng]) => [lat, lng]));
++        }
++
++        const capped = visible.slice(0, this.maxCells);
++        this.polygons = capped.map(coords => this.L.polygon(coords, {
++            color: '#7c3aed', fillColor: '#a78bfa', fillOpacity: 0.35, weight: 1,
++            interactive: false
++        }));
++        this.setCount(`Showing ${capped.length} of ${visible.length} route cells (H3-11)`);
++        this.renderBatch();
++    }
++
++    /**
++     * Clear the H3 overlay.
++     */
++    clear() {
++        this.cancelRender();
++        this.setCount('Route cells hidden');
++    }
++
++    /**
++     * Compute H3-11 cells from route geometry coordinates.
++     * Samples every ~100m along the route and caps at 500 cells.
++     * @param {Array<[number, number]>|null} geometryCoords - Array of [lat, lng] pairs
++     * @param {number} resolution - H3 resolution (default 11)
++     * @returns {string[]} Array of H3 cell IDs
++     */
++    computeH3CellsFromGeometry(geometryCoords, resolution = 11) {
++        if (!geometryCoords || !Array.isArray(geometryCoords) || geometryCoords.length < 2) {
++            return [];
++        }
++        const cells = new Set();
++
++        // Approximate distance between two lat/lng points in meters
++        const approxDistMeters = (lat1, lng1, lat2, lng2) => {
++            const R = 6371000; // Earth radius in meters
++            const φ1 = lat1 * Math.PI / 180;
++            const φ2 = lat2 * Math.PI / 180;
++            const Δφ = (lat2 - lat1) * Math.PI / 180;
++            const Δλ = (lng2 - lng1) * Math.PI / 180;
++            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
++                Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
++            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
++            return R * c;
++        };
++
++        for (let i = 0; i < geometryCoords.length - 1; i++) {
++            const [lat1, lng1] = geometryCoords[i];
++            const [lat2, lng2] = geometryCoords[i + 1];
++
++            if (!Number.isFinite(lat1) || !Number.isFinite(lng1) ||
++                !Number.isFinite(lat2) || !Number.isFinite(lng2)) {
++                continue;
++            }
++
++            const segDist = approxDistMeters(lat1, lng1, lat2, lng2);
++            const numSamples = Math.max(1, Math.ceil(segDist / 100));
++
++            for (let s = 0; s <= numSamples; s++) {
++                const t = s / numSamples;
++                const lat = lat1 + (lat2 - lat1) * t;
++                const lng = lng1 + (lng2 - lng1) * t;
++
++                try {
++                    const cell = this.h3.latLngToCell(lat, lng, resolution);
++                    if (cell) cells.add(cell);
++                } catch {
++                    // Skip invalid cells
++                }
++
++                if (cells.size >= 500) break;
++            }
++            if (cells.size >= 500) break;
++        }
++
++        return Array.from(cells);
++    }
++
+     destroy() {
+         this.cancelRender();
+         this.map.off('moveend', this.onMoveEnd);
+         this.map.removeLayer(this.layer);
+     }
+ }
+diff --git a/tests/frontend/test_h3_display.mjs b/tests/frontend/test_h3_display.mjs
+new file mode 100644
+index 0000000..a854d3c
+--- /dev/null
++++ b/tests/frontend/test_h3_display.mjs
+@@ -0,0 +1,298 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { RouteFamiliarityOverlay } from '../../backend/app/static/demo/js/ui/route_familiarity_overlay.js';
++import { DriverModeController } from '../../backend/app/static/demo/js/ui/driver_controller.js';
++
++/**
++ * H3 Display-Only Layer Tests
++ *
++ * These tests verify that the H3 overlay in Driver Mode:
++ * - Does NOT call any API endpoints
++ * - Does NOT modify selectedStationId
++ * - Clears old cells when route changes
++ */
++
++// ─── Fixtures ────────────────────────────────────────────────────────────
++
++function createOverlayFixture() {
++    const added = [];
++    const frames = [];
++    const map = {
++        getBounds: () => ({
++            getWest: () => 105.7, getEast: () => 106.0,
++            getSouth: () => 20.9, getNorth: () => 21.1
++        }),
++        on() {}, off() {}, removeLayer(layer) { layer.removed = true; }
++    };
++    const L = {
++        layerGroup: () => ({
++            addTo() { return this; },
++            clearLayers() { added.length = 0; },
++            addLayer(layer) { added.push(layer); },
++            getLayers() { return added; }
++        }),
++        polygon: (coords, options) => ({ coords, options })
++    };
++    const h3 = {
++        isValidCell: cell => typeof cell === 'string' && /^8[a-f0-9]+11$/.test(cell),
++        getResolution: cell => cell?.endsWith('11') ? 11 : 10,
++        latLngToCell: (lat, lng, resolution) => `8${Math.abs(Math.floor(lat * 100) + Math.floor(lng * 100))}11`,
++        cellToBoundary: (cell) => {
++            // Extract coords from cell ID to create a proper boundary
++            const num = parseInt(cell.replace(/^8/, '').replace(/11$/, ''), 10);
++            const lat = 21.0 + (num % 100) * 0.001;
++            const lng = 105.8 + (num % 100) * 0.001;
++            return [
++                [lat, lng], [lat + 0.001, lng], [lat + 0.001, lng + 0.001], [lat, lng + 0.001]
++            ];
++        }
++    };
++    const countElement = { textContent: '' };
++    const supportElement = { textContent: '' };
++    const toggle = Object.assign(new EventTarget(), { checked: false, disabled: true });
++
++    const overlay = new RouteFamiliarityOverlay({
++        map, leaflet: L, h3, countElement, supportElement, toggle,
++        maxCells: 500, batchSize: 10,
++        requestFrame: callback => {
++            const id = (frames.at(-1)?.id || 0) + 1;
++            frames.push({ id, callback });
++            return id;
++        },
++        cancelFrame: id => {
++            const index = frames.findIndex(frame => frame.id === id);
++            if (index >= 0) frames.splice(index, 1);
++        }
++    });
++
++    return { overlay, added, frames, map, countElement, supportElement, toggle, L, h3 };
++}
++
++function createDriverControllerFixture() {
++    const { overlay, added, frames, map, countElement, supportElement, toggle, L, h3 } = createOverlayFixture();
++
++    const apiCalls = [];
++    const api = {
++        getRecommendation: async (payload) => {
++            apiCalls.push({ method: 'getRecommendation', payload });
++            return { has_recommendation: false, ranked_candidates: [] };
++        },
++        computeRoute: async (origin, dest, options) => {
++            apiCalls.push({ method: 'computeRoute', origin, dest, options });
++            return { geometry: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' };
++        },
++        evaluateAndSearchCandidates: async (payload) => {
++            apiCalls.push({ method: 'evaluateAndSearchCandidates', payload });
++            return { candidates: [] };
++        }
++    };
++
++    const mockMap = {
++        map,
++        clearAll() {},
++        renderTripEndpoints() {},
++        renderDirectRoute() {},
++        renderStations() {},
++        fitBoundsToActive() {},
++        updateDirectRoute() {},
++        renderRecommendationRoute() {}
++    };
++
++    const controller = Object.assign(Object.create(DriverModeController.prototype), {
++        api,
++        map: mockMap,
++        state: 'AVAILABLE',
++        directRouteGeometry: [[21.0, 105.8], [21.01, 105.85], [21.02, 105.9]],
++        fullRouteCoords: [[21.0, 105.8], [21.01, 105.85], [21.02, 105.9]],
++        currentTrip: {
++            origin: { latitude: 21.0, longitude: 105.8 },
++            destination: { latitude: 21.02, longitude: 105.9 }
++        },
++        _h3Overlay: overlay,
++        _h3Enabled: false,
++        _h3Initialized: true,
++        _selectedStationId: null,
++        _navigationLocked: false,
++        bindings: {
++            getH3Toggle: () => toggle,
++            getH3CountElement: () => countElement,
++            getH3SupportElement: () => supportElement
++        }
++    });
++
++    return { controller, overlay, added, frames, apiCalls, toggle, countElement, map };
++}
++
++// ─── Tests ───────────────────────────────────────────────────────────────
++
++test('computeH3CellsFromGeometry returns empty array for invalid input', () => {
++    const { overlay } = createOverlayFixture();
++
++    // Test null/undefined
++    assert.deepEqual(overlay.computeH3CellsFromGeometry(null), []);
++    assert.deepEqual(overlay.computeH3CellsFromGeometry(undefined), []);
++    assert.deepEqual(overlay.computeH3CellsFromGeometry([]), []);
++    assert.deepEqual(overlay.computeH3CellsFromGeometry([[21.0, 105.8]]), []);
++
++    overlay.destroy();
++});
++
++test('computeH3CellsFromGeometry samples along route segments', () => {
++    const { overlay, h3 } = createOverlayFixture();
++
++    // Simple 2-point route
++    const geometry = [[21.0, 105.8], [21.01, 105.81]];
++    const cells = overlay.computeH3CellsFromGeometry(geometry);
++
++    assert.ok(Array.isArray(cells), 'should return array');
++    assert.ok(cells.length > 0, 'should have cells for valid route');
++
++    // All cells should be resolution 11
++    for (const cell of cells) {
++        assert.ok(h3.isValidCell(cell), `cell ${cell} should be valid`);
++        assert.equal(h3.getResolution(cell), 11, `cell ${cell} should be resolution 11`);
++    }
++
++    overlay.destroy();
++});
++
++test('computeH3CellsFromGeometry caps at 500 cells', () => {
++    const { overlay } = createOverlayFixture();
++
++    // Very long route that would generate many cells
++    const geometry = [];
++    for (let i = 0; i < 1000; i++) {
++        geometry.push([21.0 + i * 0.001, 105.8 + i * 0.001]);
++    }
++
++    const cells = overlay.computeH3CellsFromGeometry(geometry);
++    assert.ok(cells.length <= 500, `should cap at 500 cells, got ${cells.length}`);
++
++    overlay.destroy();
++});
++
++test('H3 toggle does not call any API endpoint', async () => {
++    const { controller, apiCalls, toggle } = createDriverControllerFixture();
++
++    // Toggle H3 on
++    toggle.checked = true;
++    toggle.dispatchEvent(new Event('change'));
++
++    // Wait briefly for any async operations
++    await new Promise(resolve => setTimeout(resolve, 50));
++
++    // Toggle H3 off
++    toggle.checked = false;
++    toggle.dispatchEvent(new Event('change'));
++
++    await new Promise(resolve => setTimeout(resolve, 50));
++
++    // No API calls should have been made
++    assert.deepEqual(apiCalls, [], 'H3 toggle should not call any API endpoint');
++
++    controller._h3Overlay?.destroy();
++});
++
++test('H3 toggle does not modify selectedStationId', () => {
++    const { controller, toggle } = createDriverControllerFixture();
++
++    // Set initial selected station
++    controller._selectedStationId = 'S001';
++
++    // Toggle H3 on
++    toggle.checked = true;
++    toggle.dispatchEvent(new Event('change'));
++
++    // selectedStationId should remain unchanged
++    assert.equal(controller._selectedStationId, 'S001', 'selectedStationId should not change when H3 toggled on');
++
++    // Toggle H3 off
++    toggle.checked = false;
++    toggle.dispatchEvent(new Event('change'));
++
++    // selectedStationId should still remain unchanged
++    assert.equal(controller._selectedStationId, 'S001', 'selectedStationId should not change when H3 toggled off');
++
++    controller._h3Overlay?.destroy();
++});
++
++test('changing route removes previous H3 overlay', () => {
++    const { controller, overlay, added, toggle } = createDriverControllerFixture();
++
++    // Enable H3 and render cells
++    controller._h3Enabled = true;
++    overlay.setEnabled(true);
++
++    // Simulate rendering cells
++    const initialGeometry = [[21.0, 105.8], [21.01, 105.85]];
++    const cells = overlay.computeH3CellsFromGeometry(initialGeometry);
++    overlay.renderFromCells(cells);
++
++    const cellsBeforeRouteChange = added.length;
++    assert.ok(cellsBeforeRouteChange > 0, 'should have cells before route change');
++
++    // Clear H3 when route changes
++    controller._clearH3OnRouteChange();
++
++    // Cells should be cleared
++    assert.equal(added.length, 0, 'cells should be cleared after route change');
++    assert.equal(controller._h3Enabled, false, 'H3 should be disabled after route change');
++    assert.equal(toggle.checked, false, 'toggle should be unchecked after route change');
++
++    overlay.destroy();
++});
++
++test('renderFromCells renders cells from geometry without backend calls', () => {
++    const { overlay, added, countElement } = createOverlayFixture();
++
++    // Compute cells from geometry
++    const geometry = [[21.0, 105.8], [21.01, 105.85], [21.02, 105.9]];
++    const cells = overlay.computeH3CellsFromGeometry(geometry);
++
++    // Render the cells
++    overlay.setEnabled(true);
++    overlay.renderFromCells(cells);
++
++    // Should have rendered cells
++    assert.ok(added.length > 0, 'should render polygons');
++    assert.ok(countElement.textContent.includes('route cells'), 'count element should be updated');
++
++    overlay.destroy();
++});
++
++test('clear() removes all rendered polygons', () => {
++    const { overlay, added, countElement } = createOverlayFixture();
++
++    // Render some cells
++    const geometry = [[21.0, 105.8], [21.01, 105.85]];
++    const cells = overlay.computeH3CellsFromGeometry(geometry);
++    overlay.setEnabled(true);
++    overlay.renderFromCells(cells);
++
++    assert.ok(added.length > 0, 'should have rendered cells');
++
++    // Clear
++    overlay.clear();
++
++    // All cells should be removed
++    assert.equal(added.length, 0, 'all cells should be cleared');
++    assert.equal(countElement.textContent, 'Route cells hidden', 'count should show hidden');
++
++    overlay.destroy();
++});
++
++test('isResolution11Cell correctly identifies H3-11 cells', () => {
++    const { overlay } = createOverlayFixture();
++
++    // Valid H3-11 cell - our mock returns 11 for cells ending in '11'
++    assert.equal(overlay.isResolution11Cell('81111'), true);
++
++    // Invalid cells
++    assert.equal(overlay.isResolution11Cell('81010'), false); // wrong resolution
++    assert.equal(overlay.isResolution11Cell('not-a-cell'), false);
++    assert.equal(overlay.isResolution11Cell(null), false);
++    assert.equal(overlay.isResolution11Cell(undefined), false);
++    assert.equal(overlay.isResolution11Cell(''), false);
++
++    overlay.destroy();
++});
+diff --git a/tests/frontend/test_station_tooltip.mjs b/tests/frontend/test_station_tooltip.mjs
+index 00626d3..6b175d1 100644
+--- a/tests/frontend/test_station_tooltip.mjs
++++ b/tests/frontend/test_station_tooltip.mjs
+@@ -108,22 +108,22 @@ test('offline station card shows no "Ghé trạm" navigation button', () => {
+     const activeRec = { ranked_candidates: [candidate] };
+ 
+     const html = renderDrawerStationCard(station, {
+         isRec: false,
+         isAtDest: false,
+         activeRec,
+         topRecId: 'ST_001'
+     });
+ 
+     // Offline/ineligible stations should not show the "Ghé trạm" or "Dẫn đường ghé trạm" button
+-    assert.ok(!html.includes('Dẫn đường ghé trạm') || !html.includes('Ghé trạm'),
+-        'Offline station should not show "Dẫn đường ghé trạm" button');
++    assert.ok(!html.includes('Dẫn đường ghé trạm') && !html.includes('Ghé trạm'),
++        'Offline station should not show "Dẫn đường ghé trạm" or "Ghé trạm" button');
+ });
+ 
+ test('station card with ranked candidate shows full metrics breakdown', () => {
+     const station = makeStation();
+     const candidate = makeCandidate({
+         rank: 1,
+         eta_to_destination_via_station_s: 1500
+     });
+     const activeRec = { ranked_candidates: [candidate] };
+ 

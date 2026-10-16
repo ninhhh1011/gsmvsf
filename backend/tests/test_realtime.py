@@ -1,13 +1,15 @@
 """Tests for realtime map matching."""
 
 import pytest
-from datetime import datetime, timedelta, timedelta
+from datetime import UTC, datetime, timedelta, timedelta
 from backend.app.services.realtime.state import (
     DriverTraceState,
     DriverStateStore,
     GPSObservation,
     MatchedState,
     haversine_distance,
+)
+from backend.app.core.constants import (
     DEFAULT_GAP_THRESHOLD_SECONDS,
     DEFAULT_STATIONARY_THRESHOLD,
     DEFAULT_STATIONARY_DISTANCE_M,
@@ -18,6 +20,42 @@ from backend.app.services.realtime.trigger import (
     HybridTrigger,
     get_default_policy,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('last_offset, expected_calls', [(60.002, 1), (90.002, 0)])
+async def test_ingestion_matches_jittered_cadence_without_bridging_gap(monkeypatch, last_offset, expected_calls):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from backend.app.api.v1 import realtime
+
+    state = DriverTraceState(driver_id='cadence-endpoint')
+    started = datetime(2026, 10, 13, 6, tzinfo=UTC)
+    for index, offset in enumerate([0, 30.001]):
+        state.add_observation(GPSObservation(
+            observation_id=f'cadence-{index}', driver_id=state.driver_id,
+            timestamp=started + timedelta(seconds=offset),
+            latitude=21.028 + index * 0.001, longitude=105.83))
+
+    async def add(driver, observation, manager):
+        gap, reason = state.add_observation(observation)
+        return state, False, gap, reason
+
+    monkeypatch.setattr(realtime, '_add_observation_with_cas', add)
+    monkeypatch.setattr(realtime, 'get_driver_state_manager', lambda request: SimpleNamespace(save_with_retry=AsyncMock()))
+    match = AsyncMock(return_value=(None, 1.0))
+    monkeypatch.setattr(realtime, '_call_map_match', match)
+    result = await realtime.ingest_location(state.driver_id, realtime.LocationIngestionRequest(
+        vehicle_category='EV_CAR', observation_id='cadence-2',
+        timestamp=started + timedelta(seconds=last_offset), latitude=21.03, longitude=105.83),
+        request_obj=SimpleNamespace())
+    assert match.await_count == expected_calls
+    if expected_calls:
+        assert result.status == realtime.MatchingStatus.NO_MATCH
+        assert [point.observation_id for point in match.call_args.args[0]] == ['cadence-1', 'cadence-2']
+    else:
+        assert result.status == realtime.MatchingStatus.WARMING_UP
+        assert result.buffered_points == 1
 
 
 class TestGPSObservation:
@@ -190,6 +228,29 @@ class TestDriverTraceState:
         context = state.get_context(window_seconds=30.0, max_points=50)
         assert 4 <= len(context) <= 6
 
+    @pytest.mark.parametrize('cadence', [30.001, 59.999, 60.0])
+    def test_default_context_retains_previous_point_within_valid_session(self, cadence):
+        state = DriverTraceState(driver_id='cadence')
+        started = datetime(2026, 10, 13, 6)
+        for index in range(3):
+            state.add_observation(GPSObservation(
+                observation_id=f'cadence-{index}', driver_id='cadence',
+                timestamp=started + timedelta(seconds=index * cadence),
+                latitude=21.028 + index * 0.001, longitude=105.83))
+        assert not state.is_warming_up()
+        assert [point.observation_id for point in state.get_context()][-2:] == ['cadence-1', 'cadence-2']
+
+    def test_default_context_does_not_bridge_session_gap(self):
+        state = DriverTraceState(driver_id='cadence')
+        started = datetime(2026, 10, 13, 6)
+        for index, offset in enumerate([0, 30, 90.001]):
+            state.add_observation(GPSObservation(
+                observation_id=f'cadence-{index}', driver_id='cadence',
+                timestamp=started + timedelta(seconds=offset),
+                latitude=21.028 + index * 0.001, longitude=105.83))
+        assert state.is_warming_up()
+        assert [point.observation_id for point in state.get_context()] == ['cadence-2']
+
     def test_context_max_points(self):
         """Test context max points limit."""
         state = DriverTraceState(driver_id="D001")
@@ -329,7 +390,7 @@ class TestTriggers:
         state = DriverTraceState(driver_id="D001")
         state.movement_since_match = 30.0
 
-        should, reason = trigger.should_trigger(datetime.utcnow(), state)
+        should, reason = trigger.should_trigger(datetime.now(UTC), state)
         assert not should
         assert "NOT_DIST" in reason
 
@@ -339,7 +400,7 @@ class TestTriggers:
         state = DriverTraceState(driver_id="D001")
         state.movement_since_match = 75.0
 
-        should, reason = trigger.should_trigger(datetime.utcnow(), state)
+        should, reason = trigger.should_trigger(datetime.now(UTC), state)
         assert should
         assert "DIST" in reason
 

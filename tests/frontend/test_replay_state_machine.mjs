@@ -7,7 +7,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ReplayState, TrajectoryReplayController } from '../../backend/app/static/demo/js/replay.js';
-import { DriverState, DriverModeController, straightLineDistanceKm } from '../../backend/app/static/demo/js/driver_mode.js';
+import { DriverModeController } from '../../backend/app/static/demo/js/driver_mode.js';
+import { DriverState } from '../../backend/app/static/demo/js/domain/driver_state.js';
+import { straightLineDistanceKm } from '../../backend/app/static/demo/js/domain/vehicle_model.js';
 
 test('ReplayState enum constants are defined correctly', () => {
     assert.equal(ReplayState.IDLE, 'IDLE');

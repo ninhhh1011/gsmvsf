@@ -1,5 +1,48 @@
 # DATA_CONTRACT
 
+## Grouped road benchmark (2026-10-15/16)
+
+Opt-in `seed_local_guided --benchmark` freezes a `grouped-road-benchmark-v1`
+manifest before analysis, including source hash, seed, observation time, template
+limit, H3-7 origin groups and train/validation/test assignments. Driver identities
+are disjoint. Only train records enter `synthetic.route_deviation_trips`;
+validation/test inputs and maneuver declarations remain offline. No ranking history
+is populated by this workflow. Existing manifests keep their original protocol.
+
+Seven equally enumerated maneuver/control types are a stress benchmark, not a
+behavioral prevalence sample. Guidance timestamps and GPS gaps remain intact.
+Trip confusion counts refer to declared synthetic maneuvers; total event count
+discrepancy is not event-level precision/recall. Grouping origins does not prevent
+roads from crossing splits; no geographical generalization claim is permitted.
+The sampled H3-11 novelty used for selection is separate from the 12 m PostGIS
+candidate-reference proximity coverage measurement. Runtime weights remain 80/10/10.
+
+## Paired guidance-departure evidence (2026-10-14)
+
+The authorized H3 extension stores paired evidence separately in the configured
+`realtime.route_deviation_trips` or `synthetic.route_deviation_trips` namespace.
+Trusted producers submit driver/trip identity, aware start/completion times,
+ordered guidance versions (`effective_at`, coordinates), and strictly ordered
+timestamped observations. Raw evidence is immutable; matching retries may refresh
+derived analysis after detector corrections. Conflicting evidence is HTTP 409.
+Legacy paths cannot prove a departure and are not backfilled with today's routes.
+
+Only completed trips available at query time contribute. Individual reached,
+departure and uncertainty timestamps also obey the seven-day event window.
+Per cell, a trip counts once in the reached denominator/departure numerator; all
+confirmed events count separately. Uncertain no-event trip/cell contributions are
+excluded rather than reported as zero. This denominator measures sampled guided
+corridor exposure, not all planned trips or all GPS points. The last unambiguous
+guided position preceding confirmation approximates the departure origin, not a
+verified junction or a driver's motivation. Synthetic offline truth never enters
+runtime analysis. See the [contract](superpowers/specs/2026-10-14-h3-departure-statistics.md).
+
+## Approved synthetic journey extension (2026-10-12)
+
+Dataset V1 remains immutable. Optional generated journey histories live in PostgreSQL `synthetic.route_familiarity_routes`; production history defaults to `realtime.route_familiarity_routes`. Namespace selection is server configuration, never a client-supplied SQL identifier. The fixed public example identity is exposed only with enabled synthetic history.
+
+Seed manifests contain batch identity, seed, exact observation time, real GraphHopper route templates and provenance. Behavioral inputs produce route choices; separate `evaluation_truth.json` records those inputs for evaluation and is never runtime prediction input. Immutable ingestion retries preserve trip geometry/time. Load drivers use virtual copies of canonical vehicle specifications and independent synthetic IDs; no canonical fleet or trajectories are patched.
+
 **MAP STATUS — APPROVED:** `hanoi-patched.osm.pbf` is the primary GraphHopper map; OSM remains canonical map data. Contains motorcar=no for OSM way 881947000 (Cầu Thanh Trì). `hanoi-baseline.osm.pbf` is reference.
 
 ## Dataset V1 Location
@@ -134,11 +177,21 @@ python scripts/validate_external_gps.py  # validate
 
 ## Service Semantics (V1.2)
 
+These are frozen Dataset V1 semantics and historical baselines. Under customer-approved ADR-026, the current runtime replaces flat charging time with predicted energy-based service duration. The canonical snapshots and labels remain unchanged and are not rewritten to match the new runtime.
+
 - CHARGING service time: 18 minutes
 - BATTERY_SWAP service time: 6 minutes
 - CHARGING capacity: available_charging_slots
 - BATTERY_SWAP capacity: min(available_swap_slots, available_swap_batteries)
 - FARTHER_BUT_FASTER threshold: ≥500 m farther AND ≥10 min lower total ETA
+
+## Predicted replenishment contract (2026-10-13)
+
+`EvaluatedCandidate.replenishment`, ranking `features.replenishment` and station-plan `replenishment` expose model status/reason, arrival/departure/destination kWh and SOC, added kWh, effective installed capacity, consumption, reserve, nominal charging power bound, efficiency/taper/setup, service seconds and provenance. Destination energy is null when the station is the final goal. Explicit valid remaining kWh is authoritative over rounded SOC; missing range is derived from that energy and retained consumption. Explicit range keeps its source. Capacity comes from canonical capability and installed modules, not a client override. Nonfinite/out-of-capacity evidence is unavailable.
+
+The customer chose sufficient energy for B plus reserve, 80% for a station-only goal and 90% for swap. The published VF 3 limit is 24 kW; representative charging powers and broad class assumptions are documented separately. Calculated charging service time replaces the flat whole-service time, rather than adding it as setup. Swap service time still follows the operational snapshot. Queue is separate and counted once.
+
+These fields predict a future service plan. They are not accepted GPS/SOC telemetry, charging completion evidence or calibrated charging curves. Live SOC is never raised just because a driver passes the station. After-B planning evidence consumes the prefix once without reporting the projected B SOC as the current live SOC.
 
 ## Current Runtime and Validation (2026-09-21)
 
@@ -175,3 +228,52 @@ Live routing smoke/benchmark fixtures consume only vehicles, trips, canonical
 road nodes and SOC telemetry. All labels and ranking references remain confined
 to offline evaluation. Neither smoke results nor business-eligibility agreement
 alone establish matching accuracy or recommendation quality.
+
+## Legacy H3 footprint extension (2026-10-14)
+
+Legacy completed histories contribute gray `HISTORY_ONLY` cells, with
+`history_trip_count` and null departure metrics. Convert saved resolution-11 index
+centres to the requested resolution, counting each trip once per cell. Time means
+`COMPLETED_TRIP_COHORT`, because legacy point times are unavailable. Paired observed
+cell timestamps obey the event window, independently of guided exposure. Overlapping
+legacy/paired identities are excluded from legacy only once paired completion is
+available. Visits never enlarge the guided denominator. No raw identity is exposed.
+The new GraphHopper synthetic batch is separate from Dataset V1 and ranking history;
+its offline maneuver declarations are never prediction inputs.
+
+## Approved trip-inspection and coverage extension (2026-10-14)
+
+`POST /routing/inspect-guided-trip` accepts bounded caller-supplied GuidedTrip
+without history lookup or persistence. Confirmed ON_ROUTE/OFF_ROUTE runs reuse the
+analyzer. UNKNOWN includes pending runs, ambiguity and continuity/version breaks;
+never draw across those breaks. Unknown time includes missing head/tail; unobserved
+jump distances are withheld. Two frozen initial-guidance coverage percentages are
+separate from active-guidance intervals. Incomplete GPS/boundaries, zero observed
+movement or comparison work limits withhold percentages rather than invalidate
+otherwise usable interval evidence.
+
+Gated synthetic examples sanitize identities and require enabled familiarity,
+public_synthetic_sample and a synthetic repository. No realtime history reader.
+Offline coverage reports are fixed synthetic summaries. Candidate-reference
+coverage uses road class/access, deduplicated physical geometry, 12 m proximity to
+continuous seven-day paired GPS and EPSG:32648 lengths. Entire roads are bucketed
+by approximate geodesic midpoint into H3-5 regions, not clipped at borders or
+assigned districts. Complete motorcar permissions are unavailable; eligible-road
+coverage stays null. Legacy signatures and offline labels never supply coverage.
+
+## Local synthetic cohorts (2026-10-15)
+
+`GET /routing/departure-heatmap?cohort=all|coverage|stress` keeps `all` as default.
+Non-default filters require a synthetic repository; realtime rejects them with
+HTTP 403. The seed owns IDs `h3-road-{batch}-{coverage|stress}-{driver}`; the
+fourth ID component selects these generated cohorts. Other IDs and legacy-only
+footprints remain in `all`. Filtered metadata and cells use the same transaction,
+event-time window and cohort. Counts distinguish trips, drivers and departure events.
+
+Local generation artifacts under `runtime/h3-local-20261015/seed` include immutable
+manifest, source targets, separate cohort inputs and offline maneuver declarations.
+Held-out trip records are never ingested; geographical independence is not claimed.
+Declarations are evaluation-only and never aggregate/ranking inputs. No Dataset V1
+labels or canonical files are modified. Coverage summaries disclose configured,
+imported and intersected map bounds and missing-map area; candidate-reference
+proximity remains an approximation with unknown full motorcar eligibility.

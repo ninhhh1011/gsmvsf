@@ -1,0 +1,248 @@
+/**
+ * Regression tests for Replay Loop Ownership, STALE guards, and Retry Limits.
+ *
+ * These tests verify:
+ * - Exactly one playback loop active after pause->play (no duplicate loops)
+ * - STALE_OBSERVATION does not advance currentIndex
+ * - Transient errors retry at most 3 times
+ * - reset() cancels in-flight step and sets isStepInProgress=false
+ * - 10x speed respects minimum delay guard of 50ms
+ *
+ * TDD Red Phase: These tests FAIL against the current buggy implementation.
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { ReplayState, TrajectoryReplayController } from '../../backend/app/static/demo/js/replay.js';
+import { ApiError } from '../../backend/app/static/demo/js/api.js';
+
+function mockMap() {
+    return {
+        renderDriver() {},
+        updateDirectRoute() {},
+        renderRecommendationRoute() {},
+        renderDirectRoute() {},
+        renderStations() {},
+        clearRecommendationRoute() {},
+        fitBoundsToActive() {},
+        layers: { markers: { clearLayers() {} }, driver: { clearLayers() {} } }
+    };
+}
+
+test('pause then play leaves exactly one active loop', async () => {
+    let maxConcurrentSteps = 0;
+    let currentConcurrentSteps = 0;
+
+    const mockApi = {
+        ingestDriverLocation: async () => {
+            currentConcurrentSteps++;
+            maxConcurrentSteps = Math.max(maxConcurrentSteps, currentConcurrentSteps);
+            // Hold for 50ms to allow pause to happen during step
+            await new Promise(r => setTimeout(r, 50));
+            currentConcurrentSteps--;
+            return {
+                status: 'MATCHED',
+                matched_position: { latitude: 21.01, longitude: 105.81 }
+            };
+        },
+        resetDriverLocation: async () => ({})
+    };
+
+    const replay = new TrajectoryReplayController(mockApi, mockMap());
+    // Generate 20 observations to ensure pause lands mid-playback
+    replay.observations = Array.from({ length: 20 }, (_, i) => ({
+        latitude: 21.01 + (i * 0.001),
+        longitude: 105.81,
+        timestamp: `2026-09-01T07:00:${String(i).padStart(2, '0')}Z`,
+        speed_kmh: 30,
+        heading_deg: 90
+    }));
+    replay.speedMultiplier = 100; // fast for testing
+
+    // Start playback
+    replay.play();
+    // Wait for a few steps to start
+    await new Promise(r => setTimeout(r, 20));
+    // Pause mid-playback
+    replay.pause();
+    // Resume immediately
+    replay.play();
+
+    // Wait for a while to observe behavior
+    await new Promise(r => setTimeout(r, 300));
+
+    // CRITICAL: Only one step should be active at any time
+    // If maxConcurrentSteps > 1, it means two loops overlapped
+    assert.equal(maxConcurrentSteps, 1, 'Only one playback loop should be active at a time (no duplicate loops)');
+});
+
+test('STALE_OBSERVATION response does not advance currentIndex', async () => {
+    let indexAfterStale = null;
+
+    const mockApi = {
+        ingestDriverLocation: async () => ({
+            status: 'STALE_OBSERVATION',
+            message: 'Observation timestamp precedes last known state'
+        }),
+        resetDriverLocation: async () => ({})
+    };
+
+    const replay = new TrajectoryReplayController(mockApi, mockMap());
+    replay.observations = [
+        { latitude: 21.01, longitude: 105.81, timestamp: '2026-09-01T07:00:00Z', speed_kmh: 30, heading_deg: 90 },
+        { latitude: 21.02, longitude: 105.82, timestamp: '2026-09-01T07:00:05Z', speed_kmh: 30, heading_deg: 90 }
+    ];
+    replay.state = ReplayState.READY;
+
+    // Attempt step with stale observation
+    try {
+        await replay.step(false);
+    } catch (err) {
+        // Expected to throw with isStale flag
+        assert.equal(err.isStale, true, 'STALE_OBSERVATION should throw with isStale=true');
+    }
+
+    indexAfterStale = replay.currentIndex;
+
+    // After STALE_OBSERVATION:
+    // - State should be ERROR (not silently swallowed)
+    // - currentIndex MUST NOT advance
+    assert.equal(replay.state, ReplayState.ERROR, 'State should be ERROR after stale observation');
+    assert.equal(indexAfterStale, 0, 'currentIndex must NOT advance on STALE_OBSERVATION');
+    assert.equal(replay.isStepInProgress, false, 'isStepInProgress should be false after stale');
+});
+
+test('transient error retries at most 3 times', async () => {
+    let callCount = 0;
+
+    const mockApi = {
+        ingestDriverLocation: async () => {
+            callCount++;
+            // Return 429 rate limit for all attempts (exhaust retries)
+            throw new ApiError('Rate limit exceeded', 429, 'RATE_LIMIT', null, 0.05);
+        },
+        resetDriverLocation: async () => ({})
+    };
+
+    const replay = new TrajectoryReplayController(mockApi, mockMap());
+    // Multiple observations so retries can be observed
+    replay.observations = Array.from({ length: 5 }, (_, i) => ({
+        latitude: 21.01 + (i * 0.001),
+        longitude: 105.81,
+        timestamp: `2026-09-01T07:00:${String(i).padStart(2, '0')}Z`,
+        speed_kmh: 30,
+        heading_deg: 90
+    }));
+    replay.speedMultiplier = 100; // fast for tests
+
+    replay.play();
+    // Wait for retries: 1 original + 3 retries = 4 total calls
+    // Each retry has 50ms cooldown (retryAfter * 1000 from ApiError)
+    // Total: 50ms + 100ms + 200ms + some margin = ~400ms
+    await new Promise(r => setTimeout(r, 600));
+
+    // After exhausting 3 retries, state should be ERROR
+    assert.equal(replay.state, ReplayState.ERROR, 'State should be ERROR after exhausting 3 retries');
+    // Index must NOT advance past the observation that failed
+    assert.equal(replay.currentIndex, 0, 'currentIndex should not advance when retries exhausted');
+    // Exactly 4 calls: 1 original + 3 retries
+    assert.equal(callCount, 4, 'Should have 1 original + 3 retries = 4 total calls');
+});
+
+test('reset() cancels in-flight request and sets isStepInProgress=false', async () => {
+    let resolveIngest = null;
+    let ingestCalled = false;
+
+    const mockApi = {
+        ingestDriverLocation: async () => {
+            ingestCalled = true;
+            return new Promise((resolve) => {
+                resolveIngest = resolve;
+            });
+        },
+        resetDriverLocation: async () => ({})
+    };
+
+    const replay = new TrajectoryReplayController(mockApi, mockMap());
+    replay.observations = [
+        { latitude: 21.01, longitude: 105.81, timestamp: '2026-09-01T07:00:00Z', speed_kmh: 30, heading_deg: 90 }
+    ];
+    replay.state = ReplayState.READY;
+
+    const initialGen = replay.generation;
+    const initialToken = replay.playbackToken;
+
+    // Start step (will be pending due to slow mock)
+    const stepPromise = replay.step(true);
+    assert.equal(replay.isStepInProgress, true, 'isStepInProgress should be true after step start');
+    assert.equal(ingestCalled, true, 'ingestDriverLocation should have been called');
+
+    // Immediately reset while step is in flight
+    replay.reset();
+
+    // After reset:
+    assert.ok(replay.generation > initialGen, 'Generation must increment on reset');
+    assert.ok(replay.playbackToken > initialToken, 'Playback token must increment on reset');
+    assert.equal(replay.isStepInProgress, false, 'isStepInProgress must be false after reset');
+    assert.equal(replay.currentIndex, 0, 'currentIndex must reset to 0');
+
+    // Now resolve the stale request
+    resolveIngest({
+        status: 'MATCHED',
+        matched_position: { latitude: 21.01, longitude: 105.81 }
+    });
+
+    const stepResult = await stepPromise;
+    // Step must return false because generation was stale
+    assert.equal(stepResult, false, 'In-flight step should return false after reset');
+    assert.equal(replay.currentIndex, 0, 'Index must stay at 0 after stale response');
+});
+
+test('speed 10x respects minimum delay of 50ms', async () => {
+    let stepCount = 0;
+
+    const mockApi = {
+        ingestDriverLocation: async () => {
+            stepCount++;
+            return {
+                status: 'MATCHED',
+                matched_position: { latitude: 21.01, longitude: 105.81 }
+            };
+        },
+        resetDriverLocation: async () => ({})
+    };
+
+    const replay = new TrajectoryReplayController(mockApi, mockMap());
+
+    // Generate 15 observations
+    replay.observations = Array.from({ length: 15 }, (_, i) => ({
+        latitude: 21.01 + (i * 0.001),
+        longitude: 105.81,
+        timestamp: `2026-09-01T07:00:${String(i).padStart(2, '0')}Z`,
+        speed_kmh: 30,
+        heading_deg: 90
+    }));
+    replay.speedMultiplier = 10; // 10x speed
+
+    // Use play() to test the _runPlaybackLoop which has the delay
+    replay.play();
+
+    // Wait for 10 steps to complete
+    // At 10x speed with 50ms minimum delay: 10 steps * 50ms = 500ms minimum
+    const startTime = Date.now();
+    while (stepCount < 10) {
+        await new Promise(r => setTimeout(r, 10));
+        if (Date.now() - startTime > 1000) break; // Safety timeout
+    }
+
+    const elapsed = Date.now() - startTime;
+    replay.pause(); // Stop playback
+
+    // At 10x with 50ms minimum delay: 10 steps * 50ms = 500ms minimum
+    // Allow some tolerance for test execution overhead
+    const minExpected = 450; // 500ms - 50ms tolerance
+
+    assert.equal(stepCount, 10, 'Should have completed exactly 10 steps');
+    assert.ok(elapsed >= minExpected, `10 steps at 10x should take >= ${minExpected}ms, got ${elapsed}ms (minimum 50ms per step)`);
+});

@@ -1,4 +1,6 @@
 """FastAPI application entry point."""
+import hashlib
+import hmac
 
 from backend.app.api.v1.candidate import _routing_http_error
 from backend.app.api.v1.candidate import router as candidate_router
@@ -9,11 +11,20 @@ from backend.app.api.v1.metrics import router as metrics_router
 from backend.app.api.v1.middleware import setup_middleware
 from backend.app.api.v1.ranking import router as ranking_router
 from backend.app.api.v1.realtime import router as realtime_router
+from backend.app.api.v1.route_familiarity import router as route_familiarity_router
+from backend.app.api.v1.route_comparison import router as route_comparison_router
+from backend.app.api.v1.vehicles import router as vehicles_router
 from backend.app.config import settings
 from backend.app.core.lifespan import lifespan
 from backend.app.services.routing.engine import RoutingEngineError
+from backend.app.services.realtime.driver_state_manager import (
+    DriverStateUnavailableError, DriverStateConflictError,
+)
+from backend.app.services.demand.capability import VehicleCapabilityResolver
+from backend.app.services.demand.service import DemandService
 from backend.app.services.snapshots.models import StateError
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -25,6 +36,8 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         lifespan=lifespan,
     )
+    app.state.capability_resolver = VehicleCapabilityResolver()
+    app.state.demand_service = DemandService(app.state.capability_resolver)
 
     # Apply middleware (rate limiting, request logging)
     setup_middleware(app)
@@ -37,10 +50,27 @@ def create_app() -> FastAPI:
     app.include_router(candidate_router, prefix="/api/v1", tags=["candidate-search"])
     app.include_router(ranking_router, prefix="/api/v1", tags=["ranking"])
     app.include_router(metrics_router, prefix="/api/v1", tags=["metrics"])
+    app.include_router(route_familiarity_router, prefix="/api/v1", tags=["route-familiarity"])
+    app.include_router(route_comparison_router, prefix="/api/v1", tags=["routing"])
+    app.include_router(vehicles_router, prefix="/api/v1", tags=["vehicles"])
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(request, exc):
+        # Invalid input can contain nonfinite numbers or private telemetry.
+        return JSONResponse(status_code=422, content={'detail': [
+            {key: error[key] for key in ('loc', 'msg', 'type')}
+            for error in exc.errors()]})
 
     @app.exception_handler(StateError)
     async def state_error_handler(request, exc):
         return JSONResponse(status_code=exc.status, content=exc.detail)
+
+    @app.exception_handler(DriverStateUnavailableError)
+    async def driver_state_error_handler(request, exc):
+        conflict = isinstance(exc, DriverStateConflictError)
+        return JSONResponse(status_code=409 if conflict else 503, content={
+            'error_code': 'DRIVER_STATE_CONFLICT' if conflict else 'DRIVER_STATE_UNAVAILABLE',
+            'message': str(exc)})
 
     @app.exception_handler(RoutingEngineError)
     async def routing_error_handler(request, exc):
@@ -70,6 +100,12 @@ def create_app() -> FastAPI:
     async def get_config() -> dict:
         """Expose client-safe application & geographic configuration."""
         return {
+            "route_familiarity_identity": (
+                {"driver_id": "synthetic_sample_driver", "signature": hmac.new(
+                    settings.route_familiarity_identity_secret.encode(),
+                    b"synthetic_sample_driver", hashlib.sha256).hexdigest()}
+                if settings.enable_route_familiarity and settings.public_synthetic_sample
+                and settings.route_history_namespace == 'synthetic' else None),
             "app_name": settings.app_name,
             "app_version": settings.app_version,
             "city_name": settings.city_name,

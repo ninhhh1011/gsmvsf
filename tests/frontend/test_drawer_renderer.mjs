@@ -76,7 +76,7 @@ test('renderDrawerStationCard renders at-destination post-trip station card layo
 
     assert.ok(html.includes('Cự ly từ Điểm đến (B) ➔ Trạm'), 'Displays post-trip destination leg');
     assert.ok(html.includes('Chuyến chính (A ➔ B thẳng)'), 'Displays direct trip label');
-    assert.ok(html.includes('btn-nav-post-trip-station'), 'Contains post-trip select button');
+    assert.ok(!html.includes('btn-nav-post-trip-station'), 'Unknown eligibility cannot be selected');
 });
 
 test('renderDrawerStationsListHTML renders empty state when no stations match filter', () => {

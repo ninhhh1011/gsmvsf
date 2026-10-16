@@ -62,12 +62,12 @@ async def test_snapshot_search_and_rank_use_existing_candidate_service(repositor
     from backend.app.services.candidate.station_catalog import station_catalog
     from backend.app.services.candidate.models import CandidateSearchRequest
     from backend.app.services.demand.models import DemandContext, RequestedServiceType
-    from backend.app.services.demand.service import get_demand_service
+    from backend.app.services.demand.service import create_demand_service
     catalog = SimpleNamespace(get_all_stations=lambda: [station_catalog.get_station('S001')],
                               get_station=station_catalog.get_station)
     timestamp = traffic().timestamp
     await repository.ingest(station())
-    energy = get_demand_service().process_driver_request(DemandContext(vehicle_id='V0001',
+    energy = create_demand_service().process_driver_request(DemandContext(vehicle_id='V0001',
         timestamp=timestamp, current_soc_pct=60, estimated_remaining_range_km=200,
         raw_latitude=21.028, raw_longitude=105.854), RequestedServiceType.CHARGING)
     request = CandidateSearchRequest(energy_request=energy)

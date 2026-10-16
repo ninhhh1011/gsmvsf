@@ -1,8 +1,10 @@
 """Application configuration management."""
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from backend.app.core.constants import REQUESTS_PER_MINUTE
 
 
 class Settings(BaseSettings):
@@ -19,6 +21,7 @@ class Settings(BaseSettings):
     app_name: str = "EV Recommendation API"
     app_version: str = "0.1.0"
     debug: bool = False
+    requests_per_minute: int = Field(default=REQUESTS_PER_MINUTE, ge=1, le=100000)
 
     # City & Geographic Configuration (Default Hanoi, configurable for HCMC, Da Nang, etc.)
     city_name: str = "Hanoi"
@@ -55,6 +58,38 @@ class Settings(BaseSettings):
     missing_queue_wait_s: float = Field(default=5400, ge=0, allow_inf_nan=False)
     snapshot_ingestion_token: str = ""
 
+    enable_route_familiarity: bool = False
+    route_history_namespace: Literal['realtime', 'synthetic'] = 'realtime'
+    public_synthetic_sample: bool = False
+    route_familiarity_identity_secret: str = ""
+    route_familiarity_lookback_days: int = Field(default=7, ge=1, le=365)
+    max_familiarity_penalty_s: float = Field(default=30.0, ge=0, le=30, allow_inf_nan=False)
+    familiarity_minimum_support_adherence: float = Field(default=0.10, ge=0, le=1)
+    familiarity_prior_mean: float = Field(default=0.5, ge=0, le=1)
+    familiarity_prior_strength: float = Field(default=3.0, ge=0, allow_inf_nan=False)
+    familiarity_minimum_community_drivers: int = Field(default=5, ge=1, le=100)
+    familiarity_confidence_prior_strength: float = Field(default=3.0, gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_route_familiarity(self):
+        if self.public_synthetic_sample and (not self.enable_route_familiarity or
+                                            self.route_history_namespace != 'synthetic'):
+            raise ValueError('Public sample requires enabled isolated synthetic history')
+        if self.enable_route_familiarity and len(self.route_familiarity_identity_secret.encode()) < 32:
+            raise ValueError("ROUTE_FAMILIARITY_IDENTITY_SECRET must be at least 32 bytes when enabled")
+        return self
+
+    # Project charging assumptions, not manufacturer specifications.
+    charge_no_destination_soc_pct: float = Field(80, gt=0, le=100, allow_inf_nan=False)
+    swap_departure_soc_pct: float = Field(90, gt=0, le=100, allow_inf_nan=False)
+    charge_car_station_kw: float = Field(60, gt=0, allow_inf_nan=False)
+    charge_car_vehicle_kw: float = Field(30, gt=0, allow_inf_nan=False)
+    charge_bike_station_kw: float = Field(0.4, gt=0, allow_inf_nan=False)
+    charge_bike_vehicle_kw: float = Field(0.4, gt=0, allow_inf_nan=False)
+    charge_efficiency: float = Field(0.9, gt=0, le=1, allow_inf_nan=False)
+    charge_taper_power_factor: float = Field(0.5, gt=0, le=1, allow_inf_nan=False)
+    charge_setup_s: float = Field(60, ge=0, allow_inf_nan=False)
+
     # Mapping
     mapping_dir: Path = Path("runtime/map_mapping")
 
@@ -63,8 +98,8 @@ class Settings(BaseSettings):
 
     # Week 6 productionization: routing concurrency
     max_concurrent_routes: int = Field(
-        default=8, ge=1, le=32,
-        description="Maximum concurrent GraphHopper route calls per candidate search",
+        default=4, ge=1, le=32,
+        description="Shared GraphHopper call budget per API adapter; also bounds each candidate search",
     )
 
     # Realtime operational state simulator (Problem D)

@@ -24,8 +24,10 @@ CandidateSearchResult
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
+from starlette.concurrency import run_in_threadpool
 
+from backend.app.services.energy.replenishment import estimate_replenishment
 from backend.app.config import settings
 from backend.app.services.candidate.compatibility import check_station_service_compatibility
 from backend.app.services.candidate.eligibility import evaluate_candidate_eligibility
@@ -37,7 +39,7 @@ from backend.app.services.candidate.models import (
     EvaluatedCandidate,
 )
 from backend.app.services.candidate.station_catalog import StationCatalog, station_catalog
-from backend.app.services.demand.capability import get_capability_resolver
+from backend.app.services.demand.capability import VehicleCapabilityResolver
 from backend.app.services.demand.models import EnergyServiceRequest, RequestSource, VehicleCategory
 from backend.app.services.routing.engine import RoutingEngine, RoutingInvalidRequestError
 from backend.app.services.routing.models import Position, VehicleRoutingProfile
@@ -56,9 +58,11 @@ class CandidateSearchService:
         routing_engine: RoutingEngine,
         catalog: StationCatalog | None = None,
         max_concurrent_routes: int | None = None,
+        capability_resolver: VehicleCapabilityResolver | None = None,
     ):
         self.routing_engine = routing_engine
         self.catalog = catalog or station_catalog
+        self.capability_resolver = capability_resolver or VehicleCapabilityResolver()
         self.route_calculator = MultiLegRouteCalculator(
             self.routing_engine,
             max_concurrent_routes=max_concurrent_routes or settings.max_concurrent_routes,
@@ -68,6 +72,9 @@ class CandidateSearchService:
         self,
         request: CandidateSearchRequest,
         eligible_only: bool = False,
+        *,
+        _signature_sink: dict | None = None,
+        _signature_runner=None,
     ) -> CandidateSearchResult:
         """
         Execute full candidate search pipeline for an incoming CandidateSearchRequest.
@@ -126,7 +133,7 @@ class CandidateSearchService:
 
         # 5. Resolve vehicle capability
         vehicle_cap = None
-        resolver = get_capability_resolver()
+        resolver = self.capability_resolver
         if esr.vehicle_model:
             try:
                 vehicle_cap = resolver.resolve_by_model(esr.vehicle_model)
@@ -160,6 +167,7 @@ class CandidateSearchService:
                 driver_pos=driver_pos,
                 destination_pos=dest_pos,
                 profile=vehicle_profile,
+                constraints=request.constraints,
             )
 
         # 8. Pre-compute all station routes concurrently
@@ -181,6 +189,7 @@ class CandidateSearchService:
             profile=vehicle_profile,
             cached_direct_route=cached_direct,
             constraints=request.constraints,
+            include_leg_results=_signature_sink is not None,
         )
 
         # 9. Evaluate all candidate pairs using pre-computed routes
@@ -202,7 +211,8 @@ class CandidateSearchService:
             )
 
             # Use pre-computed route
-            is_reach, route_metrics, _ = station_routes.get(station.station_id, (False, None, None))
+            route_result = station_routes.get(station.station_id, (False, None, None))
+            is_reach, route_metrics = route_result[:2]
 
             net_dist_m = route_metrics.distance_to_station_m if (is_reach and route_metrics) else None
 
@@ -220,6 +230,18 @@ class CandidateSearchService:
                 service_type=service_type,
                 is_soc_feasible=soc_feasible,
             )
+            replenishment = None
+            if eligible:
+                if dest_pos is not None and (route_metrics.duration_station_to_dest_s is None or
+                                            route_metrics.distance_station_to_dest_m is None):
+                    eligible, reason = False, 'UNREACHABLE'
+                else:
+                    replenishment = estimate_replenishment(esr, vehicle_cap, service_type, net_dist_m,
+                        route_metrics.distance_station_to_dest_m if dest_pos is not None else None,
+                        op_snapshot.service_time_min)
+                    if replenishment.status != 'AVAILABLE':
+                        eligible, reason = False, ('INSUFFICIENT_DEPARTURE_ENERGY'
+                            if replenishment.status == 'INFEASIBLE' else 'REPLENISHMENT_UNAVAILABLE')
 
             candidate = EvaluatedCandidate(
                 station_id=station.station_id,
@@ -233,8 +255,32 @@ class CandidateSearchService:
                 soc_feasible=soc_feasible,
                 operational=op_snapshot,
                 route_metrics=route_metrics,
+                replenishment=replenishment,
             )
             evaluated_candidates.append(candidate)
+            if candidate.eligible and _signature_sink is not None:
+                key = (station.station_id, service_type.value)
+                _signature_sink[key] = None
+            if candidate.eligible and _signature_sink is not None:
+                leg1, leg2 = route_result[2:4]
+                if (leg1 is not None and leg1.geometry and
+                        (dest_pos is None or (leg2 is not None and leg2.geometry and leg2.status.value == 'SUCCESS'))):
+                    from backend.app.core.metrics import (
+                        observe_route_familiarity, record_route_familiarity_event,
+                    )
+                    from backend.app.services.route_familiarity.signature import create_route_signature
+                    from time import perf_counter
+                    signature_started = perf_counter()
+                    try:
+                        _signature_sink[key] = await (_signature_runner or run_in_threadpool)(create_route_signature,
+                            ([request.prefix_geometry] if request.prefix_geometry else []) +
+                            [leg1.geometry] + ([leg2.geometry] if dest_pos is not None else []))
+                        record_route_familiarity_event('signature')
+                    except ValueError:
+                        record_route_familiarity_event('signature', 'unavailable')
+                        pass  # Invalid or over-limit recommended geometry is unavailable.
+                    finally:
+                        observe_route_familiarity('signature', perf_counter() - signature_started)
 
         # Count eligible candidates
         eligible_count = sum(1 for c in evaluated_candidates if c.eligible)
@@ -257,7 +303,7 @@ class CandidateSearchService:
 
         return CandidateSearchResult(
             service_request_id=req_id,
-            search_timestamp=datetime.utcnow(),
+            search_timestamp=datetime.now(UTC),
             search_status="SUCCESS",
             total_candidates_evaluated=len(evaluated_candidates),
             eligible_count=eligible_count,

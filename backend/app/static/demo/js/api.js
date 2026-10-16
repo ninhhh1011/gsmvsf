@@ -6,12 +6,14 @@
  */
 
 export class ApiError extends Error {
-    constructor(message, status, code = null, detail = null) {
+    constructor(message, status, code = null, detail = null, retryAfter = null) {
         super(message);
         this.name = 'ApiError';
         this.status = status;
         this.code = code;
         this.detail = detail;
+        this.retryAfter = retryAfter;
+        this.isRateLimited = status === 429;
         this.isConflict = status === 409;
         this.isEngineUnavailable = status === 503;
         this.isLocationUnavailable = code === 'LOCATION_UNAVAILABLE';
@@ -71,7 +73,9 @@ export class ApiClient {
                     if (data.message) message = data.message;
                 }
 
-                throw new ApiError(message, response.status, code, detail);
+                const retryAfterHeader = response.headers?.get ? response.headers.get('retry-after') : null;
+                const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+                throw new ApiError(message, response.status, code, detail, retryAfter);
             }
 
             return data;
@@ -104,9 +108,16 @@ export class ApiClient {
     /**
      * Recommendation API: demand detection, candidate search, and ranking.
      */
+    async getConfig() { return this._request('/api/v1/config'); }
+
+    _identityHeaders() { return this.driverIdentity?.signature ? { 'x-driver-identity-signature': this.driverIdentity.signature } : {}; }
+
+    async getStationPlan(payload) { return this._request('/api/v1/station-plan', { method: 'POST', headers: this._identityHeaders(), body: JSON.stringify(payload) }); }
+
     async getRecommendation(recommendRequest) {
         return this._request('/api/v1/recommend', {
             method: 'POST',
+            headers: this._identityHeaders(),
             body: JSON.stringify(recommendRequest)
         });
     }
@@ -135,12 +146,13 @@ export class ApiClient {
     /**
      * Computes a road-network route and returns encoded polyline geometry.
      */
-    async computeRoute(origin, destination, profile = { vehicle_category: 'EV_CAR' }, via = []) {
+    async computeRoute(origin, destination, profile = { vehicle_category: 'EV_CAR' }, via = [], constraints = null) {
         const payload = {
             origin: { latitude: origin.latitude, longitude: origin.longitude },
             destination: { latitude: destination.latitude, longitude: destination.longitude },
             profile
         };
+        if (constraints != null) payload.constraints = constraints;
         if (via && via.length > 0) {
             payload.via = via.map(p => ({ latitude: p.latitude, longitude: p.longitude }));
         }
@@ -210,6 +222,27 @@ export class ApiClient {
                 consumption_wh_per_km: consumptionWhPerKm
             })
         });
+    }
+
+    /**
+     * Compare proposed route against driver route using backend H3 engine.
+     */
+    async computePowerStep(payload) {
+        return this._request('/api/v1/vehicles/power-step', { method: 'POST', body: JSON.stringify(payload) });
+    }
+
+    async compareRoutes(payload) {
+        return this._request('/api/v1/routing/compare-routes', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+    }
+
+    async getDepartureHeatmap({ resolution, as_of_iso = null, cohort = 'all' }) {
+        const query = new URLSearchParams({ resolution });
+        if (as_of_iso) query.set('as_of_iso', as_of_iso);
+        if (cohort !== 'all') query.set('cohort', cohort);
+        return this._request(`/api/v1/routing/departure-heatmap?${query}`);
     }
 }
 

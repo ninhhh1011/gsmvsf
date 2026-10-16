@@ -29,7 +29,7 @@ from backend.app.services.demand.models import (
     RequestSource,
     ServiceType,
 )
-from backend.app.services.demand.service import get_demand_service
+from backend.app.services.demand.service import create_demand_service
 
 DEMAND_LABELS_PATH = settings.dataset_path / "labels" / "demand_labels.csv"
 
@@ -43,7 +43,7 @@ def demand_labels_df():
 
 @pytest.fixture
 def demand_service():
-    return get_demand_service()
+    return create_demand_service()
 
 
 def run_event_replay(event_id: str, demand_labels_df: pd.DataFrame, demand_service):

@@ -1,0 +1,4342 @@
+{
+  "res8": {
+    "8841436941fffff": {
+      "count": 39619,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (39,619 lượt)"
+    },
+    "8841436943fffff": {
+      "count": 19626,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,626 lượt)"
+    },
+    "8841436945fffff": {
+      "count": 538501,
+      "score": 10.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (538,501 lượt)"
+    },
+    "8841436947fffff": {
+      "count": 42135,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (42,135 lượt)"
+    },
+    "8841436949fffff": {
+      "count": 37326,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (37,326 lượt)"
+    },
+    "884143694bfffff": {
+      "count": 39858,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (39,858 lượt)"
+    },
+    "884143694dfffff": {
+      "count": 6863,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,863 lượt)"
+    },
+    "8841436951fffff": {
+      "count": 42315,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (42,315 lượt)"
+    },
+    "8841436959fffff": {
+      "count": 16926,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (16,926 lượt)"
+    },
+    "884143695dfffff": {
+      "count": 86638,
+      "score": 8.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (86,638 lượt)"
+    },
+    "8841436961fffff": {
+      "count": 156256,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (156,256 lượt)"
+    },
+    "8841436965fffff": {
+      "count": 4380,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,380 lượt)"
+    },
+    "8841436969fffff": {
+      "count": 414212,
+      "score": 9.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (414,212 lượt)"
+    },
+    "884143696bfffff": {
+      "count": 7084,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,084 lượt)"
+    },
+    "884143696dfffff": {
+      "count": 163339,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (163,339 lượt)"
+    },
+    "8841436b05fffff": {
+      "count": 24515,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (24,515 lượt)"
+    },
+    "8841436b21fffff": {
+      "count": 480724,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (480,724 lượt)"
+    },
+    "8841436b23fffff": {
+      "count": 14052,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (14,052 lượt)"
+    },
+    "8841436b25fffff": {
+      "count": 470834,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (470,834 lượt)"
+    },
+    "8841436b27fffff": {
+      "count": 33039,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (33,039 lượt)"
+    },
+    "8841436b29fffff": {
+      "count": 370531,
+      "score": 9.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (370,531 lượt)"
+    },
+    "8841436b2bfffff": {
+      "count": 31346,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (31,346 lượt)"
+    },
+    "8841436b2dfffff": {
+      "count": 258751,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (258,751 lượt)"
+    },
+    "8841436b3dfffff": {
+      "count": 7026,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,026 lượt)"
+    },
+    "8841436b65fffff": {
+      "count": 53823,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (53,823 lượt)"
+    },
+    "8841436b67fffff": {
+      "count": 13662,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (13,662 lượt)"
+    },
+    "8841436b6dfffff": {
+      "count": 61532,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (61,532 lượt)"
+    },
+    "88415ca641fffff": {
+      "count": 34383,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (34,383 lượt)"
+    },
+    "88415ca649fffff": {
+      "count": 18850,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (18,850 lượt)"
+    },
+    "88415ca64bfffff": {
+      "count": 34868,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (34,868 lượt)"
+    },
+    "88415ca659fffff": {
+      "count": 2628,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,628 lượt)"
+    },
+    "88415cb401fffff": {
+      "count": 3140,
+      "score": 6.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,140 lượt)"
+    },
+    "88415cb403fffff": {
+      "count": 1099,
+      "score": 5.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "88415cb405fffff": {
+      "count": 3925,
+      "score": 6.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,925 lượt)"
+    },
+    "88415cb407fffff": {
+      "count": 157,
+      "score": 3.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (157 lượt)"
+    },
+    "88415cb40bfffff": {
+      "count": 1099,
+      "score": 5.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "88415cb413fffff": {
+      "count": 3570,
+      "score": 6.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,570 lượt)"
+    },
+    "88415cb419fffff": {
+      "count": 4239,
+      "score": 6.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,239 lượt)"
+    },
+    "88415cb41bfffff": {
+      "count": 2826,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,826 lượt)"
+    },
+    "88415cb41dfffff": {
+      "count": 2983,
+      "score": 6.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,983 lượt)"
+    },
+    "88415cb421fffff": {
+      "count": 942,
+      "score": 5.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (942 lượt)"
+    },
+    "88415cb425fffff": {
+      "count": 2198,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,198 lượt)"
+    },
+    "88415cb429fffff": {
+      "count": 2826,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,826 lượt)"
+    },
+    "88415cb42dfffff": {
+      "count": 2512,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,512 lượt)"
+    },
+    "88415cb433fffff": {
+      "count": 15184,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (15,184 lượt)"
+    },
+    "88415cb437fffff": {
+      "count": 20412,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (20,412 lượt)"
+    },
+    "88415cb457fffff": {
+      "count": 157,
+      "score": 3.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (157 lượt)"
+    },
+    "88415cb481fffff": {
+      "count": 1480,
+      "score": 5.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,480 lượt)"
+    },
+    "88415cb483fffff": {
+      "count": 109842,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (109,842 lượt)"
+    },
+    "88415cb485fffff": {
+      "count": 444,
+      "score": 4.6,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (444 lượt)"
+    },
+    "88415cb487fffff": {
+      "count": 84800,
+      "score": 8.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (84,800 lượt)"
+    },
+    "88415cb489fffff": {
+      "count": 318067,
+      "score": 9.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (318,067 lượt)"
+    },
+    "88415cb48bfffff": {
+      "count": 56705,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (56,705 lượt)"
+    },
+    "88415cb48dfffff": {
+      "count": 266532,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (266,532 lượt)"
+    },
+    "88415cb491fffff": {
+      "count": 494021,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (494,021 lượt)"
+    },
+    "88415cb493fffff": {
+      "count": 271104,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (271,104 lượt)"
+    },
+    "88415cb495fffff": {
+      "count": 401214,
+      "score": 9.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (401,214 lượt)"
+    },
+    "88415cb497fffff": {
+      "count": 299349,
+      "score": 9.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (299,349 lượt)"
+    },
+    "88415cb499fffff": {
+      "count": 229612,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (229,612 lượt)"
+    },
+    "88415cb49bfffff": {
+      "count": 475633,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (475,633 lượt)"
+    },
+    "88415cb49dfffff": {
+      "count": 79106,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (79,106 lượt)"
+    },
+    "88415cb4a1fffff": {
+      "count": 13293,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (13,293 lượt)"
+    },
+    "88415cb4a3fffff": {
+      "count": 19291,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,291 lượt)"
+    },
+    "88415cb4a5fffff": {
+      "count": 865,
+      "score": 5.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (865 lượt)"
+    },
+    "88415cb4a7fffff": {
+      "count": 351,
+      "score": 4.4,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (351 lượt)"
+    },
+    "88415cb4a9fffff": {
+      "count": 183804,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (183,804 lượt)"
+    },
+    "88415cb4abfffff": {
+      "count": 132554,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (132,554 lượt)"
+    },
+    "88415cb4adfffff": {
+      "count": 11772,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (11,772 lượt)"
+    },
+    "88415cb4b1fffff": {
+      "count": 43281,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (43,281 lượt)"
+    },
+    "88415cb4b3fffff": {
+      "count": 33134,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (33,134 lượt)"
+    },
+    "88415cb4b5fffff": {
+      "count": 10592,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (10,592 lượt)"
+    },
+    "88415cb4b7fffff": {
+      "count": 54456,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (54,456 lượt)"
+    },
+    "88415cb4b9fffff": {
+      "count": 473779,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (473,779 lượt)"
+    },
+    "88415cb4bbfffff": {
+      "count": 225070,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (225,070 lượt)"
+    },
+    "88415cb4bdfffff": {
+      "count": 422593,
+      "score": 9.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (422,593 lượt)"
+    },
+    "88415cb4c1fffff": {
+      "count": 245404,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (245,404 lượt)"
+    },
+    "88415cb4c3fffff": {
+      "count": 51424,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (51,424 lượt)"
+    },
+    "88415cb4c5fffff": {
+      "count": 205266,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (205,266 lượt)"
+    },
+    "88415cb4c7fffff": {
+      "count": 44721,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (44,721 lượt)"
+    },
+    "88415cb4c9fffff": {
+      "count": 255368,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (255,368 lượt)"
+    },
+    "88415cb4cbfffff": {
+      "count": 20431,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (20,431 lượt)"
+    },
+    "88415cb4cdfffff": {
+      "count": 14828,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (14,828 lượt)"
+    },
+    "88415cb4d1fffff": {
+      "count": 196724,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (196,724 lượt)"
+    },
+    "88415cb4d3fffff": {
+      "count": 72009,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (72,009 lượt)"
+    },
+    "88415cb4d5fffff": {
+      "count": 221345,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (221,345 lượt)"
+    },
+    "88415cb4d7fffff": {
+      "count": 148,
+      "score": 3.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (148 lượt)"
+    },
+    "88415cb4dbfffff": {
+      "count": 103970,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (103,970 lượt)"
+    },
+    "88415cb4e1fffff": {
+      "count": 223799,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (223,799 lượt)"
+    },
+    "88415cb4e5fffff": {
+      "count": 29101,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (29,101 lượt)"
+    },
+    "88415cb4e7fffff": {
+      "count": 163513,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (163,513 lượt)"
+    },
+    "88415cb4e9fffff": {
+      "count": 119725,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (119,725 lượt)"
+    },
+    "88415cb4ebfffff": {
+      "count": 186850,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (186,850 lượt)"
+    },
+    "88415cb4edfffff": {
+      "count": 348294,
+      "score": 9.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (348,294 lượt)"
+    },
+    "88415cb511fffff": {
+      "count": 21056,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (21,056 lượt)"
+    },
+    "88415cb513fffff": {
+      "count": 31557,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (31,557 lượt)"
+    },
+    "88415cb519fffff": {
+      "count": 13562,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (13,562 lượt)"
+    },
+    "88415cb51bfffff": {
+      "count": 47687,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (47,687 lượt)"
+    },
+    "88415cb553fffff": {
+      "count": 628,
+      "score": 4.9,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (628 lượt)"
+    },
+    "88415cb5c1fffff": {
+      "count": 33258,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (33,258 lượt)"
+    },
+    "88415cb5c5fffff": {
+      "count": 8564,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,564 lượt)"
+    },
+    "88415cb5cbfffff": {
+      "count": 36542,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (36,542 lượt)"
+    },
+    "88415cb5cdfffff": {
+      "count": 22054,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (22,054 lượt)"
+    },
+    "88415cb5d1fffff": {
+      "count": 692,
+      "score": 5.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (692 lượt)"
+    },
+    "88415cb5d3fffff": {
+      "count": 3979,
+      "score": 6.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,979 lượt)"
+    },
+    "88415cb5d9fffff": {
+      "count": 50682,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (50,682 lượt)"
+    },
+    "88415cb5dbfffff": {
+      "count": 14113,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (14,113 lượt)"
+    },
+    "88415cb5ddfffff": {
+      "count": 4282,
+      "score": 6.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,282 lượt)"
+    },
+    "88415cb687fffff": {
+      "count": 161535,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (161,535 lượt)"
+    },
+    "88415cb695fffff": {
+      "count": 2318,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,318 lượt)"
+    },
+    "88415cb6a3fffff": {
+      "count": 31956,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (31,956 lượt)"
+    },
+    "88415cb6a5fffff": {
+      "count": 157,
+      "score": 3.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (157 lượt)"
+    },
+    "88415cb6a7fffff": {
+      "count": 1884,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,884 lượt)"
+    },
+    "88415cb6b1fffff": {
+      "count": 13828,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (13,828 lượt)"
+    },
+    "88415cb6b5fffff": {
+      "count": 166577,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (166,577 lượt)"
+    },
+    "88415cb6b9fffff": {
+      "count": 407498,
+      "score": 9.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (407,498 lượt)"
+    },
+    "88415cb6bbfffff": {
+      "count": 66607,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (66,607 lượt)"
+    },
+    "88415cb6bdfffff": {
+      "count": 263848,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (263,848 lượt)"
+    }
+  },
+  "res9": {
+    "89414369403ffff": {
+      "count": 9883,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (9,883 lượt)"
+    },
+    "89414369407ffff": {
+      "count": 9415,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (9,415 lượt)"
+    },
+    "8941436940bffff": {
+      "count": 9642,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (9,642 lượt)"
+    },
+    "8941436940fffff": {
+      "count": 4470,
+      "score": 6.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,470 lượt)"
+    },
+    "89414369417ffff": {
+      "count": 6209,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,209 lượt)"
+    },
+    "89414369433ffff": {
+      "count": 7620,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,620 lượt)"
+    },
+    "89414369437ffff": {
+      "count": 12006,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,006 lượt)"
+    },
+    "89414369443ffff": {
+      "count": 132704,
+      "score": 9.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (132,704 lượt)"
+    },
+    "89414369447ffff": {
+      "count": 105362,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (105,362 lượt)"
+    },
+    "8941436944bffff": {
+      "count": 46209,
+      "score": 8.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (46,209 lượt)"
+    },
+    "8941436944fffff": {
+      "count": 42959,
+      "score": 8.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (42,959 lượt)"
+    },
+    "89414369457ffff": {
+      "count": 9438,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (9,438 lượt)"
+    },
+    "8941436945bffff": {
+      "count": 201829,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (201,829 lượt)"
+    },
+    "8941436947bffff": {
+      "count": 42135,
+      "score": 8.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (42,135 lượt)"
+    },
+    "89414369483ffff": {
+      "count": 4878,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,878 lượt)"
+    },
+    "8941436948bffff": {
+      "count": 6209,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,209 lượt)"
+    },
+    "8941436948fffff": {
+      "count": 13600,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,600 lượt)"
+    },
+    "8941436949bffff": {
+      "count": 12639,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,639 lượt)"
+    },
+    "894143694abffff": {
+      "count": 12861,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,861 lượt)"
+    },
+    "894143694afffff": {
+      "count": 21306,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (21,306 lượt)"
+    },
+    "894143694bbffff": {
+      "count": 5691,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,691 lượt)"
+    },
+    "894143694dbffff": {
+      "count": 6863,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,863 lượt)"
+    },
+    "89414369513ffff": {
+      "count": 19747,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,747 lượt)"
+    },
+    "89414369517ffff": {
+      "count": 22568,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (22,568 lượt)"
+    },
+    "8941436958bffff": {
+      "count": 16926,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,926 lượt)"
+    },
+    "894143695c3ffff": {
+      "count": 29238,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (29,238 lượt)"
+    },
+    "894143695c7ffff": {
+      "count": 5642,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,642 lượt)"
+    },
+    "894143695cbffff": {
+      "count": 16725,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,725 lượt)"
+    },
+    "894143695d7ffff": {
+      "count": 14105,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (14,105 lượt)"
+    },
+    "894143695dbffff": {
+      "count": 20928,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (20,928 lượt)"
+    },
+    "89414369603ffff": {
+      "count": 5488,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,488 lượt)"
+    },
+    "8941436960bffff": {
+      "count": 1460,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,460 lượt)"
+    },
+    "8941436960fffff": {
+      "count": 292,
+      "score": 4.6,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (292 lượt)"
+    },
+    "89414369613ffff": {
+      "count": 75591,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (75,591 lượt)"
+    },
+    "89414369617ffff": {
+      "count": 4554,
+      "score": 6.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,554 lượt)"
+    },
+    "8941436961bffff": {
+      "count": 68871,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (68,871 lượt)"
+    },
+    "89414369643ffff": {
+      "count": 292,
+      "score": 4.6,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (292 lượt)"
+    },
+    "89414369653ffff": {
+      "count": 1314,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,314 lượt)"
+    },
+    "89414369657ffff": {
+      "count": 1168,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,168 lượt)"
+    },
+    "8941436965bffff": {
+      "count": 1606,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,606 lượt)"
+    },
+    "89414369683ffff": {
+      "count": 67192,
+      "score": 9.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (67,192 lượt)"
+    },
+    "8941436968bffff": {
+      "count": 33596,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (33,596 lượt)"
+    },
+    "8941436968fffff": {
+      "count": 8399,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,399 lượt)"
+    },
+    "89414369693ffff": {
+      "count": 132984,
+      "score": 9.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (132,984 lượt)"
+    },
+    "89414369697ffff": {
+      "count": 101949,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (101,949 lượt)"
+    },
+    "8941436969bffff": {
+      "count": 70092,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (70,092 lượt)"
+    },
+    "894143696b3ffff": {
+      "count": 3036,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,036 lượt)"
+    },
+    "894143696bbffff": {
+      "count": 4048,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,048 lượt)"
+    },
+    "894143696c3ffff": {
+      "count": 13310,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,310 lượt)"
+    },
+    "894143696c7ffff": {
+      "count": 94730,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (94,730 lượt)"
+    },
+    "894143696cbffff": {
+      "count": 9680,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (9,680 lượt)"
+    },
+    "894143696d7ffff": {
+      "count": 45619,
+      "score": 8.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (45,619 lượt)"
+    },
+    "8941436b04bffff": {
+      "count": 9051,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (9,051 lượt)"
+    },
+    "8941436b04fffff": {
+      "count": 15464,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (15,464 lượt)"
+    },
+    "8941436b207ffff": {
+      "count": 9368,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (9,368 lượt)"
+    },
+    "8941436b20bffff": {
+      "count": 91364,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (91,364 lượt)"
+    },
+    "8941436b20fffff": {
+      "count": 8197,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,197 lượt)"
+    },
+    "8941436b213ffff": {
+      "count": 210145,
+      "score": 10.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (210,145 lượt)"
+    },
+    "8941436b21bffff": {
+      "count": 161650,
+      "score": 9.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (161,650 lượt)"
+    },
+    "8941436b233ffff": {
+      "count": 9368,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (9,368 lượt)"
+    },
+    "8941436b237ffff": {
+      "count": 4684,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,684 lượt)"
+    },
+    "8941436b243ffff": {
+      "count": 184375,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (184,375 lượt)"
+    },
+    "8941436b247ffff": {
+      "count": 34672,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (34,672 lượt)"
+    },
+    "8941436b24bffff": {
+      "count": 14816,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (14,816 lượt)"
+    },
+    "8941436b24fffff": {
+      "count": 48651,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (48,651 lượt)"
+    },
+    "8941436b253ffff": {
+      "count": 31544,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (31,544 lượt)"
+    },
+    "8941436b257ffff": {
+      "count": 84338,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (84,338 lượt)"
+    },
+    "8941436b25bffff": {
+      "count": 72438,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (72,438 lượt)"
+    },
+    "8941436b263ffff": {
+      "count": 5691,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,691 lượt)"
+    },
+    "8941436b26bffff": {
+      "count": 12861,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,861 lượt)"
+    },
+    "8941436b26fffff": {
+      "count": 13674,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,674 lượt)"
+    },
+    "8941436b27bffff": {
+      "count": 813,
+      "score": 5.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (813 lượt)"
+    },
+    "8941436b283ffff": {
+      "count": 86320,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (86,320 lượt)"
+    },
+    "8941436b287ffff": {
+      "count": 13115,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,115 lượt)"
+    },
+    "8941436b28bffff": {
+      "count": 125461,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (125,461 lượt)"
+    },
+    "8941436b28fffff": {
+      "count": 145635,
+      "score": 9.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (145,635 lượt)"
+    },
+    "8941436b2a7ffff": {
+      "count": 8197,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,197 lượt)"
+    },
+    "8941436b2afffff": {
+      "count": 3513,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,513 lượt)"
+    },
+    "8941436b2b3ffff": {
+      "count": 3839,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,839 lượt)"
+    },
+    "8941436b2b7ffff": {
+      "count": 15797,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (15,797 lượt)"
+    },
+    "8941436b2c3ffff": {
+      "count": 13805,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,805 lượt)"
+    },
+    "8941436b2cbffff": {
+      "count": 32908,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (32,908 lượt)"
+    },
+    "8941436b2d3ffff": {
+      "count": 35210,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (35,210 lượt)"
+    },
+    "8941436b2d7ffff": {
+      "count": 78424,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (78,424 lượt)"
+    },
+    "8941436b2dbffff": {
+      "count": 98404,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (98,404 lượt)"
+    },
+    "8941436b3dbffff": {
+      "count": 7026,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,026 lượt)"
+    },
+    "8941436b647ffff": {
+      "count": 19738,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,738 lượt)"
+    },
+    "8941436b64fffff": {
+      "count": 9272,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (9,272 lượt)"
+    },
+    "8941436b657ffff": {
+      "count": 24813,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (24,813 lượt)"
+    },
+    "8941436b66bffff": {
+      "count": 1317,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,317 lượt)"
+    },
+    "8941436b67bffff": {
+      "count": 12345,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,345 lượt)"
+    },
+    "8941436b6c3ffff": {
+      "count": 19738,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,738 lượt)"
+    },
+    "8941436b6cfffff": {
+      "count": 24813,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (24,813 lượt)"
+    },
+    "8941436b6d3ffff": {
+      "count": 16981,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,981 lượt)"
+    },
+    "89415ca6407ffff": {
+      "count": 16464,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,464 lượt)"
+    },
+    "89415ca640fffff": {
+      "count": 10980,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (10,980 lượt)"
+    },
+    "89415ca6417ffff": {
+      "count": 6939,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,939 lượt)"
+    },
+    "89415ca6483ffff": {
+      "count": 771,
+      "score": 5.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (771 lượt)"
+    },
+    "89415ca6487ffff": {
+      "count": 4626,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,626 lượt)"
+    },
+    "89415ca648fffff": {
+      "count": 6168,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,168 lượt)"
+    },
+    "89415ca6497ffff": {
+      "count": 7285,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,285 lượt)"
+    },
+    "89415ca64a3ffff": {
+      "count": 6981,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,981 lượt)"
+    },
+    "89415ca64abffff": {
+      "count": 6705,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,705 lượt)"
+    },
+    "89415ca64b3ffff": {
+      "count": 1557,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,557 lượt)"
+    },
+    "89415ca64b7ffff": {
+      "count": 14330,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (14,330 lượt)"
+    },
+    "89415ca64bbffff": {
+      "count": 5295,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,295 lượt)"
+    },
+    "89415ca6593ffff": {
+      "count": 1168,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,168 lượt)"
+    },
+    "89415ca6597ffff": {
+      "count": 1460,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,460 lượt)"
+    },
+    "89415cb4007ffff": {
+      "count": 1099,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "89415cb400bffff": {
+      "count": 628,
+      "score": 5.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (628 lượt)"
+    },
+    "89415cb400fffff": {
+      "count": 1413,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,413 lượt)"
+    },
+    "89415cb4033ffff": {
+      "count": 1099,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "89415cb4047ffff": {
+      "count": 1570,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,570 lượt)"
+    },
+    "89415cb404bffff": {
+      "count": 1256,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,256 lượt)"
+    },
+    "89415cb404fffff": {
+      "count": 1099,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "89415cb4073ffff": {
+      "count": 157,
+      "score": 4.1,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (157 lượt)"
+    },
+    "89415cb40afffff": {
+      "count": 1099,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "89415cb4127ffff": {
+      "count": 1190,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,190 lượt)"
+    },
+    "89415cb412fffff": {
+      "count": 1700,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,700 lượt)"
+    },
+    "89415cb4137ffff": {
+      "count": 680,
+      "score": 5.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (680 lượt)"
+    },
+    "89415cb4183ffff": {
+      "count": 1256,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,256 lượt)"
+    },
+    "89415cb4187ffff": {
+      "count": 1570,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,570 lượt)"
+    },
+    "89415cb419bffff": {
+      "count": 1413,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,413 lượt)"
+    },
+    "89415cb41b3ffff": {
+      "count": 1413,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,413 lượt)"
+    },
+    "89415cb41b7ffff": {
+      "count": 1413,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,413 lượt)"
+    },
+    "89415cb41d3ffff": {
+      "count": 1256,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,256 lượt)"
+    },
+    "89415cb41d7ffff": {
+      "count": 785,
+      "score": 5.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (785 lượt)"
+    },
+    "89415cb41dbffff": {
+      "count": 942,
+      "score": 5.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (942 lượt)"
+    },
+    "89415cb4213ffff": {
+      "count": 942,
+      "score": 5.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (942 lượt)"
+    },
+    "89415cb4253ffff": {
+      "count": 1099,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "89415cb425bffff": {
+      "count": 1099,
+      "score": 5.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,099 lượt)"
+    },
+    "89415cb4287ffff": {
+      "count": 1413,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,413 lượt)"
+    },
+    "89415cb428fffff": {
+      "count": 1413,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,413 lượt)"
+    },
+    "89415cb42c7ffff": {
+      "count": 1256,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,256 lượt)"
+    },
+    "89415cb42cfffff": {
+      "count": 1256,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,256 lượt)"
+    },
+    "89415cb4327ffff": {
+      "count": 4634,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,634 lượt)"
+    },
+    "89415cb432fffff": {
+      "count": 2532,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,532 lượt)"
+    },
+    "89415cb4337ffff": {
+      "count": 8018,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,018 lượt)"
+    },
+    "89415cb436bffff": {
+      "count": 5103,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,103 lượt)"
+    },
+    "89415cb436fffff": {
+      "count": 15309,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (15,309 lượt)"
+    },
+    "89415cb456fffff": {
+      "count": 157,
+      "score": 4.1,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (157 lượt)"
+    },
+    "89415cb480bffff": {
+      "count": 1184,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,184 lượt)"
+    },
+    "89415cb481bffff": {
+      "count": 296,
+      "score": 4.6,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (296 lượt)"
+    },
+    "89415cb4823ffff": {
+      "count": 2607,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,607 lượt)"
+    },
+    "89415cb4827ffff": {
+      "count": 45224,
+      "score": 8.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (45,224 lượt)"
+    },
+    "89415cb482fffff": {
+      "count": 27772,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (27,772 lượt)"
+    },
+    "89415cb4833ffff": {
+      "count": 23463,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (23,463 lượt)"
+    },
+    "89415cb4837ffff": {
+      "count": 10776,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (10,776 lượt)"
+    },
+    "89415cb4857ffff": {
+      "count": 444,
+      "score": 5.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (444 lượt)"
+    },
+    "89415cb4863ffff": {
+      "count": 1332,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,332 lượt)"
+    },
+    "89415cb486bffff": {
+      "count": 48402,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (48,402 lượt)"
+    },
+    "89415cb486fffff": {
+      "count": 32402,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (32,402 lượt)"
+    },
+    "89415cb4873ffff": {
+      "count": 2664,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,664 lượt)"
+    },
+    "89415cb4883ffff": {
+      "count": 102067,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (102,067 lượt)"
+    },
+    "89415cb4887ffff": {
+      "count": 28677,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (28,677 lượt)"
+    },
+    "89415cb488bffff": {
+      "count": 88555,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (88,555 lượt)"
+    },
+    "89415cb4893ffff": {
+      "count": 20856,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (20,856 lượt)"
+    },
+    "89415cb4897ffff": {
+      "count": 77912,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (77,912 lượt)"
+    },
+    "89415cb48a7ffff": {
+      "count": 3088,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,088 lượt)"
+    },
+    "89415cb48abffff": {
+      "count": 20856,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (20,856 lượt)"
+    },
+    "89415cb48b7ffff": {
+      "count": 4780,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,780 lượt)"
+    },
+    "89415cb48bbffff": {
+      "count": 27981,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (27,981 lượt)"
+    },
+    "89415cb48c3ffff": {
+      "count": 57834,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (57,834 lượt)"
+    },
+    "89415cb48c7ffff": {
+      "count": 59335,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (59,335 lượt)"
+    },
+    "89415cb48cbffff": {
+      "count": 68180,
+      "score": 9.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (68,180 lượt)"
+    },
+    "89415cb48cfffff": {
+      "count": 11967,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (11,967 lượt)"
+    },
+    "89415cb48d3ffff": {
+      "count": 1036,
+      "score": 5.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,036 lượt)"
+    },
+    "89415cb48dbffff": {
+      "count": 68180,
+      "score": 9.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (68,180 lượt)"
+    },
+    "89415cb4903ffff": {
+      "count": 75295,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (75,295 lượt)"
+    },
+    "89415cb4907ffff": {
+      "count": 204738,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (204,738 lượt)"
+    },
+    "89415cb490bffff": {
+      "count": 91327,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (91,327 lượt)"
+    },
+    "89415cb490fffff": {
+      "count": 54320,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (54,320 lượt)"
+    },
+    "89415cb4913ffff": {
+      "count": 32229,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (32,229 lượt)"
+    },
+    "89415cb4917ffff": {
+      "count": 25743,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (25,743 lượt)"
+    },
+    "89415cb491bffff": {
+      "count": 10369,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (10,369 lượt)"
+    },
+    "89415cb4923ffff": {
+      "count": 444,
+      "score": 5.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (444 lượt)"
+    },
+    "89415cb4927ffff": {
+      "count": 132567,
+      "score": 9.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (132,567 lượt)"
+    },
+    "89415cb492bffff": {
+      "count": 1332,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,332 lượt)"
+    },
+    "89415cb492fffff": {
+      "count": 1036,
+      "score": 5.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,036 lượt)"
+    },
+    "89415cb4933ffff": {
+      "count": 23964,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (23,964 lượt)"
+    },
+    "89415cb4937ffff": {
+      "count": 111761,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (111,761 lượt)"
+    },
+    "89415cb4943ffff": {
+      "count": 22392,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (22,392 lượt)"
+    },
+    "89415cb4947ffff": {
+      "count": 144515,
+      "score": 9.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (144,515 lượt)"
+    },
+    "89415cb494bffff": {
+      "count": 86216,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (86,216 lượt)"
+    },
+    "89415cb494fffff": {
+      "count": 120982,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (120,982 lượt)"
+    },
+    "89415cb4953ffff": {
+      "count": 25128,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (25,128 lượt)"
+    },
+    "89415cb4957ffff": {
+      "count": 1981,
+      "score": 6.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,981 lượt)"
+    },
+    "89415cb4963ffff": {
+      "count": 8136,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,136 lượt)"
+    },
+    "89415cb4967ffff": {
+      "count": 79115,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (79,115 lượt)"
+    },
+    "89415cb496bffff": {
+      "count": 61704,
+      "score": 9.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (61,704 lượt)"
+    },
+    "89415cb496fffff": {
+      "count": 83176,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (83,176 lượt)"
+    },
+    "89415cb4973ffff": {
+      "count": 606,
+      "score": 5.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (606 lượt)"
+    },
+    "89415cb4977ffff": {
+      "count": 57610,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (57,610 lượt)"
+    },
+    "89415cb497bffff": {
+      "count": 9002,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (9,002 lượt)"
+    },
+    "89415cb4987ffff": {
+      "count": 96584,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (96,584 lượt)"
+    },
+    "89415cb498fffff": {
+      "count": 12298,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,298 lượt)"
+    },
+    "89415cb4997ffff": {
+      "count": 120730,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (120,730 lượt)"
+    },
+    "89415cb49a3ffff": {
+      "count": 54469,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (54,469 lượt)"
+    },
+    "89415cb49a7ffff": {
+      "count": 3629,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,629 lượt)"
+    },
+    "89415cb49abffff": {
+      "count": 91630,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (91,630 lượt)"
+    },
+    "89415cb49afffff": {
+      "count": 115125,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (115,125 lượt)"
+    },
+    "89415cb49b3ffff": {
+      "count": 47826,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (47,826 lượt)"
+    },
+    "89415cb49b7ffff": {
+      "count": 45151,
+      "score": 8.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (45,151 lượt)"
+    },
+    "89415cb49bbffff": {
+      "count": 117803,
+      "score": 9.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (117,803 lượt)"
+    },
+    "89415cb49c3ffff": {
+      "count": 3828,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,828 lượt)"
+    },
+    "89415cb49c7ffff": {
+      "count": 27117,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (27,117 lượt)"
+    },
+    "89415cb49cfffff": {
+      "count": 45105,
+      "score": 8.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (45,105 lượt)"
+    },
+    "89415cb49d3ffff": {
+      "count": 2744,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,744 lượt)"
+    },
+    "89415cb49dbffff": {
+      "count": 312,
+      "score": 4.7,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (312 lượt)"
+    },
+    "89415cb4a03ffff": {
+      "count": 2793,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,793 lượt)"
+    },
+    "89415cb4a07ffff": {
+      "count": 2457,
+      "score": 6.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,457 lượt)"
+    },
+    "89415cb4a0bffff": {
+      "count": 519,
+      "score": 5.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (519 lượt)"
+    },
+    "89415cb4a0fffff": {
+      "count": 2966,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,966 lượt)"
+    },
+    "89415cb4a13ffff": {
+      "count": 3510,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,510 lượt)"
+    },
+    "89415cb4a17ffff": {
+      "count": 702,
+      "score": 5.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (702 lượt)"
+    },
+    "89415cb4a1bffff": {
+      "count": 346,
+      "score": 4.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (346 lượt)"
+    },
+    "89415cb4a27ffff": {
+      "count": 2940,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,940 lượt)"
+    },
+    "89415cb4a2bffff": {
+      "count": 3495,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,495 lượt)"
+    },
+    "89415cb4a2fffff": {
+      "count": 8313,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,313 lượt)"
+    },
+    "89415cb4a3bffff": {
+      "count": 4543,
+      "score": 6.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,543 lượt)"
+    },
+    "89415cb4a57ffff": {
+      "count": 865,
+      "score": 5.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (865 lượt)"
+    },
+    "89415cb4a77ffff": {
+      "count": 351,
+      "score": 4.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (351 lượt)"
+    },
+    "89415cb4a83ffff": {
+      "count": 53616,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (53,616 lượt)"
+    },
+    "89415cb4a87ffff": {
+      "count": 60750,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (60,750 lượt)"
+    },
+    "89415cb4a8bffff": {
+      "count": 4977,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,977 lượt)"
+    },
+    "89415cb4a8fffff": {
+      "count": 6306,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,306 lượt)"
+    },
+    "89415cb4a93ffff": {
+      "count": 41356,
+      "score": 8.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (41,356 lượt)"
+    },
+    "89415cb4a9bffff": {
+      "count": 16799,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,799 lượt)"
+    },
+    "89415cb4aa3ffff": {
+      "count": 5348,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,348 lượt)"
+    },
+    "89415cb4aa7ffff": {
+      "count": 14886,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (14,886 lượt)"
+    },
+    "89415cb4aabffff": {
+      "count": 2896,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,896 lượt)"
+    },
+    "89415cb4aafffff": {
+      "count": 5068,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,068 lượt)"
+    },
+    "89415cb4ab3ffff": {
+      "count": 48722,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (48,722 lượt)"
+    },
+    "89415cb4ab7ffff": {
+      "count": 47810,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (47,810 lượt)"
+    },
+    "89415cb4abbffff": {
+      "count": 7824,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,824 lượt)"
+    },
+    "89415cb4ac3ffff": {
+      "count": 1596,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,596 lượt)"
+    },
+    "89415cb4acbffff": {
+      "count": 2754,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,754 lượt)"
+    },
+    "89415cb4acfffff": {
+      "count": 1038,
+      "score": 5.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,038 lượt)"
+    },
+    "89415cb4ad3ffff": {
+      "count": 2793,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,793 lượt)"
+    },
+    "89415cb4ad7ffff": {
+      "count": 399,
+      "score": 4.9,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (399 lượt)"
+    },
+    "89415cb4adbffff": {
+      "count": 3192,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,192 lượt)"
+    },
+    "89415cb4b03ffff": {
+      "count": 8205,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,205 lượt)"
+    },
+    "89415cb4b0bffff": {
+      "count": 8961,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,961 lượt)"
+    },
+    "89415cb4b0fffff": {
+      "count": 270,
+      "score": 4.6,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (270 lượt)"
+    },
+    "89415cb4b13ffff": {
+      "count": 10768,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (10,768 lượt)"
+    },
+    "89415cb4b17ffff": {
+      "count": 12303,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,303 lượt)"
+    },
+    "89415cb4b1bffff": {
+      "count": 2774,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,774 lượt)"
+    },
+    "89415cb4b23ffff": {
+      "count": 7724,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,724 lượt)"
+    },
+    "89415cb4b27ffff": {
+      "count": 8470,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,470 lượt)"
+    },
+    "89415cb4b2bffff": {
+      "count": 12846,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,846 lượt)"
+    },
+    "89415cb4b2fffff": {
+      "count": 464,
+      "score": 5.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (464 lượt)"
+    },
+    "89415cb4b37ffff": {
+      "count": 3630,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,630 lượt)"
+    },
+    "89415cb4b47ffff": {
+      "count": 8081,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,081 lượt)"
+    },
+    "89415cb4b4bffff": {
+      "count": 1384,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,384 lượt)"
+    },
+    "89415cb4b57ffff": {
+      "count": 608,
+      "score": 5.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (608 lượt)"
+    },
+    "89415cb4b5bffff": {
+      "count": 519,
+      "score": 5.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (519 lượt)"
+    },
+    "89415cb4b63ffff": {
+      "count": 1443,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,443 lượt)"
+    },
+    "89415cb4b67ffff": {
+      "count": 11176,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (11,176 lượt)"
+    },
+    "89415cb4b6bffff": {
+      "count": 16090,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,090 lượt)"
+    },
+    "89415cb4b6fffff": {
+      "count": 15844,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (15,844 lượt)"
+    },
+    "89415cb4b73ffff": {
+      "count": 1485,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,485 lượt)"
+    },
+    "89415cb4b7bffff": {
+      "count": 8418,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,418 lượt)"
+    },
+    "89415cb4b83ffff": {
+      "count": 35266,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (35,266 lượt)"
+    },
+    "89415cb4b87ffff": {
+      "count": 138129,
+      "score": 9.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (138,129 lượt)"
+    },
+    "89415cb4b8bffff": {
+      "count": 96467,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (96,467 lượt)"
+    },
+    "89415cb4b8fffff": {
+      "count": 105798,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (105,798 lượt)"
+    },
+    "89415cb4b93ffff": {
+      "count": 33695,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (33,695 lượt)"
+    },
+    "89415cb4b9bffff": {
+      "count": 64424,
+      "score": 9.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (64,424 lượt)"
+    },
+    "89415cb4ba3ffff": {
+      "count": 57649,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (57,649 lượt)"
+    },
+    "89415cb4ba7ffff": {
+      "count": 20568,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (20,568 lượt)"
+    },
+    "89415cb4bb3ffff": {
+      "count": 21554,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (21,554 lượt)"
+    },
+    "89415cb4bb7ffff": {
+      "count": 69285,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (69,285 lượt)"
+    },
+    "89415cb4bbbffff": {
+      "count": 56014,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (56,014 lượt)"
+    },
+    "89415cb4bcbffff": {
+      "count": 6212,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,212 lượt)"
+    },
+    "89415cb4bcfffff": {
+      "count": 2432,
+      "score": 6.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,432 lượt)"
+    },
+    "89415cb4bd3ffff": {
+      "count": 186897,
+      "score": 9.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (186,897 lượt)"
+    },
+    "89415cb4bd7ffff": {
+      "count": 221260,
+      "score": 10.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (221,260 lượt)"
+    },
+    "89415cb4bdbffff": {
+      "count": 5792,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,792 lượt)"
+    },
+    "89415cb4c07ffff": {
+      "count": 2669,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,669 lượt)"
+    },
+    "89415cb4c0bffff": {
+      "count": 32751,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (32,751 lượt)"
+    },
+    "89415cb4c13ffff": {
+      "count": 102315,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (102,315 lượt)"
+    },
+    "89415cb4c17ffff": {
+      "count": 7886,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,886 lượt)"
+    },
+    "89415cb4c1bffff": {
+      "count": 99783,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (99,783 lượt)"
+    },
+    "89415cb4c23ffff": {
+      "count": 8032,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,032 lượt)"
+    },
+    "89415cb4c27ffff": {
+      "count": 5827,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,827 lượt)"
+    },
+    "89415cb4c2bffff": {
+      "count": 19793,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,793 lượt)"
+    },
+    "89415cb4c33ffff": {
+      "count": 5670,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,670 lượt)"
+    },
+    "89415cb4c37ffff": {
+      "count": 12102,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,102 lượt)"
+    },
+    "89415cb4c43ffff": {
+      "count": 76466,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (76,466 lượt)"
+    },
+    "89415cb4c47ffff": {
+      "count": 93102,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (93,102 lượt)"
+    },
+    "89415cb4c53ffff": {
+      "count": 2947,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,947 lượt)"
+    },
+    "89415cb4c57ffff": {
+      "count": 32751,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (32,751 lượt)"
+    },
+    "89415cb4c63ffff": {
+      "count": 16515,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,515 lượt)"
+    },
+    "89415cb4c67ffff": {
+      "count": 1835,
+      "score": 6.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,835 lượt)"
+    },
+    "89415cb4c6bffff": {
+      "count": 2871,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,871 lượt)"
+    },
+    "89415cb4c77ffff": {
+      "count": 7340,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,340 lượt)"
+    },
+    "89415cb4c7bffff": {
+      "count": 16160,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,160 lượt)"
+    },
+    "89415cb4c83ffff": {
+      "count": 78751,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (78,751 lượt)"
+    },
+    "89415cb4c87ffff": {
+      "count": 620,
+      "score": 5.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (620 lượt)"
+    },
+    "89415cb4c8bffff": {
+      "count": 1941,
+      "score": 6.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,941 lượt)"
+    },
+    "89415cb4c8fffff": {
+      "count": 81238,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (81,238 lượt)"
+    },
+    "89415cb4c97ffff": {
+      "count": 90292,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (90,292 lượt)"
+    },
+    "89415cb4c9bffff": {
+      "count": 2526,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,526 lượt)"
+    },
+    "89415cb4ca3ffff": {
+      "count": 772,
+      "score": 5.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (772 lượt)"
+    },
+    "89415cb4ca7ffff": {
+      "count": 4632,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,632 lượt)"
+    },
+    "89415cb4cabffff": {
+      "count": 793,
+      "score": 5.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (793 lượt)"
+    },
+    "89415cb4cafffff": {
+      "count": 4632,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,632 lượt)"
+    },
+    "89415cb4cb3ffff": {
+      "count": 930,
+      "score": 5.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (930 lượt)"
+    },
+    "89415cb4cb7ffff": {
+      "count": 6176,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,176 lượt)"
+    },
+    "89415cb4cbbffff": {
+      "count": 2496,
+      "score": 6.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,496 lượt)"
+    },
+    "89415cb4cc7ffff": {
+      "count": 2947,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,947 lượt)"
+    },
+    "89415cb4ccbffff": {
+      "count": 1530,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,530 lượt)"
+    },
+    "89415cb4ccfffff": {
+      "count": 5570,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,570 lượt)"
+    },
+    "89415cb4cd3ffff": {
+      "count": 314,
+      "score": 4.7,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (314 lượt)"
+    },
+    "89415cb4cd7ffff": {
+      "count": 4467,
+      "score": 6.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,467 lượt)"
+    },
+    "89415cb4d03ffff": {
+      "count": 8469,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,469 lượt)"
+    },
+    "89415cb4d07ffff": {
+      "count": 71536,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (71,536 lượt)"
+    },
+    "89415cb4d0bffff": {
+      "count": 80005,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (80,005 lượt)"
+    },
+    "89415cb4d0fffff": {
+      "count": 36714,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (36,714 lượt)"
+    },
+    "89415cb4d33ffff": {
+      "count": 71536,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (71,536 lượt)"
+    },
+    "89415cb4d37ffff": {
+      "count": 473,
+      "score": 5.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (473 lượt)"
+    },
+    "89415cb4d43ffff": {
+      "count": 81394,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (81,394 lượt)"
+    },
+    "89415cb4d47ffff": {
+      "count": 1903,
+      "score": 6.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,903 lượt)"
+    },
+    "89415cb4d4bffff": {
+      "count": 21270,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (21,270 lượt)"
+    },
+    "89415cb4d4fffff": {
+      "count": 3390,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,390 lượt)"
+    },
+    "89415cb4d53ffff": {
+      "count": 3935,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,935 lượt)"
+    },
+    "89415cb4d57ffff": {
+      "count": 53179,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (53,179 lượt)"
+    },
+    "89415cb4d5bffff": {
+      "count": 56274,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (56,274 lượt)"
+    },
+    "89415cb4d6bffff": {
+      "count": 148,
+      "score": 4.1,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (148 lượt)"
+    },
+    "89415cb4da7ffff": {
+      "count": 23935,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (23,935 lượt)"
+    },
+    "89415cb4dafffff": {
+      "count": 61175,
+      "score": 9.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (61,175 lượt)"
+    },
+    "89415cb4db7ffff": {
+      "count": 18860,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (18,860 lượt)"
+    },
+    "89415cb4e0bffff": {
+      "count": 60390,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (60,390 lượt)"
+    },
+    "89415cb4e0fffff": {
+      "count": 23089,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (23,089 lượt)"
+    },
+    "89415cb4e13ffff": {
+      "count": 29220,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (29,220 lượt)"
+    },
+    "89415cb4e17ffff": {
+      "count": 87660,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (87,660 lượt)"
+    },
+    "89415cb4e1bffff": {
+      "count": 23440,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (23,440 lượt)"
+    },
+    "89415cb4e47ffff": {
+      "count": 1855,
+      "score": 6.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,855 lượt)"
+    },
+    "89415cb4e4bffff": {
+      "count": 2968,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,968 lượt)"
+    },
+    "89415cb4e4fffff": {
+      "count": 2968,
+      "score": 6.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,968 lượt)"
+    },
+    "89415cb4e57ffff": {
+      "count": 16060,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,060 lượt)"
+    },
+    "89415cb4e5bffff": {
+      "count": 5250,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,250 lượt)"
+    },
+    "89415cb4e63ffff": {
+      "count": 19866,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,866 lượt)"
+    },
+    "89415cb4e67ffff": {
+      "count": 48687,
+      "score": 8.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (48,687 lượt)"
+    },
+    "89415cb4e6fffff": {
+      "count": 11301,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (11,301 lượt)"
+    },
+    "89415cb4e73ffff": {
+      "count": 24575,
+      "score": 8.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (24,575 lượt)"
+    },
+    "89415cb4e77ffff": {
+      "count": 59084,
+      "score": 8.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (59,084 lượt)"
+    },
+    "89415cb4e83ffff": {
+      "count": 340,
+      "score": 4.7,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (340 lượt)"
+    },
+    "89415cb4e8bffff": {
+      "count": 97865,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (97,865 lượt)"
+    },
+    "89415cb4e8fffff": {
+      "count": 19480,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (19,480 lượt)"
+    },
+    "89415cb4e93ffff": {
+      "count": 1360,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,360 lượt)"
+    },
+    "89415cb4e9bffff": {
+      "count": 680,
+      "score": 5.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (680 lượt)"
+    },
+    "89415cb4eabffff": {
+      "count": 99190,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (99,190 lượt)"
+    },
+    "89415cb4eafffff": {
+      "count": 87660,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (87,660 lượt)"
+    },
+    "89415cb4ec3ffff": {
+      "count": 6265,
+      "score": 7.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,265 lượt)"
+    },
+    "89415cb4ec7ffff": {
+      "count": 81135,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (81,135 lượt)"
+    },
+    "89415cb4ecbffff": {
+      "count": 90109,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (90,109 lượt)"
+    },
+    "89415cb4ecfffff": {
+      "count": 165415,
+      "score": 9.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (165,415 lượt)"
+    },
+    "89415cb4ed7ffff": {
+      "count": 5370,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,370 lượt)"
+    },
+    "89415cb5113ffff": {
+      "count": 10968,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (10,968 lượt)"
+    },
+    "89415cb5117ffff": {
+      "count": 10088,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (10,088 lượt)"
+    },
+    "89415cb5127ffff": {
+      "count": 16307,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (16,307 lượt)"
+    },
+    "89415cb5137ffff": {
+      "count": 15250,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (15,250 lượt)"
+    },
+    "89415cb5183ffff": {
+      "count": 1570,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,570 lượt)"
+    },
+    "89415cb518bffff": {
+      "count": 7118,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,118 lượt)"
+    },
+    "89415cb518fffff": {
+      "count": 3461,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,461 lượt)"
+    },
+    "89415cb5193ffff": {
+      "count": 157,
+      "score": 4.1,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (157 lượt)"
+    },
+    "89415cb5197ffff": {
+      "count": 1256,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,256 lượt)"
+    },
+    "89415cb51a3ffff": {
+      "count": 9680,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (9,680 lượt)"
+    },
+    "89415cb51abffff": {
+      "count": 12315,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,315 lượt)"
+    },
+    "89415cb51afffff": {
+      "count": 17772,
+      "score": 8.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (17,772 lượt)"
+    },
+    "89415cb51bbffff": {
+      "count": 7920,
+      "score": 7.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (7,920 lượt)"
+    },
+    "89415cb552fffff": {
+      "count": 628,
+      "score": 5.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (628 lượt)"
+    },
+    "89415cb5c13ffff": {
+      "count": 15368,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (15,368 lượt)"
+    },
+    "89415cb5c17ffff": {
+      "count": 14488,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (14,488 lượt)"
+    },
+    "89415cb5c1bffff": {
+      "count": 3402,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,402 lượt)"
+    },
+    "89415cb5c53ffff": {
+      "count": 8564,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,564 lượt)"
+    },
+    "89415cb5ca3ffff": {
+      "count": 13608,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,608 lượt)"
+    },
+    "89415cb5ca7ffff": {
+      "count": 13608,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,608 lượt)"
+    },
+    "89415cb5cabffff": {
+      "count": 8505,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,505 lượt)"
+    },
+    "89415cb5cbbffff": {
+      "count": 821,
+      "score": 5.5,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (821 lượt)"
+    },
+    "89415cb5cc7ffff": {
+      "count": 5103,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,103 lượt)"
+    },
+    "89415cb5ccbffff": {
+      "count": 1642,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,642 lượt)"
+    },
+    "89415cb5ccfffff": {
+      "count": 15309,
+      "score": 7.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (15,309 lượt)"
+    },
+    "89415cb5d07ffff": {
+      "count": 346,
+      "score": 4.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (346 lượt)"
+    },
+    "89415cb5d17ffff": {
+      "count": 346,
+      "score": 4.8,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (346 lượt)"
+    },
+    "89415cb5d33ffff": {
+      "count": 2076,
+      "score": 6.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,076 lượt)"
+    },
+    "89415cb5d37ffff": {
+      "count": 1903,
+      "score": 6.1,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,903 lượt)"
+    },
+    "89415cb5d83ffff": {
+      "count": 17010,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (17,010 lượt)"
+    },
+    "89415cb5d87ffff": {
+      "count": 8797,
+      "score": 7.4,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (8,797 lượt)"
+    },
+    "89415cb5d97ffff": {
+      "count": 11267,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (11,267 lượt)"
+    },
+    "89415cb5d9bffff": {
+      "count": 13608,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (13,608 lượt)"
+    },
+    "89415cb5dabffff": {
+      "count": 5321,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,321 lượt)"
+    },
+    "89415cb5dafffff": {
+      "count": 3990,
+      "score": 6.7,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,990 lượt)"
+    },
+    "89415cb5dbbffff": {
+      "count": 4802,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,802 lượt)"
+    },
+    "89415cb5dd3ffff": {
+      "count": 4282,
+      "score": 6.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (4,282 lượt)"
+    },
+    "89415cb6867ffff": {
+      "count": 64614,
+      "score": 9.0,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (64,614 lượt)"
+    },
+    "89415cb686fffff": {
+      "count": 96921,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (96,921 lượt)"
+    },
+    "89415cb694bffff": {
+      "count": 2318,
+      "score": 6.3,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (2,318 lượt)"
+    },
+    "89415cb6a27ffff": {
+      "count": 31956,
+      "score": 8.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (31,956 lượt)"
+    },
+    "89415cb6a4fffff": {
+      "count": 157,
+      "score": 4.1,
+      "tier": "LOW_FAMILIARITY",
+      "color": "#ea580c",
+      "fillColor": "#fb923c",
+      "label": "Khu vực ít khi đi vào (157 lượt)"
+    },
+    "89415cb6a6bffff": {
+      "count": 1256,
+      "score": 5.8,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,256 lượt)"
+    },
+    "89415cb6a6fffff": {
+      "count": 628,
+      "score": 5.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (628 lượt)"
+    },
+    "89415cb6b0bffff": {
+      "count": 1696,
+      "score": 6.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,696 lượt)"
+    },
+    "89415cb6b13ffff": {
+      "count": 1348,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,348 lượt)"
+    },
+    "89415cb6b1bffff": {
+      "count": 10784,
+      "score": 7.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (10,784 lượt)"
+    },
+    "89415cb6b43ffff": {
+      "count": 3401,
+      "score": 6.6,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (3,401 lượt)"
+    },
+    "89415cb6b47ffff": {
+      "count": 5059,
+      "score": 6.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,059 lượt)"
+    },
+    "89415cb6b4bffff": {
+      "count": 1395,
+      "score": 5.9,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (1,395 lượt)"
+    },
+    "89415cb6b4fffff": {
+      "count": 6948,
+      "score": 7.2,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (6,948 lượt)"
+    },
+    "89415cb6b53ffff": {
+      "count": 36517,
+      "score": 8.5,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (36,517 lượt)"
+    },
+    "89415cb6b57ffff": {
+      "count": 12547,
+      "score": 7.7,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,547 lượt)"
+    },
+    "89415cb6b5bffff": {
+      "count": 100710,
+      "score": 9.4,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (100,710 lượt)"
+    },
+    "89415cb6b83ffff": {
+      "count": 142693,
+      "score": 9.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (142,693 lượt)"
+    },
+    "89415cb6b87ffff": {
+      "count": 165158,
+      "score": 9.8,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (165,158 lượt)"
+    },
+    "89415cb6b8bffff": {
+      "count": 12132,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,132 lượt)"
+    },
+    "89415cb6b8fffff": {
+      "count": 12132,
+      "score": 7.6,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (12,132 lượt)"
+    },
+    "89415cb6b9bffff": {
+      "count": 75383,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (75,383 lượt)"
+    },
+    "89415cb6ba7ffff": {
+      "count": 21617,
+      "score": 8.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (21,617 lượt)"
+    },
+    "89415cb6bb3ffff": {
+      "count": 27570,
+      "score": 8.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (27,570 lượt)"
+    },
+    "89415cb6bb7ffff": {
+      "count": 17420,
+      "score": 7.9,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (17,420 lượt)"
+    },
+    "89415cb6bc3ffff": {
+      "count": 96921,
+      "score": 9.3,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (96,921 lượt)"
+    },
+    "89415cb6bc7ffff": {
+      "count": 5392,
+      "score": 7.0,
+      "tier": "MEDIUM_FAMILIARITY",
+      "color": "#d97706",
+      "fillColor": "#fbbf24",
+      "label": "Khu vực tài xế hay đi vào (5,392 lượt)"
+    },
+    "89415cb6bcbffff": {
+      "count": 86152,
+      "score": 9.2,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (86,152 lượt)"
+    },
+    "89415cb6bd7ffff": {
+      "count": 75383,
+      "score": 9.1,
+      "tier": "HIGH_FAMILIARITY",
+      "color": "#059669",
+      "fillColor": "#10b981",
+      "label": "Hành lang rất quen thuộc (75,383 lượt)"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 Unit tests for DemandService and EnergyServiceRequest convergence.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 import pytest
 
 from backend.app.services.demand.models import (
@@ -12,12 +12,51 @@ from backend.app.services.demand.models import (
     RequestSource,
     ServiceType,
 )
-from backend.app.services.demand.service import DemandService, get_demand_service
+from backend.app.services.demand.service import DemandService, create_demand_service
 
 
 @pytest.fixture
 def service():
-    return get_demand_service()
+    return create_demand_service()
+
+
+@pytest.mark.parametrize("soc,range_km,trip_km,level", [
+    (84, 150, 34.6, "SAFE"),
+    (12, 10, 34.6, "CRITICAL"),
+    (30, 36, 34.6, "ADVISORY"),
+    (12, 100, 20, "ADVISORY"),
+    (None, None, 34.6, "UNAVAILABLE"),
+])
+def test_driver_intent_keeps_independent_physical_energy_assessment(service, soc, range_km, trip_km, level):
+    context = DemandContext(vehicle_id="V0001", current_soc_pct=soc,
+                            estimated_remaining_range_km=range_km,
+                            remaining_trip_distance_km=trip_km, safety_reserve_km=5)
+    request = service.process_driver_request(context, RequestedServiceType.CHARGING)
+    assert request.need_service is True
+    assert request.request_valid is True
+    assert request.reason_code == ReasonCode.VALID_REQUEST
+    assert request.energy_assessment.warning_level == level
+    assert request.energy_assessment == service.evaluate_auto_demand(context).energy_assessment
+
+
+def test_computed_range_is_preserved_for_candidate_search(service):
+    context = DemandContext(vehicle_id="V0001", current_soc_pct=15, remaining_trip_distance_km=10)
+    capability = service._resolver.resolve_by_vehicle_id(context.vehicle_id)
+    expected = capability.estimate_range_km(context.current_soc_pct)
+    for request in [service.evaluate_auto_demand(context),
+                    service.process_driver_request(context, RequestedServiceType.CHARGING)]:
+        assert request.estimated_remaining_range_km == pytest.approx(expected, abs=0.001)
+        assert request.energy_assessment.estimated_remaining_range_km == request.estimated_remaining_range_km
+
+
+def test_range_only_driver_request_preserves_candidate_evidence_without_asserting_safe_soc(service):
+    context = DemandContext(vehicle_id="V0001", estimated_remaining_range_km=100,
+                            remaining_trip_distance_km=34.6, safety_reserve_km=5)
+    request = service.process_driver_request(context, RequestedServiceType.CHARGING)
+    assert request.estimated_remaining_range_km == 100
+    assert request.remaining_trip_distance_km == 34.6
+    assert request.safety_reserve_km == 5
+    assert request.energy_assessment.warning_level == 'UNAVAILABLE'
 
 
 def test_auto_demand_car_no_service(service):
@@ -26,7 +65,7 @@ def test_auto_demand_car_no_service(service):
         vehicle_id="V0001",  # VF_3 (car)
         driver_id="D0001",
         trip_id="T0001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=85.0,
         estimated_remaining_range_km=150.0,
         remaining_trip_distance_km=10.0,
@@ -50,7 +89,7 @@ def test_auto_demand_car_need_charge(service):
         vehicle_id="V0002",  # VF_5 (car)
         driver_id="D0002",
         trip_id="T0002",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=15.0,  # <= 20%
         estimated_remaining_range_km=30.0,
         remaining_trip_distance_km=20.0,
@@ -71,7 +110,7 @@ def test_auto_demand_swap_bike_remains_unresolved(service):
         vehicle_id="V0003",  # EVO (swap-capable bike)
         driver_id="D0003",
         trip_id="T0003",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=10.0,
         estimated_remaining_range_km=8.0,
         remaining_trip_distance_km=15.0,
@@ -91,7 +130,7 @@ def test_driver_request_car_charging(service):
     ctx = DemandContext(
         vehicle_id="V0001",
         driver_id="D0001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=40.0,
     )
     req = service.process_driver_request(ctx, RequestedServiceType.CHARGING)
@@ -108,7 +147,7 @@ def test_driver_request_car_swap_rejected(service):
     ctx = DemandContext(
         vehicle_id="V0001",
         driver_id="D0001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=40.0,
     )
     req = service.process_driver_request(ctx, RequestedServiceType.BATTERY_SWAP)
@@ -125,7 +164,7 @@ def test_driver_request_swap_bike_any(service):
     ctx = DemandContext(
         vehicle_id="V0003",
         driver_id="D0003",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=40.0,
     )
     req = service.process_driver_request(ctx, RequestedServiceType.ANY)
@@ -143,7 +182,7 @@ def test_driver_request_swap_bike_swap(service):
     ctx = DemandContext(
         vehicle_id="V0003",
         driver_id="D0003",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=40.0,
     )
     req = service.process_driver_request(ctx, RequestedServiceType.BATTERY_SWAP)
@@ -160,7 +199,7 @@ def test_driver_request_car_any(service):
     ctx = DemandContext(
         vehicle_id="V0001",
         driver_id="D0001",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=50.0,
     )
     req = service.process_driver_request(ctx, RequestedServiceType.ANY)
@@ -178,7 +217,7 @@ def test_driver_request_charge_only_bike_any(service):
     ctx = DemandContext(
         vehicle_id="V0024",
         driver_id="D0024",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         current_soc_pct=45.0,
     )
     req = service.process_driver_request(ctx, RequestedServiceType.ANY)

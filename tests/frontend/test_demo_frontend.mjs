@@ -16,7 +16,7 @@ import {
     simplifyTrajectoryRDP
 } from '../../backend/app/static/demo/js/map.js';
 import { classifyEnergyWarning } from '../../backend/app/static/demo/js/components.js';
-import { DriverState } from '../../backend/app/static/demo/js/driver_mode.js';
+import { DriverState } from '../../backend/app/static/demo/js/domain/driver_state.js';
 
 test('ApiError sets flags correctly', () => {
     const err409 = new ApiError('Conflict', 409, 'CANDIDATE_STATE_CHANGED', { detail: 'state changed' });
@@ -72,6 +72,7 @@ test('classifyEnergyWarning maps backend reason codes to UX warning levels', () 
     const critResult2 = classifyEnergyWarning({
         need_service: true,
         reason_code: 'LOW_SOC_AND_INSUFFICIENT_RANGE',
+        energy_assessment: {warning_level: 'CRITICAL', reason_code: 'LOW_SOC_AND_INSUFFICIENT_RANGE'},
         estimated_remaining_range_km: 5.0,
         remaining_trip_distance_km: 10.0
     });

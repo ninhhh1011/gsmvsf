@@ -4,6 +4,7 @@ Tests for Candidate Search REST API endpoints.
 
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
 import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -20,8 +21,11 @@ def setup_mock_service():
     mock_engine = MockRoutingAdapter(winding_factor=1.2, average_speed_mps=8.33)
     service = CandidateSearchService(routing_engine=mock_engine)
     set_candidate_service(service)
+    previous = getattr(app.state, 'recommendation_workflow', None)
+    app.state.recommendation_workflow = SimpleNamespace(search_candidates=service.search_candidates)
     yield
     set_candidate_service(None)
+    app.state.recommendation_workflow = previous
 
 
 @pytest.mark.asyncio
