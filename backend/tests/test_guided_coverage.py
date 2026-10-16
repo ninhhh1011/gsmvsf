@@ -2,9 +2,17 @@ import csv
 import gzip
 
 import h3
+import pytest
 
 from scripts.audit_guided_coverage import continuous_paths, reference_roads, road_midpoint, intersect_bbox, local_targets
 from backend.tests.test_route_deviations import evidence, point, BASE
+
+
+def test_local_target_limits_are_validated():
+    with pytest.raises(ValueError, match='target'):
+        local_targets([], [105.7, 20.9, 105.9, 21.1], 0)
+    with pytest.raises(ValueError, match='resolution'):
+        local_targets([], [105.7, 20.9, 105.9, 21.1], 120, 15)
 
 
 def test_reference_roads_deduplicate_directions_and_do_not_include_restricted_or_nonmotor_roads(tmp_path):

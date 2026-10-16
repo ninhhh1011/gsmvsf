@@ -93,3 +93,6 @@ graphify-out/
 
 # Local Git worktrees
 .worktrees/
+
+# Reproducible paired-road benchmark artifacts (summary is committed in docs/reports)
+runtime/guided-quality-20261015/

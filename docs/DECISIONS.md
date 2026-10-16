@@ -1,5 +1,28 @@
 # DECISIONS
 
+## ADR-030: Coverage-driven paired benchmark with fixed ranking policy
+
+**Date:** 2026-10-15/16. **Status:** Owner authorized planning and immediate implementation.
+
+Keep 80/10/10 in runtime. Reuse imported GraphHopper geometry and uncovered local
+reference targets within the existing map intersection. An opt-in versioned seeder
+selects at most 120 templates by incremental sampled H3-11 footprint; the offline
+PostGIS audit separately measures actual reference-length proximity before/after.
+Selection-cell gains are not authoritative directed-road or junction coverage.
+
+Freeze H3-7 origin-group splits and disjoint synthetic driver identities before
+running detection. Keep all variants of a template in one split and schedule
+validation/test later than train. Only train enters synthetic history. Whole paths
+can cross group boundaries, so do not claim unseen-road or spatially disjoint tests.
+FOLLOW, EXIT, EXIT_LATE, RETURN_EXIT, REROUTE, GAP and NOISE are designed strata.
+Report false positives/negatives and event-count discrepancies; never discard a
+case because the detector disagrees. Independent maneuver declarations remain offline.
+
+The prior weight experiment changed generation assumptions after held-out inspection;
+its measured gain is exploratory, not an independent validation of learned weights.
+Historical Week 6 work exists and must not be called unimplemented. Current
+production readiness remains distinct from historical completion and local health.
+
 ## ADR-013: Week 4 snapshot persistence and eligibility ownership
 
 **Date:** 2026-09-21. **Status:** Approved by the user for Week 4.

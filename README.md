@@ -231,4 +231,16 @@ documentation tree. Large predictions/logs and local secrets stay in ignored
 `runtime/week5/`.
 
 Week 5 is request-driven, with no recommendation daemon or push/streaming system.
-Production tuning and lifecycle persistence remain Week 6/future work.
+Week 6 concurrency, shared Redis state, metrics and readiness have a historical
+completion tag (`week6-productionization-complete`, 2026-09-23). The current
+four-API, single-host deployment retains a single-node data plane. Public-production
+readiness and capacity require current verification; the historical tag is not a
+guarantee for later features. See [operations](docs/OPERATIONS.md).
+
+The road-data benchmark keeps runtime weights at **80/10/10**. It selects compact
+real-road templates by additional sampled footprint, freezes grouped
+train/validation/test records, and evaluates seven designed maneuver/control types.
+Use `python -m scripts.audit_guided_coverage --help` and
+`python -m scripts.seed_local_guided --help` for the coverage-driven workflow.
+The earlier standalone weight calibration is exploratory: its generator was changed
+after held-out inspection, so its accuracy gain is not independent validation.

@@ -250,7 +250,7 @@ def main():
             "simulated_abandonment_rate": "fraction of held-out top recommendations that differ from chosen_idx",
             "mean_recommended_T_over_T_min": "mean normalized journey time for held-out top recommendations",
         },
-        "limitation": "Controlled synthetic choices encode a known latent preference; these metrics do not establish real-driver behavior or justify runtime policy changes.",
+        "limitation": "Exploratory optimizer demonstration: generator parameters were revised after held-out inspection, so the reported gain is not independent validation. Controlled synthetic metrics do not establish real-driver behavior or justify runtime policy changes.",
     }
     output = Path(__file__).resolve().parents[1] / "weights_calibration_report.json"
     output.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")

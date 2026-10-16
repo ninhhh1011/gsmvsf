@@ -1,5 +1,22 @@
 # DATA_CONTRACT
 
+## Grouped road benchmark (2026-10-15/16)
+
+Opt-in `seed_local_guided --benchmark` freezes a `grouped-road-benchmark-v1`
+manifest before analysis, including source hash, seed, observation time, template
+limit, H3-7 origin groups and train/validation/test assignments. Driver identities
+are disjoint. Only train records enter `synthetic.route_deviation_trips`;
+validation/test inputs and maneuver declarations remain offline. No ranking history
+is populated by this workflow. Existing manifests keep their original protocol.
+
+Seven equally enumerated maneuver/control types are a stress benchmark, not a
+behavioral prevalence sample. Guidance timestamps and GPS gaps remain intact.
+Trip confusion counts refer to declared synthetic maneuvers; total event count
+discrepancy is not event-level precision/recall. Grouping origins does not prevent
+roads from crossing splits; no geographical generalization claim is permitted.
+The sampled H3-11 novelty used for selection is separate from the 12 m PostGIS
+candidate-reference proximity coverage measurement. Runtime weights remain 80/10/10.
+
 ## Paired guidance-departure evidence (2026-10-14)
 
 The authorized H3 extension stores paired evidence separately in the configured

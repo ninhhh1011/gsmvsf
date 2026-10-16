@@ -32,6 +32,10 @@ def intersect_bbox(configured, imported):
 
 
 def local_targets(rows, bbox, maximum, resolution=7):
+    if not 1 <= maximum <= 2000:
+        raise ValueError('Local target count must be between 1 and 2000')
+    if resolution not in (7, 8, 9):
+        raise ValueError('Local target resolution must be 7, 8 or 9')
     targets, occupied = [], set()
     for row in rows:
         lat, lon = row['latitude'], row['longitude']
@@ -161,7 +165,8 @@ async def audit(args):
                 WHERE reference_length_m BETWEEN 25 AND 1000
                   AND reference_length_m-covered_length_m > 20
                 ORDER BY covered_length_m/reference_length_m, reference_length_m-covered_length_m DESC,id LIMIT 60000''')
-            local = local_targets(local_rows, available_bbox, 120)
+            local = local_targets(local_rows, available_bbox, getattr(args, 'target_count', 120),
+                                  getattr(args, 'target_resolution', 7))
             available = dict(await conn.fetchrow('''SELECT sum(reference_length_m) AS reference_length_m,
                 sum(covered_length_m) AS covered_length_m FROM road_coverage
                 WHERE longitude BETWEEN $1 AND $3 AND latitude BETWEEN $2 AND $4''', *available_bbox))
@@ -204,6 +209,8 @@ def main():
     parser.add_argument('--as-of', required=True)
     parser.add_argument('--output', default='runtime/h3-coverage')
     parser.add_argument('--exclude-batch', help='Reproduce a pre-extension source cohort without deleting stored trips')
+    parser.add_argument('--target-count', type=int, choices=range(1, 241), default=120, metavar='1..240')
+    parser.add_argument('--target-resolution', type=int, choices=(7, 8, 9), default=7)
     parser.add_argument('--database-url', default=settings.database_url.replace('postgresql+asyncpg://', 'postgresql://'))
     asyncio.run(audit(parser.parse_args()))
 

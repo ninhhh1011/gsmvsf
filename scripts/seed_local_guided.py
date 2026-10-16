@@ -16,6 +16,7 @@ from backend.app.services.route_familiarity.route_matcher import _haversine_m, p
 from backend.app.services.routing.graphhopper_routing_adapter import GraphHopperRoutingAdapter
 from scripts.seed_guided_hanoi import build_trip, fetch_route, sampled
 from scripts.seed_synthetic_journeys import output_directory, seed_time
+from scripts.guided_benchmark import select_templates, benchmark_inputs, evaluation_report
 
 
 def departure_indices(size, rng):
@@ -84,6 +85,8 @@ async def prepare_template(adapter, target, targets, vias, rng, bbox):
 
 
 def make_inputs(manifest, batch):
+    if manifest.get('protocol') == 'grouped-road-benchmark-v1':
+        return benchmark_inputs(manifest, batch)
     rng = random.Random(manifest['seed'])
     as_of = seed_time(manifest['as_of'])
     inputs, declarations, next_start = [], [], {}
@@ -132,10 +135,17 @@ async def seed(args):
     as_of = seed_time(args.as_of)
     source_hash = hashlib.sha256(source_bytes).hexdigest()
     manifest_path = output / 'manifest.json'
+    benchmark = getattr(args, 'benchmark', False)
+    maximum = getattr(args, 'max_templates', 120)
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
         if (manifest['seed'], manifest['as_of'], manifest['source_sha256']) != (args.seed, as_of.isoformat(), source_hash):
             raise ValueError('Frozen manifest differs from requested seed/time/source')
+        if (manifest.get('protocol') == 'grouped-road-benchmark-v1') != benchmark or (
+                benchmark and manifest.get('max_templates') != maximum):
+            raise ValueError('Frozen manifest differs from requested benchmark mode/template limit')
+        if benchmark and manifest.get('generator_revision') != 2:
+            raise ValueError('Use a new output manifest for benchmark generator revision 2')
     else:
         rng, templates, rejected = random.Random(args.seed), [], []
         async with httpx.AsyncClient(timeout=30) as client:
@@ -153,11 +163,19 @@ async def seed(args):
                             'prepared': len(templates), 'rejected': len(rejected)}
                 print(json.dumps(progress), flush=True)
                 (output / 'preparation.json').write_text(json.dumps({**progress, 'rejections': rejected}, indent=2), encoding='utf-8')
+        if benchmark:
+            templates = select_templates(templates, maximum, args.seed)
+            if {item['split'] for item in templates} != {'train', 'validation', 'test'}:
+                raise ValueError('Insufficient independent groups for all frozen splits')
         if len(templates) < 12 or not any(item['held_out'] for item in templates):
             raise ValueError('Insufficient routable local/held-out templates; inspect rejected targets')
         manifest = {'seed': args.seed, 'as_of': as_of.isoformat(), 'source_sha256': source_hash,
                     'scope': source['scope'], 'templates': templates, 'rejected': rejected,
                     'provenance': 'Real GraphHopper local roads; designed synthetic cohorts, not driver prevalence'}
+        if benchmark:
+            manifest.update(protocol='grouped-road-benchmark-v1', generator_revision=2, max_templates=maximum,
+                            selection='Greedy incremental sampled H3-11 footprint; not measured road length',
+                            split_policy='H3-7 origin groups hashed before detection; traversed roads may overlap')
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
     for item in manifest['templates']:
         for key in ('direct', 'tail_first', 'tail_second', 'loop'):
@@ -172,19 +190,30 @@ async def seed(args):
         selected = [trip.model_dump(mode='json') for trip, item in zip(inputs, declarations)
                     if (item['held_out'] if cohort == 'held_out' else not item['held_out'] and item['cohort'] == cohort)]
         (output / f'{cohort}-inputs.json').write_text(json.dumps(selected), encoding='utf-8')
+    if benchmark:
+        for split in ('train', 'validation', 'test'):
+            selected = [trip.model_dump(mode='json') for trip, item in zip(inputs, declarations) if item['split'] == split]
+            (output / f'{split}-inputs.json').write_text(json.dumps(selected), encoding='utf-8')
     analyses, rows = [], []
     for trip, declaration in zip(inputs, declarations):
         analysis = analyze_guided_trip(trip)
         events = sum(len(value['departures']) for value in analysis['cells']['9'].values())
-        if declaration['scenario'] == 'FOLLOW' and events:
+        if not benchmark and declaration['scenario'] == 'FOLLOW' and events:
             raise AssertionError('False departure in following control; no batch writes performed')
         analyses.append(analysis)
         rows.append({**declaration, 'detected_events': events, 'driver_id': trip.driver_id,
+                     'uncertain_intervals': analysis['uncertain_intervals'],
                      'detected_departing_trip': events > 0})
     report = {'status': 'VALIDATED', 'batch': batch, 'scope': manifest['scope'],
               'prepared_corridors': len(manifest['templates']), 'rejected_targets': len(manifest['rejected']),
               'held_out_trips': sum(row['held_out'] for row in rows),
               'rows': rows, 'limitations': 'Stress ratio is designed. Maneuver intentions are not exact event truth.'}
+    if benchmark:
+        report['evaluation'] = evaluation_report(rows)
+        report['protocol'] = manifest['protocol']
+        report['limitations'] += (' Origin/template/driver groups and later event times are split; '
+                                  'traversed roads may overlap. Trip metrics compare designed maneuvers, '
+                                  'not field behavior. Event-count discrepancies are not event precision/recall.')
     (output / 'seed-report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     async with asyncpg.create_pool(args.database_url, min_size=1, max_size=2) as pool:
         repo = RouteHistoryRepository(pool, 'synthetic')
@@ -210,6 +239,8 @@ def main():
     parser.add_argument('--targets', required=True)
     parser.add_argument('--as-of', required=True)
     parser.add_argument('--seed', type=int, default=20261015)
+    parser.add_argument('--benchmark', action='store_true', help='Freeze grouped train/validation/test and seven scenario controls')
+    parser.add_argument('--max-templates', type=int, choices=range(12, 241), default=120, metavar='12..240')
     parser.add_argument('--output', default='runtime/h3-local-20261015/seed')
     parser.add_argument('--database-url', default=settings.database_url.replace('postgresql+asyncpg://', 'postgresql://'))
     asyncio.run(seed(parser.parse_args()))
